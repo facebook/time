@@ -1,0 +1,36 @@
+version: 2.1
+
+executors:
+  linux:
+    docker:
+      - image: circleci/golang:1.13
+      - image: circleci/golang:1.14
+
+jobs:
+  linters:
+    parameters:
+      os:
+        type: executor
+    executor: << parameters.os >>
+    steps:
+      - checkout
+      - run: go get -v -t ./...
+      - run: .circleci/linters.sh
+  test:
+    parameters:
+      os:
+        type: executor
+    executor: << parameters.os >>
+    steps:
+      - checkout
+      - run: go get -v -t ./...
+      - run: .circleci/tests.sh
+
+
+workflows:
+  all_tests:
+    jobs:
+      - test:
+          matrix:
+              parameters:
+                os: [linux]
