@@ -45,7 +45,7 @@ func (s *Server) addIPToInterface(vip net.IP) error {
 	// Add IPs to the interface
 	iface, err := net.InterfaceByName(s.ListenConfig.Iface)
 	if err != nil {
-		return fmt.Errorf("failed to add IP to the %s interface: %w", iface, err)
+		return fmt.Errorf("failed to add IP to the %s interface: %v", s.ListenConfig.Iface, err)
 	}
 
 	return addIfaceIP(iface, &vip)
