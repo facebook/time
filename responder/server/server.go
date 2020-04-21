@@ -182,7 +182,7 @@ func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 		generateResponse(time.Now().Add(extraoffset), t.received.Add(extraoffset), t.request, response)
 		responseBytes, err := response.Bytes()
 		if err != nil {
-			log.Errorf("Failed to convert ntp.%v to bytes %v: %w", response, responseBytes, err)
+			log.Errorf("Failed to convert ntp.%v to bytes %v: %v", response, responseBytes, err)
 			return
 		}
 
