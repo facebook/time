@@ -3,7 +3,7 @@ set -exu
 
 go get -v -u github.com/golangci/golangci-lint/cmd/golangci-lint
 go install github.com/golangci/golangci-lint/cmd/golangci-lint
-cd "${TRAVIS_BUILD_DIR}"
+cd "${CIRCLE_WORKING_DIRECTORY}"
 golangci-lint run --enable deadcode --enable varcheck --enable staticcheck
 
 # check license headers
@@ -11,6 +11,6 @@ golangci-lint run --enable deadcode --enable varcheck --enable staticcheck
 # `git ls-files` under the hood.
 go get -v -u github.com/u-root/u-root/tools/checklicenses
 go install github.com/u-root/u-root/tools/checklicenses
-cd "${TRAVIS_BUILD_DIR}"
+cd "${CIRCLE_WORKING_DIRECTORY}"
 echo "[*] Running checklicenses"
-go run github.com/u-root/u-root/tools/checklicenses -c .travis/config.json
+go run github.com/u-root/u-root/tools/checklicenses -c .circleci/config.json
