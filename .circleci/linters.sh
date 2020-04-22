@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -exu
 
-go get -v -u github.com/golangci/golangci-lint/cmd/golangci-lint
-go install github.com/golangci/golangci-lint/cmd/golangci-lint
+# install golangci-lint as recommended on the project page
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
 cd "${CIRCLE_WORKING_DIRECTORY}"
 golangci-lint run --enable deadcode --enable varcheck --enable staticcheck
 
