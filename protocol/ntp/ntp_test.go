@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	syscall "golang.org/x/sys/unix"
 )
 
 var (
@@ -228,29 +227,6 @@ func Test_connFd(t *testing.T) {
 	connfd, err := connFd(conn)
 	assert.Nil(t, err)
 	assert.Greater(t, connfd, 0, "connection fd must be > 0")
-}
-
-func Test_EnableKernelTimestampsSocket(t *testing.T) {
-	// listen to incoming udp packets
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	assert.Nil(t, err)
-	defer conn.Close()
-
-	connfd, err := connFd(conn)
-	assert.Nil(t, err)
-
-	// Allow reading of hardware/kernel timestamps via socket
-	err = EnableKernelTimestampsSocket(conn)
-	assert.Nil(t, err)
-
-	// Check that socket option is set
-	hwTimestampsEnabled, err := syscall.GetsockoptInt(connfd, syscall.SOL_SOCKET, syscall.SO_TIMESTAMPNS)
-	assert.Nil(t, err)
-	kernelTimestampsEnabled, err := syscall.GetsockoptInt(connfd, syscall.SOL_SOCKET, syscall.SO_TIMESTAMP)
-	assert.Nil(t, err)
-
-	// At least one of them should be set, which it > 0
-	assert.Greater(t, hwTimestampsEnabled+kernelTimestampsEnabled, 0, "None of the socket options is set")
 }
 
 func Test_ReadNTPPacket(t *testing.T) {
