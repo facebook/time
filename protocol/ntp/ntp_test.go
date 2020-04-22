@@ -302,13 +302,13 @@ func Test_ReadPacketWithKernelTimestamp(t *testing.T) {
 
 func Benchmark_PacketToBytesConversion(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ntpResponse.Bytes()
+		_, _ = ntpResponse.Bytes()
 	}
 }
 
 func Benchmark_BytesToPacketConversion(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		BytesToPacket(ntpResponseBytes)
+		_, _ = BytesToPacket(ntpResponseBytes)
 	}
 }
 
@@ -326,8 +326,8 @@ func Benchmark_ServerWithoutHWTimestamps(b *testing.B) {
 	defer cconn.Close()
 
 	for i := 0; i < b.N; i++ {
-		cconn.Write(ntpRequestBytes)
-		ReadNTPPacket(conn)
+		_, _ = cconn.Write(ntpRequestBytes)
+		_, _, _ = ReadNTPPacket(conn)
 	}
 }
 
@@ -349,8 +349,8 @@ func Benchmark_ServerWithHWTimestamps(b *testing.B) {
 	defer cconn.Close()
 
 	for i := 0; i < b.N; i++ {
-		cconn.Write(ntpRequestBytes)
-		ReadNTPPacket(conn)
+		_, _ = cconn.Write(ntpRequestBytes)
+		_, _, _ = ReadNTPPacket(conn)
 	}
 }
 
@@ -372,7 +372,7 @@ func Benchmark_ServerWithHWTimestampsRead(b *testing.B) {
 	defer cconn.Close()
 
 	for i := 0; i < b.N; i++ {
-		cconn.Write(ntpRequestBytes)
-		ReadPacketWithKernelTimestamp(conn)
+		_, _ = cconn.Write(ntpRequestBytes)
+		_, _, _, _ = ReadPacketWithKernelTimestamp(conn)
 	}
 }
