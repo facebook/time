@@ -14,27 +14,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package server
+package ntp
 
 import (
+	"fmt"
 	"net"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
+	syscall "golang.org/x/sys/unix"
 )
 
-const testIP = "1.2.3.4"
+// EnableKernelTimestampsSocket enables socket options to read ether kernel timestamps
+func EnableKernelTimestampsSocket(conn *net.UDPConn) error {
+	// Get socket fd
+	connfd, err := connFd(conn)
+	if err != nil {
+		return err
+	}
 
-func Test_addIPToInterfaceError(t *testing.T) {
-	lc := ListenConfig{Iface: "lol-does-not-exist"}
-	s := &Server{ListenConfig: lc}
-	err := s.addIPToInterface(net.ParseIP(testIP))
-	assert.NotNil(t, err)
-}
-
-func Test_deleteIPFromInterfaceError(t *testing.T) {
-	lc := ListenConfig{Iface: "lol-does-not-exist"}
-	s := &Server{ListenConfig: lc}
-	err := s.deleteIPFromInterface(net.ParseIP(testIP))
-	assert.NotNil(t, err)
+	// Allow reading of hardware timestamps via socket
+	if err := syscall.SetsockoptInt(connfd, syscall.SOL_SOCKET, syscall.SO_TIMESTAMP, 1); err != nil {
+		return fmt.Errorf("failed to enable SO_TIMESTAMP: %w", err)
+	}
+	return nil
 }

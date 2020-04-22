@@ -17,7 +17,6 @@ limitations under the License.
 package ntp
 
 import (
-	"fmt"
 	"net"
 	"time"
 
@@ -65,24 +64,6 @@ func CurrentRealTime(serverTransmitTime time.Time, avgNetworkDelay int64) time.T
 // CalculateOffset returns offset between local time and "real" time
 func CalculateOffset(currentRealTime, curentLocaTime time.Time) int64 {
 	return currentRealTime.UnixNano() - curentLocaTime.UnixNano()
-}
-
-// EnableKernelTimestampsSocket enables socket options to read ether hardware or kernel timestamps
-func EnableKernelTimestampsSocket(conn *net.UDPConn) error {
-	// Get socket fd
-	connfd, err := connFd(conn)
-	if err != nil {
-		return err
-	}
-
-	// Allow reading of hardware timestamps via socket
-	if err := syscall.SetsockoptInt(connfd, syscall.SOL_SOCKET, syscall.SO_TIMESTAMPNS, 1); err != nil {
-		// If we can't have hardware timestamps - use kernel timestamps
-		if err := syscall.SetsockoptInt(connfd, syscall.SOL_SOCKET, syscall.SO_TIMESTAMP, 1); err != nil {
-			return fmt.Errorf("failed to enable SO_TIMESTAMP: %w", err)
-		}
-	}
-	return nil
 }
 
 // sockaddrToUDP converts syscall.Sockaddr to net.Addr
