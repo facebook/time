@@ -34,8 +34,7 @@ type NTPClient struct {
 func (n *NTPClient) Communicate(packet *NTPControlMsgHead) (*NTPControlMsg, error) {
 	packet.Sequence = n.Sequence
 	n.Sequence++
-	var err error
-	err = binary.Write(n.Connection, binary.BigEndian, packet)
+	err := binary.Write(n.Connection, binary.BigEndian, packet)
 	if err != nil {
 		return nil, err
 	}

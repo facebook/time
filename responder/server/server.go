@@ -77,12 +77,10 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 	// Run active metric reporting
 	go func() {
 		for {
-			select {
-			case <-time.After(1 * time.Minute):
-				err := s.Stats.Report()
-				if err != nil {
-					log.Errorf("[stats] %v", err)
-				}
+			<-time.After(1 * time.Minute)
+			err := s.Stats.Report()
+			if err != nil {
+				log.Errorf("[stats] %v", err)
 			}
 		}
 	}()
@@ -126,7 +124,9 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 // Stop will stop announcement, delete IPs from interfaces
 func (s *Server) Stop() {
 	s.DeleteAllIPs()
-	s.Announce.Withdraw()
+	if err := s.Announce.Withdraw(); err != nil {
+		log.Errorf("[server] failed to withdraw announce: %v", err)
+	}
 }
 
 func (s *Server) startListener(ip net.IP, port int) {
@@ -160,18 +160,16 @@ func (s *Server) startListener(ip net.IP, port int) {
 func (s *Server) startWorker() {
 	s.Checker.IncWorkers()
 	defer s.Checker.DecWorkers()
+        defer s.Stats.DecWorkers()
 
 	// Pre-allocating response buffer
 	response := &ntp.Packet{}
 	s.fillStaticHeaders(response)
 	s.Stats.IncWorkers()
 	for {
-		select {
-		case task := <-s.tasks:
-			task.serve(response, s.ExtraOffset)
-		}
+		task := <-s.tasks
+		task.serve(response, s.ExtraOffset)
 	}
-	s.Stats.DecWorkers()
 }
 
 // serve checks the request format.

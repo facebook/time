@@ -61,7 +61,9 @@ func (j *JSONStats) handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(js)
+	if _, err = w.Write(js); err != nil {
+		log.Errorf("Failed to reply: %v", err)
+	}
 }
 
 // Start with launch 303 thrift and report ODS metrics periodically
@@ -69,7 +71,10 @@ func (j *JSONStats) Start(port int) {
 	http.HandleFunc("/", j.handleRequest)
 	addr := fmt.Sprintf(":%d", port)
 	log.Debugf("Starting http json server on %s", addr)
-	http.ListenAndServe(addr, nil)
+	err := http.ListenAndServe(addr, nil)
+	if err != nil {
+		log.Errorf("Failed to start listener: %v", err)
+	}
 }
 
 // SetPrefix is implementing SetPrefix function of interface
