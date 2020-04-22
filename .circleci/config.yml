@@ -1,26 +1,26 @@
 version: 2.1
 
-executors:
-  linux:
-    docker:
-      - image: circleci/golang:1.13
-      - image: circleci/golang:1.14
+orbs:
+  go: circleci/go@0.2.0
+
+environment:
+  CGO_ENABLED: "0"
 
 jobs:
   linters:
-    parameters:
-      os:
-        type: executor
-    executor: << parameters.os >>
+    working_directory: /go/src/github.com/facebookincubator/ntp
+    executor:
+      name: go/default
+      tag: '1.14'
     steps:
       - checkout
       - run: go get -v -t ./...
       - run: .circleci/linters.sh
-  test:
-    parameters:
-      os:
-        type: executor
-    executor: << parameters.os >>
+  tests:
+    working_directory: /go/src/github.com/facebookincubator/ntp
+    executor:
+      name: go/default
+      tag: '1.14'
     steps:
       - checkout
       - run: go get -v -t ./...
@@ -28,9 +28,7 @@ jobs:
 
 
 workflows:
-  all_tests:
-    jobs:
-      - test:
-          matrix:
-              parameters:
-                os: [linux]
+  main:
+   jobs:
+     - linters
+     - tests
