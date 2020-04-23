@@ -12,6 +12,20 @@ Collection of Facebook's NTP libraries.
 * NTP protocol implementation
 * Chrony and ntpd control protocol implementations
 
+## Leaphash
+Utility package for computing the hash value of the official leap-second.list document
+
+## ntpcheck
+CLI and library to perform various NTP-related tasks, including:
+* replacement for `ntptime` and `ntpdate` commands
+* human-readable diagnostics for typical problems with NTP based on data from chrony/ntpd
+* server stats and peer stats taken from chrony/ntpd with output in JSON
+
+### Quick Installation
+```console
+go get github.com/facebookincubator/ntp/ntpcheck
+```
+
 ## Responder
 Simple NTP server implementation with hardware timestamps support
 
