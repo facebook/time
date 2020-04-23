@@ -16,6 +16,15 @@ jobs:
       - checkout
       - run: go get -v -t ./...
       - run: .circleci/linters.sh
+  build:
+    working_directory: /go/src/github.com/facebookincubator/ntp
+    executor:
+      name: go/default
+      tag: '1.14'
+    steps:
+      - checkout
+      - run: go get -v -t ./...
+      - run: .circleci/build.sh
   tests:
     working_directory: /go/src/github.com/facebookincubator/ntp
     executor:
@@ -31,4 +40,5 @@ workflows:
   main:
    jobs:
      - linters
+     - build
      - tests
