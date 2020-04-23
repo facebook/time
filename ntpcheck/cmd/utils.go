@@ -22,15 +22,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"syscall"
-	"unsafe"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/spf13/cobra"
-	"github.com/facebookincubator/ntp/protocol/ntp"
 	"github.com/facebookincubator/ntp/leaphash"
+	"github.com/facebookincubator/ntp/protocol/ntp"
+	"github.com/spf13/cobra"
 )
 
 // cannot import sys/timex.h
@@ -53,46 +51,6 @@ var timexToDesc = map[int]string{
 	timeOOP: "TIME_OOP	Insertion of a leap second is in progress.",
 	timeWait: "TIME_WAIT	A leap-second insertion or deletion has been completed.",
 	timeError: "TIME_ERROR	The system clock is not synchronized to a reliable server.",
-}
-
-func getRawMonotonic() float64 {
-	var ts syscall.Timespec
-	_, _, _ = syscall.Syscall(syscall.SYS_CLOCK_GETTIME, clockMonotonic, uintptr(unsafe.Pointer(&ts)), 0)
-	return float64(ts.Sec) + float64(ts.Nsec)/float64(1e9)
-}
-
-// track reports wall time / mono time difference on stdout
-func track(interval time.Duration) {
-	fmt.Println("Wall timestamp\t\t\tWall difference\tMono difference\tMono raw diff\tOffset mono\tOffset mono raw")
-	startTime := time.Now()
-	rawStart := getRawMonotonic()
-
-	var prevWallElapsed time.Duration
-	var prevMonoElapsed time.Duration
-	for {
-		now := time.Now()
-		nowMonotonic := getRawMonotonic()
-
-		wallElapsed := now.Truncate(0).Sub(startTime.Truncate(0))
-		monoElapsed := now.Sub(startTime)
-		wallElapsedS := float64(wallElapsed) / float64(time.Second)
-		monoElapsedS := float64(monoElapsed) / float64(time.Second)
-		monoRawElapsedS := nowMonotonic - rawStart
-		offsetMonoUs := float64(wallElapsed-monoElapsed) / float64(time.Microsecond)
-		offsetMonoRawUs := float64(wallElapsed)/float64(time.Microsecond) - monoRawElapsedS*float64(1e6)
-		fmt.Printf("[%s]\t%.7fs\t%.7fs\t%.7fs\t%.2fus\t\t%.2fus\n", now.Format(time.RFC3339), wallElapsedS, monoElapsedS, monoRawElapsedS, offsetMonoUs, offsetMonoRawUs)
-
-		if (prevWallElapsed != 0) && int64(wallElapsed-prevWallElapsed) < 1000*int64(time.Millisecond) {
-			fmt.Println("^^^ BANG! Wall time goes back")
-		}
-		if (prevMonoElapsed != 0) && int64(monoElapsed-prevMonoElapsed) < 1000*int64(time.Millisecond) {
-			fmt.Println("^^^ BANG! Monotonic time goes back")
-		}
-		prevWallElapsed = wallElapsed
-		prevMonoElapsed = monoElapsed
-
-		time.Sleep(interval)
-	}
 }
 
 // refID converts ip into ReFID format and prints it on stdout
@@ -141,47 +99,6 @@ func signFile(fileName string) {
 	}
 
 	fmt.Printf("#h %s\n", leaphash.Compute(string(data)))
-}
-
-// clockState report system clock state via adjtimex syscall
-func clockState() {
-	if state, err := syscall.Adjtimex(&syscall.Timex{}); err != nil {
-		fmt.Printf("Error calling adjtimex(2): %s", err)
-	} else {
-		if desc, ok := timexToDesc[state]; ok {
-			fmt.Println(desc)
-		} else {
-			fmt.Printf("Error: %v state is not recognized\n", state)
-		}
-	}
-}
-
-// ntpTime prints data similar to 'ntptime' command output
-func ntpTime() {
-	var buf syscall.Timex
-	if state, err := syscall.Adjtimex(&buf); err != nil {
-		fmt.Printf("Error calling adjtimex(2): %s", err)
-	} else {
-		if desc, ok := timexToDesc[state]; ok {
-			fmt.Printf("adjtimex() returns code %d (%s)\n", state, desc)
-		} else {
-			fmt.Printf("Error: %v state is not recognized\n", state)
-		}
-
-		var offset float64
-		// 0x2000 is STA_NANO
-		if buf.Status&0x2000 != 0 {
-			offset = float64(buf.Offset) / 1000.0 // ns -> us
-		} else {
-			offset = float64(buf.Offset)
-		}
-
-		fmt.Printf("  modes 0x%x,\n", buf.Modes)
-		fmt.Printf("  offset %.3f us, frequency %.3f ppm, interval %d s\n", offset, float64(buf.Freq)/65536.0, buf.Shift)
-		fmt.Printf("  maximum error %d us, estimated error %d us,\n", buf.Maxerror, buf.Esterror)
-		fmt.Printf("  status 0x%x,\n", buf.Status)
-		fmt.Printf("  time constant %d, precision %d.000 us, tolerance %d ppm,\n", buf.Constant, buf.Precision, buf.Tolerance/65535)
-	}
 }
 
 // ntpDate prints data similar to 'ntptime' command output
@@ -263,7 +180,6 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 }
 
 // cli vars
-var trackInterval time.Duration
 var refidIP string
 var fsCount int
 var signFileName string
@@ -273,9 +189,6 @@ var ntpdateRequests int
 
 func init() {
 	RootCmd.AddCommand(utilsCmd)
-	// track
-	utilsCmd.AddCommand(trackCmd)
-	trackCmd.Flags().DurationVarP(&trackInterval, "interval", "i", time.Second, "Measurement interval")
 	// refid
 	utilsCmd.AddCommand(refidCmd)
 	refidCmd.Flags().StringVarP(&refidIP, "ip", "i", "", "IP address")
@@ -285,10 +198,6 @@ func init() {
 	// signfile
 	utilsCmd.AddCommand(signFileCmd)
 	signFileCmd.Flags().StringVarP(&signFileName, "file", "f", "leap-seconds.list", "File name")
-	// clockstate
-	utilsCmd.AddCommand(clockStateCmd)
-	// ntptime
-	utilsCmd.AddCommand(ntpTimeCmd)
 	// ntpdate
 	utilsCmd.AddCommand(ntpdateCmd)
 	ntpdateCmd.Flags().StringVarP(&remoteServerAddr, "server", "s", "", "Server to query")
@@ -299,23 +208,6 @@ func init() {
 var utilsCmd = &cobra.Command{
 	Use:   "utils",
 	Short: "Collection of NTP-related utils",
-}
-
-var trackCmd = &cobra.Command{
-	Use:   "track",
-	Short: "Allows to compare monotonic with wall clock.",
-	Long: `Allows to compare monotonic with wall clock.
-Legend:
-  * Wall timestamp - local date and time with TZ
-  * Wall difference - wall time elapsed since the start
-  * Mono difference - monotonic time elapsed since the start
-  * Mono raw diff - monotonic raw time elapsed since the start
-  * Offset mono - offset between monotonic and wall elapsed
-  * Offset mono raw - offset between monotonic raw and wall elapsed`,
-	Run: func(cmd *cobra.Command, args []string) {
-		ConfigureVerbosity()
-		track(trackInterval)
-	},
 }
 
 var refidCmd = &cobra.Command{
@@ -349,27 +241,6 @@ var signFileCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ConfigureVerbosity()
 		signFile(signFileName)
-	},
-}
-
-var clockStateCmd = &cobra.Command{
-	Use:   "clockstate",
-	Short: "Print kernel clock state with description.",
-	Long: `Print kernel clock state with description.
-Useful for checking if kernel noticed leap second. Uses adjtimex(2) to get info.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		ConfigureVerbosity()
-		clockState()
-	},
-}
-
-var ntpTimeCmd = &cobra.Command{
-	Use:   "ntptime",
-	Short: "Print OS kernel output that is similar to ntp_gettime() and ntp_adjtime() output of 'ntptime' utility.",
-	Long:  "'ntptime' utility is a part of ntp package. This command produces similar output.",
-	Run: func(cmd *cobra.Command, args []string) {
-		ConfigureVerbosity()
-		ntpTime()
 	},
 }
 
