@@ -206,42 +206,12 @@ func (s *Server) fillStaticHeaders(response *ntp.Packet) {
 	response.RootDelay = 0
 	// Root dispersion, big-endian 0.000152
 	response.RootDispersion = 10
-	// Refference ID ATOM. Only for stratum 1
+	// Reference ID ATOM. Only for stratum 1
 	response.ReferenceID = binary.BigEndian.Uint32([]byte(fmt.Sprintf("%-4s", s.RefID)))
 }
 
-// generateResponse generates ntp.in a proper format
-/*
-	http://seriot.ch/ntp.php
-	https://tools.ietf.org/html/rfc958
-	0                   1                   2                   3
-	0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-0 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|LI | VN  |Mode |    Stratum     |     Poll      |  Precision   |
-4 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                         Root Delay                            |
-8 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                         Root Dispersion                       |
-12+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                          Reference ID                         |
-16+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                                                               |
-	+                     Reference Timestamp (64)                  +
-	|                                                               |
-24+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                                                               |
-	+                      Origin Timestamp (64)                    +
-	|                                                               |
-32+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                                                               |
-	+                      Receive Timestamp (64)                   +
-	|                                                               |
-40+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                                                               |
-	+                      Transmit Timestamp (64)                  +
-	|                                                               |
-48+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-*/
+// generateResponse generates response NTP packet
+// See more in protocol/ntp/packet.go
 func generateResponse(now time.Time, received time.Time, request, response *ntp.Packet) {
 	var vn = request.Settings & 0x38
 	response.Settings = vn + 4

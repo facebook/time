@@ -123,11 +123,11 @@ func Test_PacketConversionFailure(t *testing.T) {
 }
 
 func Test_RequestSize(t *testing.T) {
-	assert.Equal(t, NTPPacketSizeBytes, len(ntpRequestBytes))
+	assert.Equal(t, PacketSizeBytes, len(ntpRequestBytes))
 }
 
 func Test_ResponseSize(t *testing.T) {
-	assert.Equal(t, NTPPacketSizeBytes, len(ntpResponseBytes))
+	assert.Equal(t, PacketSizeBytes, len(ntpResponseBytes))
 }
 
 func Test_ValidSettingsFormat(t *testing.T) {

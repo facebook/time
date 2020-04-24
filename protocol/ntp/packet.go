@@ -26,67 +26,72 @@ import (
 	syscall "golang.org/x/sys/unix"
 )
 
-// NTPPacketSizeBytes sets the size of NTP packet
-const NTPPacketSizeBytes = 48
+// PacketSizeBytes sets the size of NTP packet
+const PacketSizeBytes = 48
 
 // ControlHeaderSizeBytes is a buffer to read packet header with Kernel/HW timestamps
 const ControlHeaderSizeBytes = 32
 
-// Packet is an NTP packet
+// Packet is an NTPv4 packet
 /*
-	http://seriot.ch/ntp.php
-	https://tools.ietf.org/html/rfc958
-	0                   1                   2                   3
-	0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+http://seriot.ch/ntp.php
+https://tools.ietf.org/html/rfc958
+   0                   1                   2                   3
+   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 0 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|LI | VN  |Mode |    Stratum     |     Poll      |  Precision   |
+  |LI | VN  |Mode |    Stratum     |     Poll      |  Precision   |
 4 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                         Root Delay                            |
+  |                         Root Delay                            |
 8 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                         Root Dispersion                       |
+  |                         Root Dispersion                       |
 12+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                          Reference ID                         |
+  |                          Reference ID                         |
 16+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                                                               |
-	+                     Reference Timestamp (64)                  +
-	|                                                               |
+  |                                                               |
+  +                     Reference Timestamp (64)                  +
+  |                                                               |
 24+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                                                               |
-	+                      Origin Timestamp (64)                    +
-	|                                                               |
+  |                                                               |
+  +                      Origin Timestamp (64)                    +
+  |                                                               |
 32+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                                                               |
-	+                      Receive Timestamp (64)                   +
-	|                                                               |
+  |                                                               |
+  +                      Receive Timestamp (64)                   +
+  |                                                               |
 40+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                                                               |
-	+                      Transmit Timestamp (64)                  +
-	|                                                               |
+  |                                                               |
+  +                      Transmit Timestamp (64)                  +
+  |                                                               |
 48+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-*/
-/*
-	Setting = LI | VN  |Mode. Client request example:
-	00 011 011 (or 0x1B)
-	|  |   +-- client mode (3)
-	|  + ----- version (3)
-	+ -------- leap year indicator, 0 no warning
+
+ 0 1 2 3 4 5 6 7 
++-+-+-+-+-+-+-+-+
+|LI | VN  |Mode |
++-+-+-+-+-+-+-+-+
+ 0 1 1 0 0 0 1 1
+
+Setting = LI | VN  |Mode. Client request example:
+00 011 011 (or 0x1B)
+|  |   +-- client mode (3)
+|  + ----- version (3)
++ -------- leap year indicator, 0 no warning
 */
 type Packet struct {
-	Settings       uint8  // leap yr indicator, ver number, and mode
-	Stratum        uint8  // stratum of local clock
-	Poll           int8   // poll exponent
-	Precision      int8   // precision exponent
-	RootDelay      uint32 // root delay
-	RootDispersion uint32 // root dispersion
-	ReferenceID    uint32 // reference id
-	RefTimeSec     uint32 // reference timestamp sec
-	RefTimeFrac    uint32 // reference timestamp nanosec
-	OrigTimeSec    uint32 // origin time secs
-	OrigTimeFrac   uint32 // origin time nanosec
-	RxTimeSec      uint32 // receive time secs
-	RxTimeFrac     uint32 // receive time nanosec
-	TxTimeSec      uint32 // transmit time secs
-	TxTimeFrac     uint32 // transmit time nanosec
+	Settings       uint8  // leap year indicator, version number and mode
+	Stratum        uint8  // stratum 
+	Poll           int8   // poll. Power of 2
+	Precision      int8   // precision. Power of 2
+	RootDelay      uint32 // total delay to the reference clock
+	RootDispersion uint32 // total dispersion to the reference clock
+	ReferenceID    uint32 // identifier of server or a reference clock
+	RefTimeSec     uint32 // last time local clock was updated sec
+	RefTimeFrac    uint32 // last time local clock was updated frac
+	OrigTimeSec    uint32 // client time sec
+	OrigTimeFrac   uint32 // client time frac
+	RxTimeSec      uint32 // receive time sec
+	RxTimeFrac     uint32 // receive time frac
+	TxTimeSec      uint32 // transmit time sec
+	TxTimeFrac     uint32 // transmit time frac
 }
 
 const (
@@ -99,9 +104,9 @@ const (
 
 // ValidSettingsFormat verifies that LI | VN  |Mode fields are set correctly
 // check the first byte,include:
-// 	LN:must be 0 or 3
-// 	VN:must be 1,2,3 or 4
-//	Mode:must be 3
+// LN:must be 0 or 3
+// VN:must be 1,2,3 or 4
+// Mode:must be 3
 func (p *Packet) ValidSettingsFormat() bool {
 	settings := p.Settings
 	var l = settings >> 6
@@ -134,7 +139,7 @@ func BytesToPacket(ntpPacketBytes []byte) (*Packet, error) {
 
 // ReadNTPPacket reads incoming NTP packet
 func ReadNTPPacket(conn *net.UDPConn) (ntp *Packet, remAddr net.Addr, err error) {
-	buf := make([]byte, NTPPacketSizeBytes)
+	buf := make([]byte, PacketSizeBytes)
 	_, remAddr, err = conn.ReadFromUDP(buf)
 	if err != nil {
 		return nil, nil, err
@@ -151,7 +156,7 @@ func ReadPacketWithKernelTimestamp(conn *net.UDPConn) (ntp *Packet, hwRxTime tim
 	if err != nil {
 		return nil, time.Time{}, nil, err
 	}
-	buf := make([]byte, NTPPacketSizeBytes)
+	buf := make([]byte, PacketSizeBytes)
 	oob := make([]byte, ControlHeaderSizeBytes)
 
 	// Receive message + control struct from the socket
