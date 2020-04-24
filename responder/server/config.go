@@ -48,7 +48,7 @@ func (m *MultiIPs) Set(ipaddr string) error {
 
 // String returns joined list of checks
 func (m *MultiIPs) String() string {
-	ips := []string{}
+	var ips []string
 	for _, ip := range *m {
 		ips = append(ips, ip.String())
 	}
