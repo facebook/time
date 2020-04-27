@@ -35,9 +35,15 @@ func NewNTPPeerStats(r *NTPCheckResult) (map[string]interface{}, error) {
 
 	// Then add stats for all the peers
 	for _, peer := range r.Peers {
+		// skip invalid IPs
+		ip := net.ParseIP(peer.SRCAdr)
+		if ip == nil || ip.IsUnspecified() {
+			continue
+		}
 		hostnames, err := net.LookupAddr(peer.SRCAdr)
 		if err != nil || len(hostnames) == 0 {
-			hostnames[0] = peer.SRCAdr
+			hostnames = []string{peer.SRCAdr}
+
 		}
 		// Replace "." and ":" for "_"
 		hostname := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSuffix(hostnames[0], "."), ".", "_"), ":", "_")
