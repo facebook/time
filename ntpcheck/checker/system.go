@@ -23,12 +23,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ServerStats holds NTP server operational stats
-type ServerStats struct {
-	PacketsReceived uint64 `json:"ntp.server.packets_received"`
-	PacketsDropped  uint64 `json:"ntp.server.packets_dropped"`
-}
-
 // SystemVariables holds System Variables extracted from k=v pairs, as described in http://doc.ntp.org/current-stable/ntpq.html
 type SystemVariables struct {
 	Version   string

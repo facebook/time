@@ -30,11 +30,25 @@ type NTPClient struct {
 	Connection io.ReadWriter
 }
 
-// Communicate sends package over connection, bumps Sequence num and parses (possibly multiple) response packats into NTPControlMsg packet.
-func (n *NTPClient) Communicate(packet *NTPControlMsgHead) (*NTPControlMsg, error) {
+// CommunicateWithData sends package + data over connection, bumps Sequence num and parses (possibly multiple) response packets into NTPControlMsg packet.
+func (n *NTPClient) CommunicateWithData(packet *NTPControlMsgHead, data []uint8) (*NTPControlMsg, error) {
 	packet.Sequence = n.Sequence
+	if len(data) > 0 {
+		packet.Count = uint16(len(data))
+	}
 	n.Sequence++
-	err := binary.Write(n.Connection, binary.BigEndian, packet)
+	// create a buffer where we can compose full payload
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.BigEndian, packet)
+	if err != nil {
+		return nil, err
+	}
+	err = binary.Write(buf, binary.BigEndian, data)
+	if err != nil {
+		return nil, err
+	}
+	// send full payload
+	_, err = n.Connection.Write(buf.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -63,4 +77,9 @@ func (n *NTPClient) Communicate(packet *NTPControlMsgHead) (*NTPControlMsg, erro
 		}
 	}
 	return &NTPControlMsg{NTPControlMsgHead: *resultHead, Data: resultData}, nil
+}
+
+// Communicate sends package over connection, bumps Sequence num and parses (possibly multiple) response packets into NTPControlMsg packet.
+func (n *NTPClient) Communicate(packet *NTPControlMsgHead) (*NTPControlMsg, error) {
+	return n.CommunicateWithData(packet, nil)
 }

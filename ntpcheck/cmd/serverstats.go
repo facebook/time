@@ -22,12 +22,13 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
 	"github.com/facebookincubator/ntp/ntpcheck/checker"
 )
 
 func printServerStats(r *checker.NTPCheckResult) error {
 	if r.ServerStats == nil {
-		return fmt.Errorf("no server stats present (only chrony over unix socket is currently supported)")
+		return fmt.Errorf("no server stats present (chrony is supported only over unix socket, required ntpd version 4.2.8+)")
 	}
 	toPrint, err := json.Marshal(r.ServerStats)
 	if err != nil {

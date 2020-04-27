@@ -76,10 +76,7 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 		if !ok {
 			return nil, errors.Errorf("Got wrong 'serverstats' response %+v", packet)
 		}
-		result.ServerStats = &ServerStats{
-			PacketsReceived: uint64(stats.NTPHits),
-			PacketsDropped:  uint64(stats.NTPDrops),
-		}
+		result.ServerStats = NewServerStatsFromChrony(stats)
 		log.Debugf("ServerStats: %v", result.ServerStats)
 	} else if err != chrony.ErrNotAuthorized {
 		return nil, errors.Wrap(err, "failed to get 'serverstats' response")
