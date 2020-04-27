@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/jsimonetti/rtnetlink/rtnl"
-	errors "github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -71,67 +69,6 @@ func (s *Server) DeleteAllIPs() {
 			log.Errorf("[server]: %v", err)
 		}
 	}
-}
-
-func addIfaceIP(iface *net.Interface, addr *net.IP) error {
-	// Check if IP is assigned:
-	assigned, err := checkIP(iface, addr)
-	if err != nil {
-		return err
-	}
-	if assigned {
-		return nil
-	}
-
-	conn, err := rtnl.Dial(nil)
-	if err != nil {
-		return errors.Wrap(err, "can't establish netlink connection")
-	}
-	defer conn.Close()
-
-	var mask net.IPMask
-	if v4 := addr.To4(); v4 == nil {
-		mask = net.CIDRMask(ipv6Mask, ipv6Len)
-	} else {
-		mask = net.CIDRMask(ipv4Mask, ipv4Len)
-	}
-
-	err = conn.AddrAdd(iface, &net.IPNet{IP: *addr, Mask: mask})
-	if err != nil {
-		return errors.Wrap(err, "can't add address")
-	}
-	return nil
-}
-
-func deleteIfaceIP(iface *net.Interface, addr *net.IP) error {
-	// Check if IP is assigned:
-	assigned, err := checkIP(iface, addr)
-	if err != nil {
-		return err
-	}
-	if !assigned {
-		return nil
-	}
-
-	conn, err := rtnl.Dial(nil)
-	if err != nil {
-		return errors.Wrap(err, "can't establish netlink connection")
-	}
-	defer conn.Close()
-
-	var mask net.IPMask
-	if v4 := addr.To4(); v4 == nil {
-		mask = net.CIDRMask(ipv6Mask, ipv6Len)
-	} else {
-		mask = net.CIDRMask(ipv4Mask, ipv4Len)
-	}
-
-	err = conn.AddrDel(iface, &net.IPNet{IP: *addr, Mask: mask})
-	if err != nil {
-		return errors.Wrap(err, "can't remove address")
-	}
-
-	return nil
 }
 
 // checkIP checks if IP is assigned to the interface already
