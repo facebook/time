@@ -58,11 +58,19 @@ func (n *NTPCheck) ReadStatus() (*control.NTPControlMsg, error) {
 	return n.Client.Communicate(packet)
 }
 
-// ReadVariables sends Read Variables packat for associationID.
+// ReadVariables sends Read Variables packet for associationID.
 // associationID set to 0 means 'read local system variables'
 func (n *NTPCheck) ReadVariables(associationID uint16) (*control.NTPControlMsg, error) {
 	packet := n.getReadVariablesPacket(associationID)
 	return n.Client.Communicate(packet)
+}
+
+// ReadServerVariables sends Read Variables packet asking for server vars and returns response packet
+func (n *NTPCheck) ReadServerVariables() (*control.NTPControlMsg, error) {
+	packet := n.getReadVariablesPacket(0)
+	// ntpd for some reason requires all those fields to be present in request (order doesn't matter though)
+	vars := "ss_uptime,ss_reset,ss_received,ss_thisver,ss_oldver,ss_badformat,ss_badauth,ss_declined,ss_restricted,ss_limited,ss_kodsent,ss_processed"
+	return n.Client.CommunicateWithData(packet, []uint8(vars))
 }
 
 // Run is the main method of NTPCheck and it fetches all information to return NTPCheckResult.
@@ -98,14 +106,6 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get 'read variables' packet from NTP server for associationID=0")
 	}
-	sys, err := NewSystemVariables(infoPacket)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create System structure from response packet for server")
-	}
-	result.SysVars = sys
-	// with NTPD 4.2.8+ we can read SystemStats from system variables: 'ss_received', 'ss_declined' and so on.
-	// But we currently have NTPD 4.2.6 which uses custom mode 7 NTP messaging I really don't want to implement
-	// as we are moving to chrony anyway.
 	log.Debugf("Got 'read variables' response:")
 	log.Debugf("Version: %v", infoPacket.GetVersion())
 	log.Debugf("Mode: %v", infoPacket.GetMode())
@@ -113,6 +113,35 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 	log.Debugf("Error: %v", infoPacket.HasError())
 	log.Debugf("More: %v", infoPacket.HasMore())
 	log.Debugf("Data string: '%s'", string(infoPacket.Data))
+
+	sys, err := NewSystemVariables(infoPacket)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create System structure from response packet for server")
+	}
+	result.SysVars = sys
+
+	// Server stats. Best effort (ntpd 4.2.8+)
+	// With NTPD 4.2.8+ we can read SystemStats from system variables: 'ss_received', 'ss_declined' and so on.
+	// Older NTPD 4.2.6 uses custom mode 7 NTP messaging that is not implemented in this library
+	serverVars, err := n.ReadServerVariables()
+	if err == nil {
+		log.Debugf("Got system 'read variables' response:")
+		log.Debugf("Version: %v", serverVars.GetVersion())
+		log.Debugf("Mode: %v", serverVars.GetMode())
+		log.Debugf("Response: %v", serverVars.IsResponse())
+		log.Debugf("Error: %v", serverVars.HasError())
+		log.Debugf("More: %v", serverVars.HasMore())
+		log.Debugf("Data string: '%s'", string(serverVars.Data))
+
+		if !serverVars.HasError() && len(serverVars.Data) > 0 {
+			serverStats, err := NewServerStatsFromNTP(serverVars)
+			if err != nil {
+				return nil, errors.Errorf("Got bad 'server variables' response %+v", packet)
+			}
+			result.ServerStats = serverStats
+		}
+	}
+
 	assocs, err := packet.GetAssociations()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get associations list from response packet for associationID=0")
