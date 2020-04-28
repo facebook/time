@@ -123,7 +123,7 @@ func RunCheck(address string) (*NTPCheckResult, error) {
 			return nil, err
 		}
 	} else {
-		conn, err = net.DialTimeout("udp6", address, timeout)
+		conn, err = net.DialTimeout("udp", address, timeout)
 		if err != nil {
 			return nil, err
 		}
