@@ -17,8 +17,10 @@ limitations under the License.
 package control
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNormalizeData(t *testing.T) {
@@ -102,4 +104,127 @@ filtdisp= 0.00 1.95 3.87 5.79 7.79 9.78 11.72 13.71
 		"xleave":     "0.022",
 	}
 	assert.Equal(expected, parsed)
+}
+
+func TestPeerStatus(t *testing.T) {
+	var wantByte uint8 = 0x12
+	wantPeerStatus := PeerStatus{
+		Broadcast:   false,
+		Reachable:   true,
+		AuthEnabled: false,
+		AuthOK:      false,
+		Configured:  true,
+	}
+	input := wantPeerStatus.Byte()
+	assert.Equal(t, wantByte, input)
+	peerStatus := ReadPeerStatus(input)
+	assert.Equal(t, wantPeerStatus, peerStatus)
+}
+
+func TestPeerStatusWord(t *testing.T) {
+	var wantWord uint16 = 0x9412
+	wantPeerStatusWord := &PeerStatusWord{
+		PeerStatus: PeerStatus{
+			Broadcast:   false,
+			Reachable:   true,
+			AuthEnabled: false,
+			AuthOK:      false,
+			Configured:  true,
+		},
+		PeerSelection:    4,
+		PeerEventCounter: 1,
+		PeerEventCode:    2,
+	}
+	input := wantPeerStatusWord.Word()
+	assert.Equal(t, wantWord, input)
+	peerStatusWord := ReadPeerStatusWord(input)
+	assert.Equal(t, wantPeerStatusWord, peerStatusWord)
+}
+
+func TestSystemStatusWord(t *testing.T) {
+	var wantWord uint16 = 0x4342
+	wantSystemStatusWord := &SystemStatusWord{
+		LI:                 1, // add_sec
+		ClockSource:        3, // hf_radio
+		SystemEventCounter: 4,
+		SystemEventCode:    2, // freq_mode
+	}
+	input := wantSystemStatusWord.Word()
+	assert.Equal(t, wantWord, input)
+	systemStatusWord := ReadSystemStatusWord(input)
+	assert.Equal(t, wantSystemStatusWord, systemStatusWord)
+}
+
+func TestMakeVnMode(t *testing.T) {
+	version := 3
+	mode := 2
+	msg := NTPControlMsgHead{
+		VnMode: MakeVnMode(version, mode),
+	}
+	assert.Equal(t, version, msg.GetVersion())
+	assert.Equal(t, mode, msg.GetMode())
+}
+
+func TestMakeREMOp(t *testing.T) {
+	response := true
+	err := false
+	more := true
+	op := OpReadVariables
+	msg := NTPControlMsgHead{
+		REMOp: MakeREMOp(response, err, more, op),
+	}
+	assert.True(t, msg.IsResponse())
+	assert.False(t, msg.HasError())
+	assert.True(t, msg.HasMore())
+	assert.Equal(t, uint8(op), msg.GetOperation())
+}
+
+func uint16to2x8(d uint16) []uint8 {
+	return []uint8{uint8((d & 65280) >> 8), uint8(d & 255)}
+}
+
+func TestNTPControlMsg_GetAssociations(t *testing.T) {
+	peerStatusWord1 := &PeerStatusWord{
+		PeerStatus: PeerStatus{
+			Broadcast:   false,
+			Reachable:   true,
+			AuthEnabled: false,
+			AuthOK:      false,
+			Configured:  true,
+		},
+		PeerSelection:    4,
+		PeerEventCounter: 1,
+		PeerEventCode:    2,
+	}
+	peerStatusWord2 := &PeerStatusWord{
+		PeerStatus: PeerStatus{
+			Broadcast:   false,
+			Reachable:   true,
+			AuthEnabled: false,
+			AuthOK:      false,
+			Configured:  true,
+		},
+		PeerSelection:    6,
+		PeerEventCounter: 0,
+		PeerEventCode:    3,
+	}
+	assocData := []uint8{}
+	assocData = append(assocData, uint16to2x8(1)...)
+	assocData = append(assocData, uint16to2x8(peerStatusWord1.Word())...)
+	assocData = append(assocData, uint16to2x8(2)...)
+	assocData = append(assocData, uint16to2x8(peerStatusWord2.Word())...)
+	msg := NTPControlMsg{
+		NTPControlMsgHead: NTPControlMsgHead{
+			REMOp: MakeREMOp(true, false, false, OpReadStatus),
+			Count: uint16(len(assocData)),
+		},
+		Data: assocData,
+	}
+	want := map[uint16]*PeerStatusWord{
+		1: peerStatusWord1,
+		2: peerStatusWord2,
+	}
+	got, err := msg.GetAssociations()
+	require.Nil(t, err)
+	assert.Equal(t, want, got)
 }

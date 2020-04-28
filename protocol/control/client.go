@@ -31,6 +31,8 @@ type NTPClient struct {
 }
 
 // CommunicateWithData sends package + data over connection, bumps Sequence num and parses (possibly multiple) response packets into NTPControlMsg packet.
+// This function will always return single NTPControlMsg, even if under the hood it was split across multiple packets.
+// Resulting NTPControlMsg will have Data section composed of combined Data sections from all packages.
 func (n *NTPClient) CommunicateWithData(packet *NTPControlMsgHead, data []uint8) (*NTPControlMsg, error) {
 	packet.Sequence = n.Sequence
 	if len(data) > 0 {
@@ -80,6 +82,8 @@ func (n *NTPClient) CommunicateWithData(packet *NTPControlMsgHead, data []uint8)
 }
 
 // Communicate sends package over connection, bumps Sequence num and parses (possibly multiple) response packets into NTPControlMsg packet.
+// This function will always return single NTPControlMsg, even if under the hood it was split across multiple packets.
+// Resulting NTPControlMsg will have Data section composed of combined Data sections from all packages.
 func (n *NTPClient) Communicate(packet *NTPControlMsgHead) (*NTPControlMsg, error) {
 	return n.CommunicateWithData(packet, nil)
 }

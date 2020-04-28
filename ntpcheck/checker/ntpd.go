@@ -25,18 +25,25 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var vnMode = control.MakeVnMode(3, control.Mode)
+
+type ntpClient interface {
+	Communicate(packet *control.NTPControlMsgHead) (*control.NTPControlMsg, error)
+	CommunicateWithData(packet *control.NTPControlMsgHead, data []uint8) (*control.NTPControlMsg, error)
+}
+
 // NTPCheck gathers NTP stats using UDP network client
 type NTPCheck struct {
-	Client control.NTPClient
+	Client ntpClient
 }
 
 func (n *NTPCheck) getReadStatusPacket() *control.NTPControlMsgHead {
 	return &control.NTPControlMsgHead{
 		// This is a 00, then three-bit integer indicating the NTP version number, currently three, then
 		// a three-bit integer indicating the mode. It must have the value 6, indicating an NTP control message.
-		VnMode: 0x1E,
+		VnMode: vnMode,
 		// Response Bit, Error Bit and More bit set to zero, Operation Code set to 1 (read status command/response)
-		REMOp: 0x01,
+		REMOp: control.OpReadStatus,
 	}
 }
 
@@ -45,9 +52,9 @@ func (n *NTPCheck) getReadVariablesPacket(associationID uint16) *control.NTPCont
 	return &control.NTPControlMsgHead{
 		// This is a 00, then three-bit integer indicating the NTP version number, currently three, then
 		// a three-bit integer indicating the mode. It must have the value 6, indicating an NTP control message.
-		VnMode: 0x1E,
+		VnMode: vnMode,
 		// Response Bit, Error Bit and More bit set to zero, Operation Code set to 2 (read variables command/response)
-		REMOp:         0x02,
+		REMOp:         control.OpReadVariables,
 		AssociationID: associationID,
 	}
 }
@@ -114,7 +121,7 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 	log.Debugf("More: %v", infoPacket.HasMore())
 	log.Debugf("Data string: '%s'", string(infoPacket.Data))
 
-	sys, err := NewSystemVariables(infoPacket)
+	sys, err := NewSystemVariablesFromNTP(infoPacket)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create System structure from response packet for server")
 	}
@@ -178,6 +185,6 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 // NewNTPCheck is a contructor for NTPCheck
 func NewNTPCheck(conn io.ReadWriter) *NTPCheck {
 	return &NTPCheck{
-		Client: control.NTPClient{Sequence: 1, Connection: conn},
+		Client: &control.NTPClient{Sequence: 1, Connection: conn},
 	}
 }

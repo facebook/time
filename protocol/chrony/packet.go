@@ -58,7 +58,7 @@ const (
 	reqSourceData  CommandType = 15
 	reqTracking    CommandType = 33
 	reqServerStats CommandType = 54
-	reqNtpData     CommandType = 57
+	reqNTPData     CommandType = 57
 )
 
 // reply types
@@ -161,9 +161,9 @@ var SourceStateDesc = [6]string{
 	"outlier",
 }
 
-// requestHead is the first (common) part of the request,
+// RequestHead is the first (common) part of the request,
 // in a format that can be directly passed to binary.Write
-type requestHead struct {
+type RequestHead struct {
 	Version  uint8
 	PKTType  PacketType
 	Res1     uint8
@@ -176,12 +176,12 @@ type requestHead struct {
 }
 
 // GetCommand returns request packet command
-func (r *requestHead) GetCommand() CommandType {
+func (r *RequestHead) GetCommand() CommandType {
 	return r.Command
 }
 
 // SetSequence sets request packet sequence number
-func (r *requestHead) SetSequence(n uint32) {
+func (r *RequestHead) SetSequence(n uint32) {
 	r.Sequence = n
 }
 
@@ -200,23 +200,24 @@ type ResponsePacket interface {
 
 // RequestSources - packet to request number of sources (peers)
 type RequestSources struct {
-	requestHead
+	RequestHead
 	// we actually need this to send proper packet
 	data [maxDataLen]uint8 //nolint:unused,structcheck
 }
 
 // RequestSourceData - packet to request source data for source id
 type RequestSourceData struct {
-	requestHead
+	RequestHead
 	Index int32
 	EOR   int32
 	// we pass i32 - 4 bytes
 	data [maxDataLen - 4]uint8 //nolint:unused,structcheck
 }
 
-// RequestNTPData - packet to request NTP data for peer IP
+// RequestNTPData - packet to request NTP data for peer IP.
+// As of now, it's only allowed by Chrony over unix socket connection.
 type RequestNTPData struct {
-	requestHead
+	RequestHead
 	IPAddr ipAddr
 	EOR    int32
 	// we pass at max ipv6 addr - 16 bytes
@@ -225,21 +226,21 @@ type RequestNTPData struct {
 
 // RequestServerStats - packet to request server stats
 type RequestServerStats struct {
-	requestHead
+	RequestHead
 	// we actually need this to send proper packet
 	data [maxDataLen]uint8 //nolint:unused,structcheck
 }
 
 // RequestTracking - packet to request 'tracking' data
 type RequestTracking struct {
-	requestHead
+	RequestHead
 	// we actually need this to send proper packet
 	data [maxDataLen]uint8 //nolint:unused,structcheck
 }
 
-// replyHead is the first (common) part of the reply packet,
+// ReplyHead is the first (common) part of the reply packet,
 // in a format that can be directly passed to binary.Read
-type replyHead struct {
+type ReplyHead struct {
 	Version  uint8
 	PKTType  PacketType
 	Res1     uint8
@@ -256,17 +257,17 @@ type replyHead struct {
 }
 
 // GetCommand returns reply packet command
-func (r *replyHead) GetCommand() CommandType {
+func (r *ReplyHead) GetCommand() CommandType {
 	return r.Command
 }
 
 // GetType returns reply packet type
-func (r *replyHead) GetType() PacketType {
+func (r *ReplyHead) GetType() PacketType {
 	return r.PKTType
 }
 
 // GetStatus returns reply packet status
-func (r *replyHead) GetStatus() ResponseStatusType {
+func (r *ReplyHead) GetStatus() ResponseStatusType {
 	return r.Status
 }
 
@@ -277,7 +278,7 @@ type replySourcesContent struct {
 
 // ReplySources is a usable version of a reply to 'sources' command
 type ReplySources struct {
-	replyHead
+	ReplyHead
 	NSources int
 }
 
@@ -296,8 +297,8 @@ type replySourceDataContent struct {
 	EOR            int32
 }
 
-// sourceData contains parsed version of 'source data' reply
-type sourceData struct {
+// SourceData contains parsed version of 'source data' reply
+type SourceData struct {
 	IPAddr         net.IP
 	Poll           int16
 	Stratum        uint16
@@ -311,8 +312,8 @@ type sourceData struct {
 	LatestMeasErr  float64
 }
 
-func newSourceData(r *replySourceDataContent) *sourceData {
-	return &sourceData{
+func newSourceData(r *replySourceDataContent) *SourceData {
+	return &SourceData{
 		IPAddr:         r.IPAddr.ToNetIP(),
 		Poll:           r.Poll,
 		Stratum:        r.Stratum,
@@ -329,8 +330,8 @@ func newSourceData(r *replySourceDataContent) *sourceData {
 
 // ReplySourceData is a usable version of 'source data' reply for given source id
 type ReplySourceData struct {
-	replyHead
-	sourceData
+	ReplyHead
+	SourceData
 }
 
 type replyTrackingContent struct {
@@ -351,7 +352,8 @@ type replyTrackingContent struct {
 	EOR                int32
 }
 
-type tracking struct {
+// Tracking contains parsed version of 'tracking' reply
+type Tracking struct {
 	RefID              uint32
 	IPAddr             net.IP
 	Stratum            uint16
@@ -368,8 +370,8 @@ type tracking struct {
 	LastUpdateInterval float64
 }
 
-func newTracking(r *replyTrackingContent) *tracking {
-	return &tracking{
+func newTracking(r *replyTrackingContent) *Tracking {
+	return &Tracking{
 		RefID:              r.RefID,
 		IPAddr:             r.IPAddr.ToNetIP(),
 		Stratum:            r.Stratum,
@@ -389,8 +391,8 @@ func newTracking(r *replyTrackingContent) *tracking {
 
 // ReplyTracking has usable 'tracking' response
 type ReplyTracking struct {
-	replyHead
-	tracking
+	ReplyHead
+	Tracking
 }
 
 type replyNTPDataContent struct {
@@ -422,7 +424,8 @@ type replyNTPDataContent struct {
 	EOR             int32
 }
 
-type ntpData struct {
+// NTPData contains parsed version of 'ntpdata' reply
+type NTPData struct {
 	RemoteAddr      net.IP
 	LocalAddr       net.IP
 	RemotePort      uint16
@@ -449,8 +452,8 @@ type ntpData struct {
 	TotalValidCount uint32
 }
 
-func newNTPData(r *replyNTPDataContent) *ntpData {
-	return &ntpData{
+func newNTPData(r *replyNTPDataContent) *NTPData {
+	return &NTPData{
 		RemoteAddr:      r.RemoteAddr.ToNetIP(),
 		LocalAddr:       r.LocalAddr.ToNetIP(),
 		RemotePort:      r.RemotePort,
@@ -478,13 +481,14 @@ func newNTPData(r *replyNTPDataContent) *ntpData {
 	}
 }
 
-// ReplyNTPData is a usable version of 'ntp data' response
+// ReplyNTPData is a what end user will get for of 'ntp data' response
 type ReplyNTPData struct {
-	replyHead
-	ntpData
+	ReplyHead
+	NTPData
 }
 
-type serverStats struct {
+// ServerStats contains parsed version of 'serverstats' reply
+type ServerStats struct {
 	NTPHits  uint32
 	CMDHits  uint32
 	NTPDrops uint32
@@ -494,8 +498,8 @@ type serverStats struct {
 
 // ReplyServerStats is a usable version of 'serverstats' response
 type ReplyServerStats struct {
-	replyHead
-	serverStats
+	ReplyHead
+	ServerStats
 }
 
 // here go request constuctors
@@ -503,7 +507,7 @@ type ReplyServerStats struct {
 // NewSourcesPacket creates new packet to request number of sources (peers)
 func NewSourcesPacket() *RequestSources {
 	return &RequestSources{
-		requestHead: requestHead{
+		RequestHead: RequestHead{
 			Version: protoVersionNumber,
 			PKTType: pktTypeCmdRequest,
 			Command: reqNSources,
@@ -514,7 +518,7 @@ func NewSourcesPacket() *RequestSources {
 // NewTrackingPacket creates new packet to request 'tracking' information
 func NewTrackingPacket() *RequestTracking {
 	return &RequestTracking{
-		requestHead: requestHead{
+		RequestHead: RequestHead{
 			Version: protoVersionNumber,
 			PKTType: pktTypeCmdRequest,
 			Command: reqTracking,
@@ -525,7 +529,7 @@ func NewTrackingPacket() *RequestTracking {
 // NewSourceDataPacket creates new packet to request 'source data' information about source with given ID
 func NewSourceDataPacket(sourceID int32) *RequestSourceData {
 	return &RequestSourceData{
-		requestHead: requestHead{
+		RequestHead: RequestHead{
 			Version: protoVersionNumber,
 			PKTType: pktTypeCmdRequest,
 			Command: reqSourceData,
@@ -537,10 +541,10 @@ func NewSourceDataPacket(sourceID int32) *RequestSourceData {
 // NewNTPDataPacket creates new packet to request 'ntp data' information for given peer IP
 func NewNTPDataPacket(ip net.IP) *RequestNTPData {
 	return &RequestNTPData{
-		requestHead: requestHead{
+		RequestHead: RequestHead{
 			Version: protoVersionNumber,
 			PKTType: pktTypeCmdRequest,
-			Command: reqNtpData,
+			Command: reqNTPData,
 		},
 		IPAddr: *newIPAddr(ip),
 	}
@@ -549,7 +553,7 @@ func NewNTPDataPacket(ip net.IP) *RequestNTPData {
 // NewServerStatsPacket creates new packet to request 'serverstats' information
 func NewServerStatsPacket() *RequestServerStats {
 	return &RequestServerStats{
-		requestHead: requestHead{
+		RequestHead: RequestHead{
 			Version: protoVersionNumber,
 			PKTType: pktTypeCmdRequest,
 			Command: reqServerStats,

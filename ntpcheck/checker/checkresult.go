@@ -16,7 +16,10 @@ limitations under the License.
 
 package checker
 
-import "github.com/pkg/errors"
+import (
+	"github.com/facebookincubator/ntp/protocol/control"
+	"github.com/pkg/errors"
+)
 
 // NTPCheckResult represents result of NTPCheck run polulated with information about server and it's peers.
 type NTPCheckResult struct {
@@ -40,7 +43,7 @@ func (r *NTPCheckResult) FindSysPeer() (*Peer, error) {
 		return nil, errors.New("no peers present")
 	}
 	for _, peer := range r.Peers {
-		if peer.Selection == SelSYSPeer {
+		if peer.Selection == control.SelSYSPeer {
 			return peer, nil
 		}
 	}
@@ -52,10 +55,10 @@ func (r *NTPCheckResult) FindGoodPeers() ([]*Peer, error) {
 	results := []*Peer{}
 	// see http://doc.ntp.org/current-stable/decode.html#peer for reference
 	goodStatusesMap := map[uint8]bool{
-		SelCandidate: true,
-		SelBackup:    true,
-		SelSYSPeer:   true,
-		SelPPSPeer:   true,
+		control.SelCandidate: true,
+		control.SelBackup:    true,
+		control.SelSYSPeer:   true,
+		control.SelPPSPeer:   true,
 	}
 	if len(r.Peers) == 0 {
 		return results, errors.New("no peers present")

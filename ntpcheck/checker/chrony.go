@@ -25,9 +25,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type chronyClient interface {
+	Communicate(packet chrony.RequestPacket) (chrony.ResponsePacket, error)
+}
+
 // ChronyCheck gathers NTP stats using chronyc/chronyd protocol client
 type ChronyCheck struct {
-	Client chrony.Client
+	Client chronyClient
 }
 
 // chrony reports all float measures in seconds, while NTP and this tool operate ms
@@ -57,16 +61,7 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 	result.LIDesc = control.LeapDesc[uint8(tracking.LeapStatus)]
 	result.LI = uint8(tracking.LeapStatus)
 	result.Event = "clock_sync" // no real events for chrony
-	result.SysVars = &SystemVariables{
-		Leap:      int(tracking.LeapStatus),
-		Stratum:   int(tracking.Stratum),
-		RootDelay: secToMS(tracking.RootDelay),
-		RootDisp:  secToMS(tracking.RootDispersion),
-		RefID:     chrony.RefidAsHEX(tracking.RefID),
-		RefTime:   tracking.RefTime.String(),
-		Offset:    secToMS(tracking.RMSOffset),
-		Frequency: tracking.FreqPPM,
-	}
+	result.SysVars = NewSystemVariablesFromChrony(tracking)
 
 	// server stats (best effort, works only over unix socket)
 	statsReq := chrony.NewServerStatsPacket()
@@ -143,6 +138,6 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 // NewChronyCheck is a constructor for ChronyCheck
 func NewChronyCheck(conn io.ReadWriter) *ChronyCheck {
 	return &ChronyCheck{
-		Client: chrony.Client{Sequence: 1, Connection: conn},
+		Client: &chrony.Client{Sequence: 1, Connection: conn},
 	}
 }

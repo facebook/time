@@ -23,9 +23,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Mode is NTP Control operation mode code
+const Mode = 6
+
+// Supported operation codes
 const (
-	readStatus    = 1
-	readVariables = 2
+	OpReadStatus    = 1
+	OpReadVariables = 2
 )
 
 // NormalizeData turns bytes that contain kv ASCII string info a map[string]string
@@ -48,8 +52,7 @@ func NormalizeData(data []byte) (map[string]string, error) {
 	return result, nil
 }
 
-// NTPControlMsgHead structure is described in NTPv3 RFC-1119 Appendix B. NTP Control Messages
-// for some reason it's missing from more recent NTPv4 RFC-5905.
+// NTPControlMsgHead structure is described in NTPv3 RFC1305 Appendix B. NTP Control Messages.
 // We don't have Data defined here as data size is variable and binary package
 // simply doesn't support reading or writing structs with non-fixed fields.
 type NTPControlMsgHead struct {
@@ -71,7 +74,7 @@ type NTPControlMsgHead struct {
 	// then goes [468]uint8 of data that we have in NTPControlMsg
 }
 
-// NTPControlMsg is just a NTPControlMsgHead with data
+// NTPControlMsg is just a NTPControlMsgHead with data.
 type NTPControlMsg struct {
 	NTPControlMsgHead
 	Data []uint8
@@ -151,6 +154,16 @@ type SystemStatusWord struct {
 	SystemEventCode    uint8
 }
 
+// Word encodes SystemStatusWord as uint16 word
+func (ssw *SystemStatusWord) Word() uint16 {
+	var out uint16
+	out |= uint16(ssw.LI) << 14
+	out |= uint16(ssw.ClockSource) << 8
+	out |= uint16(ssw.SystemEventCounter) << 4
+	out |= uint16(ssw.SystemEventCode)
+	return out
+}
+
 // ReadSystemStatusWord transforms SystemStatus 16bit word into usable struct.
 func ReadSystemStatusWord(b uint16) *SystemStatusWord {
 	return &SystemStatusWord{
@@ -170,6 +183,47 @@ type PeerStatus struct {
 	AuthOK      bool
 	Configured  bool
 }
+
+// Byte encodes PeerStatus as uint8
+func (ps *PeerStatus) Byte() uint8 {
+	var out uint8
+	if ps.Configured {
+		out |= 0x10
+	}
+	if ps.AuthOK {
+		out |= 0x8
+	}
+	if ps.AuthEnabled {
+		out |= 0x4
+	}
+	if ps.Reachable {
+		out |= 0x2
+	}
+	if ps.Broadcast {
+		out |= 0x1
+	}
+	return out
+}
+
+// Here go peer selection statuses, as described in http://doc.ntp.org/current-stable/decode.html#peer
+const (
+	// SelReject means peer is discarded as not valid (TEST10-TEST13)
+	SelReject uint8 = 0
+	// SelFalseTick means peer is discarded by intersection algorithm
+	SelFalseTick uint8 = 1
+	// SelExcess means peer is discarded by table overflow (not used)
+	SelExcess uint8 = 2
+	// SelOutlier means peer is discarded by the cluster algorithm
+	SelOutlier uint8 = 3
+	// SelCandidate means peer is included by the combine algorithm
+	SelCandidate uint8 = 4
+	// SelBackup means peer is a backup (more than tos maxclock sources)
+	SelBackup uint8 = 5
+	// SelSYSPeer means peer is a system peer (main syncronization source)
+	SelSYSPeer uint8 = 6
+	// SelPPSPeer means peer is a PPS peer (when the prefer peer is valid)
+	SelPPSPeer uint8 = 7
+)
 
 // PeerSelect maps PeerSelection uint8 to human-readable string taken from http://doc.ntp.org/4.2.6/decode.html#peer
 var PeerSelect = [8]string{"reject", "falsetick", "excess", "outlyer", "candidate", "backup", "sys.peer", "pps.peer"}
@@ -194,6 +248,17 @@ type PeerStatusWord struct {
 	PeerEventCode    uint8
 }
 
+// Word encodes PeerStatusWord as uint16 word
+func (psw *PeerStatusWord) Word() uint16 {
+	var out uint16
+	psByte := uint16(psw.PeerStatus.Byte())
+	out |= psByte << 11
+	out |= uint16(psw.PeerSelection) << 8
+	out |= uint16(psw.PeerEventCounter) << 4
+	out |= uint16(psw.PeerEventCode)
+	return out
+}
+
 // ReadPeerStatusWord transforms PeerStatus 16bit word into usable struct
 func ReadPeerStatusWord(b uint16) *PeerStatusWord {
 	status := uint8((b & 0xf800) >> 11) // first 5 bits
@@ -203,6 +268,30 @@ func ReadPeerStatusWord(b uint16) *PeerStatusWord {
 		PeerEventCounter: uint8((b & 0xf0) >> 4),  // 4 bits
 		PeerEventCode:    uint8((b & 0xf)),        // last 4 bits
 	}
+}
+
+// MakeVnMode composes uint8 with version and mode bits set
+func MakeVnMode(version int, mode int) uint8 {
+	var out uint8
+	out |= uint8(version) << 3
+	out |= uint8(mode)
+	return out
+}
+
+// MakeREMOp composes uint8 with response error and more bits set, combined with operation code
+func MakeREMOp(response, err, more bool, op int) uint8 {
+	var out uint8
+	if response {
+		out |= 0x80
+	}
+	if err {
+		out |= 0x40
+	}
+	if more {
+		out |= 0x20
+	}
+	out |= uint8(op)
+	return out
 }
 
 // GetVersion gets int version from Version+Mode 8bit word
@@ -237,7 +326,7 @@ func (n NTPControlMsgHead) GetOperation() uint8 {
 
 // GetSystemStatus returns parsed SystemStatusWord struct if present
 func (n NTPControlMsg) GetSystemStatus() (*SystemStatusWord, error) {
-	if n.GetOperation() != readStatus {
+	if n.GetOperation() != OpReadStatus {
 		return nil, errors.Errorf("no System Status Word supported for operation=%d", n.GetOperation())
 	}
 	return ReadSystemStatusWord(n.Status), nil
@@ -245,7 +334,7 @@ func (n NTPControlMsg) GetSystemStatus() (*SystemStatusWord, error) {
 
 // GetPeerStatus returns parsed PeerStatusWord struct if present
 func (n NTPControlMsg) GetPeerStatus() (*PeerStatusWord, error) {
-	if n.GetOperation() != readVariables {
+	if n.GetOperation() != OpReadVariables {
 		return nil, errors.Errorf("no Peer Status Word supported for operation=%d", n.GetOperation())
 	}
 	return ReadPeerStatusWord(n.Status), nil
@@ -254,7 +343,7 @@ func (n NTPControlMsg) GetPeerStatus() (*PeerStatusWord, error) {
 // GetAssociations returns map of PeerStatusWord, basically peer information.
 func (n NTPControlMsg) GetAssociations() (map[uint16]*PeerStatusWord, error) {
 	result := map[uint16]*PeerStatusWord{}
-	if n.GetOperation() != readStatus {
+	if n.GetOperation() != OpReadStatus {
 		return result, errors.Errorf("no peer list supported for operation=%d", n.GetOperation())
 	}
 	for i := 0; i < int(n.Count/4); i++ {
@@ -269,7 +358,7 @@ func (n NTPControlMsg) GetAssociations() (map[uint16]*PeerStatusWord, error) {
 // GetAssociationInfo returns parsed normalized variables if present
 func (n NTPControlMsg) GetAssociationInfo() (map[string]string, error) {
 	result := map[string]string{}
-	if n.GetOperation() != readVariables {
+	if n.GetOperation() != OpReadVariables {
 		return result, errors.Errorf("no variables supported for operation=%d", n.GetOperation())
 	}
 	data, err := NormalizeData(n.Data)
