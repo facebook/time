@@ -25,26 +25,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Here go peer selection statuses, as described in http://doc.ntp.org/current-stable/decode.html#peer
-const (
-	// SelReject means peer is discarded as not valid (TEST10-TEST13)
-	SelReject uint8 = 0
-	// SelFalseTick means peer is discarded by intersection algorithm
-	SelFalseTick uint8 = 1
-	// SelExcess means peer is discarded by table overflow (not used)
-	SelExcess uint8 = 2
-	// SelOutlier means peer is discarded by the cluster algorithm
-	SelOutlier uint8 = 3
-	// SelCandidate means peer is included by the combine algorithm
-	SelCandidate uint8 = 4
-	// SelBackup means peer is a backup (more than tos maxclock sources)
-	SelBackup uint8 = 5
-	// SelSYSPeer means peer is a system peer (main syncronization source)
-	SelSYSPeer uint8 = 6
-	// SelPPSPeer means peer is a PPS peer (when the prefer peer is valid)
-	SelPPSPeer uint8 = 7
-)
-
 // Peer contains parsed information from Peer Variables and peer status word, as described in http://doc.ntp.org/current-stable/ntpq.html
 type Peer struct {
 	// from PeerStatusWord
@@ -183,16 +163,19 @@ func NewPeerFromNTP(p *control.NTPControlMsg) (*Peer, error) {
 
 // this mapping is not 100% correct, but fits the purpose of the tool
 var chronyToPeerSelection = map[chrony.SourceStateType]uint8{
-	chrony.SourceStateSync:        SelSYSPeer,
-	chrony.SourceStateUnreach:     SelReject, // not a direct mapping
-	chrony.SourceStateFalseTicket: SelFalseTick,
-	chrony.SourceStateJittery:     SelReject, // ditto
-	chrony.SourceStateCandidate:   SelCandidate,
-	chrony.SourceStateOutlier:     SelOutlier,
+	chrony.SourceStateSync:        control.SelSYSPeer,
+	chrony.SourceStateUnreach:     control.SelReject, // not a direct mapping
+	chrony.SourceStateFalseTicket: control.SelFalseTick,
+	chrony.SourceStateJittery:     control.SelReject, // ditto
+	chrony.SourceStateCandidate:   control.SelCandidate,
+	chrony.SourceStateOutlier:     control.SelOutlier,
 }
 
 // NewPeerFromChrony constructs Peer from two chrony packets
 func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.ReplyNTPData) (*Peer, error) {
+	if s == nil {
+		return nil, fmt.Errorf("no ReplySourceData to create Peer")
+	}
 	// clear auth and interlieved flag
 	flash := s.Flags & chrony.NTPFlagsTests
 	// don't report all flashers if peer is unreachable

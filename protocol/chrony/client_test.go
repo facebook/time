@@ -69,7 +69,7 @@ func TestCommunicateError(t *testing.T) {
 	var err error
 	require := require.New(t)
 	buf := &bytes.Buffer{}
-	packetHead := replyHead{
+	packetHead := ReplyHead{
 		Version:  protoVersionNumber,
 		PKTType:  pktTypeCmdReply,
 		Res1:     0,
@@ -102,7 +102,7 @@ func TestCommunicateAuthError(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	buf := &bytes.Buffer{}
-	packetHead := replyHead{
+	packetHead := ReplyHead{
 		Version:  protoVersionNumber,
 		PKTType:  pktTypeCmdReply,
 		Res1:     0,
@@ -136,7 +136,7 @@ func TestCommunicateOK(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	buf := &bytes.Buffer{}
-	packetHead := replyHead{
+	packetHead := ReplyHead{
 		Version:  protoVersionNumber,
 		PKTType:  pktTypeCmdReply,
 		Res1:     0,
@@ -178,8 +178,8 @@ func TestCommunicateOK(t *testing.T) {
 	p, err := client.Communicate(NewTrackingPacket())
 	require.Nil(err)
 	expected := &ReplyTracking{
-		replyHead: packetHead,
-		tracking: tracking{
+		ReplyHead: packetHead,
+		Tracking: Tracking{
 			RefID:              packetBody.RefID,
 			IPAddr:             net.IP([]byte{192, 168, 0, 10}),
 			Stratum:            packetBody.Stratum,

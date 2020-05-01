@@ -1,4 +1,4 @@
-# NTP [![CircleCI](https://circleci.com/gh/facebookincubator/ntp.svg?style=shield&circle-token=ebd225ee8627c5cfed164ccc90da1fc124bae609)](https://circleci.com/gh/facebookincubator/ntp)
+# NTP [![CircleCI](https://circleci.com/gh/facebookincubator/ntp.svg?style=shield&circle-token=ebd225ee8627c5cfed164ccc90da1fc124bae609)](https://circleci.com/gh/facebookincubator/ntp) [![GoDoc](https://godoc.org/github.com/facebookincubator/ntp?status.svg)](https://godoc.org/github.com/facebookincubator/ntp)
 
 <img width="50%" 
 align="right"

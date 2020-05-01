@@ -47,7 +47,7 @@ func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 	}
 	log.Debugf("Read %d bytes", read)
 	r := bytes.NewReader(response)
-	head := new(replyHead)
+	head := new(ReplyHead)
 	if err = binary.Read(r, binary.BigEndian, head); err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 		}
 		log.Debugf("response data: %+v", data)
 		return &ReplySources{
-			replyHead: *head,
+			ReplyHead: *head,
 			NSources:  int(data.NSources),
 		}, nil
 	case rpySourceData:
@@ -76,8 +76,8 @@ func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 		}
 		log.Debugf("response data: %+v", data)
 		return &ReplySourceData{
-			replyHead:  *head,
-			sourceData: *newSourceData(data),
+			ReplyHead:  *head,
+			SourceData: *newSourceData(data),
 		}, nil
 	case rpyTracking:
 		data := new(replyTrackingContent)
@@ -86,18 +86,18 @@ func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 		}
 		log.Debugf("response data: %+v", data)
 		return &ReplyTracking{
-			replyHead: *head,
-			tracking:  *newTracking(data),
+			ReplyHead: *head,
+			Tracking:  *newTracking(data),
 		}, nil
 	case rpyServerStats:
-		data := new(serverStats)
+		data := new(ServerStats)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
 		log.Debugf("response data: %+v", data)
 		return &ReplyServerStats{
-			replyHead:   *head,
-			serverStats: *data,
+			ReplyHead:   *head,
+			ServerStats: *data,
 		}, nil
 	case rpyNTPData:
 		data := new(replyNTPDataContent)
@@ -106,8 +106,8 @@ func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 		}
 		log.Debugf("response data: %+v", data)
 		return &ReplyNTPData{
-			replyHead: *head,
-			ntpData:   *newNTPData(data),
+			ReplyHead: *head,
+			NTPData:   *newNTPData(data),
 		}, nil
 	default:
 		return nil, fmt.Errorf("not implemented reply type %d from %+v", head.Reply, head)

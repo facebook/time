@@ -19,6 +19,7 @@ package checker
 import (
 	"strconv"
 
+	"github.com/facebookincubator/ntp/protocol/chrony"
 	"github.com/facebookincubator/ntp/protocol/control"
 	"github.com/pkg/errors"
 )
@@ -58,8 +59,21 @@ func sanityCheckSysVars(sysVars *SystemVariables) error {
 	return nil
 }
 
-// NewSystemVariables constructs System from NTPControlMsg packet
-func NewSystemVariables(p *control.NTPControlMsg) (*SystemVariables, error) {
+func NewSystemVariablesFromChrony(p *chrony.ReplyTracking) *SystemVariables {
+	return &SystemVariables{
+		Leap:      int(p.LeapStatus),
+		Stratum:   int(p.Stratum),
+		RootDelay: secToMS(p.RootDelay),
+		RootDisp:  secToMS(p.RootDispersion),
+		RefID:     chrony.RefidAsHEX(p.RefID),
+		RefTime:   p.RefTime.String(),
+		Offset:    secToMS(p.RMSOffset),
+		Frequency: p.FreqPPM,
+	}
+}
+
+// NewSystemVariablesFromNTP constructs System from NTPControlMsg packet
+func NewSystemVariablesFromNTP(p *control.NTPControlMsg) (*SystemVariables, error) {
 	m, err := p.GetAssociationInfo()
 	if err != nil {
 		return nil, err

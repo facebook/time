@@ -19,10 +19,13 @@ package control
 import (
 	"bytes"
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
+
+var vnMode = MakeVnMode(3, Mode)
 
 // fakeConn gives us fake io.ReadWriter interace implementation for which we can provide fake outputs
 type fakeConn struct {
@@ -59,8 +62,8 @@ func TestCommunicateEOF(t *testing.T) {
 	})
 	client := NTPClient{Sequence: 1, Connection: conn}
 	_, err := client.Communicate(&NTPControlMsgHead{
-		VnMode: 0x1E,
-		REMOp:  0x01,
+		VnMode: vnMode,
+		REMOp:  OpReadStatus,
 	})
 	require.NotNil(err)
 }
@@ -78,8 +81,8 @@ func TestCommunicateSingle(t *testing.T) {
 	})
 	client := NTPClient{Sequence: 1, Connection: conn}
 	p, err := client.Communicate(&NTPControlMsgHead{
-		VnMode: 0x1E,
-		REMOp:  0x01,
+		VnMode: vnMode,
+		REMOp:  OpReadStatus,
 	})
 	require.Nil(err)
 	expected := &NTPControlMsg{
@@ -112,8 +115,8 @@ func TestCommunicateMulti(t *testing.T) {
 	})
 	client := NTPClient{Sequence: 1, Connection: conn}
 	p, err := client.Communicate(&NTPControlMsgHead{
-		VnMode: 0x1E,
-		REMOp:  0x01,
+		VnMode: vnMode,
+		REMOp:  OpReadStatus,
 	})
 	require.Nil(err)
 	expected := &NTPControlMsg{
