@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package ntp implementns ntp packet and basic functions to work with.
+It provides quick and transparent translation between 48 bytes and
+simply accessible struct in the most efficient way.
+*/
 package ntp
 
 import (
@@ -23,19 +28,19 @@ import (
 	syscall "golang.org/x/sys/unix"
 )
 
-// NTPEpochNanosecond is the difference between NTP and Unix epoch in NS
-const NTPEpochNanosecond = int64(2208988800000000000)
+// NanosecondsToUnix is the difference between NTP and Unix epoch in NS
+const NanosecondsToUnix = int64(2208988800000000000)
 
 // Time is converting Unix time to sec and frac NTP format
 func Time(t time.Time) (seconds uint32, fracions uint32) {
-	nsec := t.UnixNano() + NTPEpochNanosecond
+	nsec := t.UnixNano() + NanosecondsToUnix
 	sec := nsec / time.Second.Nanoseconds()
 	return uint32(sec), uint32((nsec - sec*time.Second.Nanoseconds()) << 32 / time.Second.Nanoseconds())
 }
 
 // Unix is converting NTP seconds and fractions into Unix time
 func Unix(seconds, fractions uint32) time.Time {
-	secs := int64(seconds) - NTPEpochNanosecond/time.Second.Nanoseconds()
+	secs := int64(seconds) - NanosecondsToUnix/time.Second.Nanoseconds()
 	nanos := (int64(fractions) * time.Second.Nanoseconds()) >> 32 // convert fractional to nanos
 	return time.Unix(secs, nanos)
 }

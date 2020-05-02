@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package stats implements statistics collection and reporting.
+It is used by server to report internal statistics, such as number of
+requests and responses.
+*/
 package stats
 
 import (
@@ -41,6 +46,7 @@ type JSONStats struct {
 	prefix string
 }
 
+// toMap converts struct to a map
 func (j *JSONStats) toMap() (export map[string]int64) {
 	export = make(map[string]int64)
 
@@ -54,6 +60,7 @@ func (j *JSONStats) toMap() (export map[string]int64) {
 	return export
 }
 
+// handleRequest is a handler used for all http monitoring requests
 func (j *JSONStats) handleRequest(w http.ResponseWriter, r *http.Request) {
 	js, err := json.Marshal(j.toMap())
 	if err != nil {
