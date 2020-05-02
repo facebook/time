@@ -64,7 +64,7 @@ https://tools.ietf.org/html/rfc958
   |                                                               |
 48+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
- 0 1 2 3 4 5 6 7 
+ 0 1 2 3 4 5 6 7
 +-+-+-+-+-+-+-+-+
 |LI | VN  |Mode |
 +-+-+-+-+-+-+-+-+
@@ -78,7 +78,7 @@ Setting = LI | VN  |Mode. Client request example:
 */
 type Packet struct {
 	Settings       uint8  // leap year indicator, version number and mode
-	Stratum        uint8  // stratum 
+	Stratum        uint8  // stratum
 	Poll           int8   // poll. Power of 2
 	Precision      int8   // precision. Power of 2
 	RootDelay      uint32 // total delay to the reference clock

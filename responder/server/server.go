@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package server implements simple UDP server to work with NTP packets.
+In addition, it run checker, announce and stats implementations
+*/
+
 package server
 
 import (
@@ -27,6 +32,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// task is a data structure with everything needed to work independently on NTP packet.
 type task struct {
 	conn     net.PacketConn
 	addr     net.Addr
@@ -35,7 +41,7 @@ type task struct {
 	stats    Stats
 }
 
-// Server is a type for UDP server which handles connections
+// Server is a type for UDP server which handles connections.
 type Server struct {
 	ListenConfig ListenConfig
 	Workers      int
@@ -48,7 +54,7 @@ type Server struct {
 	Stratum      int
 }
 
-// Start UDP server
+// Start UDP server.
 func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 	log.Warningf("Creating %d goroutine workers", s.Workers)
 	s.tasks = make(chan task, s.Workers)
@@ -74,7 +80,7 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 		}(ip)
 	}
 
-	// Run active metric reporting
+	// Run active metric reporting.
 	go func() {
 		for {
 			<-time.After(1 * time.Minute)
@@ -172,7 +178,7 @@ func (s *Server) startWorker() {
 	}
 }
 
-// serve checks the request format.
+// serve checks the request format
 // gets time from local and respond.
 func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 	log.Debugf("Received request: %+v", t.request)
@@ -198,7 +204,7 @@ func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 }
 
 // fillStaticHeaders pre-sets all the headers per worker which will never change
-// numbers are taken from tcpdump
+// numbers are taken from tcpdump.
 func (s *Server) fillStaticHeaders(response *ntp.Packet) {
 	response.Stratum = uint8(s.Stratum)
 	response.Precision = -32
@@ -211,7 +217,7 @@ func (s *Server) fillStaticHeaders(response *ntp.Packet) {
 }
 
 // generateResponse generates response NTP packet
-// See more in protocol/ntp/packet.go
+// See more in protocol/ntp/packet.go.
 func generateResponse(now time.Time, received time.Time, request, response *ntp.Packet) {
 	var vn = request.Settings & 0x38
 	response.Settings = vn + 4

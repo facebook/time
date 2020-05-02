@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// bitsInBytes is a number of bits in byte
 const bitsInBytes = 8
 
 // ipv4Mask is a mask we will be assigning to the IPv4 address in interface

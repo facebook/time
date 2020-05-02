@@ -14,6 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package announce implements announcement of server IPs.
+Depending on the implementation it could be anything:
+* Exabgp
+* Haproxy
+* Carp
+*/
 package announce
 
 import (

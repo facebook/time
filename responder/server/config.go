@@ -33,7 +33,7 @@ type ListenConfig struct {
 	Iface          string
 }
 
-// MultiIPs is a wrapper allowing to set multiple IPs
+// MultiIPs is a wrapper allowing to set multiple IPs with flag parser
 type MultiIPs []net.IP
 
 // Set adds check to the runlist

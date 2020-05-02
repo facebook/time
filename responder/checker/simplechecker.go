@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package checker implements checking mechanism of server aliveness.
+It is used by server to determine if internal health if good and work can be continued
+*/
 package checker
 
 import (
@@ -28,7 +32,8 @@ var (
 	errSimpleCheckerWrongAmountWorkers   = errors.New("wrong amount of workers is up")
 )
 
-// SimpleChecker is a datasruct containing monitoring info for internal healthchecks
+// SimpleChecker is an implementation of checker containing basic health info such as
+// amount of workers and listeners
 type SimpleChecker struct {
 	// ExpectedListeners is number of listeners we expect to run
 	ExpectedListeners int64
