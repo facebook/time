@@ -18,7 +18,6 @@ limitations under the License.
 Package server implements simple UDP server to work with NTP packets.
 In addition, it run checker, announce and stats implementations
 */
-
 package server
 
 import (
