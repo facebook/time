@@ -141,20 +141,20 @@ func (s *Server) startListener(ip net.IP, port int) {
 	// listen to incoming udp ntp.
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: port})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("listening error: %s", err)
 	}
 	defer conn.Close()
 
 	// Allow reading of hardware/kernel timestamps via socket
 	if err := ntp.EnableKernelTimestampsSocket(conn); err != nil {
-		log.Fatalln(err)
+		log.Fatalf("enabling timestamp error: %s", err)
 	}
 
 	for {
 		// read HW/kernel timestamp from incoming packet
 		request, nowHWtimestamp, returnaddr, err := ntp.ReadPacketWithKernelTimestamp(conn)
 		if err != nil {
-			log.Fatalln(err)
+			log.Errorf("read timestamp error: %s", err)
 			continue
 		}
 		s.Stats.IncRequests()
