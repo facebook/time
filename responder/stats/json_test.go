@@ -63,6 +63,13 @@ func Test_JSONStatsWorkers(t *testing.T) {
 	assert.Equal(t, int64(0), stats.workers)
 }
 
+func Test_JSONStatsReadError(t *testing.T) {
+	stats := JSONStats{}
+
+	stats.IncReadError()
+	assert.Equal(t, int64(1), stats.readError)
+}
+
 func Test_JSONStatsAnnounce(t *testing.T) {
 	stats := JSONStats{}
 

@@ -41,6 +41,7 @@ type JSONStats struct {
 	responses     int64
 	listeners     int64
 	workers       int64
+	readError     int64
 	announce      int64
 
 	prefix string
@@ -118,6 +119,11 @@ func (j *JSONStats) IncListeners() {
 // IncWorkers atomically add 1 to the counter
 func (j *JSONStats) IncWorkers() {
 	atomic.AddInt64(&j.workers, 1)
+}
+
+// IncReadError atomically add 1 to the counter
+func (j *JSONStats) IncReadError() {
+	atomic.AddInt64(&j.readError, 1)
 }
 
 // DecListeners atomically removes 1 from the counter
