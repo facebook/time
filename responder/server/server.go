@@ -154,7 +154,8 @@ func (s *Server) startListener(ip net.IP, port int) {
 		// read HW/kernel timestamp from incoming packet
 		request, nowHWtimestamp, returnaddr, err := ntp.ReadPacketWithKernelTimestamp(conn)
 		if err != nil {
-			log.Errorf("read timestamp error: %s", err)
+			log.Errorf("read packet with timestamp error: %s", err)
+			s.Stats.IncReadError()
 			continue
 		}
 		s.Stats.IncRequests()

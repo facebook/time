@@ -44,6 +44,8 @@ type Stats interface {
 	IncListeners()
 	// IncWorkers atomically add 1 to the counter
 	IncWorkers()
+	// IncReadError atomically add 1 to the counter
+	IncReadError()
 
 	// DecListeners atomically removes 1 from the counter
 	DecListeners()
