@@ -24,8 +24,6 @@ package ntp
 import (
 	"net"
 	"time"
-
-	syscall "golang.org/x/sys/unix"
 )
 
 // NanosecondsToUnix is the difference between NTP and Unix epoch in NS
@@ -71,22 +69,18 @@ func CalculateOffset(currentRealTime, curentLocaTime time.Time) int64 {
 	return currentRealTime.UnixNano() - curentLocaTime.UnixNano()
 }
 
-// sockaddrToUDP converts syscall.Sockaddr to net.Addr
-func sockaddrToUDP(sa syscall.Sockaddr) net.Addr {
-	switch sa := sa.(type) {
-	case *syscall.SockaddrInet4:
-		return &net.UDPAddr{IP: sa.Addr[0:], Port: sa.Port}
-	case *syscall.SockaddrInet6:
-		return &net.UDPAddr{IP: sa.Addr[0:], Port: sa.Port}
-	}
-	return nil
-}
-
 // connFd returns file descriptor of a connection
 func connFd(conn *net.UDPConn) (int, error) {
-	connfd, err := conn.File()
+	sc, err := conn.SyscallConn()
 	if err != nil {
 		return -1, err
 	}
-	return int(connfd.Fd()), nil
+	var intfd int
+	err = sc.Control(func(fd uintptr) {
+		intfd = int(fd)
+	})
+	if err != nil {
+		return -1, err
+	}
+	return intfd, nil
 }
