@@ -151,11 +151,6 @@ func ReadNTPPacket(conn *net.UDPConn) (ntp *Packet, remAddr net.Addr, err error)
 
 // ReadPacketWithKernelTimestamp reads HW/kernel timestamp from incoming packet
 func ReadPacketWithKernelTimestamp(conn *net.UDPConn) (ntp *Packet, hwRxTime time.Time, remAddr net.Addr, err error) {
-	// Get socket fd
-	connfd, err := connFd(conn)
-	if err != nil {
-		return nil, time.Time{}, nil, err
-	}
 	buf := make([]byte, PacketSizeBytes)
 	oob := make([]byte, ControlHeaderSizeBytes)
 
@@ -163,7 +158,7 @@ func ReadPacketWithKernelTimestamp(conn *net.UDPConn) (ntp *Packet, hwRxTime tim
 	// https://linux.die.net/man/2/recvmsg
 	// This is a low-level way of getting the message (NTP packet content)
 	// Additionally we receive control headers, one of which is hwtimestamp
-	_, _, _, sa, err := syscall.Recvmsg(connfd, buf, oob, 0)
+	_, _, _, sa, err := conn.ReadMsgUDP(buf, oob)
 	if err != nil {
 		return nil, time.Time{}, nil, err
 	}
@@ -172,6 +167,5 @@ func ReadPacketWithKernelTimestamp(conn *net.UDPConn) (ntp *Packet, hwRxTime tim
 	hwRxTime = time.Unix(ts.Unix())
 
 	packet, err := BytesToPacket(buf)
-	remAddr = sockaddrToUDP(sa)
-	return packet, hwRxTime, remAddr, err
+	return packet, hwRxTime, sa, err
 }
