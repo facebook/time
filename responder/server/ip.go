@@ -40,7 +40,7 @@ const ipv6Len = net.IPv6len * bitsInBytes
 
 // AddIPOnInterface adds ip to interface
 func (s *Server) addIPToInterface(vip net.IP) error {
-	log.Debugf("Adding %s to %s", vip, s.ListenConfig.Iface)
+	log.Infof("Adding %s to %s", vip, s.ListenConfig.Iface)
 	// Add IPs to the interface
 	iface, err := net.InterfaceByName(s.ListenConfig.Iface)
 	if err != nil {
@@ -52,7 +52,7 @@ func (s *Server) addIPToInterface(vip net.IP) error {
 
 // deleteIPFromInterface deletes ip from interface
 func (s *Server) deleteIPFromInterface(vip net.IP) error {
-	log.Debugf("Deleting %s to %s", vip, s.ListenConfig.Iface)
+	log.Infof("Deleting %s to %s", vip, s.ListenConfig.Iface)
 	// Delete IPs to the interface
 	iface, err := net.InterfaceByName(s.ListenConfig.Iface)
 	if err != nil {
