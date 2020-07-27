@@ -128,10 +128,10 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 
 // Stop will stop announcement, delete IPs from interfaces
 func (s *Server) Stop() {
-	s.DeleteAllIPs()
 	if err := s.Announce.Withdraw(); err != nil {
 		log.Errorf("[server] failed to withdraw announce: %v", err)
 	}
+	s.DeleteAllIPs()
 }
 
 func (s *Server) startListener(ip net.IP, port int) {

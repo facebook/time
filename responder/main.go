@@ -46,7 +46,7 @@ func main() {
 		prefix         string
 	)
 
-	flag.StringVar(&logLevel, "loglevel", "warning", "Set a log level. Can be: debug, info, warning, error")
+	flag.StringVar(&logLevel, "loglevel", "info", "Set a log level. Can be: debug, info, warning, error")
 	flag.StringVar(&s.ListenConfig.Iface, "interface", "lo", "Interface to add IPs to")
 	flag.StringVar(&s.RefID, "refid", "OLEG", "Reference ID of the server")
 	flag.StringVar(&prefix, "metricsprefix", "", "Prefix to prepend to the metric name")
