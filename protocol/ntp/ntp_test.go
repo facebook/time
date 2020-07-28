@@ -254,7 +254,7 @@ func Test_ReadPacketWithKernelTimestamp(t *testing.T) {
 	assert.Nil(t, err)
 	defer conn.Close()
 
-	// Allow reading of hardware/kernel timestamps via socket
+	// Allow reading of kernel timestamps via socket
 	err = EnableKernelTimestampsSocket(conn)
 	assert.Nil(t, err)
 
@@ -266,10 +266,10 @@ func Test_ReadPacketWithKernelTimestamp(t *testing.T) {
 	_, err = cconn.Write(ntpRequestBytes)
 	assert.Nil(t, err)
 
-	// read HW/kernel timestamp from incoming packet
-	request, nowHWtimestamp, returnaddr, err := ReadPacketWithKernelTimestamp(conn)
+	// read kernel timestamp from incoming packet
+	request, nowKernelTimestamp, returnaddr, err := ReadPacketWithKernelTimestamp(conn)
 	assert.Equal(t, ntpRequest, request, "We should have the same request arriving on the server")
-	assert.Equal(t, time.Now().Unix()/10, nowHWtimestamp.Unix()/10, "hwtimestamps should be within 10s")
+	assert.Equal(t, time.Now().Unix()/10, nowKernelTimestamp.Unix()/10, "kernel timestamps should be within 10s")
 	assert.Equal(t, cconn.LocalAddr().String(), returnaddr.String())
 	assert.Nil(t, err)
 }
@@ -287,19 +287,19 @@ func Benchmark_BytesToPacketConversion(b *testing.B) {
 }
 
 /*
-Benchmark_ServerWithoutHWTimestamps is a benchmark to determine speed of
-reading NTP packets without hardware timestamps
+Benchmark_ServerWithoutKernelTimestamps is a benchmark to determine speed of
+reading NTP packets without kernel timestamps
 Usually numbers look like:
 
-~/go/src/github.com/facebookincubator/ntp/protocol/ntp go test -bench=ServerWithoutHWTimestamps
+~/go/src/github.com/facebookincubator/ntp/protocol/ntp go test -bench=ServerWithoutKernelTimestamps
 goos: linux
 goarch: amd64
 pkg: github.com/facebookincubator/ntp/protocol/ntp
-Benchmark_ServerWithoutHWTimestamps-24    	  204441	      4997 ns/op
+Benchmark_ServerWithoutKernelTimestamps-24    	  204441	      4997 ns/op
 PASS
 ok  	github.com/facebookincubator/ntp/protocol/ntp	1.094s
 */
-func Benchmark_ServerWithoutHWTimestamps(b *testing.B) {
+func Benchmark_ServerWithoutKernelTimestamps(b *testing.B) {
 	// Server
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
 	assert.Nil(b, err)
@@ -318,13 +318,13 @@ func Benchmark_ServerWithoutHWTimestamps(b *testing.B) {
 	}
 }
 
-func Benchmark_ServerWithHWTimestamps(b *testing.B) {
+func Benchmark_ServerWithKernelTimestamps(b *testing.B) {
 	// Server
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
 	assert.Nil(b, err)
 	defer conn.Close()
 
-	// Allow reading of hardware/kernel timestamps via socket
+	// Allow reading of kernel timestamps via socket
 	err = EnableKernelTimestampsSocket(conn)
 	assert.Nil(b, err)
 
@@ -342,25 +342,25 @@ func Benchmark_ServerWithHWTimestamps(b *testing.B) {
 }
 
 /*
-Benchmark_ServerWithHWTimestampsRead is a benchmark to determine speed of
-reading NTP packets with hardware timestamps
+Benchmark_ServerWithKernelTimestampsRead is a benchmark to determine speed of
+reading NTP packets with kernel timestamps
 Usually numbers look like:
 
-~/go/src/github.com/facebookincubator/ntp/protocol/ntp go test -bench=ServerWithHWTimestampsRead
+~/go/src/github.com/facebookincubator/ntp/protocol/ntp go test -bench=ServerWithKernelTimestampsRead
 goos: linux
 goarch: amd64
 pkg: github.com/facebookincubator/ntp/protocol/ntp
-Benchmark_ServerWithHWTimestampsRead-24    	  143074	      8084 ns/op
+Benchmark_ServerWithKernelTimestampsRead-24    	  143074	      8084 ns/op
 PASS
 ok  	github.com/facebookincubator/ntp/protocol/ntp	1.778s
 */
-func Benchmark_ServerWithHWTimestampsRead(b *testing.B) {
+func Benchmark_ServerWithKernelTimestampsRead(b *testing.B) {
 	// Server
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
 	assert.Nil(b, err)
 	defer conn.Close()
 
-	// Allow reading of hardware/kernel timestamps via socket
+	// Allow reading of kernel timestamps via socket
 	err = EnableKernelTimestampsSocket(conn)
 	assert.Nil(b, err)
 

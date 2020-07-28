@@ -23,7 +23,7 @@ import (
 	syscall "golang.org/x/sys/unix"
 )
 
-// EnableKernelTimestampsSocket enables socket options to read ether kernel timestamps
+// EnableKernelTimestampsSocket enables socket options to read kernel timestamps
 func EnableKernelTimestampsSocket(conn *net.UDPConn) error {
 	// Get socket fd
 	connfd, err := connFd(conn)
@@ -31,7 +31,7 @@ func EnableKernelTimestampsSocket(conn *net.UDPConn) error {
 		return err
 	}
 
-	// Allow reading of hardware timestamps via socket
+	// Allow reading of kernel timestamps via socket
 	if err := syscall.SetsockoptInt(connfd, syscall.SOL_SOCKET, syscall.SO_TIMESTAMP, 1); err != nil {
 		return fmt.Errorf("failed to enable SO_TIMESTAMP: %w", err)
 	}
