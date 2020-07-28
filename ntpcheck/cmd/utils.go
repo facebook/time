@@ -111,7 +111,7 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 	}
 	defer conn.Close()
 
-	// Allow reading of hardware/kernel timestamps via socket
+	// Allow reading of kernel timestamps via socket
 	if err := ntp.EnableKernelTimestampsSocket(conn.(*net.UDPConn)); err != nil {
 		return err
 	}

@@ -33,16 +33,16 @@ func Test_EnableKernelTimestampsSocket(t *testing.T) {
 	connfd, err := connFd(conn)
 	assert.Nil(t, err)
 
-	// Allow reading of hardware/kernel timestamps via socket
+	// Allow reading of kernel timestamps via socket
 	err = EnableKernelTimestampsSocket(conn)
 	assert.Nil(t, err)
 
 	// Check that socket option is set
-	hwTimestampsEnabled, err := syscall.GetsockoptInt(connfd, syscall.SOL_SOCKET, syscall.SO_TIMESTAMPNS)
+	preciseKernelTimestampsEnabled, err := syscall.GetsockoptInt(connfd, syscall.SOL_SOCKET, syscall.SO_TIMESTAMPNS)
 	assert.Nil(t, err)
 	kernelTimestampsEnabled, err := syscall.GetsockoptInt(connfd, syscall.SOL_SOCKET, syscall.SO_TIMESTAMP)
 	assert.Nil(t, err)
 
 	// At least one of them should be set, which it > 0
-	assert.Greater(t, hwTimestampsEnabled+kernelTimestampsEnabled, 0, "None of the socket options is set")
+	assert.Greater(t, preciseKernelTimestampsEnabled+kernelTimestampsEnabled, 0, "None of the socket options is set")
 }

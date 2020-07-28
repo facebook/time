@@ -27,7 +27,7 @@ go get github.com/facebookincubator/ntp/ntpcheck
 ```
 
 ## Responder
-Simple NTP server implementation with hardware timestamps support
+Simple NTP server implementation with kernel timestamps support
 
 ### Quick Installation
 ```console

@@ -145,21 +145,21 @@ func (s *Server) startListener(ip net.IP, port int) {
 	}
 	defer conn.Close()
 
-	// Allow reading of hardware/kernel timestamps via socket
+	// Allow reading of kernel timestamps via socket
 	if err := ntp.EnableKernelTimestampsSocket(conn); err != nil {
 		log.Fatalf("enabling timestamp error: %s", err)
 	}
 
 	for {
-		// read HW/kernel timestamp from incoming packet
-		request, nowHWtimestamp, returnaddr, err := ntp.ReadPacketWithKernelTimestamp(conn)
+		// read kernel timestamp from incoming packet
+		request, nowKernelTimestamp, returnaddr, err := ntp.ReadPacketWithKernelTimestamp(conn)
 		if err != nil {
 			log.Errorf("read packet with timestamp error: %s", err)
 			s.Stats.IncReadError()
 			continue
 		}
 		s.Stats.IncRequests()
-		s.tasks <- task{conn: conn, addr: returnaddr, received: nowHWtimestamp, request: request, stats: s.Stats}
+		s.tasks <- task{conn: conn, addr: returnaddr, received: nowKernelTimestamp, request: request, stats: s.Stats}
 	}
 }
 

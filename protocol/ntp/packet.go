@@ -29,7 +29,7 @@ import (
 // PacketSizeBytes sets the size of NTP packet
 const PacketSizeBytes = 48
 
-// ControlHeaderSizeBytes is a buffer to read packet header with Kernel/HW timestamps
+// ControlHeaderSizeBytes is a buffer to read packet header with Kernel timestamps
 const ControlHeaderSizeBytes = 32
 
 // Packet is an NTPv4 packet
@@ -149,23 +149,23 @@ func ReadNTPPacket(conn *net.UDPConn) (ntp *Packet, remAddr net.Addr, err error)
 	return ntp, remAddr, err
 }
 
-// ReadPacketWithKernelTimestamp reads HW/kernel timestamp from incoming packet
-func ReadPacketWithKernelTimestamp(conn *net.UDPConn) (ntp *Packet, hwRxTime time.Time, remAddr net.Addr, err error) {
+// ReadPacketWithKernelTimestamp reads kernel timestamp from incoming packet
+func ReadPacketWithKernelTimestamp(conn *net.UDPConn) (ntp *Packet, kernelRxTime time.Time, remAddr net.Addr, err error) {
 	buf := make([]byte, PacketSizeBytes)
 	oob := make([]byte, ControlHeaderSizeBytes)
 
 	// Receive message + control struct from the socket
 	// https://linux.die.net/man/2/recvmsg
 	// This is a low-level way of getting the message (NTP packet content)
-	// Additionally we receive control headers, one of which is hwtimestamp
+	// Additionally we receive control headers, one of which is kernel timestamp
 	_, _, _, sa, err := conn.ReadMsgUDP(buf, oob)
 	if err != nil {
 		return nil, time.Time{}, nil, err
 	}
-	// Extract hardware timestamp from control fields
+	// Extract kernel timestamp from control fields
 	ts := (*syscall.Timespec)(unsafe.Pointer(&oob[syscall.CmsgSpace(0)]))
-	hwRxTime = time.Unix(ts.Unix())
+	kernelRxTime = time.Unix(ts.Unix())
 
 	packet, err := BytesToPacket(buf)
-	return packet, hwRxTime, sa, err
+	return packet, kernelRxTime, sa, err
 }

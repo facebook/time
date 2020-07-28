@@ -33,7 +33,7 @@ func Test_EnableKernelTimestampsSocket(t *testing.T) {
 	connfd, err := connFd(conn)
 	assert.Nil(t, err)
 
-	// Allow reading of hardware/kernel timestamps via socket
+	// Allow reading of kernel timestamps via socket
 	err = EnableKernelTimestampsSocket(conn)
 	assert.Nil(t, err)
 
