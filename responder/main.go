@@ -118,19 +118,17 @@ func main() {
 	s.Checker = ch
 
 	go func() {
-		for {
-			select {
-			case <-sigStop:
-				log.Warning("Graceful shutdown")
-				s.Stop()
-				close(shutdownFinish)
-				return
-			case <-ctx.Done():
-				log.Error("Internal error shutdown")
-				s.Stop()
-				close(shutdownFinish)
-				return
-			}
+		select {
+		case <-sigStop:
+			log.Warning("Graceful shutdown")
+			s.Stop()
+			close(shutdownFinish)
+			return
+		case <-ctx.Done():
+			log.Error("Internal error shutdown")
+			s.Stop()
+			close(shutdownFinish)
+			return
 		}
 	}()
 
