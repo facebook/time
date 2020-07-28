@@ -55,14 +55,14 @@ type Server struct {
 
 // Start UDP server.
 func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
-	log.Warningf("Creating %d goroutine workers", s.Workers)
+	log.Infof("Creating %d goroutine workers", s.Workers)
 	s.tasks = make(chan task, s.Workers)
 	// Pre-create workers
 	for i := 0; i < s.Workers; i++ {
 		go s.startWorker()
 	}
 
-	log.Warningf("Starting %d listener(s)", len(s.ListenConfig.IPs))
+	log.Infof("Starting %d listener(s)", len(s.ListenConfig.IPs))
 
 	for _, ip := range s.ListenConfig.IPs {
 		log.Infof("Starting listener on %s:%d", ip.String(), s.ListenConfig.Port)
@@ -194,12 +194,12 @@ func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 		log.Debugf("Writing response: %+v", response)
 		_, err = t.conn.WriteTo(responseBytes, t.addr)
 		if err != nil {
-			log.Infof("Failed to respond to the request: %v", err)
+			log.Debugf("Failed to respond to the request: %v", err)
 		}
 		t.stats.IncResponses()
 		return
 	}
-	log.Infof("Invalid query, discarding: %v", t.request)
+	log.Debugf("Invalid query, discarding: %v", t.request)
 	t.stats.IncInvalidFormat()
 }
 
