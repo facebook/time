@@ -58,6 +58,7 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 	if !ok {
 		return nil, errors.Errorf("Got wrong 'tracking' response %+v", packet)
 	}
+	result.Correction = tracking.CurrentCorrection
 	result.LIDesc = control.LeapDesc[uint8(tracking.LeapStatus)]
 	result.LI = uint8(tracking.LeapStatus)
 	result.Event = "clock_sync" // no real events for chrony

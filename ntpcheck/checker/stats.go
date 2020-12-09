@@ -32,6 +32,7 @@ type NTPStats struct {
 	PeerStratum int     `json:"ntp.peer.stratum"`  // sys.peer stratum
 	Frequency   float64 `json:"ntp.sys.frequency"` // clock frequency in PPM
 	StatError   bool    `json:"ntp.stat.error"`    // error reported in Leap Status
+	Correction  float64 `json:"ntp.correction"`    // current correction
 }
 
 // NewNTPStats constructs NTPStats from NTPCheckResult
@@ -93,6 +94,7 @@ func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 		PeerOffset:  offset,
 		PeerStratum: stratum,
 		Frequency:   r.SysVars.Frequency,
+		Correction:  r.Correction,
 		// that's how ntpstat defines unsynchronized
 		StatError: r.LI == 3,
 	}
