@@ -27,6 +27,7 @@ type NTPCheckResult struct {
 	LI          uint8
 	LIDesc      string
 	ClockSource string
+	Correction  float64
 	Event       string
 	EventCount  uint8
 	// data parsed from System Variables
