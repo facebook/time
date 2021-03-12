@@ -27,7 +27,7 @@ func Test_checkIP(t *testing.T) {
 	iface, err := net.InterfaceByName("lo")
 	assert.Nil(t, err)
 
-	ip := net.ParseIP("::1")
+	ip := net.ParseIP("127.0.0.1")
 	assigned, err := checkIP(iface, &ip)
 
 	assert.Nil(t, err)
