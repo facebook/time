@@ -92,6 +92,16 @@ func Read() (*NTPSHM, error) {
 	return ReadID(shmID)
 }
 
+// SHMTime returns time from SHM
+func SHMTime() (time.Time, error) {
+	shm, err := Read()
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return shm.ClockTimeStamp(), nil
+}
+
 // ClockTimeStamp returns the clock time
 func (n *NTPSHM) ClockTimeStamp() time.Time {
 	return time.Unix(n.ClockTimeStampSec, int64(n.ClockTimeStampNSec))
