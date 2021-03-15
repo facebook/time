@@ -27,6 +27,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// cannot import sys/timex.h
+const clockMonotonic = 4
+
 func getRawMonotonic() float64 {
 	var ts syscall.Timespec
 	_, _, _ = syscall.Syscall(syscall.SYS_CLOCK_GETTIME, clockMonotonic, uintptr(unsafe.Pointer(&ts)), 0)

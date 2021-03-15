@@ -31,28 +31,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// cannot import sys/timex.h
-const clockMonotonic = 4
-
-const (
-	timeOK = iota
-	timeIns
-	timeDel
-	timeOOP
-	timeWait
-	timeError
-)
-
-// man 2 adjtimex
-var timexToDesc = map[int]string{
-	timeOK: "TIME_OK		Clock synchronized, no leap second adjustment pending.",
-	timeIns: "TIME_INS	Indicates that a leap second will be added at the end of the UTC day.",
-	timeDel: "TIME_DEL	Indicates that a leap second will be deleted at the end of the UTC day.",
-	timeOOP: "TIME_OOP	Insertion of a leap second is in progress.",
-	timeWait: "TIME_WAIT	A leap-second insertion or deletion has been completed.",
-	timeError: "TIME_ERROR	The system clock is not synchronized to a reliable server.",
-}
-
 // refID converts ip into ReFID format and prints it on stdout
 func refID(ipStr string) error {
 	if ipStr == "" {

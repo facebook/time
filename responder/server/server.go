@@ -166,7 +166,7 @@ func (s *Server) startListener(ip net.IP, port int) {
 func (s *Server) startWorker() {
 	s.Checker.IncWorkers()
 	defer s.Checker.DecWorkers()
-        defer s.Stats.DecWorkers()
+	defer s.Stats.DecWorkers()
 
 	// Pre-allocating response buffer
 	response := &ntp.Packet{}

@@ -37,8 +37,8 @@ func Test_ConfigSetInvalid(t *testing.T) {
 	testIP := "invalid"
 
 	m := MultiIPs{}
-        err := m.Set(testIP)
-        assert.NotNil(t, err)
+	err := m.Set(testIP)
+	assert.NotNil(t, err)
 	assert.Empty(t, m)
 }
 

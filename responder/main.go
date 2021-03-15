@@ -20,12 +20,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	syscall "golang.org/x/sys/unix"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
-	syscall "golang.org/x/sys/unix"
 
 	"github.com/facebookincubator/ntp/responder/announce"
 	"github.com/facebookincubator/ntp/responder/checker"

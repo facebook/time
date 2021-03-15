@@ -23,7 +23,6 @@ import (
 	"testing"
 )
 
-
 func Test_EnableKernelTimestampsSocket(t *testing.T) {
 	// listen to incoming udp packets
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
