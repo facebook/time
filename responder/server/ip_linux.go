@@ -23,6 +23,15 @@ import (
 	errors "github.com/pkg/errors"
 )
 
+// bitsInBytes is a number of bits in byte
+const bitsInBytes = 8
+
+// ipv4Len is the IPv4 len in bits
+const ipv4Len = net.IPv4len * bitsInBytes
+
+// ipv6Len is the IPv6 len in bits
+const ipv6Len = net.IPv6len * bitsInBytes
+
 func addIfaceIP(iface *net.Interface, addr *net.IP) error {
 	// Check if IP is assigned:
 	assigned, err := checkIP(iface, addr)

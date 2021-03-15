@@ -23,20 +23,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// bitsInBytes is a number of bits in byte
-const bitsInBytes = 8
-
 // ipv4Mask is a mask we will be assigning to the IPv4 address in interface
 const ipv4Mask = 32
 
 // ipv6Mask is a mask we will be assigning to the IPv4 address in interface
 const ipv6Mask = 64
-
-// ipv4Len is the IPv4 len in bits
-const ipv4Len = net.IPv4len * bitsInBytes
-
-// ipv6Len is the IPv6 len in bits
-const ipv6Len = net.IPv6len * bitsInBytes
 
 // AddIPOnInterface adds ip to interface
 func (s *Server) addIPToInterface(vip net.IP) error {

@@ -22,10 +22,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/facebookincubator/ntp/ntpcheck/checker"
 	"github.com/fatih/color"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/facebookincubator/ntp/ntpcheck/checker"
 )
 
 type status int

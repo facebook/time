@@ -20,9 +20,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/facebookincubator/ntp/ntpcheck/checker"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/facebookincubator/ntp/ntpcheck/checker"
 )
 
 func printPeerStats(r *checker.NTPCheckResult) error {

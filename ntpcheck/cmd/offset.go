@@ -19,9 +19,9 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/facebookincubator/ntp/ntpcheck/checker"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/facebookincubator/ntp/ntpcheck/checker"
 )
 
 func printOffset(r *checker.NTPCheckResult) error {
