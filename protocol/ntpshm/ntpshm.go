@@ -92,8 +92,8 @@ func Read() (*NTPSHM, error) {
 	return ReadID(shmID)
 }
 
-// SHMTime returns time from SHM
-func SHMTime() (time.Time, error) {
+// Time returns time from SHM
+func Time() (time.Time, error) {
 	shm, err := Read()
 	if err != nil {
 		return time.Time{}, err
