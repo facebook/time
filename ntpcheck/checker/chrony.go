@@ -102,21 +102,23 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 		if !ok {
 			return nil, errors.Errorf("Got wrong 'sourcedata' response %+v", packet)
 		}
-		ntpDataReq := chrony.NewNTPDataPacket(sourceData.IPAddr)
 		// try to get ntpdata, which is available only through socket
 		var ntpData *chrony.ReplyNTPData
-		packet, err = n.Client.Communicate(ntpDataReq)
-		if err == nil {
-			ntpData, ok = packet.(*chrony.ReplyNTPData)
-			if !ok {
-				return nil, errors.Errorf("Got wrong 'ntpdata' response %+v", packet)
+		if sourceData.Mode != chrony.SourceModeRef {
+			ntpDataReq := chrony.NewNTPDataPacket(sourceData.IPAddr)
+			packet, err = n.Client.Communicate(ntpDataReq)
+			if err == nil {
+				ntpData, ok = packet.(*chrony.ReplyNTPData)
+				if !ok {
+					return nil, errors.Errorf("Got wrong 'ntpdata' response %+v", packet)
+				}
+			} else if err != chrony.ErrNotAuthorized {
+				return nil, errors.Wrapf(err, "failed to get 'ntpdata' response for source #%d", i)
 			}
-		} else if err != chrony.ErrNotAuthorized {
-			return nil, errors.Wrapf(err, "failed to get 'ntpdata' response for source #%d", i)
-		}
-		// unauthorized when asked for ntp data
-		if ntpData == nil {
-			result.Incomplete = true
+			// unauthorized when asked for ntp data
+			if ntpData == nil {
+				result.Incomplete = true
+			}
 		}
 		peer, err := NewPeerFromChrony(sourceData, ntpData)
 		if err != nil {
