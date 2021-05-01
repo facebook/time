@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/facebookincubator/ntp/leaphash"
+	"github.com/facebookincubator/ntp/leapsectz"
 	"github.com/facebookincubator/ntp/protocol/ntp"
 	"github.com/spf13/cobra"
 )
@@ -157,6 +158,18 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 	return nil
 }
 
+// printLeap prints leap second information from the system timezone database
+func printLeap() error {
+	ls, err := leapsectz.Parse()
+	if err != nil {
+		return err
+	}
+	for _, l := range ls {
+		fmt.Println(l.Time().UTC())
+	}
+	return nil
+}
+
 // cli vars
 var refidIP string
 var fsCount int
@@ -181,6 +194,8 @@ func init() {
 	ntpdateCmd.Flags().StringVarP(&remoteServerAddr, "server", "s", "", "Server to query")
 	ntpdateCmd.Flags().IntVarP(&remoteServerPort, "port", "p", 123, "Port of the remote server")
 	ntpdateCmd.Flags().IntVarP(&ntpdateRequests, "requests", "r", 3, "How many requests to send")
+	// printleap
+	utilsCmd.AddCommand(printLeapCmd)
 }
 
 var utilsCmd = &cobra.Command{
@@ -233,6 +248,18 @@ var ntpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		if err := ntpDate(remoteServerAddr, strconv.Itoa(remoteServerPort), ntpdateRequests); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+	},
+}
+
+var printLeapCmd = &cobra.Command{
+	Use:   "printleap",
+	Short: "Prints leap second information from the system timezone database",
+	Run: func(cmd *cobra.Command, args []string) {
+		ConfigureVerbosity()
+		if err := printLeap(); err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}

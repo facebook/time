@@ -15,6 +15,9 @@ Collection of Facebook's NTP libraries.
 ## Leaphash
 Utility package for computing the hash value of the official leap-second.list document
 
+## leapsectz
+Utility package for obtaining leap second information from the system timezone database
+
 ## ntpcheck
 CLI and library to perform various NTP-related tasks, including:
 * replacement for `ntptime` and `ntpdate` commands
