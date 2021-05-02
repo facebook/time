@@ -56,7 +56,7 @@ func Parse() ([]LeapSecond, error) {
 func parse(r io.Reader) ([]LeapSecond, error) {
 	// 4-byte magic "TZif"
 	magic := make([]byte, 4)
-	if r.Read(magic); string(magic) != "TZif" {
+	if _, _ = r.Read(magic); string(magic) != "TZif" {
 		return nil, errBadData
 	}
 
