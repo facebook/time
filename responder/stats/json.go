@@ -33,7 +33,6 @@ import (
 // JSONStats implements Stat interface
 // This implementation reports JSON metrics via http interface
 // This is a passive implementation. Only "Start" needs to be called
-// Report will do nothing
 type JSONStats struct {
 	// keep these aligned to 64-bit for sync/atomic
 	invalidFormat int64
@@ -45,6 +44,12 @@ type JSONStats struct {
 	announce      int64
 
 	prefix string
+}
+
+func NewJSONStats(prefix string) *JSONStats {
+	return &JSONStats{
+		prefix: prefix,
+	}
 }
 
 // toMap converts struct to a map
@@ -83,17 +88,6 @@ func (j *JSONStats) Start(port int) {
 	if err != nil {
 		log.Errorf("Failed to start listener: %v", err)
 	}
-}
-
-// SetPrefix is implementing SetPrefix function of interface
-func (j *JSONStats) SetPrefix(prefix string) {
-	j.prefix = prefix
-}
-
-// Report is implementing Report function of interface
-// As JSONStats a passive reporter, Report will do nothing
-func (j *JSONStats) Report() error {
-	return nil
 }
 
 // IncInvalidFormat atomically add 1 to the counter

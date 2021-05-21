@@ -92,8 +92,7 @@ func main() {
 
 	// Monitoring
 	// Replace with your implementation of Stats
-	st := &stats.JSONStats{}
-	st.SetPrefix(prefix)
+	st := stats.NewJSONStats(prefix)
 	go st.Start(monitoringport)
 
 	// Replace with your implementation of Announce

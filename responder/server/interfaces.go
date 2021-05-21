@@ -26,14 +26,6 @@ type Stats interface {
 	// Use this for passive reporters
 	Start(int)
 
-	// Report reports metrics
-	// Use this for active reporters
-	Report() error
-
-	// SetPrefix sets custom metric prefix
-	// For passive reporters this needs to be set before Start()
-	SetPrefix(prefix string)
-
 	// IncInvalidFormat atomically add 1 to the counter
 	IncInvalidFormat()
 	// IncRequests atomically add 1 to the counter

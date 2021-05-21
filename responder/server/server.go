@@ -79,17 +79,6 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 		}(ip)
 	}
 
-	// Run active metric reporting.
-	go func() {
-		for {
-			<-time.After(1 * time.Minute)
-			err := s.Stats.Report()
-			if err != nil {
-				log.Errorf("[stats] %v", err)
-			}
-		}
-	}()
-
 	// Run checker periodically
 	go func() {
 		for {
