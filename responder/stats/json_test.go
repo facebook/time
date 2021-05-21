@@ -80,13 +80,6 @@ func Test_JSONStatsAnnounce(t *testing.T) {
 	assert.Equal(t, int64(0), stats.announce)
 }
 
-func Test_JSONStatsSetPrefix(t *testing.T) {
-	stats := JSONStats{}
-
-	stats.SetPrefix("test")
-	assert.Equal(t, "test", stats.prefix)
-}
-
 func Test_JSONStatsToMap(t *testing.T) {
 	j := JSONStats{
 		invalidFormat: 1,
@@ -95,8 +88,8 @@ func Test_JSONStatsToMap(t *testing.T) {
 		listeners:     4,
 		workers:       5,
 		announce:      6,
+		prefix:        "test.",
 	}
-	j.SetPrefix("test.")
 	result := j.toMap()
 
 	expectedMap := make(map[string]int64)
