@@ -1,0 +1,44 @@
+version: 2.1
+
+orbs:
+  go: circleci/go@0.2.0
+
+environment:
+  CGO_ENABLED: "0"
+
+jobs:
+  linters:
+    working_directory: /go/src/github.com/facebookincubator/ptp
+    executor:
+      name: go/default
+      tag: '1.14'
+    steps:
+      - checkout
+      - run: go get -v -t ./...
+      - run: .circleci/linters.sh
+  build:
+    working_directory: /go/src/github.com/facebookincubator/ptp
+    executor:
+      name: go/default
+      tag: '1.14'
+    steps:
+      - checkout
+      - run: go get -v -t ./...
+      - run: .circleci/build.sh
+  tests:
+    working_directory: /go/src/github.com/facebookincubator/ptp
+    executor:
+      name: go/default
+      tag: '1.14'
+    steps:
+      - checkout
+      - run: go get -v -t ./...
+      - run: .circleci/tests.sh
+
+
+workflows:
+  main:
+   jobs:
+     - linters
+     - build
+     - tests
