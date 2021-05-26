@@ -13,8 +13,10 @@ Implementation of PTPv2.1 (IEEE 1588-2019) protocol
 ## PHC
 Library to work with PTP Hardware Clock (PHC).
 
-## Simpleclient
-Basic PTPv2.1 two-step unicast client implementation.
+## pshark
+Simple tool to read pcap/pcapng captures and parse and print PTP packets from there.
+Allows to test our protocol parser implementation against arbitrary tcpdump capture.
+Also the code shows integration with *GoPacket* library.
 
 ## ptpcheck
 CLI and library to perform various PTP-related tasks, including:
@@ -29,11 +31,16 @@ CLI and library to perform various PTP-related tasks, including:
 go get github.com/facebookincubator/ptp/ptpcheck
 ```
 
-## pshark
-Simple tool to read pcap/pcapng captures and parse and print PTP packets from there.
-Allows to test our protocol parser implementation against arbitrary tcpdump capture.
-Also the code shows integration with *GoPacket* library.
+## Responder
+Scalable unicast PTP server.
 
+### Quick Installation
+```console
+go get github.com/facebookincubator/ptp/responder
+```
+
+## Simpleclient
+Basic PTPv2.1 two-step unicast client implementation.
 
 # License
 PTP is licensed under Apache 2.0 as found in the [LICENSE file](LICENSE).
