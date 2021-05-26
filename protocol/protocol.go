@@ -208,11 +208,11 @@ func Bytes(p Packet) ([]byte, error) {
 		return append(b, []byte{0, 0}...), err
 	}
 	var bytes bytes.Buffer
-  var err error
+	var err error
 	err = binary.Write(&bytes, binary.BigEndian, p)
-  if err != nil {
-    return nil, err
-  }
+	if err != nil {
+		return nil, err
+	}
 	err = binary.Write(&bytes, binary.BigEndian, []byte{0, 0})
 	return bytes.Bytes(), err
 }

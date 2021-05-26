@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-  ptp "github.com/facebookincubator/ptp/protocol"
+	ptp "github.com/facebookincubator/ptp/protocol"
 )
 
 func grantUnicastPkt(seq int, clockID ptp.ClockIdentity, duration time.Duration, what ptp.MessageType) *ptp.Signaling {

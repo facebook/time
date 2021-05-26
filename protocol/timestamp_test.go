@@ -48,8 +48,8 @@ func Test_ReadTXtimestamp(t *testing.T) {
 	require.Nil(t, err)
 
 	addr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 12345}
-  _, err = conn.WriteTo([]byte{}, addr)
-  require.Nil(t, err)
+	_, err = conn.WriteTo([]byte{}, addr)
+	require.Nil(t, err)
 	txts, attempts, err = ReadTXtimestamp(conn)
 
 	require.NotEqual(t, time.Time{}, txts)

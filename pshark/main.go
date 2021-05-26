@@ -149,9 +149,9 @@ func run(input string, filter []ptp.MessageType) error {
 	// try NGReader, if it fails - fall back to Reader
 	handle, err = pcapgo.NewNgReader(f, pcapgo.DefaultNgReaderOptions)
 	if err != nil {
-    if _, ierr := f.Seek(0, 0); ierr != nil {
-      return fmt.Errorf("seeking in %s: %w", input, ierr)
-    }
+		if _, ierr := f.Seek(0, 0); ierr != nil {
+			return fmt.Errorf("seeking in %s: %w", input, ierr)
+		}
 		handle, err = pcapgo.NewReader(f)
 		if err != nil {
 			return fmt.Errorf("decoding %s: %w", input, err)

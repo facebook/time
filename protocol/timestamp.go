@@ -81,7 +81,7 @@ func connFd(conn *net.UDPConn) (int, error) {
 
 func ioctlTimestamp(fd int, ifname string) error {
 	hw := &hwtstampСonfig{
-    flags:    0,
+		flags:    0,
 		txType:   hwtstampTXON,
 		rxFilter: hwtstampFilterAll,
 	}
@@ -223,7 +223,7 @@ func ReadTXtimestamp(conn *net.UDPConn) (time.Time, int, error) {
 	for ; attempts < maxTXTS; attempts++ {
 		if !txfound {
 			// Wait for the poll event, ignore the error
-      _ = waitForHWTS(conn)
+			_ = waitForHWTS(conn)
 		}
 
 		_, tboob, _, _, err := unix.Recvmsg(connfd, tbuf, toob, unix.MSG_ERRQUEUE)
