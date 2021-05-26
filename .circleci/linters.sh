@@ -6,6 +6,11 @@ curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/insta
 cd "${CIRCLE_WORKING_DIRECTORY}"
 golangci-lint run --enable deadcode --enable varcheck --enable staticcheck
 
+# check format
+if [ "$(go fmt ./... | wc -l)" -gt 0 ]; then
+    exit 1
+fi
+
 # check license headers
 # this needs to be run from the top level directory, because it uses
 # `git ls-files` under the hood.
