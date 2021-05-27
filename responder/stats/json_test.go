@@ -87,18 +87,19 @@ func Test_JSONStatsToMap(t *testing.T) {
 		responses:     3,
 		listeners:     4,
 		workers:       5,
-		announce:      6,
-		prefix:        "test.",
+		readError:     6,
+		announce:      7,
 	}
 	result := j.toMap()
 
 	expectedMap := make(map[string]int64)
-	expectedMap["test.invalidformat"] = 1
-	expectedMap["test.requests"] = 2
-	expectedMap["test.responses"] = 3
-	expectedMap["test.listeners"] = 4
-	expectedMap["test.workers"] = 5
-	expectedMap["test.announce"] = 6
+	expectedMap["invalidformat"] = 1
+	expectedMap["requests"] = 2
+	expectedMap["responses"] = 3
+	expectedMap["listeners"] = 4
+	expectedMap["workers"] = 5
+	expectedMap["readError"] = 6
+	expectedMap["announce"] = 7
 
 	assert.Equal(t, expectedMap, result)
 }
