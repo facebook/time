@@ -43,13 +43,11 @@ func main() {
 		debugger       bool
 		logLevel       string
 		monitoringport int
-		prefix         string
 	)
 
 	flag.StringVar(&logLevel, "loglevel", "info", "Set a log level. Can be: debug, info, warning, error")
 	flag.StringVar(&s.ListenConfig.Iface, "interface", "lo", "Interface to add IPs to")
 	flag.StringVar(&s.RefID, "refid", "OLEG", "Reference ID of the server")
-	flag.StringVar(&prefix, "metricsprefix", "", "Prefix to prepend to the metric name")
 	flag.IntVar(&s.ListenConfig.Port, "port", 123, "Port to run service on")
 	flag.IntVar(&monitoringport, "monitoringport", 0, "Port to run monitoring server on")
 	flag.IntVar(&s.Stratum, "stratum", 1, "Stratum of the server")
@@ -92,7 +90,7 @@ func main() {
 
 	// Monitoring
 	// Replace with your implementation of Stats
-	st := stats.NewJSONStats(prefix)
+	st := &stats.JSONStats{}
 	go st.Start(monitoringport)
 
 	// Replace with your implementation of Announce

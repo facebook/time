@@ -42,26 +42,19 @@ type JSONStats struct {
 	workers       int64
 	readError     int64
 	announce      int64
-
-	prefix string
-}
-
-func NewJSONStats(prefix string) *JSONStats {
-	return &JSONStats{
-		prefix: prefix,
-	}
 }
 
 // toMap converts struct to a map
 func (j *JSONStats) toMap() (export map[string]int64) {
 	export = make(map[string]int64)
 
-	export[fmt.Sprintf("%sinvalidformat", j.prefix)] = j.invalidFormat
-	export[fmt.Sprintf("%srequests", j.prefix)] = j.requests
-	export[fmt.Sprintf("%sresponses", j.prefix)] = j.responses
-	export[fmt.Sprintf("%slisteners", j.prefix)] = j.listeners
-	export[fmt.Sprintf("%sworkers", j.prefix)] = j.workers
-	export[fmt.Sprintf("%sannounce", j.prefix)] = j.announce
+	export["invalidformat"] = j.invalidFormat
+	export["requests"] = j.requests
+	export["responses"] = j.responses
+	export["listeners"] = j.listeners
+	export["workers"] = j.workers
+	export["readError"] = j.readError
+	export["announce"] = j.announce
 
 	return export
 }
