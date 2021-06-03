@@ -25,8 +25,8 @@ import (
 	"time"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
-	"github.com/facebookincubator/ptp/responder/server"
-	"github.com/facebookincubator/ptp/responder/stats"
+	"github.com/facebookincubator/ptp/ptp4u/server"
+	"github.com/facebookincubator/ptp/ptp4u/stats"
 	log "github.com/sirupsen/logrus"
 )
 

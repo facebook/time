@@ -29,7 +29,7 @@ import (
 	"time"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
-	"github.com/facebookincubator/ptp/responder/stats"
+	"github.com/facebookincubator/ptp/ptp4u/stats"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -153,7 +153,7 @@ func (s *Server) startEventListener() {
 	}
 	defer s.eventConn.Close()
 
-	// Enable RX timestamps. Delay requests need to be timestamped by responder on receipt
+	// Enable RX timestamps. Delay requests need to be timestamped by ptp4u on receipt
 	if s.Config.TimestampType == ptp.HWTIMESTAMP {
 		if err := ptp.EnableHWTimestampsSocket(s.eventConn, s.Config.Interface); err != nil {
 			log.Fatalf("Cannot enable hardware RX timestamps")
