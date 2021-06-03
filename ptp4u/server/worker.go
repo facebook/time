@@ -20,7 +20,7 @@ import (
 	"net"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
-	"github.com/facebookincubator/ptp/responder/stats"
+	"github.com/facebookincubator/ptp/ptp4u/stats"
 	log "github.com/sirupsen/logrus"
 )
 

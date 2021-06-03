@@ -31,12 +31,12 @@ CLI and library to perform various PTP-related tasks, including:
 go get github.com/facebookincubator/ptp/ptpcheck
 ```
 
-## Responder
+## ptp4u
 Scalable unicast PTP server.
 
 ### Quick Installation
 ```console
-go get github.com/facebookincubator/ptp/responder
+go get github.com/facebookincubator/ptp/ptp4u
 ```
 
 ## Simpleclient

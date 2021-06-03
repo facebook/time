@@ -22,7 +22,7 @@ import (
 	"time"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
-	"github.com/facebookincubator/ptp/responder/stats"
+	"github.com/facebookincubator/ptp/ptp4u/stats"
 	"github.com/stretchr/testify/require"
 )
 
