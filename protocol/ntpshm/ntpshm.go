@@ -17,8 +17,9 @@ limitations under the License.
 package ntpshm
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
-	"reflect"
 	"time"
 	"unsafe"
 
@@ -62,14 +63,23 @@ func Create() (uintptr, error) {
 	return shmID, nil
 }
 
-func ptrToNTPSHM(shmptr uintptr) *NTPSHM {
-	var shm []NTPSHM
-	sh := (*reflect.SliceHeader)(unsafe.Pointer(&shm))
-	sh.Data = shmptr
-	sh.Len = 1
-	sh.Cap = 1
+func ptrToBytes(shmptr uintptr) []byte {
+	// Runtime representation of a slice in Go
+	var sl = struct {
+		addr uintptr
+		len  int
+		cap  int
+	}{shmptr, NTPSHMSize, NTPSHMSize}
 
-	return &shm[0]
+	return *(*[]byte)(unsafe.Pointer(&sl))
+}
+
+func ptrToNTPSHM(shmptr uintptr) (*NTPSHM, error) {
+	b := ptrToBytes(shmptr)
+	s := &NTPSHM{}
+	r := bytes.NewReader(b)
+	err := binary.Read(r, binary.LittleEndian, s)
+	return s, err
 }
 
 // ReadID reads SHM segment by ID
@@ -79,7 +89,7 @@ func ReadID(id uintptr) (*NTPSHM, error) {
 		return nil, fmt.Errorf("failed to attach to shm: %s", unix.ErrnoName(errno))
 	}
 
-	return ptrToNTPSHM(shmptr), nil
+	return ptrToNTPSHM(shmptr)
 }
 
 // Read SHM segment

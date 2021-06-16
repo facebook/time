@@ -25,30 +25,29 @@ import (
 )
 
 func Test_NTPSHMStruct(t *testing.T) {
-	testBytes := []byte{1, 0, 0, 0, 236, 72, 0, 0, 110, 133, 75, 96, 0, 0, 0, 0, 122, 156, 13, 0, 0, 0, 0, 0, 72, 133, 75, 96, 0, 0, 0, 0, 169, 250, 6, 0, 0, 0, 0, 0, 226, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 70, 63, 43, 53, 50, 36, 67, 27, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	testBytes := []byte{1, 0, 0, 0, 240, 64, 0, 0, 189, 86, 202, 96, 0, 0, 0, 0, 51, 1, 0, 0, 189, 86, 202, 96, 0, 0, 0, 0, 34, 252, 0, 0, 0, 0, 0, 0, 236, 255, 255, 255, 3, 0, 0, 0, 0, 0, 0, 0, 121, 176, 4, 0, 182, 231, 216, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	testNTPSHM := NTPSHM{
 		Mode:                 1,
-		Count:                18668,
-		ClockTimeStampSec:    1615562094,
-		ClockTimeStampUSec:   892026,
-		ReceiveTimeStampSec:  1615562056,
-		ReceiveTimeStampUSec: 457385,
+		Count:                16624,
+		ClockTimeStampSec:    1623873213,
+		ClockTimeStampUSec:   307,
+		ReceiveTimeStampSec:  1623873213,
+		ReceiveTimeStampUSec: 64546,
 		Leap:                 0,
-		Precision:            -30,
-		Nsamples:             0,
+		Precision:            -20,
+		Nsamples:             3,
 		Valid:                0,
-		ClockTimeStampNSec:   892026694,
-		ReceiveTimeStampNSec: 457385010,
+		ClockTimeStampNSec:   307321,
+		ReceiveTimeStampNSec: 64546742,
 		Dummy:                [8]int32{0, 0, 0, 0, 0, 0, 0, 0},
 	}
 
-	assert.Equal(t, NTPSHMSize, int(unsafe.Sizeof(testNTPSHM)))
-
-	s := ptrToNTPSHM(uintptr(unsafe.Pointer(&testBytes[0])))
+	s, err := ptrToNTPSHM(uintptr(unsafe.Pointer(&testBytes[0])))
+	assert.NoError(t, err)
 	assert.Equal(t, testNTPSHM, *s)
 
-	assert.True(t, time.Unix(1615562056, 457385010).Equal(s.ReceiveTimeStamp()))
-	assert.True(t, time.Unix(1615562094, 892026694).Equal(s.ClockTimeStamp()))
+	assert.True(t, time.Unix(1623873213, 307321).Equal(s.ClockTimeStamp()))
+	assert.True(t, time.Unix(1623873213, 64546742).Equal(s.ReceiveTimeStamp()))
 }
 
 func Test_NTPSHMReadID(t *testing.T) {
