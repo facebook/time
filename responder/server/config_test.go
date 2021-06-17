@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_ConfigSet(t *testing.T) {
+func TestConfigSet(t *testing.T) {
 	testIP := "1.2.3.4"
 
 	m := MultiIPs{}
@@ -33,7 +33,7 @@ func Test_ConfigSet(t *testing.T) {
 	assert.Equal(t, net.ParseIP(testIP), m[0])
 }
 
-func Test_ConfigSetInvalid(t *testing.T) {
+func TestConfigSetInvalid(t *testing.T) {
 	testIP := "invalid"
 
 	m := MultiIPs{}
@@ -42,7 +42,7 @@ func Test_ConfigSetInvalid(t *testing.T) {
 	assert.Empty(t, m)
 }
 
-func Test_ConfigString(t *testing.T) {
+func TestConfigString(t *testing.T) {
 	testIP1 := "1.2.3.4"
 	testIP2 := "5.6.7.8"
 
@@ -55,7 +55,7 @@ func Test_ConfigString(t *testing.T) {
 	assert.Equal(t, m.String(), fmt.Sprintf("%s, %s", testIP1, testIP2))
 }
 
-func Test_ConfigSetDefault(t *testing.T) {
+func TestConfigSetDefault(t *testing.T) {
 	m := MultiIPs{}
 	m.SetDefault()
 

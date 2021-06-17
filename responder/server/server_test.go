@@ -27,7 +27,7 @@ import (
 
 var timestamp = time.Unix(1585231321, 148166539)
 
-func Test_fillStaticHeadersStratum(t *testing.T) {
+func TestFillStaticHeadersStratum(t *testing.T) {
 	stratum := 1
 	s := &Server{Stratum: stratum}
 	response := &ntp.Packet{}
@@ -35,7 +35,7 @@ func Test_fillStaticHeadersStratum(t *testing.T) {
 	assert.Equal(t, uint8(stratum), response.Stratum)
 }
 
-func Test_fillStaticHeadersReferenceID(t *testing.T) {
+func TestFillStaticHeadersReferenceID(t *testing.T) {
 	s := &Server{RefID: "CHANDLER"}
 	response := &ntp.Packet{}
 
@@ -43,7 +43,7 @@ func Test_fillStaticHeadersReferenceID(t *testing.T) {
 	assert.Equal(t, binary.BigEndian.Uint32([]byte("CHAN")), response.ReferenceID, "Reference-ID must be 4 bytes")
 }
 
-func Test_fillStaticHeadersRootDelay(t *testing.T) {
+func TestFillStaticHeadersRootDelay(t *testing.T) {
 	s := &Server{}
 	response := &ntp.Packet{}
 
@@ -51,7 +51,7 @@ func Test_fillStaticHeadersRootDelay(t *testing.T) {
 	assert.Equal(t, uint32(0), response.RootDelay, "Root delay should be 0 if stratum is 1")
 }
 
-func Test_fillStaticHeadersRootDispersion(t *testing.T) {
+func TestFillStaticHeadersRootDispersion(t *testing.T) {
 	s := &Server{}
 	response := &ntp.Packet{}
 
@@ -59,14 +59,14 @@ func Test_fillStaticHeadersRootDispersion(t *testing.T) {
 	assert.Equal(t, uint32(10), response.RootDispersion, "Root dispersion should be 0.000152")
 }
 
-func Test_generateResponsePoll(t *testing.T) {
+func TestGenerateResponsePoll(t *testing.T) {
 	request := &ntp.Packet{Poll: 8}
 	response := &ntp.Packet{}
 	generateResponse(timestamp, timestamp, request, response)
 	assert.Equal(t, request.Poll, response.Poll)
 }
 
-func Test_generateResponseTimestamps(t *testing.T) {
+func TestGenerateResponseTimestamps(t *testing.T) {
 	request := &ntp.Packet{TxTimeSec: 3794210679, TxTimeFrac: 2718216404}
 	response := &ntp.Packet{}
 	nowSec, nowFrac := ntp.Time(timestamp)

@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_SimpleCheckerListeners(t *testing.T) {
+func TestSimpleCheckerListeners(t *testing.T) {
 	randomNumber := int64(100500)
 
 	checker := SimpleChecker{realListeners: randomNumber}
@@ -33,7 +33,7 @@ func Test_SimpleCheckerListeners(t *testing.T) {
 	assert.Equal(t, checker.realListeners, randomNumber)
 }
 
-func Test_SimpleCheckerWorkers(t *testing.T) {
+func TestSimpleCheckerWorkers(t *testing.T) {
 	randomNumber := int64(100500)
 
 	checker := SimpleChecker{realWorkers: randomNumber}
@@ -44,14 +44,14 @@ func Test_SimpleCheckerWorkers(t *testing.T) {
 	assert.Equal(t, checker.realWorkers, randomNumber)
 }
 
-func Test_SimpleCheckListeners(t *testing.T) {
+func TestSimpleCheckListeners(t *testing.T) {
 	checker := SimpleChecker{ExpectedListeners: 1}
 	checker.IncListeners()
 
 	assert.Nil(t, checker.checkListeners())
 }
 
-func Test_CheckListenersFail(t *testing.T) {
+func TestCheckListenersFail(t *testing.T) {
 	checker := SimpleChecker{ExpectedListeners: 1}
 	checker.IncListeners()
 	checker.DecListeners()
@@ -59,14 +59,14 @@ func Test_CheckListenersFail(t *testing.T) {
 	assert.Equal(t, checker.checkListeners(), errSimpleCheckerWrongAmountListeners)
 }
 
-func Test_SimpleCheckerCheckWorkers(t *testing.T) {
+func TestSimpleCheckerCheckWorkers(t *testing.T) {
 	checker := SimpleChecker{ExpectedWorkers: 1}
 	checker.IncWorkers()
 
 	assert.Nil(t, checker.checkWorkers())
 }
 
-func Test_SimpleCheckerCheckWorkersFail(t *testing.T) {
+func TestSimpleCheckerCheckWorkersFail(t *testing.T) {
 	checker := SimpleChecker{ExpectedWorkers: 1}
 	checker.IncWorkers()
 	checker.DecWorkers()

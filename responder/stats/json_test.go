@@ -22,28 +22,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_JSONStatsInvalidFormat(t *testing.T) {
+func TestJSONStatsInvalidFormat(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncInvalidFormat()
 	assert.Equal(t, int64(1), stats.invalidFormat)
 }
 
-func Test_JSONStatsRequests(t *testing.T) {
+func TestJSONStatsRequests(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncRequests()
 	assert.Equal(t, int64(1), stats.requests)
 }
 
-func Test_JSONStatsResponses(t *testing.T) {
+func TestJSONStatsResponses(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncResponses()
 	assert.Equal(t, int64(1), stats.responses)
 }
 
-func Test_JSONStatsListeners(t *testing.T) {
+func TestJSONStatsListeners(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncListeners()
@@ -53,7 +53,7 @@ func Test_JSONStatsListeners(t *testing.T) {
 	assert.Equal(t, int64(0), stats.listeners)
 }
 
-func Test_JSONStatsWorkers(t *testing.T) {
+func TestJSONStatsWorkers(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncWorkers()
@@ -63,14 +63,14 @@ func Test_JSONStatsWorkers(t *testing.T) {
 	assert.Equal(t, int64(0), stats.workers)
 }
 
-func Test_JSONStatsReadError(t *testing.T) {
+func TestJSONStatsReadError(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncReadError()
 	assert.Equal(t, int64(1), stats.readError)
 }
 
-func Test_JSONStatsAnnounce(t *testing.T) {
+func TestJSONStatsAnnounce(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.SetAnnounce()
@@ -80,7 +80,7 @@ func Test_JSONStatsAnnounce(t *testing.T) {
 	assert.Equal(t, int64(0), stats.announce)
 }
 
-func Test_JSONStatsToMap(t *testing.T) {
+func TestJSONStatsToMap(t *testing.T) {
 	j := JSONStats{
 		invalidFormat: 1,
 		requests:      2,
