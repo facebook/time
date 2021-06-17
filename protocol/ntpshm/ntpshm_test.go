@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_NTPSHMStruct(t *testing.T) {
+func TestNTPSHMStruct(t *testing.T) {
 	testBytes := []byte{1, 0, 0, 0, 240, 64, 0, 0, 189, 86, 202, 96, 0, 0, 0, 0, 51, 1, 0, 0, 189, 86, 202, 96, 0, 0, 0, 0, 34, 252, 0, 0, 0, 0, 0, 0, 236, 255, 255, 255, 3, 0, 0, 0, 0, 0, 0, 0, 121, 176, 4, 0, 182, 231, 216, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	testNTPSHM := NTPSHM{
 		Mode:                 1,
@@ -50,7 +50,7 @@ func Test_NTPSHMStruct(t *testing.T) {
 	assert.True(t, time.Unix(1623873213, 64546742).Equal(s.ReceiveTimeStamp()))
 }
 
-func Test_NTPSHMReadID(t *testing.T) {
+func TestNTPSHMReadID(t *testing.T) {
 	id, err := Create()
 	// Happens when we have no permissions
 	if err != nil {

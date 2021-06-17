@@ -25,14 +25,14 @@ import (
 
 const testIP = "1.2.3.4"
 
-func Test_addIPToInterfaceError(t *testing.T) {
+func TestAddIPToInterfaceError(t *testing.T) {
 	lc := ListenConfig{Iface: "lol-does-not-exist"}
 	s := &Server{ListenConfig: lc}
 	err := s.addIPToInterface(net.ParseIP(testIP))
 	assert.NotNil(t, err)
 }
 
-func Test_deleteIPFromInterfaceError(t *testing.T) {
+func TestDeleteIPFromInterfaceError(t *testing.T) {
 	lc := ListenConfig{Iface: "lol-does-not-exist"}
 	s := &Server{ListenConfig: lc}
 	err := s.deleteIPFromInterface(net.ParseIP(testIP))

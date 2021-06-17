@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_noPeerExitCode(t *testing.T) {
+func TestNoPeerExitCode(t *testing.T) {
 	// Check that no "good" pier triggers exit code
 	s := SystemVariables{}
 	peers := make(map[uint16]*Peer, 1)

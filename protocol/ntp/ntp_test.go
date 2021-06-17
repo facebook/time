@@ -89,26 +89,26 @@ var (
 )
 
 // Testing conversion so if Packet structure changes we notice
-func Test_RequestConversion(t *testing.T) {
+func TestRequestConversion(t *testing.T) {
 	bytes, err := ntpRequest.Bytes()
 	assert.Nil(t, err)
 	assert.Equal(t, ntpRequestBytes, bytes)
 }
 
 // Testing conversion so if Packet structure changes we notice
-func Test_ResponseConersion(t *testing.T) {
+func TestResponseConersion(t *testing.T) {
 	bytes, err := ntpResponse.Bytes()
 	assert.Nil(t, err)
 	assert.Equal(t, ntpResponseBytes, bytes)
 }
 
-func Test_BytesToPacket(t *testing.T) {
+func TestBytesToPacket(t *testing.T) {
 	packet, err := BytesToPacket(ntpResponseBytes)
 	assert.Nil(t, err)
 	assert.Equal(t, ntpResponse, packet)
 }
 
-func Test_BytesToPacketError(t *testing.T) {
+func TestBytesToPacketError(t *testing.T) {
 	bytes := []byte{}
 	packet, err := BytesToPacket(bytes)
 	assert.NotNil(t, err)
@@ -116,29 +116,29 @@ func Test_BytesToPacketError(t *testing.T) {
 }
 
 // Testing conversion so if Packet structure changes we notice
-func Test_PacketConversionFailure(t *testing.T) {
+func TestPacketConversionFailure(t *testing.T) {
 	bytes, err := ntpRequest.Bytes()
 	assert.Nil(t, err)
 	assert.Equal(t, ntpRequestBytes, bytes)
 }
 
-func Test_RequestSize(t *testing.T) {
+func TestRequestSize(t *testing.T) {
 	assert.Equal(t, PacketSizeBytes, len(ntpRequestBytes))
 }
 
-func Test_ResponseSize(t *testing.T) {
+func TestResponseSize(t *testing.T) {
 	assert.Equal(t, PacketSizeBytes, len(ntpResponseBytes))
 }
 
-func Test_ValidSettingsFormat(t *testing.T) {
+func TestValidSettingsFormat(t *testing.T) {
 	assert.True(t, ntpRequest.ValidSettingsFormat())
 }
 
-func Test_invalidSettingsFormat(t *testing.T) {
+func TestInvalidSettingsFormat(t *testing.T) {
 	assert.False(t, ntpBadRequest.ValidSettingsFormat())
 }
 
-func Test_Time(t *testing.T) {
+func TestTime(t *testing.T) {
 	testtime := time.Unix(usec, unsec)
 	sec, frac := Time(testtime)
 
@@ -146,7 +146,7 @@ func Test_Time(t *testing.T) {
 	assert.Equal(t, nfrac, frac)
 }
 
-func Test_Unix(t *testing.T) {
+func TestUnix(t *testing.T) {
 	testtime := Unix(nsec, nfrac)
 
 	assert.Equal(t, usec, testtime.Unix())
@@ -154,12 +154,12 @@ func Test_Unix(t *testing.T) {
 	assert.Equal(t, unsec, int64(testtime.Nanosecond())+1)
 }
 
-func Test_abs(t *testing.T) {
+func TestAbs(t *testing.T) {
 	assert.Equal(t, abs(1), int64(1))
 	assert.Equal(t, abs(-1), int64(1))
 }
 
-func Test_AvgNetworkDelay(t *testing.T) {
+func TestAvgNetworkDelay(t *testing.T) {
 	// Time on server is = of time on client
 	clientTransmitTime := time.Now()
 	// Network delay client -> server 10ms
@@ -173,7 +173,7 @@ func Test_AvgNetworkDelay(t *testing.T) {
 	assert.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
 }
 
-func Test_AvgNetworkDelayPositive(t *testing.T) {
+func TestAvgNetworkDelayPositive(t *testing.T) {
 	// Assuming time on client is > of time on server
 	clientToServer := 50 * time.Millisecond
 
@@ -189,7 +189,7 @@ func Test_AvgNetworkDelayPositive(t *testing.T) {
 	assert.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
 }
 
-func Test_AvgNetworkDelayNegative(t *testing.T) {
+func TestAvgNetworkDelayNegative(t *testing.T) {
 	// Assuming time on client is < of time on server
 	clientToServer := -50 * time.Millisecond
 
@@ -205,13 +205,13 @@ func Test_AvgNetworkDelayNegative(t *testing.T) {
 	assert.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
 }
 
-func Test_CurrentRealTime(t *testing.T) {
+func TestCurrentRealTime(t *testing.T) {
 	serverTransmitTime := time.Now()
 	currentRealTime := CurrentRealTime(serverTransmitTime, avgNetworkDelay)
 	assert.Equal(t, serverTransmitTime.Add(time.Duration(avgNetworkDelay)*time.Nanosecond), currentRealTime)
 }
 
-func Test_CalculateOffset(t *testing.T) {
+func TestCalculateOffset(t *testing.T) {
 	curentLocaTime := time.Now()
 	currentRealTime := curentLocaTime.Add(offset)
 
@@ -219,7 +219,7 @@ func Test_CalculateOffset(t *testing.T) {
 	assert.Equal(t, offset.Nanoseconds(), actualOffset)
 }
 
-func Test_connFd(t *testing.T) {
+func TestConnFd(t *testing.T) {
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
 	assert.Nil(t, err)
 	defer conn.Close()
@@ -229,7 +229,7 @@ func Test_connFd(t *testing.T) {
 	assert.Greater(t, connfd, 0, "connection fd must be > 0")
 }
 
-func Test_ReadNTPPacket(t *testing.T) {
+func TestReadNTPPacket(t *testing.T) {
 	// listen to incoming udp packets
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
 	assert.Nil(t, err)
@@ -248,7 +248,7 @@ func Test_ReadNTPPacket(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func Test_ReadPacketWithKernelTimestamp(t *testing.T) {
+func TestReadPacketWithKernelTimestamp(t *testing.T) {
 	// listen to incoming udp packets
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
 	assert.Nil(t, err)

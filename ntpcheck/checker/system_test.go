@@ -26,7 +26,7 @@ import (
 	"github.com/facebookincubator/ntp/protocol/control"
 )
 
-func Test_sanityCheckSysVars(t *testing.T) {
+func TestSanityCheckSysVars(t *testing.T) {
 	tests := []struct {
 		name    string
 		sysVars *SystemVariables

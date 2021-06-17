@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_checkIP(t *testing.T) {
+func TestCheckIP(t *testing.T) {
 	iface, err := net.InterfaceByName("lo")
 	assert.Nil(t, err)
 
@@ -34,7 +34,7 @@ func Test_checkIP(t *testing.T) {
 	assert.True(t, assigned)
 }
 
-func Test_checkIPFalse(t *testing.T) {
+func TestCheckIPFalse(t *testing.T) {
 	iface, err := net.InterfaceByName("lo")
 	assert.Nil(t, err)
 
