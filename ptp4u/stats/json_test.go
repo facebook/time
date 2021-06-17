@@ -167,7 +167,7 @@ func TestJSONExport(t *testing.T) {
 	stats := NewJSONStats()
 
 	go stats.Start(8888)
-	time.Sleep(time.Millisecond)
+	time.Sleep(time.Second)
 
 	stats.IncSubscription(ptp.MessageAnnounce)
 	stats.IncTX(ptp.MessageSync)
