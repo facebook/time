@@ -185,11 +185,11 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 
 	// addresses
 	// where to send to
-	genAddr, err := net.ResolveUDPAddr("udp6", net.JoinHostPort(c.cfg.Address, fmt.Sprintf("%d", ptp.PortGeneral)))
+	genAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(c.cfg.Address, fmt.Sprintf("%d", ptp.PortGeneral)))
 	if err != nil {
 		return err
 	}
-	eventAddr, err := net.ResolveUDPAddr("udp6", net.JoinHostPort(c.cfg.Address, fmt.Sprintf("%d", ptp.PortEvent)))
+	eventAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(c.cfg.Address, fmt.Sprintf("%d", ptp.PortEvent)))
 	if err != nil {
 		return err
 	}
