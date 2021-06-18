@@ -19,6 +19,7 @@ package protocol
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"testing"
 	"time"
 
@@ -28,6 +29,10 @@ import (
 // Testing conversion so if Packet structure changes we notice
 func Test_byteToTime(t *testing.T) {
 	timeb := []byte{63, 155, 21, 96, 0, 0, 0, 0, 52, 156, 191, 42, 0, 0, 0, 0}
+	// time_t is 32 bit on Linux 386
+	if strconv.IntSize == 32 {
+		timeb = []byte{63, 155, 21, 96, 52, 156, 191, 42}
+	}
 	res, err := byteToTime(timeb)
 	require.Nil(t, err)
 
@@ -59,6 +64,39 @@ func Test_ReadTXtimestamp(t *testing.T) {
 }
 
 func Test_scmDataToTime(t *testing.T) {
+	hwData := []byte{
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		63, 155, 21, 96, 0, 0, 0, 0, 52, 156, 191, 42, 0, 0, 0, 0,
+	}
+	swData := []byte{
+		63, 155, 21, 96, 0, 0, 0, 0, 52, 156, 191, 42, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	}
+	noData := []byte{
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	}
+	if strconv.IntSize == 32 {
+		hwData = []byte{
+			0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0,
+			63, 155, 21, 96, 52, 156, 191, 42,
+		}
+		swData = []byte{
+			63, 155, 21, 96, 52, 156, 191, 42,
+			0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0,
+		}
+		noData = []byte{
+			0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0,
+		}
+	}
+
 	tests := []struct {
 		name    string
 		data    []byte
@@ -66,32 +104,20 @@ func Test_scmDataToTime(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "hardware timestamp",
-			data: []byte{
-				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-				63, 155, 21, 96, 0, 0, 0, 0, 52, 156, 191, 42, 0, 0, 0, 0,
-			},
+			name:    "hardware timestamp",
+			data:    hwData,
 			want:    1612028735717200436,
 			wantErr: false,
 		},
 		{
-			name: "software timestamp",
-			data: []byte{
-				63, 155, 21, 96, 0, 0, 0, 0, 52, 156, 191, 42, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			},
+			name:    "software timestamp",
+			data:    swData,
 			want:    1612028735717200436,
 			wantErr: false,
 		},
 		{
-			name: "zero timestamp",
-			data: []byte{
-				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			},
+			name:    "zero timestamp",
+			data:    noData,
 			want:    0,
 			wantErr: true,
 		},
