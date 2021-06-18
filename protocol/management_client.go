@@ -31,14 +31,18 @@ type MgmtClient struct {
 }
 
 // SendPacket sends packet, incrementing sequence counter
-func (c *MgmtClient) SendPacket(packet Packet) error {
+func (c *MgmtClient) SendPacket(packet *Management) error {
 	c.Sequence++
 	packet.SetSequence(c.Sequence)
-	return binary.Write(c.Connection, binary.BigEndian, packet)
+	b, err := packet.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	return binary.Write(c.Connection, binary.BigEndian, b)
 }
 
 // Communicate sends the management the packet, parses response into something usable
-func (c *MgmtClient) Communicate(packet ManagementPacket) (Packet, error) {
+func (c *MgmtClient) Communicate(packet *Management) (*Management, error) {
 	var err error
 
 	if err := c.SendPacket(packet); err != nil {
@@ -49,13 +53,17 @@ func (c *MgmtClient) Communicate(packet ManagementPacket) (Packet, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := decodeMgmtPacket(response[:n])
+	res, err := decodeMgmtPacket(response[:n])
 	if err != nil {
 		return nil, err
 	}
-	errorPacket, ok := p.(*ManagementMsgErrorStatus)
+	errorPacket, ok := res.(*ManagementMsgErrorStatus)
 	if ok {
 		return nil, fmt.Errorf("got Management Error in response: %v", errorPacket.ManagementErrorStatusTLV.ManagementErrorID)
+	}
+	p, ok := res.(*Management)
+	if !ok {
+		return nil, fmt.Errorf("got unexpected management packet %T", res)
 	}
 	return p, nil
 }
@@ -63,41 +71,41 @@ func (c *MgmtClient) Communicate(packet ManagementPacket) (Packet, error) {
 // ParentDataSet sends PARENT_DATA_SET request and returns response
 func (c *MgmtClient) ParentDataSet() (*ParentDataSetTLV, error) {
 	req := ParentDataSetRequest()
-	res, err := c.Communicate(req)
+	p, err := c.Communicate(req)
 	if err != nil {
 		return nil, err
 	}
-	p, ok := res.(*ManagementMsgParentDataSet)
+	tlv, ok := p.TLV.(*ParentDataSetTLV)
 	if !ok {
-		return nil, fmt.Errorf("got unexpected management packet %T, expected %T", res, p)
+		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
 	}
-	return &p.ParentDataSetTLV, nil
+	return tlv, nil
 }
 
 // DefaultDataSet sends DEFAULT_DATA_SET request and returns response
 func (c *MgmtClient) DefaultDataSet() (*DefaultDataSetTLV, error) {
 	req := DefaultDataSetRequest()
-	res, err := c.Communicate(req)
+	p, err := c.Communicate(req)
 	if err != nil {
 		return nil, err
 	}
-	p, ok := res.(*ManagementMsgDefaultDataSet)
+	tlv, ok := p.TLV.(*DefaultDataSetTLV)
 	if !ok {
-		return nil, fmt.Errorf("got unexpected management packet %T, expected %T", res, p)
+		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
 	}
-	return &p.DefaultDataSetTLV, nil
+	return tlv, nil
 }
 
 // CurrentDataSet sends CURRENT_DATA_SET request and returns response
 func (c *MgmtClient) CurrentDataSet() (*CurrentDataSetTLV, error) {
 	req := CurrentDataSetRequest()
-	res, err := c.Communicate(req)
+	p, err := c.Communicate(req)
 	if err != nil {
 		return nil, err
 	}
-	p, ok := res.(*ManagementMsgCurrentDataSet)
+	tlv, ok := p.TLV.(*CurrentDataSetTLV)
 	if !ok {
-		return nil, fmt.Errorf("got unexpected management packet %T, expected %T", res, p)
+		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
 	}
-	return &p.CurrentDataSetTLV, nil
+	return tlv, nil
 }

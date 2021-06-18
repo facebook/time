@@ -40,9 +40,11 @@ const (
 	PortGeneral = 320
 )
 
-const mgmtLogMessageInterval LogInterval = 0x7f // as per Table 42 Values of logMessageInterval field
+// MgmtLogMessageInterval is the default LogInterval value used in Management packets
+const MgmtLogMessageInterval LogInterval = 0x7f // as per Table 42 Values of logMessageInterval field
 
-var defaultTargetPortIdentity = PortIdentity{
+// DefaultTargetPortIdentity is a port identity that means any port
+var DefaultTargetPortIdentity = PortIdentity{
 	ClockIdentity: 0xffffffffffffffff,
 	PortNumber:    0xffff,
 }
@@ -208,8 +210,7 @@ func Bytes(p Packet) ([]byte, error) {
 		return append(b, []byte{0, 0}...), err
 	}
 	var bytes bytes.Buffer
-	var err error
-	err = binary.Write(&bytes, binary.BigEndian, p)
+	err := binary.Write(&bytes, binary.BigEndian, p)
 	if err != nil {
 		return nil, err
 	}
