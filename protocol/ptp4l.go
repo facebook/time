@@ -20,6 +20,7 @@ package protocol
 // Implemented as present in linuxptp master d95f4cd6e4a7c6c51a220c58903110a2326885e7
 
 import (
+	"encoding/binary"
 	"fmt"
 )
 
@@ -35,17 +36,12 @@ type PortStats struct {
 	TXMsgType [16]uint64
 }
 
-// PortStatsNP is a ptp4l struct containing port identinity and statistics
-type PortStatsNP struct {
+// PortStatsNPTLV is a ptp4l struct containing port identinity and statistics
+type PortStatsNPTLV struct {
+	ManagementTLVHead
+
 	PortIdentity PortIdentity
 	PortStats    PortStats
-}
-
-// ManagementMsgPortStatsNP is header + PortStatsNP
-type ManagementMsgPortStatsNP struct {
-	ManagementMsgHead
-	ManagementTLVHead
-	PortStatsNP
 }
 
 // ScaledNS is some struct used by ptp4l to report phase change
@@ -55,8 +51,10 @@ type ScaledNS struct {
 	FractionalNanoseconds uint16
 }
 
-// TimeStatusNP is a ptp4l struct containing actually useful instance metrics
-type TimeStatusNP struct {
+// TimeStatusNPTLV is a ptp4l struct containing actually useful instance metrics
+type TimeStatusNPTLV struct {
+	ManagementTLVHead
+
 	MasterOffsetNS             int64
 	IngressTimeNS              int64 // this is PHC time
 	CumulativeScaledRateOffset int32
@@ -67,40 +65,29 @@ type TimeStatusNP struct {
 	GMIdentity                 ClockIdentity
 }
 
-// ManagementMsgTimeStatusNP is header + TimeStatusNP
-type ManagementMsgTimeStatusNP struct {
-	ManagementMsgHead
-	ManagementTLVHead
-	TimeStatusNP
-}
-
-// ManagementMsgBeforeData is a header + tlv header
-type ManagementMsgBeforeData struct {
-	ManagementMsgHead
-	ManagementTLVHead
-}
-
 // PortStatsNPRequest prepares request packet for PORT_STATS_NP request
-func PortStatsNPRequest() *ManagementMsgBeforeData {
+func PortStatsNPRequest() *Management {
+	headerSize := uint16(binary.Size(ManagementMsgHead{}))
+	tlvHeadSize := uint16(binary.Size(TLVHead{}))
 	// we send request with no portStats data just like pmc does
-	return &ManagementMsgBeforeData{
+	return &Management{
 		ManagementMsgHead: ManagementMsgHead{
 			Header: Header{
 				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
 				Version:            Version,
-				MessageLength:      headerSize,
+				MessageLength:      headerSize + tlvHeadSize,
 				SourcePortIdentity: identity,
-				LogMessageInterval: mgmtLogMessageInterval,
+				LogMessageInterval: MgmtLogMessageInterval,
 			},
-			TargetPortIdentity:   defaultTargetPortIdentity,
+			TargetPortIdentity:   DefaultTargetPortIdentity,
 			StartingBoundaryHops: 0,
 			BoundaryHops:         0,
 			ActionField:          GET,
 		},
-		ManagementTLVHead: ManagementTLVHead{
+		TLV: &ManagementTLVHead{
 			TLVHead: TLVHead{
 				TLVType:     TLVManagement,
-				LengthField: tlvBaseSize,
+				LengthField: 2,
 			},
 			ManagementID: IDPortStatsNP,
 		},
@@ -108,40 +95,42 @@ func PortStatsNPRequest() *ManagementMsgBeforeData {
 }
 
 // PortStatsNP sends PORT_STATS_NP request and returns response
-func (c *MgmtClient) PortStatsNP() (*PortStatsNP, error) {
+func (c *MgmtClient) PortStatsNP() (*PortStatsNPTLV, error) {
 	req := PortStatsNPRequest()
-	res, err := c.Communicate(req)
+	p, err := c.Communicate(req)
 	if err != nil {
 		return nil, err
 	}
-	p, ok := res.(*ManagementMsgPortStatsNP)
+	tlv, ok := p.TLV.(*PortStatsNPTLV)
 	if !ok {
-		return nil, fmt.Errorf("got unexpected management packet %T, expected %T", res, p)
+		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
 	}
-	return &p.PortStatsNP, nil
+	return tlv, nil
 }
 
 // TimeStatusNPRequest prepares request packet for TIME_STATUS_NP request
-func TimeStatusNPRequest() *ManagementMsgBeforeData {
+func TimeStatusNPRequest() *Management {
+	headerSize := uint16(binary.Size(ManagementMsgHead{}))
+	tlvHeadSize := uint16(binary.Size(TLVHead{}))
 	// we send request with no TimeStatusNP data just like pmc does
-	return &ManagementMsgBeforeData{
+	return &Management{
 		ManagementMsgHead: ManagementMsgHead{
 			Header: Header{
 				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
 				Version:            Version,
-				MessageLength:      headerSize,
+				MessageLength:      headerSize + tlvHeadSize,
 				SourcePortIdentity: identity,
-				LogMessageInterval: mgmtLogMessageInterval,
+				LogMessageInterval: MgmtLogMessageInterval,
 			},
-			TargetPortIdentity:   defaultTargetPortIdentity,
+			TargetPortIdentity:   DefaultTargetPortIdentity,
 			StartingBoundaryHops: 0,
 			BoundaryHops:         0,
 			ActionField:          GET,
 		},
-		ManagementTLVHead: ManagementTLVHead{
+		TLV: &ManagementTLVHead{
 			TLVHead: TLVHead{
 				TLVType:     TLVManagement,
-				LengthField: tlvBaseSize,
+				LengthField: 2,
 			},
 			ManagementID: IDTimeStatusNP,
 		},
@@ -149,15 +138,15 @@ func TimeStatusNPRequest() *ManagementMsgBeforeData {
 }
 
 // TimeStatusNP sends TIME_STATUS_NP request and returns response
-func (c *MgmtClient) TimeStatusNP() (*TimeStatusNP, error) {
+func (c *MgmtClient) TimeStatusNP() (*TimeStatusNPTLV, error) {
 	req := TimeStatusNPRequest()
-	res, err := c.Communicate(req)
+	p, err := c.Communicate(req)
 	if err != nil {
 		return nil, err
 	}
-	p, ok := res.(*ManagementMsgTimeStatusNP)
+	tlv, ok := p.TLV.(*TimeStatusNPTLV)
 	if !ok {
-		return nil, fmt.Errorf("got unexpected management packet %T, expected %T", res, p)
+		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
 	}
-	return &p.TimeStatusNP, nil
+	return tlv, nil
 }

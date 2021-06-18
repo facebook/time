@@ -19,23 +19,34 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 )
 
 var identity PortIdentity
 
-// base struct sizes
-const (
-	headerSize  uint16 = 54
-	tlvBaseSize uint16 = 2
-)
+// ErrManagementMsgErrorStatus is what happens if we expected to get Management TLV in response, but received special ManagementErrorStatusTLV
+var ErrManagementMsgErrorStatus = errors.New("received MANAGEMENT_ERROR_STATUS_TLV")
 
 func init() {
 	// store our PID as identity that we use to talk to ptp daemon
 	identity.PortNumber = uint16(os.Getpid())
 }
+
+// Action indicate the action to be taken on receipt of the PTP message as defined in Table 57
+type Action uint8
+
+// actions as in Table 57 Values of the actionField
+const (
+	GET Action = iota
+	SET
+	RESPONSE
+	COMMAND
+	ACKNOWLEDGE
+)
 
 // ManagementTLVHead Spec Table 58 - Management TLV fields
 type ManagementTLVHead struct {
@@ -65,61 +76,66 @@ func (p *ManagementTLVHead) MgmtID() ManagementID {
 	return p.ManagementID
 }
 
-// CurrentDataSetTLV Spec Table 84 - CURRENT_DATA_SET management TLV data field
-// size = 18 bytes
-type CurrentDataSetTLV struct {
-	StepsRemoved     uint16
-	OffsetFromMaster TimeInterval
-	MeanPathDelay    TimeInterval
-}
-
-// ManagementMsgCurrentDataSet is header + CurrentDataSet
-type ManagementMsgCurrentDataSet struct {
+// Management packet, see '15. PTP management messages'
+type Management struct {
 	ManagementMsgHead
-	ManagementTLVHead
-	CurrentDataSetTLV
+	TLV ManagementTLV
 }
 
-// DefaultDataSetTLV Spec Table 69 - DEFAULT_DATA_SET management TLV data field
-// size = 20 bytes
-type DefaultDataSetTLV struct {
-	SoTSC         uint8
-	Reserved0     uint8
-	NumberPorts   uint16
-	Priority1     uint8
-	ClockQuality  ClockQuality
-	Priority2     uint8
-	ClockIdentity ClockIdentity
-	DomainNumber  uint8
-	Reserved1     uint8
+// UnmarshalBinary parses []byte and populates struct fields
+func (p *Management) UnmarshalBinary(rawBytes []byte) error {
+	var err error
+	head := ManagementMsgHead{}
+	tlvHead := ManagementTLVHead{}
+	r := bytes.NewReader(rawBytes)
+	if err = binary.Read(r, binary.BigEndian, &head); err != nil {
+		return err
+	}
+	if err = binary.Read(r, binary.BigEndian, &tlvHead.TLVHead); err != nil {
+		return err
+	}
+	if tlvHead.TLVType == TLVManagementErrorStatus {
+		return ErrManagementMsgErrorStatus
+	}
+	if tlvHead.TLVType != TLVManagement {
+		return fmt.Errorf("got TLV type 0x%x instead of 0x%x", tlvHead.TLVType, TLVManagement)
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &tlvHead.ManagementID); err != nil {
+		return err
+	}
+	headSize := binary.Size(tlvHead)
+	// seek back so we can read whole TLV
+	if _, err := r.Seek(-int64(headSize), io.SeekCurrent); err != nil {
+		return err
+	}
+	decoder, found := mgmtTLVDecoder[tlvHead.ManagementID]
+	if !found {
+		return fmt.Errorf("unsupported management TLV 0x%x", tlvHead.ManagementID)
+	}
+	tlvData, err := ioutil.ReadAll(r)
+	if err != nil {
+		return err
+	}
+	tlv, err := decoder(tlvData)
+	if err != nil {
+		return err
+	}
+	p.ManagementMsgHead = head
+	p.TLV = tlv
+	return nil
 }
 
-// ManagementMsgDefaultDataSet is header + DefaultDataSet
-type ManagementMsgDefaultDataSet struct {
-	ManagementMsgHead
-	ManagementTLVHead
-	DefaultDataSetTLV
-}
-
-// ParentDataSetTLV Spec Table 85 - PARENT_DATA_SET management TLV data field
-// size = 32 bytes
-type ParentDataSetTLV struct {
-	ParentPortIdentity                    PortIdentity
-	PS                                    uint8
-	Reserved                              uint8
-	ObservedParentOffsetScaledLogVariance uint16
-	ObservedParentClockPhaseChangeRate    uint32
-	GrandmasterPriority1                  uint8
-	GrandmasterClockQuality               ClockQuality
-	GrandmasterPriority2                  uint8
-	GrandmasterIdentity                   ClockIdentity
-}
-
-// ManagementMsgParentDataSet is header + ParentDataSet
-type ManagementMsgParentDataSet struct {
-	ManagementMsgHead
-	ManagementTLVHead
-	ParentDataSetTLV
+// MarshalBinary converts packet to []bytes
+func (p *Management) MarshalBinary() ([]byte, error) {
+	var bytes bytes.Buffer
+	if err := binary.Write(&bytes, binary.BigEndian, p.ManagementMsgHead); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, p.TLV); err != nil {
+		return nil, err
+	}
+	return bytes.Bytes(), nil
 }
 
 // ManagementErrorStatusTLV spec Table 108 MANAGEMENT_ERROR_STATUS TLV format
@@ -208,41 +224,6 @@ func (p *ManagementMsgErrorStatus) MarshalBinary() ([]byte, error) {
 	return bytes.Bytes(), nil
 }
 
-// Action indicate the action to be taken on receipt of the PTP message as defined in Table 57
-type Action uint8
-
-// actions as in Table 57 Values of the actionField
-const (
-	GET Action = iota
-	SET
-	RESPONSE
-	COMMAND
-	ACKNOWLEDGE
-)
-
-// ManagementID is type for Management IDs
-type ManagementID uint16
-
-// Management IDs we support, from Table 59 managementId values
-const (
-	IDNullPTPManagement        ManagementID = 0x0000
-	IDClockDescription         ManagementID = 0x0001
-	IDUserDescription          ManagementID = 0x0002
-	IDSaveInNonVolatileStorage ManagementID = 0x0003
-	IDResetNonVolatileStorage  ManagementID = 0x0004
-	IDInitialize               ManagementID = 0x0005
-	IDFaultLog                 ManagementID = 0x0006
-	IDFaultLogReset            ManagementID = 0x0007
-
-	IDDefaultDataSet        ManagementID = 0x2000
-	IDCurrentDataSet        ManagementID = 0x2001
-	IDParentDataSet         ManagementID = 0x2002
-	IDTimePropertiesDataSet ManagementID = 0x2003
-	IDPortDataSet           ManagementID = 0x2004
-	// rest of Management IDs that we don't implement yet
-
-)
-
 // ManagementErrorID is an enum for possible management errors
 type ManagementErrorID uint16
 
@@ -283,180 +264,18 @@ func (t ManagementErrorID) Error() string {
 	return t.String()
 }
 
-// ManagementPacket is an iterface to abstract all different management packets
-type ManagementPacket interface {
-	Packet
-
-	Action() Action
-	MgmtID() ManagementID
-}
-
-// CurrentDataSetRequest prepares request packet for CURRENT_DATA_SET request
-func CurrentDataSetRequest() *ManagementMsgCurrentDataSet {
-	size := uint16(binary.Size(CurrentDataSetTLV{}))
-	return &ManagementMsgCurrentDataSet{
-		ManagementMsgHead: ManagementMsgHead{
-			Header: Header{
-				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
-				Version:            Version,
-				MessageLength:      headerSize + size,
-				SourcePortIdentity: identity,
-				LogMessageInterval: mgmtLogMessageInterval,
-			},
-			TargetPortIdentity:   defaultTargetPortIdentity,
-			StartingBoundaryHops: 0,
-			BoundaryHops:         0,
-			ActionField:          GET,
-		},
-		ManagementTLVHead: ManagementTLVHead{
-			TLVHead: TLVHead{
-				TLVType:     TLVManagement,
-				LengthField: tlvBaseSize + size,
-			},
-			ManagementID: IDCurrentDataSet,
-		},
-		CurrentDataSetTLV: CurrentDataSetTLV{},
-	}
-}
-
-// DefaultDataSetRequest prepares request packet for DEFAULT_DATA_SET request
-func DefaultDataSetRequest() *ManagementMsgDefaultDataSet {
-	size := uint16(binary.Size(DefaultDataSetTLV{}))
-	return &ManagementMsgDefaultDataSet{
-		ManagementMsgHead: ManagementMsgHead{
-			Header: Header{
-				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
-				Version:            Version,
-				MessageLength:      headerSize + size,
-				SourcePortIdentity: identity,
-				LogMessageInterval: mgmtLogMessageInterval,
-			},
-			TargetPortIdentity:   defaultTargetPortIdentity,
-			StartingBoundaryHops: 0,
-			BoundaryHops:         0,
-			ActionField:          GET,
-		},
-		ManagementTLVHead: ManagementTLVHead{
-			TLVHead: TLVHead{
-				TLVType:     TLVManagement,
-				LengthField: tlvBaseSize + size,
-			},
-			ManagementID: IDDefaultDataSet,
-		},
-		DefaultDataSetTLV: DefaultDataSetTLV{},
-	}
-}
-
-// ParentDataSetRequest prepares request packet for PARENT_DATA_SET request
-func ParentDataSetRequest() *ManagementMsgParentDataSet {
-	size := uint16(binary.Size(ParentDataSetTLV{}))
-	return &ManagementMsgParentDataSet{
-		ManagementMsgHead: ManagementMsgHead{
-			Header: Header{
-				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
-				Version:            Version,
-				MessageLength:      headerSize + size,
-				SourcePortIdentity: identity,
-				LogMessageInterval: mgmtLogMessageInterval,
-			},
-			TargetPortIdentity:   defaultTargetPortIdentity,
-			StartingBoundaryHops: 0,
-			BoundaryHops:         0,
-			ActionField:          GET,
-		},
-		ManagementTLVHead: ManagementTLVHead{
-			TLVHead: TLVHead{
-				TLVType:     TLVManagement,
-				LengthField: tlvBaseSize + size,
-			},
-			ManagementID: IDParentDataSet,
-		},
-		ParentDataSetTLV: ParentDataSetTLV{},
-	}
-}
-
 func decodeMgmtPacket(data []byte) (Packet, error) {
-	var err error
-	head := ManagementMsgHead{}
-	tlvHead := ManagementTLVHead{}
-	r := bytes.NewReader(data)
-	if err = binary.Read(r, binary.BigEndian, &head); err != nil {
-		return nil, err
-	}
-	if err = binary.Read(r, binary.BigEndian, &tlvHead.TLVHead); err != nil {
-		return nil, err
-	}
-	if tlvHead.TLVType == TLVManagementErrorStatus {
+	packet := &Management{}
+	err := packet.UnmarshalBinary(data)
+	if errors.Is(err, ErrManagementMsgErrorStatus) {
 		errorPacket := new(ManagementMsgErrorStatus)
 		if err := errorPacket.UnmarshalBinary(data); err != nil {
 			return nil, fmt.Errorf("got Management Error in response but failed to decode it: %w", err)
 		}
 		return errorPacket, nil
 	}
-
-	if tlvHead.TLVType != TLVManagement {
-		return nil, fmt.Errorf("got TLV type 0x%x instead of 0x%x", tlvHead.TLVType, TLVManagement)
-	}
-
-	if err = binary.Read(r, binary.BigEndian, &tlvHead.ManagementID); err != nil {
+	if err != nil {
 		return nil, err
 	}
-	switch tlvHead.ManagementID {
-	case IDDefaultDataSet:
-		tlv := &DefaultDataSetTLV{}
-		if err := binary.Read(r, binary.BigEndian, tlv); err != nil {
-			return nil, err
-		}
-		return &ManagementMsgDefaultDataSet{
-			ManagementMsgHead: head,
-			ManagementTLVHead: tlvHead,
-			DefaultDataSetTLV: *tlv,
-		}, nil
-	case IDCurrentDataSet:
-		tlv := &CurrentDataSetTLV{}
-		if err := binary.Read(r, binary.BigEndian, tlv); err != nil {
-			return nil, err
-		}
-		return &ManagementMsgCurrentDataSet{
-			ManagementMsgHead: head,
-			ManagementTLVHead: tlvHead,
-			CurrentDataSetTLV: *tlv,
-		}, nil
-	case IDParentDataSet:
-		tlv := &ParentDataSetTLV{}
-		if err := binary.Read(r, binary.BigEndian, tlv); err != nil {
-			return nil, err
-		}
-		return &ManagementMsgParentDataSet{
-			ManagementMsgHead: head,
-			ManagementTLVHead: tlvHead,
-			ParentDataSetTLV:  *tlv,
-		}, nil
-	case IDPortStatsNP:
-		tlv := &PortStatsNP{}
-		if err := binary.Read(r, binary.BigEndian, &tlv.PortIdentity); err != nil {
-			return nil, err
-		}
-		// fun part that cost me few hours, this is sent over wire as LittlEndian, while EVERYTHING ELSE is BigEndian.
-		if err := binary.Read(r, binary.LittleEndian, &tlv.PortStats); err != nil {
-			return nil, err
-		}
-		return &ManagementMsgPortStatsNP{
-			ManagementMsgHead: head,
-			ManagementTLVHead: tlvHead,
-			PortStatsNP:       *tlv,
-		}, nil
-	case IDTimeStatusNP:
-		tlv := &TimeStatusNP{}
-		if err := binary.Read(r, binary.BigEndian, tlv); err != nil {
-			return nil, err
-		}
-		return &ManagementMsgTimeStatusNP{
-			ManagementMsgHead: head,
-			ManagementTLVHead: tlvHead,
-			TimeStatusNP:      *tlv,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unsupported management TLV 0x%x", tlvHead.ManagementID)
-	}
+	return packet, nil
 }

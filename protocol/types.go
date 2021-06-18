@@ -136,17 +136,25 @@ func (t TLVType) String() string {
 	return TLVTypeToString[t]
 }
 
+// IntFloat is a float64 stored in int64
+type IntFloat int64
+
+// Value decodes IntFloat to float64
+func (t IntFloat) Value() float64 {
+	return float64(t) / twoPow16
+}
+
 /*
 TimeInterval is the time interval expressed in nanoseconds, multiplied by 2**16.
 Positive or negative time intervals outside the maximum range of this data type shall be encoded as the largest
 positive and negative values of the data type, respectively.
 For example, 2.5 ns is expressed as 0000 0000 0002 8000 base 16
 */
-type TimeInterval int64
+type TimeInterval IntFloat
 
 // Nanoseconds decodes TimeInterval to human-understandable nanoseconds
 func (t TimeInterval) Nanoseconds() float64 {
-	return float64(t) / twoPow16
+	return IntFloat(t).Value()
 }
 
 func (t TimeInterval) String() string {
@@ -163,11 +171,11 @@ Correction is the value of the correction measured in nanoseconds and multiplied
 For example, 2.5 ns is represented as 0000 0000 0002 8000 base 16
 A value of one in all bits, except the most significant, of the field shall indicate that the correction is too big to be represented.
 */
-type Correction int64
+type Correction IntFloat
 
 // Nanoseconds decodes Correction to human-understandable nanoseconds
 func (t Correction) Nanoseconds() float64 {
-	return float64(t) / twoPow16
+	return IntFloat(t).Value()
 }
 
 func (t Correction) String() string {

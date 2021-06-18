@@ -31,10 +31,10 @@ func Test_parseTimeStatusNP(t *testing.T) {
 		79, 96, 119, 80, 118, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		1, 36, 138, 7, 255, 254, 63, 48, 154, 0, 0,
 	}
-	packet := new(ManagementMsgTimeStatusNP)
+	packet := new(Management)
 	err := FromBytes(raw, packet)
 	require.Nil(t, err)
-	want := ManagementMsgTimeStatusNP{
+	want := Management{
 		ManagementMsgHead: ManagementMsgHead{
 			Header: Header{
 				SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageManagement, 0),
@@ -59,14 +59,14 @@ func Test_parseTimeStatusNP(t *testing.T) {
 			},
 			ActionField: RESPONSE,
 		},
-		ManagementTLVHead: ManagementTLVHead{
-			TLVHead: TLVHead{
-				TLVType:     TLVManagement,
-				LengthField: 52,
+		TLV: &TimeStatusNPTLV{
+			ManagementTLVHead: ManagementTLVHead{
+				TLVHead: TLVHead{
+					TLVType:     TLVManagement,
+					LengthField: 52,
+				},
+				ManagementID: IDTimeStatusNP,
 			},
-			ManagementID: IDTimeStatusNP,
-		},
-		TimeStatusNP: TimeStatusNP{
 			MasterOffsetNS:             24536521,
 			IngressTimeNS:              1615472167079671311,
 			CumulativeScaledRateOffset: 0,
