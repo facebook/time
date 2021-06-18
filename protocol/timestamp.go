@@ -160,8 +160,10 @@ feature. Only one field is non-zero at any time. Most timestamps
 are passed in ts[0]. Hardware timestamps are passed in ts[2].
 */
 func scmDataToTime(data []byte) (ts time.Time, err error) {
+	// on 32bit platforms Timespec is 8bits, while on 64bit it's 16bits
+	size := unsafe.Sizeof(unix.Timespec{})
 	// first, try to use hardware timestamps
-	ts, err = byteToTime(data[32:48])
+	ts, err = byteToTime(data[size*2 : size*3])
 	if err != nil {
 		return ts, err
 	}
@@ -169,7 +171,7 @@ func scmDataToTime(data []byte) (ts time.Time, err error) {
 	// we can't use ts.IsZero because for some crazy reason timestamp parsed using time.Unix()
 	// reports IsZero() == false, even if seconds and nanoseconds are zero.
 	if ts.UnixNano() == 0 {
-		ts, err = byteToTime(data[0:16])
+		ts, err = byteToTime(data[0:size])
 		if err != nil {
 			return ts, err
 		}
