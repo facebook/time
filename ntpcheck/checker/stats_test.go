@@ -19,7 +19,7 @@ package checker
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNoPeerExitCode(t *testing.T) {
@@ -32,5 +32,5 @@ func TestNoPeerExitCode(t *testing.T) {
 		Peers:   peers,
 	}
 	_, err := NewNTPStats(r)
-	assert.EqualError(t, err, "nothing to calculate stats from: no good peers present")
+	require.EqualError(t, err, "nothing to calculate stats from: no good peers present")
 }

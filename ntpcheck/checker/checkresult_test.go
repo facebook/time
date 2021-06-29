@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/facebookincubator/ntp/protocol/control"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNTPCheckResult_FindSysPeer(t *testing.T) {
@@ -73,7 +73,7 @@ func TestNTPCheckResult_FindSysPeer(t *testing.T) {
 				t.Errorf("NTPCheckResult.FindSysPeer() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, tt.want, got)
+			require.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -142,7 +142,7 @@ func TestNTPCheckResult_FindGoodPeers(t *testing.T) {
 				t.Errorf("NTPCheckResult.FindGoodPeers() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.ElementsMatch(t, tt.want, got)
+			require.ElementsMatch(t, tt.want, got)
 		})
 	}
 }

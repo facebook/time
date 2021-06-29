@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/facebookincubator/ntp/protocol/chrony"
 	"github.com/facebookincubator/ntp/protocol/control"
@@ -93,7 +93,7 @@ func TestNewPeerFromNTP(t *testing.T) {
 				t.Errorf("NewPeerFromNTP() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, tt.want, got)
+			require.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -173,7 +173,7 @@ func TestNewPeerFromChrony(t *testing.T) {
 				t.Errorf("NewPeerFromChrony() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, tt.want, got)
+			require.Equal(t, tt.want, got)
 		})
 	}
 }

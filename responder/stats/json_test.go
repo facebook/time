@@ -19,65 +19,65 @@ package stats
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestJSONStatsInvalidFormat(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncInvalidFormat()
-	assert.Equal(t, int64(1), stats.invalidFormat)
+	require.Equal(t, int64(1), stats.invalidFormat)
 }
 
 func TestJSONStatsRequests(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncRequests()
-	assert.Equal(t, int64(1), stats.requests)
+	require.Equal(t, int64(1), stats.requests)
 }
 
 func TestJSONStatsResponses(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncResponses()
-	assert.Equal(t, int64(1), stats.responses)
+	require.Equal(t, int64(1), stats.responses)
 }
 
 func TestJSONStatsListeners(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncListeners()
-	assert.Equal(t, int64(1), stats.listeners)
+	require.Equal(t, int64(1), stats.listeners)
 
 	stats.DecListeners()
-	assert.Equal(t, int64(0), stats.listeners)
+	require.Equal(t, int64(0), stats.listeners)
 }
 
 func TestJSONStatsWorkers(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncWorkers()
-	assert.Equal(t, int64(1), stats.workers)
+	require.Equal(t, int64(1), stats.workers)
 
 	stats.DecWorkers()
-	assert.Equal(t, int64(0), stats.workers)
+	require.Equal(t, int64(0), stats.workers)
 }
 
 func TestJSONStatsReadError(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.IncReadError()
-	assert.Equal(t, int64(1), stats.readError)
+	require.Equal(t, int64(1), stats.readError)
 }
 
 func TestJSONStatsAnnounce(t *testing.T) {
 	stats := JSONStats{}
 
 	stats.SetAnnounce()
-	assert.Equal(t, int64(1), stats.announce)
+	require.Equal(t, int64(1), stats.announce)
 
 	stats.ResetAnnounce()
-	assert.Equal(t, int64(0), stats.announce)
+	require.Equal(t, int64(0), stats.announce)
 }
 
 func TestJSONStatsToMap(t *testing.T) {
@@ -101,5 +101,5 @@ func TestJSONStatsToMap(t *testing.T) {
 	expectedMap["readError"] = 6
 	expectedMap["announce"] = 7
 
-	assert.Equal(t, expectedMap, result)
+	require.Equal(t, expectedMap, result)
 }

@@ -19,7 +19,7 @@ package chrony
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFloat(t *testing.T) {
@@ -43,7 +43,7 @@ func TestFloat(t *testing.T) {
 
 	for _, testCase := range testCases {
 		// can't really compare big floats, thus measure delta
-		assert.InDelta(
+		require.InDelta(
 			t,
 			testCase.out,
 			testCase.in.ToFloat(),
@@ -72,7 +72,7 @@ func TestRefidToString(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		assert.Equal(
+		require.Equal(
 			t,
 			testCase.out,
 			RefidToString(testCase.in),
@@ -96,7 +96,7 @@ func TestNTPTestsFlagsString(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		assert.ElementsMatch(
+		require.ElementsMatch(
 			t,
 			testCase.out,
 			ReadNTPTestFlags(testCase.in),

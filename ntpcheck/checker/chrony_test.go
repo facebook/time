@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/facebookincubator/ntp/protocol/chrony"
@@ -170,8 +169,8 @@ func TestChronyCheck_RunDegraded(t *testing.T) {
 	}
 
 	got, err := check.Run()
-	require.Nil(t, err)
-	assert.Equal(t, want, got)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 }
 
 func TestChronyCheck_Run(t *testing.T) {
@@ -246,6 +245,6 @@ func TestChronyCheck_Run(t *testing.T) {
 	}
 
 	got, err := check.Run()
-	require.Nil(t, err)
-	assert.Equal(t, want, got)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 }

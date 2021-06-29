@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/facebookincubator/ntp/protocol/ntp"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var timestamp = time.Unix(1585231321, 148166539)
@@ -32,7 +32,7 @@ func TestFillStaticHeadersStratum(t *testing.T) {
 	s := &Server{Stratum: stratum}
 	response := &ntp.Packet{}
 	s.fillStaticHeaders(response)
-	assert.Equal(t, uint8(stratum), response.Stratum)
+	require.Equal(t, uint8(stratum), response.Stratum)
 }
 
 func TestFillStaticHeadersReferenceID(t *testing.T) {
@@ -40,7 +40,7 @@ func TestFillStaticHeadersReferenceID(t *testing.T) {
 	response := &ntp.Packet{}
 
 	s.fillStaticHeaders(response)
-	assert.Equal(t, binary.BigEndian.Uint32([]byte("CHAN")), response.ReferenceID, "Reference-ID must be 4 bytes")
+	require.Equal(t, binary.BigEndian.Uint32([]byte("CHAN")), response.ReferenceID, "Reference-ID must be 4 bytes")
 }
 
 func TestFillStaticHeadersRootDelay(t *testing.T) {
@@ -48,7 +48,7 @@ func TestFillStaticHeadersRootDelay(t *testing.T) {
 	response := &ntp.Packet{}
 
 	s.fillStaticHeaders(response)
-	assert.Equal(t, uint32(0), response.RootDelay, "Root delay should be 0 if stratum is 1")
+	require.Equal(t, uint32(0), response.RootDelay, "Root delay should be 0 if stratum is 1")
 }
 
 func TestFillStaticHeadersRootDispersion(t *testing.T) {
@@ -56,14 +56,14 @@ func TestFillStaticHeadersRootDispersion(t *testing.T) {
 	response := &ntp.Packet{}
 
 	s.fillStaticHeaders(response)
-	assert.Equal(t, uint32(10), response.RootDispersion, "Root dispersion should be 0.000152")
+	require.Equal(t, uint32(10), response.RootDispersion, "Root dispersion should be 0.000152")
 }
 
 func TestGenerateResponsePoll(t *testing.T) {
 	request := &ntp.Packet{Poll: 8}
 	response := &ntp.Packet{}
 	generateResponse(timestamp, timestamp, request, response)
-	assert.Equal(t, request.Poll, response.Poll)
+	require.Equal(t, request.Poll, response.Poll)
 }
 
 func TestGenerateResponseTimestamps(t *testing.T) {
@@ -76,20 +76,20 @@ func TestGenerateResponseTimestamps(t *testing.T) {
 	// Reference Timestamp must to the closest /1000s
 	lastSync := time.Unix(timestamp.Unix()/1000*1000, 0)
 	lastSyncSec, lastSyncFrac := ntp.Time(lastSync)
-	assert.Equal(t, lastSyncSec, response.RefTimeSec)
-	assert.Equal(t, lastSyncFrac, response.RefTimeFrac)
+	require.Equal(t, lastSyncSec, response.RefTimeSec)
+	require.Equal(t, lastSyncFrac, response.RefTimeFrac)
 
 	// Originate Timestamp must be the same
-	assert.Equal(t, request.TxTimeSec, response.OrigTimeSec)
-	assert.Equal(t, request.TxTimeFrac, response.OrigTimeFrac)
+	require.Equal(t, request.TxTimeSec, response.OrigTimeSec)
+	require.Equal(t, request.TxTimeFrac, response.OrigTimeFrac)
 
 	// Receive Timestamp must be current timestamp
-	assert.Equal(t, nowSec, response.RxTimeSec)
-	assert.Equal(t, nowFrac, response.RxTimeFrac)
+	require.Equal(t, nowSec, response.RxTimeSec)
+	require.Equal(t, nowFrac, response.RxTimeFrac)
 
 	// Transmit Timestamp must be current timestamp
-	assert.Equal(t, nowSec, response.TxTimeSec)
-	assert.Equal(t, nowFrac, response.TxTimeFrac)
+	require.Equal(t, nowSec, response.TxTimeSec)
+	require.Equal(t, nowFrac, response.TxTimeFrac)
 }
 
 func Benchmark_generateResponse(b *testing.B) {

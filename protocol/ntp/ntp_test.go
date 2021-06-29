@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -91,72 +91,72 @@ var (
 // Testing conversion so if Packet structure changes we notice
 func TestRequestConversion(t *testing.T) {
 	bytes, err := ntpRequest.Bytes()
-	assert.Nil(t, err)
-	assert.Equal(t, ntpRequestBytes, bytes)
+	require.NoError(t, err)
+	require.Equal(t, ntpRequestBytes, bytes)
 }
 
 // Testing conversion so if Packet structure changes we notice
 func TestResponseConersion(t *testing.T) {
 	bytes, err := ntpResponse.Bytes()
-	assert.Nil(t, err)
-	assert.Equal(t, ntpResponseBytes, bytes)
+	require.NoError(t, err)
+	require.Equal(t, ntpResponseBytes, bytes)
 }
 
 func TestBytesToPacket(t *testing.T) {
 	packet, err := BytesToPacket(ntpResponseBytes)
-	assert.Nil(t, err)
-	assert.Equal(t, ntpResponse, packet)
+	require.NoError(t, err)
+	require.Equal(t, ntpResponse, packet)
 }
 
 func TestBytesToPacketError(t *testing.T) {
 	bytes := []byte{}
 	packet, err := BytesToPacket(bytes)
-	assert.NotNil(t, err)
-	assert.Equal(t, &Packet{}, packet)
+	require.NotNil(t, err)
+	require.Equal(t, &Packet{}, packet)
 }
 
 // Testing conversion so if Packet structure changes we notice
 func TestPacketConversionFailure(t *testing.T) {
 	bytes, err := ntpRequest.Bytes()
-	assert.Nil(t, err)
-	assert.Equal(t, ntpRequestBytes, bytes)
+	require.NoError(t, err)
+	require.Equal(t, ntpRequestBytes, bytes)
 }
 
 func TestRequestSize(t *testing.T) {
-	assert.Equal(t, PacketSizeBytes, len(ntpRequestBytes))
+	require.Equal(t, PacketSizeBytes, len(ntpRequestBytes))
 }
 
 func TestResponseSize(t *testing.T) {
-	assert.Equal(t, PacketSizeBytes, len(ntpResponseBytes))
+	require.Equal(t, PacketSizeBytes, len(ntpResponseBytes))
 }
 
 func TestValidSettingsFormat(t *testing.T) {
-	assert.True(t, ntpRequest.ValidSettingsFormat())
+	require.True(t, ntpRequest.ValidSettingsFormat())
 }
 
 func TestInvalidSettingsFormat(t *testing.T) {
-	assert.False(t, ntpBadRequest.ValidSettingsFormat())
+	require.False(t, ntpBadRequest.ValidSettingsFormat())
 }
 
 func TestTime(t *testing.T) {
 	testtime := time.Unix(usec, unsec)
 	sec, frac := Time(testtime)
 
-	assert.Equal(t, nsec, sec)
-	assert.Equal(t, nfrac, frac)
+	require.Equal(t, nsec, sec)
+	require.Equal(t, nfrac, frac)
 }
 
 func TestUnix(t *testing.T) {
 	testtime := Unix(nsec, nfrac)
 
-	assert.Equal(t, usec, testtime.Unix())
+	require.Equal(t, usec, testtime.Unix())
 	// +1ns is a rounding issue
-	assert.Equal(t, unsec, int64(testtime.Nanosecond())+1)
+	require.Equal(t, unsec, int64(testtime.Nanosecond())+1)
 }
 
 func TestAbs(t *testing.T) {
-	assert.Equal(t, abs(1), int64(1))
-	assert.Equal(t, abs(-1), int64(1))
+	require.Equal(t, abs(1), int64(1))
+	require.Equal(t, abs(-1), int64(1))
 }
 
 func TestAvgNetworkDelay(t *testing.T) {
@@ -170,7 +170,7 @@ func TestAvgNetworkDelay(t *testing.T) {
 	clientReceiveTime := serverTransmitTime.Add(returnDelay)
 
 	actualAvgNetworkDelay := AvgNetworkDelay(clientTransmitTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
-	assert.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
+	require.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
 }
 
 func TestAvgNetworkDelayPositive(t *testing.T) {
@@ -186,7 +186,7 @@ func TestAvgNetworkDelayPositive(t *testing.T) {
 	clientReceiveTime := serverTransmitTime.Add(returnDelay)
 
 	actualAvgNetworkDelay := AvgNetworkDelay(clientTransmitTime.Add(clientToServer), serverReceiveTime, serverTransmitTime, clientReceiveTime.Add(clientToServer))
-	assert.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
+	require.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
 }
 
 func TestAvgNetworkDelayNegative(t *testing.T) {
@@ -202,13 +202,13 @@ func TestAvgNetworkDelayNegative(t *testing.T) {
 	clientReceiveTime := serverTransmitTime.Add(returnDelay)
 
 	actualAvgNetworkDelay := AvgNetworkDelay(clientTransmitTime.Add(clientToServer), serverReceiveTime, serverTransmitTime, clientReceiveTime.Add(clientToServer))
-	assert.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
+	require.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
 }
 
 func TestCurrentRealTime(t *testing.T) {
 	serverTransmitTime := time.Now()
 	currentRealTime := CurrentRealTime(serverTransmitTime, avgNetworkDelay)
-	assert.Equal(t, serverTransmitTime.Add(time.Duration(avgNetworkDelay)*time.Nanosecond), currentRealTime)
+	require.Equal(t, serverTransmitTime.Add(time.Duration(avgNetworkDelay)*time.Nanosecond), currentRealTime)
 }
 
 func TestCalculateOffset(t *testing.T) {
@@ -216,62 +216,62 @@ func TestCalculateOffset(t *testing.T) {
 	currentRealTime := curentLocaTime.Add(offset)
 
 	actualOffset := CalculateOffset(currentRealTime, curentLocaTime)
-	assert.Equal(t, offset.Nanoseconds(), actualOffset)
+	require.Equal(t, offset.Nanoseconds(), actualOffset)
 }
 
 func TestConnFd(t *testing.T) {
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	connfd, err := connFd(conn)
-	assert.Nil(t, err)
-	assert.Greater(t, connfd, 0, "connection fd must be > 0")
+	require.NoError(t, err)
+	require.Greater(t, connfd, 0, "connection fd must be > 0")
 }
 
 func TestReadNTPPacket(t *testing.T) {
 	// listen to incoming udp packets
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Send a client request
 	cconn, err := net.Dial("udp", conn.LocalAddr().String())
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer cconn.Close()
 	_, err = cconn.Write(ntpRequestBytes)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	request, returnaddr, err := ReadNTPPacket(conn)
-	assert.Equal(t, ntpRequest, request, "We should have the same request arriving on the server")
-	assert.Equal(t, cconn.LocalAddr().String(), returnaddr.String())
-	assert.Nil(t, err)
+	require.Equal(t, ntpRequest, request, "We should have the same request arriving on the server")
+	require.Equal(t, cconn.LocalAddr().String(), returnaddr.String())
+	require.NoError(t, err)
 }
 
 func TestReadPacketWithKernelTimestamp(t *testing.T) {
 	// listen to incoming udp packets
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Allow reading of kernel timestamps via socket
 	err = EnableKernelTimestampsSocket(conn)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Send a client request
 	timeout := 1 * time.Second
 	cconn, err := net.DialTimeout("udp", conn.LocalAddr().String(), timeout)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer cconn.Close()
 	_, err = cconn.Write(ntpRequestBytes)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// read kernel timestamp from incoming packet
 	request, nowKernelTimestamp, returnaddr, err := ReadPacketWithKernelTimestamp(conn)
-	assert.Equal(t, ntpRequest, request, "We should have the same request arriving on the server")
-	assert.Equal(t, time.Now().Unix()/10, nowKernelTimestamp.Unix()/10, "kernel timestamps should be within 10s")
-	assert.Equal(t, cconn.LocalAddr().String(), returnaddr.String())
-	assert.Nil(t, err)
+	require.Equal(t, ntpRequest, request, "We should have the same request arriving on the server")
+	require.Equal(t, time.Now().Unix()/10, nowKernelTimestamp.Unix()/10, "kernel timestamps should be within 10s")
+	require.Equal(t, cconn.LocalAddr().String(), returnaddr.String())
+	require.NoError(t, err)
 }
 
 func Benchmark_PacketToBytesConversion(b *testing.B) {
@@ -302,14 +302,14 @@ ok  	github.com/facebookincubator/ntp/protocol/ntp	1.094s
 func Benchmark_ServerWithoutKernelTimestamps(b *testing.B) {
 	// Server
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
-	assert.Nil(b, err)
+	require.Nil(b, err)
 	defer conn.Close()
 
 	// Client
 	addr, err := net.ResolveUDPAddr("udp", conn.LocalAddr().String())
-	assert.Nil(b, err)
+	require.Nil(b, err)
 	cconn, err := net.DialUDP("udp", nil, addr)
-	assert.Nil(b, err)
+	require.Nil(b, err)
 	defer cconn.Close()
 
 	for i := 0; i < b.N; i++ {
@@ -321,18 +321,18 @@ func Benchmark_ServerWithoutKernelTimestamps(b *testing.B) {
 func Benchmark_ServerWithKernelTimestamps(b *testing.B) {
 	// Server
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
-	assert.Nil(b, err)
+	require.Nil(b, err)
 	defer conn.Close()
 
 	// Allow reading of kernel timestamps via socket
 	err = EnableKernelTimestampsSocket(conn)
-	assert.Nil(b, err)
+	require.Nil(b, err)
 
 	// Client
 	addr, err := net.ResolveUDPAddr("udp", conn.LocalAddr().String())
-	assert.Nil(b, err)
+	require.Nil(b, err)
 	cconn, err := net.DialUDP("udp", nil, addr)
-	assert.Nil(b, err)
+	require.Nil(b, err)
 	defer cconn.Close()
 
 	for i := 0; i < b.N; i++ {
@@ -357,18 +357,18 @@ ok  	github.com/facebookincubator/ntp/protocol/ntp	1.778s
 func Benchmark_ServerWithKernelTimestampsRead(b *testing.B) {
 	// Server
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
-	assert.Nil(b, err)
+	require.Nil(b, err)
 	defer conn.Close()
 
 	// Allow reading of kernel timestamps via socket
 	err = EnableKernelTimestampsSocket(conn)
-	assert.Nil(b, err)
+	require.Nil(b, err)
 
 	// Client
 	addr, err := net.ResolveUDPAddr("udp", conn.LocalAddr().String())
-	assert.Nil(b, err)
+	require.Nil(b, err)
 	cconn, err := net.DialUDP("udp", nil, addr)
-	assert.Nil(b, err)
+	require.Nil(b, err)
 	defer cconn.Close()
 
 	for i := 0; i < b.N; i++ {

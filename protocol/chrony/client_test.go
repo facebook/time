@@ -23,7 +23,6 @@ import (
 	"net"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,18 +55,16 @@ func (c *fakeConn) Write(p []byte) (n int, err error) {
 
 // Test if we have errors when there is nothing on the line to read
 func TestCommunicateEOF(t *testing.T) {
-	require := require.New(t)
 	conn := newConn([]*bytes.Buffer{
 		bytes.NewBuffer([]byte{}),
 	})
 	client := Client{Sequence: 1, Connection: conn}
 	_, err := client.Communicate(NewTrackingPacket())
-	require.NotNil(err)
+	require.Error(t, err)
 }
 
 func TestCommunicateError(t *testing.T) {
 	var err error
-	require := require.New(t)
 	buf := &bytes.Buffer{}
 	packetHead := ReplyHead{
 		Version:  protoVersionNumber,
@@ -86,21 +83,19 @@ func TestCommunicateError(t *testing.T) {
 	}
 	packetBody := replyTrackingContent{}
 	err = binary.Write(buf, binary.BigEndian, packetHead)
-	require.Nil(err)
+	require.NoError(t, err)
 	err = binary.Write(buf, binary.BigEndian, packetBody)
-	require.Nil(err)
+	require.NoError(t, err)
 	conn := newConn([]*bytes.Buffer{
 		buf,
 	})
 	client := Client{Sequence: 1, Connection: conn}
 	_, err = client.Communicate(NewTrackingPacket())
-	require.NotNil(err)
+	require.Error(t, err)
 }
 
 func TestCommunicateAuthError(t *testing.T) {
 	var err error
-	assert := assert.New(t)
-	require := require.New(t)
 	buf := &bytes.Buffer{}
 	packetHead := ReplyHead{
 		Version:  protoVersionNumber,
@@ -119,22 +114,20 @@ func TestCommunicateAuthError(t *testing.T) {
 	}
 	packetBody := replyTrackingContent{}
 	err = binary.Write(buf, binary.BigEndian, packetHead)
-	require.Nil(err)
+	require.NoError(t, err)
 	err = binary.Write(buf, binary.BigEndian, packetBody)
-	require.Nil(err)
+	require.NoError(t, err)
 	conn := newConn([]*bytes.Buffer{
 		buf,
 	})
 	client := Client{Sequence: 1, Connection: conn}
 	_, err = client.Communicate(NewTrackingPacket())
-	assert.Equal(ErrNotAuthorized, err)
+	require.Equal(t, ErrNotAuthorized, err)
 }
 
 // Test if we can read reply properly
 func TestCommunicateOK(t *testing.T) {
 	var err error
-	assert := assert.New(t)
-	require := require.New(t)
 	buf := &bytes.Buffer{}
 	packetHead := ReplyHead{
 		Version:  protoVersionNumber,
@@ -168,15 +161,15 @@ func TestCommunicateOK(t *testing.T) {
 		LastUpdateInterval: 0,
 	}
 	err = binary.Write(buf, binary.BigEndian, packetHead)
-	require.Nil(err)
+	require.NoError(t, err)
 	err = binary.Write(buf, binary.BigEndian, packetBody)
-	require.Nil(err)
+	require.NoError(t, err)
 	conn := newConn([]*bytes.Buffer{
 		buf,
 	})
 	client := Client{Sequence: 1, Connection: conn}
 	p, err := client.Communicate(NewTrackingPacket())
-	require.Nil(err)
+	require.NoError(t, err)
 	expected := &ReplyTracking{
 		ReplyHead: packetHead,
 		Tracking: Tracking{
@@ -196,5 +189,5 @@ func TestCommunicateOK(t *testing.T) {
 			LastUpdateInterval: packetBody.LastUpdateInterval.ToFloat(),
 		},
 	}
-	assert.Equal(expected, p)
+	require.Equal(t, expected, p)
 }

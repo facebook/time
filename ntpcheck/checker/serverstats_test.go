@@ -19,7 +19,7 @@ package checker
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/facebookincubator/ntp/protocol/chrony"
 	"github.com/facebookincubator/ntp/protocol/control"
@@ -35,7 +35,7 @@ func TestNewServerStatsFromChrony(t *testing.T) {
 		PacketsReceived: 1234,
 		PacketsDropped:  5678,
 	}
-	assert.Equal(t, expected, s)
+	require.Equal(t, expected, s)
 }
 
 func TestNewServerStatsFromNTP(t *testing.T) {
@@ -86,7 +86,7 @@ func TestNewServerStatsFromNTP(t *testing.T) {
 				t.Errorf("NewServerStatsFromNTP() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, tt.want, got)
+			require.Equal(t, tt.want, got)
 		})
 	}
 }
