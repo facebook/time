@@ -19,7 +19,7 @@ package checker
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSimpleCheckerListeners(t *testing.T) {
@@ -27,10 +27,10 @@ func TestSimpleCheckerListeners(t *testing.T) {
 
 	checker := SimpleChecker{realListeners: randomNumber}
 	checker.IncListeners()
-	assert.Equal(t, checker.realListeners, randomNumber+1)
+	require.Equal(t, checker.realListeners, randomNumber+1)
 
 	checker.DecListeners()
-	assert.Equal(t, checker.realListeners, randomNumber)
+	require.Equal(t, checker.realListeners, randomNumber)
 }
 
 func TestSimpleCheckerWorkers(t *testing.T) {
@@ -38,17 +38,17 @@ func TestSimpleCheckerWorkers(t *testing.T) {
 
 	checker := SimpleChecker{realWorkers: randomNumber}
 	checker.IncWorkers()
-	assert.Equal(t, checker.realWorkers, randomNumber+1)
+	require.Equal(t, checker.realWorkers, randomNumber+1)
 
 	checker.DecWorkers()
-	assert.Equal(t, checker.realWorkers, randomNumber)
+	require.Equal(t, checker.realWorkers, randomNumber)
 }
 
 func TestSimpleCheckListeners(t *testing.T) {
 	checker := SimpleChecker{ExpectedListeners: 1}
 	checker.IncListeners()
 
-	assert.Nil(t, checker.checkListeners())
+	require.Nil(t, checker.checkListeners())
 }
 
 func TestCheckListenersFail(t *testing.T) {
@@ -56,14 +56,14 @@ func TestCheckListenersFail(t *testing.T) {
 	checker.IncListeners()
 	checker.DecListeners()
 
-	assert.Equal(t, checker.checkListeners(), errSimpleCheckerWrongAmountListeners)
+	require.Equal(t, checker.checkListeners(), errSimpleCheckerWrongAmountListeners)
 }
 
 func TestSimpleCheckerCheckWorkers(t *testing.T) {
 	checker := SimpleChecker{ExpectedWorkers: 1}
 	checker.IncWorkers()
 
-	assert.Nil(t, checker.checkWorkers())
+	require.Nil(t, checker.checkWorkers())
 }
 
 func TestSimpleCheckerCheckWorkersFail(t *testing.T) {
@@ -71,5 +71,5 @@ func TestSimpleCheckerCheckWorkersFail(t *testing.T) {
 	checker.IncWorkers()
 	checker.DecWorkers()
 
-	assert.Equal(t, checker.checkWorkers(), errSimpleCheckerWrongAmountWorkers)
+	require.Equal(t, checker.checkWorkers(), errSimpleCheckerWrongAmountWorkers)
 }

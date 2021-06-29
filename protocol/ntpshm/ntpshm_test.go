@@ -21,7 +21,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNTPSHMStruct(t *testing.T) {
@@ -43,11 +43,11 @@ func TestNTPSHMStruct(t *testing.T) {
 	}
 
 	s, err := ptrToNTPSHM(uintptr(unsafe.Pointer(&testBytes[0])))
-	assert.NoError(t, err)
-	assert.Equal(t, testNTPSHM, *s)
+	require.NoError(t, err)
+	require.Equal(t, testNTPSHM, *s)
 
-	assert.True(t, time.Unix(1623873213, 307321).Equal(s.ClockTimeStamp()))
-	assert.True(t, time.Unix(1623873213, 64546742).Equal(s.ReceiveTimeStamp()))
+	require.True(t, time.Unix(1623873213, 307321).Equal(s.ClockTimeStamp()))
+	require.True(t, time.Unix(1623873213, 64546742).Equal(s.ReceiveTimeStamp()))
 }
 
 func TestNTPSHMReadID(t *testing.T) {
@@ -56,9 +56,9 @@ func TestNTPSHMReadID(t *testing.T) {
 	if err != nil {
 		t.SkipNow()
 	}
-	assert.NotEqual(t, 0, id)
+	require.NotEqual(t, 0, id)
 
 	shm, err := ReadID(id)
-	assert.Nil(t, err)
-	assert.NotNil(t, shm)
+	require.NoError(t, err)
+	require.NotNil(t, shm)
 }

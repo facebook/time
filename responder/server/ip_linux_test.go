@@ -20,27 +20,27 @@ import (
 	"net"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCheckIP(t *testing.T) {
 	iface, err := net.InterfaceByName("lo")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	ip := net.ParseIP("127.0.0.1")
 	assigned, err := checkIP(iface, &ip)
 
-	assert.Nil(t, err)
-	assert.True(t, assigned)
+	require.NoError(t, err)
+	require.True(t, assigned)
 }
 
 func TestCheckIPFalse(t *testing.T) {
 	iface, err := net.InterfaceByName("lo")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	ip := net.ParseIP("8.8.8.8")
 	assigned, err := checkIP(iface, &ip)
 
-	assert.Nil(t, err)
-	assert.False(t, assigned)
+	require.NoError(t, err)
+	require.False(t, assigned)
 }

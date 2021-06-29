@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/facebookincubator/ntp/protocol/control"
@@ -156,6 +155,6 @@ func TestNTPCheck_Run(t *testing.T) {
 	}
 
 	got, err := check.Run()
-	require.Nil(t, err)
-	assert.Equal(t, want, got)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 }

@@ -19,12 +19,10 @@ package control
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNormalizeData(t *testing.T) {
-	assert := assert.New(t)
 	data := []byte(
 		`version="ntpd 4.2.6p5@1.2349-o Fri Apr 13 12:52:27 UTC 2018 (1)",
 processor="x86_64", system="Linux/4.11.3-61_fbk16_3934_gd064a3c",
@@ -35,7 +33,7 @@ frequency=0.314, sys_jitter=0.246, clk_jitter=0.140, clk_wander=0.009
 `)
 	parsed, err := NormalizeData(data)
 
-	assert.Nil(err)
+	require.NoError(t, err)
 	expected := map[string]string{
 		"version":   "ntpd 4.2.6p5@1.2349-o Fri Apr 13 12:52:27 UTC 2018 (1)",
 		"processor": "x86_64", "system": "Linux/4.11.3-61_fbk16_3934_gd064a3c",
@@ -56,12 +54,11 @@ frequency=0.314, sys_jitter=0.246, clk_jitter=0.140, clk_wander=0.009
 		"clk_jitter": "0.140",
 		"clk_wander": "0.009",
 	}
-	assert.Equal(expected, parsed)
+	require.Equal(t, expected, parsed)
 }
 
 // test that we skip bad pairs
 func TestNormalizeDataCorrupted(t *testing.T) {
-	assert := assert.New(t)
 	data := []byte(`srcadr=2401:db00:3110:5068:face:0:5c:0, srcport=123,
 dstadr=2401:db00:3110:915d:face:0:5a:0, dstport=123, leap=0, stratum=3,
 precision=-24, rootdelay=83.313, rootdisp=47.607, refid=1.104.123.73,
@@ -73,7 +70,7 @@ filtdisp= 0.00 1.95 3.87 5.79 7.79 9.78 11.72 13.71
 `)
 	parsed, err := NormalizeData(data)
 
-	assert.Nil(err)
+	require.NoError(t, err)
 	expected := map[string]string{
 		"delay":      "0.136",
 		"dispersion": "5.123",
@@ -103,7 +100,7 @@ filtdisp= 0.00 1.95 3.87 5.79 7.79 9.78 11.72 13.71
 		"unreach":    "0",
 		"xleave":     "0.022",
 	}
-	assert.Equal(expected, parsed)
+	require.Equal(t, expected, parsed)
 }
 
 func TestPeerStatus(t *testing.T) {
@@ -116,9 +113,9 @@ func TestPeerStatus(t *testing.T) {
 		Configured:  true,
 	}
 	input := wantPeerStatus.Byte()
-	assert.Equal(t, wantByte, input)
+	require.Equal(t, wantByte, input)
 	peerStatus := ReadPeerStatus(input)
-	assert.Equal(t, wantPeerStatus, peerStatus)
+	require.Equal(t, wantPeerStatus, peerStatus)
 }
 
 func TestPeerStatusWord(t *testing.T) {
@@ -136,9 +133,9 @@ func TestPeerStatusWord(t *testing.T) {
 		PeerEventCode:    2,
 	}
 	input := wantPeerStatusWord.Word()
-	assert.Equal(t, wantWord, input)
+	require.Equal(t, wantWord, input)
 	peerStatusWord := ReadPeerStatusWord(input)
-	assert.Equal(t, wantPeerStatusWord, peerStatusWord)
+	require.Equal(t, wantPeerStatusWord, peerStatusWord)
 }
 
 func TestSystemStatusWord(t *testing.T) {
@@ -150,9 +147,9 @@ func TestSystemStatusWord(t *testing.T) {
 		SystemEventCode:    2, // freq_mode
 	}
 	input := wantSystemStatusWord.Word()
-	assert.Equal(t, wantWord, input)
+	require.Equal(t, wantWord, input)
 	systemStatusWord := ReadSystemStatusWord(input)
-	assert.Equal(t, wantSystemStatusWord, systemStatusWord)
+	require.Equal(t, wantSystemStatusWord, systemStatusWord)
 }
 
 func TestMakeVnMode(t *testing.T) {
@@ -161,8 +158,8 @@ func TestMakeVnMode(t *testing.T) {
 	msg := NTPControlMsgHead{
 		VnMode: MakeVnMode(version, mode),
 	}
-	assert.Equal(t, version, msg.GetVersion())
-	assert.Equal(t, mode, msg.GetMode())
+	require.Equal(t, version, msg.GetVersion())
+	require.Equal(t, mode, msg.GetMode())
 }
 
 func TestMakeREMOp(t *testing.T) {
@@ -173,10 +170,10 @@ func TestMakeREMOp(t *testing.T) {
 	msg := NTPControlMsgHead{
 		REMOp: MakeREMOp(response, err, more, op),
 	}
-	assert.True(t, msg.IsResponse())
-	assert.False(t, msg.HasError())
-	assert.True(t, msg.HasMore())
-	assert.Equal(t, uint8(op), msg.GetOperation())
+	require.True(t, msg.IsResponse())
+	require.False(t, msg.HasError())
+	require.True(t, msg.HasMore())
+	require.Equal(t, uint8(op), msg.GetOperation())
 }
 
 func uint16to2x8(d uint16) []uint8 {
@@ -225,6 +222,6 @@ func TestNTPControlMsg_GetAssociations(t *testing.T) {
 		2: peerStatusWord2,
 	}
 	got, err := msg.GetAssociations()
-	require.Nil(t, err)
-	assert.Equal(t, want, got)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 }

@@ -21,7 +21,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConfigSet(t *testing.T) {
@@ -29,8 +29,8 @@ func TestConfigSet(t *testing.T) {
 
 	m := MultiIPs{}
 	err := m.Set(testIP)
-	assert.Nil(t, err)
-	assert.Equal(t, net.ParseIP(testIP), m[0])
+	require.NoError(t, err)
+	require.Equal(t, net.ParseIP(testIP), m[0])
 }
 
 func TestConfigSetInvalid(t *testing.T) {
@@ -38,8 +38,8 @@ func TestConfigSetInvalid(t *testing.T) {
 
 	m := MultiIPs{}
 	err := m.Set(testIP)
-	assert.NotNil(t, err)
-	assert.Empty(t, m)
+	require.NotNil(t, err)
+	require.Empty(t, m)
 }
 
 func TestConfigString(t *testing.T) {
@@ -48,16 +48,16 @@ func TestConfigString(t *testing.T) {
 
 	m := MultiIPs{}
 	err := m.Set(testIP1)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	err = m.Set(testIP2)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, m.String(), fmt.Sprintf("%s, %s", testIP1, testIP2))
+	require.Equal(t, m.String(), fmt.Sprintf("%s, %s", testIP1, testIP2))
 }
 
 func TestConfigSetDefault(t *testing.T) {
 	m := MultiIPs{}
 	m.SetDefault()
 
-	assert.Equal(t, DefaultServerIPs, m)
+	require.Equal(t, DefaultServerIPs, m)
 }

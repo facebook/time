@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,13 +49,12 @@ func (c *fakeConn) Read(p []byte) (n int, err error) {
 }
 
 func (c *fakeConn) Write(p []byte) (n int, err error) {
-	// here we may assert writes
+	// here we may require writes
 	return 0, nil
 }
 
 // Test if we have errors when there is nothing on the line to read
 func TestCommunicateEOF(t *testing.T) {
-	require := require.New(t)
 	conn := newConn([]*bytes.Buffer{
 		bytes.NewBuffer([]byte{}),
 	})
@@ -65,13 +63,11 @@ func TestCommunicateEOF(t *testing.T) {
 		VnMode: vnMode,
 		REMOp:  OpReadStatus,
 	})
-	require.NotNil(err)
+	require.Error(t, err)
 }
 
 // Test if we can read single packet (more bit set to 0)
 func TestCommunicateSingle(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
 	conn := newConn([]*bytes.Buffer{
 		bytes.NewBuffer([]byte{
 			0x1e, 0x81, 0x00, 0x00,
@@ -84,7 +80,7 @@ func TestCommunicateSingle(t *testing.T) {
 		VnMode: vnMode,
 		REMOp:  OpReadStatus,
 	})
-	require.Nil(err)
+	require.NoError(t, err)
 	expected := &NTPControlMsg{
 		NTPControlMsgHead{
 			VnMode: 0x1E,
@@ -92,13 +88,11 @@ func TestCommunicateSingle(t *testing.T) {
 		},
 		[]byte{},
 	}
-	assert.Equal(expected, p)
+	require.Equal(t, expected, p)
 }
 
 // Test if we can read split packet, when first has more bit set to 1
 func TestCommunicateMulti(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
 	conn := newConn([]*bytes.Buffer{
 		bytes.NewBuffer([]byte{
 			0x1e, 0xa1, 0x00, 0x00, // more bit set to 1
@@ -118,7 +112,7 @@ func TestCommunicateMulti(t *testing.T) {
 		VnMode: vnMode,
 		REMOp:  OpReadStatus,
 	})
-	require.Nil(err)
+	require.NoError(t, err)
 	expected := &NTPControlMsg{
 		NTPControlMsgHead{
 			VnMode: 0x1E,
@@ -127,5 +121,5 @@ func TestCommunicateMulti(t *testing.T) {
 		},
 		[]byte{0x74, 0x69, 0x6d, 0x65},
 	}
-	assert.Equal(expected, p)
+	require.Equal(t, expected, p)
 }

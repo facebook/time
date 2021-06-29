@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/facebookincubator/ntp/protocol/chrony"
 	"github.com/facebookincubator/ntp/protocol/control"
@@ -78,7 +78,7 @@ func TestNewSystemVariablesFromChrony(t *testing.T) {
 		Offset:    10,
 		Frequency: 100,
 	}
-	assert.Equal(t, expected, s)
+	require.Equal(t, expected, s)
 }
 
 func TestNewSystemVariablesFromNTP(t *testing.T) {
@@ -135,7 +135,7 @@ func TestNewSystemVariablesFromNTP(t *testing.T) {
 				t.Errorf("NewSystemVariablesFromNTP() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, tt.want, got)
+			require.Equal(t, tt.want, got)
 		})
 	}
 }

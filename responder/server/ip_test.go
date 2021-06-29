@@ -20,7 +20,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const testIP = "1.2.3.4"
@@ -29,12 +29,12 @@ func TestAddIPToInterfaceError(t *testing.T) {
 	lc := ListenConfig{Iface: "lol-does-not-exist"}
 	s := &Server{ListenConfig: lc}
 	err := s.addIPToInterface(net.ParseIP(testIP))
-	assert.NotNil(t, err)
+	require.NotNil(t, err)
 }
 
 func TestDeleteIPFromInterfaceError(t *testing.T) {
 	lc := ListenConfig{Iface: "lol-does-not-exist"}
 	s := &Server{ListenConfig: lc}
 	err := s.deleteIPFromInterface(net.ParseIP(testIP))
-	assert.NotNil(t, err)
+	require.NotNil(t, err)
 }

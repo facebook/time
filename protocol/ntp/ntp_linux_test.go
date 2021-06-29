@@ -17,7 +17,7 @@ limitations under the License.
 package ntp
 
 import (
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	syscall "golang.org/x/sys/unix"
 	"net"
 	"testing"
@@ -26,22 +26,22 @@ import (
 func TestEnableKernelTimestampsSocket(t *testing.T) {
 	// listen to incoming udp packets
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	connfd, err := connFd(conn)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Allow reading of kernel timestamps via socket
 	err = EnableKernelTimestampsSocket(conn)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Check that socket option is set
 	preciseKernelTimestampsEnabled, err := syscall.GetsockoptInt(connfd, syscall.SOL_SOCKET, syscall.SO_TIMESTAMPNS)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	kernelTimestampsEnabled, err := syscall.GetsockoptInt(connfd, syscall.SOL_SOCKET, syscall.SO_TIMESTAMP)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// At least one of them should be set, which it > 0
-	assert.Greater(t, preciseKernelTimestampsEnabled+kernelTimestampsEnabled, 0, "None of the socket options is set")
+	require.Greater(t, preciseKernelTimestampsEnabled+kernelTimestampsEnabled, 0, "None of the socket options is set")
 }
