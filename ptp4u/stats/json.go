@@ -62,10 +62,9 @@ func (s *JSONStats) Snapshot() {
 	s.tx.copy(&s.report.tx)
 	s.rxSignaling.copy(&s.report.rxSignaling)
 	s.txSignaling.copy(&s.report.txSignaling)
-	s.workerLoad.copy(&s.report.workerLoad)
-	s.workerQueue.copy(&s.report.workerQueue)
 	s.txtsattempts.copy(&s.report.txtsattempts)
 	s.report.utcoffset = s.utcoffset
+	s.report.workerQueue = s.workerQueue
 }
 
 // handleRequest is a handler used for all http monitoring requests
@@ -136,18 +135,9 @@ func (s *JSONStats) DecTXSignaling(t ptp.MessageType) {
 	s.txSignaling.dec(int(t))
 }
 
-// SetMaxWorkerLoad atomically sets worker load
-func (s *JSONStats) SetMaxWorkerLoad(workerid int, load int64) {
-	if load > s.workerLoad.load(workerid) {
-		s.workerLoad.store(workerid, load)
-	}
-}
-
-// SetMaxWorkerQueue atomically sets worker queue len
-func (s *JSONStats) SetMaxWorkerQueue(workerid int, queue int64) {
-	if queue > s.workerQueue.load(workerid) {
-		s.workerQueue.store(workerid, queue)
-	}
+// SetWorkerQueue atomically sets worker queue len
+func (s *JSONStats) SetWorkerQueue(queue int64) {
+	atomic.StoreInt64(&s.workerQueue, queue)
 }
 
 // SetMaxTXTSAttempts atomically sets number of retries for get latest TX timestamp

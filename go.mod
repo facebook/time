@@ -1,10 +1,10 @@
 module github.com/facebookincubator/ptp
 
-go 1.15
+go 1.16
 
 require (
 	github.com/davecgh/go-spew v1.1.1
-	github.com/facebookincubator/ntp v0.0.0-20210521103724-845970bc8e6a // indirect
+	github.com/facebookincubator/ntp v0.0.0-20210521103724-845970bc8e6a
 	github.com/fatih/color v1.12.0
 	github.com/golang/mock v1.5.0
 	github.com/google/gopacket v1.1.19

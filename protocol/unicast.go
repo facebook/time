@@ -43,24 +43,30 @@ type Signaling struct {
 	TLVs               []TLV
 }
 
-// MarshalBinary converts packet to []bytes
-func (p *Signaling) MarshalBinary() ([]byte, error) {
+// MarshalBinaryTo converts packet to bytes and writes those into provided buffer
+func (p *Signaling) MarshalBinaryTo(bytes io.Writer) error {
 	if len(p.TLVs) == 0 {
-		return nil, fmt.Errorf("no TLVs in Signaling message, at least one required")
+		return fmt.Errorf("no TLVs in Signaling message, at least one required")
 	}
-	var bytes bytes.Buffer
-	if err := binary.Write(&bytes, binary.BigEndian, p.Header); err != nil {
-		return nil, err
+	if err := binary.Write(bytes, binary.BigEndian, p.Header); err != nil {
+		return err
 	}
-	if err := binary.Write(&bytes, binary.BigEndian, p.TargetPortIdentity); err != nil {
-		return nil, err
+	if err := binary.Write(bytes, binary.BigEndian, p.TargetPortIdentity); err != nil {
+		return err
 	}
 	for _, tlv := range p.TLVs {
-		if err := binary.Write(&bytes, binary.BigEndian, tlv); err != nil {
-			return nil, err
+		if err := binary.Write(bytes, binary.BigEndian, tlv); err != nil {
+			return err
 		}
 	}
-	return bytes.Bytes(), nil
+	return nil
+}
+
+// MarshalBinary converts packet to []bytes
+func (p *Signaling) MarshalBinary() ([]byte, error) {
+	var bytes bytes.Buffer
+	err := p.MarshalBinaryTo(&bytes)
+	return bytes.Bytes(), err
 }
 
 // UnmarshalBinary parses []byte and populates struct fields

@@ -37,9 +37,9 @@ const (
 	// Control is a socket control message containing TX/RX timestamp
 	// If the read fails we may endup with multiple timestamps in the buffer
 	// which is best to read right away
-	controlSizeBytes = 128
+	ControlSizeBytes = 128
 	// ptp packets usually up to 66 bytes
-	payloadSizeBytes = 128
+	PayloadSizeBytes = 128
 	// look only for X sequential TS
 	maxTXTS = 100
 )
@@ -63,8 +63,8 @@ type hwtstampСonfig struct {
 	rxFilter int
 }
 
-// connFd returns file descriptor of a connection
-func connFd(conn *net.UDPConn) (int, error) {
+// ConnFd returns file descriptor of a connection
+func ConnFd(conn *net.UDPConn) (int, error) {
 	sc, err := conn.SyscallConn()
 	if err != nil {
 		return -1, err
@@ -97,12 +97,12 @@ func ioctlTimestamp(fd int, ifname string) error {
 // EnableHWTimestampsSocket enables HW timestamps on the socket
 func EnableHWTimestampsSocket(conn *net.UDPConn, iface string) error {
 	// Get socket fd
-	connfd, err := connFd(conn)
+	connFd, err := ConnFd(conn)
 	if err != nil {
 		return err
 	}
 
-	if err := ioctlTimestamp(connfd, iface); err != nil {
+	if err := ioctlTimestamp(connFd, iface); err != nil {
 		return err
 	}
 
@@ -111,11 +111,11 @@ func EnableHWTimestampsSocket(conn *net.UDPConn, iface string) error {
 		unix.SOF_TIMESTAMPING_RX_HARDWARE |
 		unix.SOF_TIMESTAMPING_RAW_HARDWARE
 	// Allow reading of HW timestamps via socket
-	if err := unix.SetsockoptInt(connfd, unix.SOL_SOCKET, unix.SO_TIMESTAMPING, flags); err != nil {
+	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_TIMESTAMPING, flags); err != nil {
 		return err
 	}
 
-	if err := unix.SetsockoptInt(connfd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1); err != nil {
+	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1); err != nil {
 		return err
 	}
 	return nil
@@ -124,7 +124,7 @@ func EnableHWTimestampsSocket(conn *net.UDPConn, iface string) error {
 // EnableSWTimestampsSocket enables SW timestamps on the socket
 func EnableSWTimestampsSocket(conn *net.UDPConn) error {
 	// Get socket fd
-	connfd, err := connFd(conn)
+	connFd, err := ConnFd(conn)
 	if err != nil {
 		return err
 	}
@@ -133,11 +133,11 @@ func EnableSWTimestampsSocket(conn *net.UDPConn) error {
 		unix.SOF_TIMESTAMPING_RX_SOFTWARE |
 		unix.SOF_TIMESTAMPING_SOFTWARE
 	// Allow reading of SW timestamps via socket
-	if err := unix.SetsockoptInt(connfd, unix.SOL_SOCKET, unix.SO_TIMESTAMPING, flags); err != nil {
+	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_TIMESTAMPING, flags); err != nil {
 		return err
 	}
 
-	if err := unix.SetsockoptInt(connfd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1); err != nil {
+	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1); err != nil {
 		return err
 	}
 	return nil
@@ -183,37 +183,19 @@ func scmDataToTime(data []byte) (ts time.Time, err error) {
 	return ts, nil
 }
 
-func waitForHWTS(conn *net.UDPConn) error {
-	// Get socket fd
-	connfd, err := connFd(conn)
-	if err != nil {
-		return err
-	}
-
+func waitForHWTS(connFd int) error {
 	// Wait until TX timestamp is ready
-	fds := []unix.PollFd{{Fd: int32(connfd), Events: unix.POLLPRI, Revents: 0}}
-	if _, err = unix.Poll(fds, 1); err != nil { // Timeout is 1 ms
+	fds := []unix.PollFd{{Fd: int32(connFd), Events: unix.POLLPRI, Revents: 0}}
+	if _, err := unix.Poll(fds, 1); err != nil { // Timeout is 1 ms
 		return err
 	}
 	return nil
 }
 
-// ReadTXtimestamp returns HW TX timestamp
-func ReadTXtimestamp(conn *net.UDPConn) (time.Time, int, error) {
-	// Get socket fd
-	connfd, err := connFd(conn)
-	if err != nil {
-		return time.Time{}, 0, err
-	}
-
+// ReadTXtimestampBuf returns HW TX timestamp, needs to be provided 4 buffers which all can be re-used after ReadTXtimestampBuf finishes.
+func ReadTXtimestampBuf(connFd int, buf, oob, tbuf, toob []byte) (time.Time, int, error) {
 	// Accessing hw timestamp
-	buf := make([]byte, payloadSizeBytes)
-	oob := make([]byte, controlSizeBytes)
 	var boob int
-
-	// TMP buffers
-	tbuf := make([]byte, payloadSizeBytes)
-	toob := make([]byte, controlSizeBytes)
 
 	txfound := false
 
@@ -225,10 +207,10 @@ func ReadTXtimestamp(conn *net.UDPConn) (time.Time, int, error) {
 	for ; attempts < maxTXTS; attempts++ {
 		if !txfound {
 			// Wait for the poll event, ignore the error
-			_ = waitForHWTS(conn)
+			_ = waitForHWTS(connFd)
 		}
 
-		_, tboob, _, _, err := unix.Recvmsg(connfd, tbuf, toob, unix.MSG_ERRQUEUE)
+		_, tboob, _, _, err := unix.Recvmsg(connFd, tbuf, toob, unix.MSG_ERRQUEUE)
 		if err != nil {
 			// We've already seen the valid TX TS and now we have an empty queue.
 			// All good
@@ -268,20 +250,39 @@ func ReadTXtimestamp(conn *net.UDPConn) (time.Time, int, error) {
 	return time.Time{}, 0, fmt.Errorf("failed to find HW timestamp in MSG_ERRQUEUE")
 }
 
+// ReadTXtimestamp returns HW TX timestamp
+func ReadTXtimestamp(connFd int) (time.Time, int, error) {
+	// Accessing hw timestamp
+	buf := make([]byte, PayloadSizeBytes)
+	oob := make([]byte, ControlSizeBytes)
+	// TMP buffers
+	tbuf := make([]byte, PayloadSizeBytes)
+	toob := make([]byte, ControlSizeBytes)
+
+	return ReadTXtimestampBuf(connFd, buf, oob, tbuf, toob)
+}
+
 // ReadPacketWithRXTimestamp returns byte packet and HW RX timestamp
 func ReadPacketWithRXTimestamp(conn *net.UDPConn) ([]byte, net.IP, time.Time, error) {
 	// Accessing hw timestamp
-	buf := make([]byte, payloadSizeBytes)
-	oob := make([]byte, controlSizeBytes)
+	buf := make([]byte, PayloadSizeBytes)
+	oob := make([]byte, ControlSizeBytes)
 
+	bbuf, ip, t, err := ReadPacketWithRXTimestampBuf(conn, buf, oob)
+	return buf[:bbuf], ip, t, err
+}
+
+// ReadPacketWithRXTimestampBuf writes byte packet into provide buffer buf, and returns number of bytes copied to the buffer, client ip and HW RX timestamp.
+// oob buffer can be reaused after ReadPacketWithRXTimestampBuf call.
+func ReadPacketWithRXTimestampBuf(conn *net.UDPConn, buf, oob []byte) (int, net.IP, time.Time, error) {
 	bbuf, boob, _, addr, err := conn.ReadMsgUDP(buf, oob)
 	if err != nil {
-		return nil, nil, time.Time{}, fmt.Errorf("failed to read timestamp: %v", err)
+		return 0, nil, time.Time{}, fmt.Errorf("failed to read timestamp: %v", err)
 	}
 
 	ms, err := unix.ParseSocketControlMessage(oob[:boob])
 	if err != nil {
-		return nil, nil, time.Time{}, err
+		return 0, nil, time.Time{}, err
 	}
 
 	for _, m := range ms {
@@ -289,11 +290,11 @@ func ReadPacketWithRXTimestamp(conn *net.UDPConn) ([]byte, net.IP, time.Time, er
 		if m.Header.Level == unix.SOL_SOCKET && m.Header.Type == unix.SO_TIMESTAMPING {
 			timestamp, err := scmDataToTime(m.Data)
 			if err != nil {
-				return nil, addr.IP, time.Time{}, err
+				return 0, addr.IP, time.Time{}, err
 			}
 
-			return buf[:bbuf], addr.IP, timestamp, nil
+			return bbuf, addr.IP, timestamp, nil
 		}
 	}
-	return nil, nil, time.Time{}, fmt.Errorf("failed to find HW timestamp in MSG_ERRQUEUE")
+	return 0, nil, time.Time{}, fmt.Errorf("failed to find HW timestamp in MSG_ERRQUEUE")
 }

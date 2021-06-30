@@ -39,6 +39,7 @@ type Config struct {
 	TimestampType  string
 	UTCOffset      time.Duration
 	Workers        int
+	QueueSize      int
 
 	clockIdentity ptp.ClockIdentity
 }

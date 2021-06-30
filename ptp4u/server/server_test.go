@@ -26,32 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Testing conversion so if Packet structure changes we notice
-func TestServerFindLeastBusyWorkerID(t *testing.T) {
-	s := Server{
-		Config: &Config{Workers: 3},
-	}
-
-	s.sw = make([]*sendWorker, s.Config.Workers)
-	for i := 0; i < s.Config.Workers; i++ {
-		s.sw[i] = &sendWorker{}
-	}
-
-	require.Equal(t, 0, s.findLeastBusyWorkerID())
-
-	s.sw[0].load = 1234
-	require.Equal(t, 1, s.findLeastBusyWorkerID())
-
-	s.sw[1].load = 8
-	require.Equal(t, 2, s.findLeastBusyWorkerID())
-
-	s.sw[2].load = 100500
-	require.Equal(t, 1, s.findLeastBusyWorkerID())
-
-	s.sw[1].load = 1000000
-	require.Equal(t, 0, s.findLeastBusyWorkerID())
-}
-
 func TestServerRegisterSubscription(t *testing.T) {
 	var (
 		scE *SubscriptionClient
@@ -78,14 +52,14 @@ func TestServerRegisterSubscription(t *testing.T) {
 	require.Nil(t, scE)
 
 	// Add Sync. Check we got
-	scS = NewSubscriptionClient(&sendWorker{}, net.ParseIP("127.0.0.1"), ptp.MessageSync, c, time.Second, time.Now())
+	scS = NewSubscriptionClient(nil, net.ParseIP("127.0.0.1"), ptp.MessageSync, c, time.Second, time.Now())
 	s.registerSubscription(pi, ptp.MessageSync, scS)
 	// Check Sync is saved
 	scT = s.findSubscription(pi, ptp.MessageSync)
 	require.Equal(t, scS, scT)
 
 	// Add announce. Check we have now both
-	scA = NewSubscriptionClient(&sendWorker{}, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, time.Second, time.Now())
+	scA = NewSubscriptionClient(nil, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, time.Second, time.Now())
 	s.registerSubscription(pi, ptp.MessageAnnounce, scA)
 	// First check Sync
 	scT = s.findSubscription(pi, ptp.MessageSync)
@@ -95,7 +69,7 @@ func TestServerRegisterSubscription(t *testing.T) {
 	require.Equal(t, scA, scT)
 
 	// Override announce
-	scA = NewSubscriptionClient(&sendWorker{}, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, time.Second, time.Now())
+	scA = NewSubscriptionClient(nil, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, time.Second, time.Now())
 	s.registerSubscription(pi, ptp.MessageAnnounce, scA)
 	// Check new Announce is saved
 	scT = s.findSubscription(pi, ptp.MessageAnnounce)
@@ -120,19 +94,19 @@ func TestServerInventoryClients(t *testing.T) {
 	s := Server{Config: c, Stats: st}
 	s.clients.init()
 
-	scS1 := NewSubscriptionClient(&sendWorker{}, net.ParseIP("127.0.0.1"), ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
+	scS1 := NewSubscriptionClient(nil, net.ParseIP("127.0.0.1"), ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
 	s.registerSubscription(clipi1, ptp.MessageSync, scS1)
 	scS1.running = true
 	s.inventoryClients()
 	require.Equal(t, 1, len(s.clients.keys()))
 
-	scA1 := NewSubscriptionClient(&sendWorker{}, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, time.Second, time.Now().Add(time.Minute))
+	scA1 := NewSubscriptionClient(nil, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, time.Second, time.Now().Add(time.Minute))
 	s.registerSubscription(clipi1, ptp.MessageSync, scA1)
 	scA1.running = true
 	s.inventoryClients()
 	require.Equal(t, 1, len(s.clients.keys()))
 
-	scS2 := NewSubscriptionClient(&sendWorker{}, net.ParseIP("127.0.0.1"), ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
+	scS2 := NewSubscriptionClient(nil, net.ParseIP("127.0.0.1"), ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
 	s.registerSubscription(clipi2, ptp.MessageSync, scS2)
 	scS2.running = true
 	s.inventoryClients()

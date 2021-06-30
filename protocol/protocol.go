@@ -23,6 +23,7 @@ import (
 	"encoding"
 	"encoding/binary"
 	"fmt"
+	"io"
 )
 
 // Version is what version of PTP protocol we implement
@@ -196,6 +197,27 @@ type PDelayRespFollowUp struct {
 type Packet interface {
 	MessageType() MessageType
 	SetSequence(uint16)
+}
+
+// BinaryMarshalerTo is an interface implemented by an object that can marshal itself into a binary form into provided io.Writer
+type BinaryMarshalerTo interface {
+	MarshalBinaryTo(io.Writer) error
+}
+
+// BytesTo converts any packet to bytes and writes those bytes into provided io.Writer
+func BytesTo(p Packet, buf io.Writer) error {
+	// interface smuggling
+	if pp, ok := p.(BinaryMarshalerTo); ok {
+		if err := pp.MarshalBinaryTo(buf); err != nil {
+			return err
+		}
+		return binary.Write(buf, binary.BigEndian, []byte{0, 0})
+	}
+	err := binary.Write(buf, binary.BigEndian, p)
+	if err != nil {
+		return err
+	}
+	return binary.Write(buf, binary.BigEndian, []byte{0, 0})
 }
 
 // Bytes converts any packet to []bytes
