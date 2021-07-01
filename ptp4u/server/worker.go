@@ -29,6 +29,7 @@ import (
 type sendWorker struct {
 	id     int
 	queue  chan *SubscriptionClient
+	load   int64
 	config *Config
 	stats  stats.Stats
 }
@@ -159,5 +160,7 @@ func (s *sendWorker) Start() {
 		}
 
 		c.sequenceID++
+		s.stats.SetMaxWorkerLoad(s.id, s.load)
+		s.stats.SetMaxWorkerQueue(s.id, int64(len(s.queue)))
 	}
 }

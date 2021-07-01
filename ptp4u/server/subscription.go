@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
@@ -29,7 +30,7 @@ import (
 type SubscriptionClient struct {
 	sync.Mutex
 
-	queue            chan *SubscriptionClient
+	worker           *sendWorker
 	subscriptionType ptp.MessageType
 	serverConfig     *Config
 
@@ -49,14 +50,14 @@ type SubscriptionClient struct {
 }
 
 // NewSubscriptionClient gets minimal required arguments to create a subscription
-func NewSubscriptionClient(q chan *SubscriptionClient, ip net.IP, st ptp.MessageType, sc *Config, i time.Duration, e time.Time) *SubscriptionClient {
+func NewSubscriptionClient(w *sendWorker, ip net.IP, st ptp.MessageType, sc *Config, i time.Duration, e time.Time) *SubscriptionClient {
 	s := &SubscriptionClient{
 		ecliAddr:         &net.UDPAddr{IP: ip, Port: ptp.PortEvent},
 		gcliAddr:         &net.UDPAddr{IP: ip, Port: ptp.PortGeneral},
 		subscriptionType: st,
 		interval:         i,
 		expire:           e,
-		queue:            q,
+		worker:           w,
 		serverConfig:     sc,
 	}
 
@@ -71,12 +72,22 @@ func NewSubscriptionClient(q chan *SubscriptionClient, ip net.IP, st ptp.Message
 func (sc *SubscriptionClient) Start() {
 	sc.setRunning(true)
 	defer sc.Stop()
+	/*
+		Calculate the load we add to the worker. Ex:
+		sc.interval = 10000ms. l = 1
+		sc.interval = 2000ms.  l = 5
+		sc.interval = 500ms.   l = 20
+		sc.interval = 7ms.     l = 1428
+		https://play.golang.org/p/XKnACWjKd24
+	*/
 	l := 10 * time.Second.Microseconds() / sc.interval.Microseconds()
+	atomic.AddInt64(&sc.worker.load, l)
+	defer atomic.AddInt64(&sc.worker.load, -l)
 	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, sc.ecliAddr.IP)
 	log.Debugf("Starting a new %s subscription for %s with load %d with interval %s which expires in %s", sc.subscriptionType, sc.ecliAddr.IP, l, sc.interval, sc.expire)
 
 	// Send first message right away
-	sc.queue <- sc
+	sc.worker.queue <- sc
 
 	intervalTicker := time.NewTicker(sc.interval)
 	oldInterval := sc.interval
@@ -98,7 +109,7 @@ func (sc *SubscriptionClient) Start() {
 			oldInterval = sc.interval
 		}
 		// Add myself to the worker queue
-		sc.queue <- sc
+		sc.worker.queue <- sc
 	}
 }
 

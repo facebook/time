@@ -36,10 +36,11 @@ func TestRunning(t *testing.T) {
 }
 
 func TestSubscriptionStart(t *testing.T) {
+	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 1 * time.Minute
 	expire := time.Now().Add(1 * time.Second)
-	sc := NewSubscriptionClient(nil, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, interval, expire)
+	sc := NewSubscriptionClient(w, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, interval, expire)
 
 	go sc.Start()
 	time.Sleep(100 * time.Millisecond)
@@ -53,7 +54,7 @@ func TestSubscriptionStop(t *testing.T) {
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 10 * time.Millisecond
 	expire := time.Now().Add(1 * time.Second)
-	sc := NewSubscriptionClient(w.queue, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, interval, expire)
+	sc := NewSubscriptionClient(w, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, interval, expire)
 
 	go sc.Start()
 	time.Sleep(100 * time.Millisecond)
@@ -64,8 +65,9 @@ func TestSubscriptionStop(t *testing.T) {
 }
 
 func TestSubscriptionflags(t *testing.T) {
+	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
-	sc := NewSubscriptionClient(nil, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, time.Second, time.Time{})
 
 	require.Equal(t, ptp.FlagUnicast|ptp.FlagTwoStep, sc.syncPacket().Header.FlagField)
 	require.Equal(t, ptp.FlagUnicast, sc.followupPacket(time.Now()).Header.FlagField)
