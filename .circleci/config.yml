@@ -11,7 +11,7 @@ jobs:
     working_directory: /go/src/github.com/facebookincubator/ptp
     executor:
       name: go/default
-      tag: '1.14'
+      tag: '1.16'
     steps:
       - checkout
       - run: go get -v -t ./...
@@ -20,7 +20,7 @@ jobs:
     working_directory: /go/src/github.com/facebookincubator/ptp
     executor:
       name: go/default
-      tag: '1.14'
+      tag: '1.16'
     steps:
       - checkout
       - run: go get -v -t ./...
@@ -29,7 +29,7 @@ jobs:
     working_directory: /go/src/github.com/facebookincubator/ptp
     executor:
       name: go/default
-      tag: '1.14'
+      tag: '1.16'
     steps:
       - checkout
       - run: go get -v -t ./...

@@ -126,16 +126,22 @@ func (p *Management) UnmarshalBinary(rawBytes []byte) error {
 	return nil
 }
 
+// MarshalBinaryTo converts packet to bytes and writes those into provided buffer
+func (p *Management) MarshalBinaryTo(bytes io.Writer) error {
+	if err := binary.Write(bytes, binary.BigEndian, p.ManagementMsgHead); err != nil {
+		return err
+	}
+	if err := binary.Write(bytes, binary.BigEndian, p.TLV); err != nil {
+		return err
+	}
+	return nil
+}
+
 // MarshalBinary converts packet to []bytes
 func (p *Management) MarshalBinary() ([]byte, error) {
 	var bytes bytes.Buffer
-	if err := binary.Write(&bytes, binary.BigEndian, p.ManagementMsgHead); err != nil {
-		return nil, err
-	}
-	if err := binary.Write(&bytes, binary.BigEndian, p.TLV); err != nil {
-		return nil, err
-	}
-	return bytes.Bytes(), nil
+	err := p.MarshalBinaryTo(&bytes)
+	return bytes.Bytes(), err
 }
 
 // ManagementErrorStatusTLV spec Table 108 MANAGEMENT_ERROR_STATUS TLV format
@@ -195,33 +201,41 @@ func (p *ManagementMsgErrorStatus) UnmarshalBinary(rawBytes []byte) error {
 	return nil
 }
 
-// MarshalBinary converts packet to []bytes
-func (p *ManagementMsgErrorStatus) MarshalBinary() ([]byte, error) {
-	var bytes bytes.Buffer
+// MarshalBinaryTo converts packet to bytes and writes those into provided buffer
+func (p *ManagementMsgErrorStatus) MarshalBinaryTo(bytes io.Writer) error {
 	be := binary.BigEndian
-	if err := binary.Write(&bytes, be, &p.ManagementMsgHead); err != nil {
-		return nil, fmt.Errorf("writing ManagementMsgErrorStatus ManagementMsgHead: %w", err)
+	if err := binary.Write(bytes, be, &p.ManagementMsgHead); err != nil {
+		return fmt.Errorf("writing ManagementMsgErrorStatus ManagementMsgHead: %w", err)
 	}
-	if err := binary.Write(&bytes, be, &p.ManagementErrorStatusTLV.TLVHead); err != nil {
-		return nil, fmt.Errorf("writing ManagementMsgErrorStatus TLVHead: %w", err)
+	if err := binary.Write(bytes, be, &p.ManagementErrorStatusTLV.TLVHead); err != nil {
+		return fmt.Errorf("writing ManagementMsgErrorStatus TLVHead: %w", err)
 	}
-	if err := binary.Write(&bytes, be, &p.ManagementErrorStatusTLV.ManagementErrorID); err != nil {
-		return nil, fmt.Errorf("writing ManagementMsgErrorStatus ManagementErrorID: %w", err)
+	if err := binary.Write(bytes, be, &p.ManagementErrorStatusTLV.ManagementErrorID); err != nil {
+		return fmt.Errorf("writing ManagementMsgErrorStatus ManagementErrorID: %w", err)
 	}
-	if err := binary.Write(&bytes, be, &p.ManagementErrorStatusTLV.ManagementID); err != nil {
-		return nil, fmt.Errorf("writing ManagementMsgErrorStatus ManagementID: %w", err)
+	if err := binary.Write(bytes, be, &p.ManagementErrorStatusTLV.ManagementID); err != nil {
+		return fmt.Errorf("writing ManagementMsgErrorStatus ManagementID: %w", err)
 	}
-	if err := binary.Write(&bytes, be, &p.ManagementErrorStatusTLV.Reserved); err != nil {
-		return nil, fmt.Errorf("writing ManagementMsgErrorStatus Reserved: %w", err)
+	if err := binary.Write(bytes, be, &p.ManagementErrorStatusTLV.Reserved); err != nil {
+		return fmt.Errorf("writing ManagementMsgErrorStatus Reserved: %w", err)
 	}
 	if p.DisplayData != "" {
 		dd, err := p.DisplayData.MarshalBinary()
 		if err != nil {
-			return nil, fmt.Errorf("writing ManagementMsgErrorStatus DisplayData: %w", err)
+			return fmt.Errorf("writing ManagementMsgErrorStatus DisplayData: %w", err)
 		}
-		bytes.Write(dd)
+		if _, err := bytes.Write(dd); err != nil {
+			return err
+		}
 	}
-	return bytes.Bytes(), nil
+	return nil
+}
+
+// MarshalBinary converts packet to []bytes
+func (p *ManagementMsgErrorStatus) MarshalBinary() ([]byte, error) {
+	var bytes bytes.Buffer
+	err := p.MarshalBinaryTo(&bytes)
+	return bytes.Bytes(), err
 }
 
 // ManagementErrorID is an enum for possible management errors

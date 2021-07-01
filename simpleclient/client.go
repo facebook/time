@@ -75,7 +75,12 @@ func (c *udpConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, erro
 	if err != nil {
 		return 0, time.Time{}, err
 	}
-	hwts, _, err := ptp.ReadTXtimestamp(c.UDPConn)
+	// get FD of the connection. Can be optimized by doing this when connection is created
+	connFd, err := ptp.ConnFd(c.UDPConn)
+	if err != nil {
+		return 0, time.Time{}, fmt.Errorf("failed to get conn fd udp connection: %v", err)
+	}
+	hwts, _, err := ptp.ReadTXtimestamp(connFd)
 	if err != nil {
 		return 0, time.Time{}, fmt.Errorf("failed to get timestamp of last packet: %v", err)
 	}

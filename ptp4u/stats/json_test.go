@@ -31,19 +31,15 @@ func TestJSONStatsReset(t *testing.T) {
 	stats := JSONStats{}
 	stats.subscriptions.init()
 	stats.rxSignaling.init()
-	stats.workerLoad.init()
-	stats.workerQueue.init()
 
 	stats.IncSubscription(ptp.MessageAnnounce)
 	stats.IncRXSignaling(ptp.MessageSync)
-	stats.SetMaxWorkerLoad(10, 42)
-	stats.SetMaxWorkerQueue(10, 42)
+	stats.SetWorkerQueue(42)
 
 	stats.Reset()
 	require.Equal(t, int64(0), stats.subscriptions.load(int(ptp.MessageAnnounce)))
 	require.Equal(t, int64(0), stats.rxSignaling.load(int(ptp.MessageSync)))
-	require.Equal(t, int64(0), stats.workerLoad.load(10))
-	require.Equal(t, int64(0), stats.workerQueue.load(10))
+	require.Equal(t, int64(0), stats.workerQueue)
 }
 
 func TestJSONStatsAnnounceSubscription(t *testing.T) {
@@ -106,18 +102,11 @@ func TestJSONStatsTXSignaling(t *testing.T) {
 	require.Equal(t, int64(0), stats.txSignaling.load(int(ptp.MessageSync)))
 }
 
-func TestJSONStatsSetMaxWorkerLoad(t *testing.T) {
+func TestJSONStatsSetWorkerQueue(t *testing.T) {
 	stats := NewJSONStats()
 
-	stats.SetMaxWorkerLoad(10, 42)
-	require.Equal(t, int64(42), stats.workerLoad.load(10))
-}
-
-func TestJSONStatsSetMaxWorkerQueue(t *testing.T) {
-	stats := NewJSONStats()
-
-	stats.SetMaxWorkerQueue(10, 42)
-	require.Equal(t, int64(42), stats.workerQueue.load(10))
+	stats.SetWorkerQueue(42)
+	require.Equal(t, int64(42), stats.workerQueue)
 }
 
 func TestJSONStatsSetMaxTXTSAttempts(t *testing.T) {
@@ -176,6 +165,7 @@ func TestJSONExport(t *testing.T) {
 	stats.IncRXSignaling(ptp.MessageDelayResp)
 	stats.IncRXSignaling(ptp.MessageDelayResp)
 	stats.SetUTCOffset(1)
+	stats.SetWorkerQueue(10)
 
 	stats.Snapshot()
 
@@ -195,6 +185,7 @@ func TestJSONExport(t *testing.T) {
 	expectedMap["tx.sync"] = 2
 	expectedMap["rx.signaling.delay_resp"] = 3
 	expectedMap["utcoffset"] = 1
+	expectedMap["worker.queue"] = 10
 
 	require.Equal(t, expectedMap, data)
 }

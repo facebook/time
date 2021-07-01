@@ -47,6 +47,7 @@ func main() {
 	flag.BoolVar(&c.SHM, "shm", false, "Use Share Memory Segment to determine UTC offset periodically")
 	flag.IntVar(&c.Workers, "workers", 10, "Set the number of workers")
 	flag.IntVar(&c.MonitoringPort, "monitoringport", 8888, "Port to run monitoring server on")
+	flag.IntVar(&c.QueueSize, "queue", 1000000, "Size of the queue to send out packets")
 	flag.DurationVar(&c.MetricInterval, "metricinterval", 1*time.Minute, "Interval of resetting metrics")
 
 	flag.Parse()

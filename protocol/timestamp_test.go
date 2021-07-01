@@ -44,7 +44,10 @@ func Test_ReadTXtimestamp(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	txts, attempts, err := ReadTXtimestamp(conn)
+	connFd, err := ConnFd(conn)
+	require.Nil(t, err)
+
+	txts, attempts, err := ReadTXtimestamp(connFd)
 	require.Equal(t, time.Time{}, txts)
 	require.Equal(t, maxTXTS, attempts)
 	require.Equal(t, fmt.Errorf("no TX timestamp found after %d tries", maxTXTS), err)
@@ -55,7 +58,7 @@ func Test_ReadTXtimestamp(t *testing.T) {
 	addr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 12345}
 	_, err = conn.WriteTo([]byte{}, addr)
 	require.Nil(t, err)
-	txts, attempts, err = ReadTXtimestamp(conn)
+	txts, attempts, err = ReadTXtimestamp(connFd)
 
 	require.NotEqual(t, time.Time{}, txts)
 	require.Equal(t, 1, attempts)

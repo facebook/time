@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"bytes"
 	"net"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
@@ -28,7 +29,6 @@ import (
 type sendWorker struct {
 	id     int
 	queue  chan *SubscriptionClient
-	load   int64
 	config *Config
 	stats  stats.Stats
 }
@@ -40,6 +40,12 @@ func (s *sendWorker) Start() {
 		log.Fatalf("Binding to event socket error: %s", err)
 	}
 	defer econn.Close()
+
+	// get connection file descriptor
+	eFd, err := ptp.ConnFd(econn)
+	if err != nil {
+		log.Fatalf("Getting event connection FD: %s", err)
+	}
 
 	// Syncs sent from event port
 	if s.config.TimestampType == ptp.HWTIMESTAMP {
@@ -60,32 +66,51 @@ func (s *sendWorker) Start() {
 	}
 	defer gconn.Close()
 
+	buf := &bytes.Buffer{}
+
+	// reusable buffers for ReadTXtimestampBuf
+	bbuf := make([]byte, ptp.PayloadSizeBytes)
+	oob := make([]byte, ptp.ControlSizeBytes)
+
+	// TMP buffers
+	tbuf := make([]byte, ptp.PayloadSizeBytes)
+	toob := make([]byte, ptp.ControlSizeBytes)
+
+	// arrays of zeroes to reset buffers
+	emptyb := make([]byte, ptp.PayloadSizeBytes)
+	emptyo := make([]byte, ptp.ControlSizeBytes)
+
 	// TODO: Enable dscp accordingly
 
 	for c := range s.queue {
-		log.Debugf("Processing client: %s", c.clientIP)
+		// clean up buffers
+		buf.Reset()
+		copy(bbuf, emptyb)
+		copy(oob, emptyo)
+		copy(tbuf, emptyb)
+		copy(toob, emptyo)
+
+		log.Debugf("Processing client: %s", c.ecliAddr.IP)
 
 		switch c.subscriptionType {
 		case ptp.MessageSync:
 			// send sync
-			ecliAddr := &net.UDPAddr{IP: c.clientIP, Port: ptp.PortEvent}
 
 			sync := c.syncPacket()
-			syncb, err := ptp.Bytes(sync)
-			if err != nil {
+			if err := ptp.BytesTo(sync, buf); err != nil {
 				log.Errorf("Failed to generate the sync packet: %v", err)
 				continue
 			}
 			log.Debugf("Sending sync")
-			log.Tracef("Sending sync %+v to %s from %d", sync, ecliAddr, econn.LocalAddr().(*net.UDPAddr).Port)
-			_, err = econn.WriteTo(syncb, ecliAddr)
+			log.Tracef("Sending sync %+v to %s from %d", sync, c.ecliAddr, econn.LocalAddr().(*net.UDPAddr).Port)
+			_, err = econn.WriteTo(buf.Bytes(), c.ecliAddr)
 			if err != nil {
 				log.Errorf("Failed to send the sync packet: %v", err)
 				continue
 			}
 			s.stats.IncTX(ptp.MessageSync)
 
-			txTS, attempts, err := ptp.ReadTXtimestamp(econn)
+			txTS, attempts, err := ptp.ReadTXtimestampBuf(eFd, bbuf, oob, tbuf, toob)
 			s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
 			if err != nil {
 				log.Warningf("Failed to read TX timestamp: %v", err)
@@ -97,17 +122,16 @@ func (s *sendWorker) Start() {
 			log.Debugf("Read TX timestamp: %v", txTS)
 
 			// send followup
-			gcliAddr := &net.UDPAddr{IP: c.clientIP, Port: ptp.PortGeneral}
+			buf.Reset()
 			followup := c.followupPacket(txTS)
-			followupb, err := ptp.Bytes(followup)
-			if err != nil {
+			if err := ptp.BytesTo(followup, buf); err != nil {
 				log.Errorf("Failed to generate the followup packet: %v", err)
 				continue
 			}
 			log.Debugf("Sending followup")
-			log.Tracef("Sending followup %+v with ts: %s to %s from %d", followup, followup.FollowUpBody.PreciseOriginTimestamp.Time(), gcliAddr, gconn.LocalAddr().(*net.UDPAddr).Port)
+			log.Tracef("Sending followup %+v with ts: %s to %s from %d", followup, followup.FollowUpBody.PreciseOriginTimestamp.Time(), c.gcliAddr, gconn.LocalAddr().(*net.UDPAddr).Port)
 
-			_, err = gconn.WriteTo(followupb, gcliAddr)
+			_, err = gconn.WriteTo(buf.Bytes(), c.gcliAddr)
 			if err != nil {
 				log.Errorf("Failed to send the followup packet: %v", err)
 				continue
@@ -115,17 +139,15 @@ func (s *sendWorker) Start() {
 			s.stats.IncTX(ptp.MessageFollowUp)
 		case ptp.MessageAnnounce:
 			// send announce
-			gcliAddr := &net.UDPAddr{IP: c.clientIP, Port: ptp.PortGeneral}
 			announce := c.announcePacket()
-			announceb, err := ptp.Bytes(announce)
-			if err != nil {
+			if err := ptp.BytesTo(announce, buf); err != nil {
 				log.Errorf("Failed to prepare the unicast announce: %v", err)
 				continue
 			}
 			log.Debugf("Sending announce")
-			log.Tracef("Sending announce %+v to %s from %d", announce, gcliAddr, gconn.LocalAddr().(*net.UDPAddr).Port)
+			log.Tracef("Sending announce %+v to %s from %d", announce, c.gcliAddr, gconn.LocalAddr().(*net.UDPAddr).Port)
 
-			_, err = gconn.WriteTo(announceb, gcliAddr)
+			_, err = gconn.WriteTo(buf.Bytes(), c.gcliAddr)
 			if err != nil {
 				log.Errorf("Failed to send the unicast announce: %v", err)
 				continue
@@ -137,7 +159,5 @@ func (s *sendWorker) Start() {
 		}
 
 		c.sequenceID++
-		s.stats.SetMaxWorkerLoad(s.id, s.load)
-		s.stats.SetMaxWorkerQueue(s.id, int64(len(s.queue)))
 	}
 }

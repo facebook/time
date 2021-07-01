@@ -19,7 +19,6 @@ import (
 	"encoding/binary"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
@@ -30,8 +29,7 @@ import (
 type SubscriptionClient struct {
 	sync.Mutex
 
-	clientIP         net.IP
-	worker           *sendWorker
+	queue            chan *SubscriptionClient
 	subscriptionType ptp.MessageType
 	serverConfig     *Config
 
@@ -39,58 +37,68 @@ type SubscriptionClient struct {
 	expire     time.Time
 	sequenceID uint16
 	running    bool
+
+	// addresses
+	ecliAddr *net.UDPAddr
+	gcliAddr *net.UDPAddr
+
+	// packets
+	syncP     *ptp.SyncDelayReq
+	followupP *ptp.FollowUp
+	announceP *ptp.Announce
 }
 
 // NewSubscriptionClient gets minimal required arguments to create a subscription
-func NewSubscriptionClient(w *sendWorker, ip net.IP, st ptp.MessageType, sc *Config, i time.Duration, e time.Time) *SubscriptionClient {
-	return &SubscriptionClient{
-		clientIP:         ip,
+func NewSubscriptionClient(q chan *SubscriptionClient, ip net.IP, st ptp.MessageType, sc *Config, i time.Duration, e time.Time) *SubscriptionClient {
+	s := &SubscriptionClient{
+		ecliAddr:         &net.UDPAddr{IP: ip, Port: ptp.PortEvent},
+		gcliAddr:         &net.UDPAddr{IP: ip, Port: ptp.PortGeneral},
 		subscriptionType: st,
 		interval:         i,
 		expire:           e,
-		worker:           w,
+		queue:            q,
 		serverConfig:     sc,
 	}
+
+	s.initSync()
+	s.initFollowup()
+	s.initAnnounce()
+
+	return s
 }
 
 // Start launches the subscription timers and exit on expire
 func (sc *SubscriptionClient) Start() {
 	sc.setRunning(true)
 	defer sc.Stop()
-	/*
-		Calculate the load we add to the worker. Ex:
-		sc.interval = 10000ms. l = 1
-		sc.interval = 2000ms.  l = 5
-		sc.interval = 500ms.   l = 20
-		sc.interval = 7ms.     l = 1428
-		https://play.golang.org/p/XKnACWjKd24
-	*/
 	l := 10 * time.Second.Microseconds() / sc.interval.Microseconds()
-	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, sc.clientIP)
-	log.Debugf("Starting a new %s subscription for %s with load %d with interval %s which expires in %s", sc.subscriptionType, sc.clientIP, l, sc.interval, sc.expire)
-	atomic.AddInt64(&sc.worker.load, l)
-	defer atomic.AddInt64(&sc.worker.load, -l)
+	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, sc.ecliAddr.IP)
+	log.Debugf("Starting a new %s subscription for %s with load %d with interval %s which expires in %s", sc.subscriptionType, sc.ecliAddr.IP, l, sc.interval, sc.expire)
 
 	// Send first message right away
-	sc.worker.queue <- sc
+	sc.queue <- sc
 
-	for {
-		log.Debugf("Subscription %s for %s is valid until %s", sc.subscriptionType, sc.clientIP, sc.expire)
-		remaining := time.Until(sc.expire)
+	intervalTicker := time.NewTicker(sc.interval)
+	oldInterval := sc.interval
+
+	defer intervalTicker.Stop()
+	for range intervalTicker.C {
+		log.Debugf("Subscription %s for %s is valid until %s", sc.subscriptionType, sc.ecliAddr.IP, sc.expire)
 		if !sc.Running() {
-			remaining = 0
+			return
 		}
-
-		select {
-		case <-time.After(sc.interval):
-			// Add myself to the worker queue
-			sc.worker.queue <- sc
-		case <-time.After(remaining):
-			// When subscription is over
-			log.Infof("Subscription %s is over for %s", sc.subscriptionType, sc.clientIP)
+		if time.Now().After(sc.expire) {
+			log.Infof("Subscription %s is over for %s", sc.subscriptionType, sc.ecliAddr.IP)
 			// TODO send cancellation
 			return
 		}
+		// check if interval changed, maybe update our ticker
+		if oldInterval != sc.interval {
+			intervalTicker.Reset(sc.interval)
+			oldInterval = sc.interval
+		}
+		// Add myself to the worker queue
+		sc.queue <- sc
 	}
 }
 
@@ -197,16 +205,15 @@ func (s *syncMapSub) keys() []ptp.MessageType {
 	return keys
 }
 
-// syncPacket generates ptp Sync packet
-func (sc *SubscriptionClient) syncPacket() *ptp.SyncDelayReq {
-	return &ptp.SyncDelayReq{
+func (sc *SubscriptionClient) initSync() {
+	sc.syncP = &ptp.SyncDelayReq{
 		Header: ptp.Header{
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageSync, 0),
 			Version:         ptp.Version,
 			MessageLength:   uint16(binary.Size(ptp.SyncDelayReq{})),
 			DomainNumber:    0,
 			FlagField:       ptp.FlagUnicast | ptp.FlagTwoStep,
-			SequenceID:      sc.sequenceID,
+			SequenceID:      0,
 			SourcePortIdentity: ptp.PortIdentity{
 				PortNumber:    1,
 				ClockIdentity: sc.serverConfig.clockIdentity,
@@ -217,56 +224,65 @@ func (sc *SubscriptionClient) syncPacket() *ptp.SyncDelayReq {
 	}
 }
 
-// followupPacket generates ptp Follow Up packet
-func (sc *SubscriptionClient) followupPacket(hwts time.Time) *ptp.FollowUp {
-	i, err := ptp.NewLogInterval(sc.interval)
-	if err != nil {
-		log.Errorf("Failed to get interval: %v", err)
-	}
-	return &ptp.FollowUp{
+// syncPacket generates ptp Sync packet
+func (sc *SubscriptionClient) syncPacket() *ptp.SyncDelayReq {
+	sc.syncP.SequenceID = sc.sequenceID
+	return sc.syncP
+}
+
+func (sc *SubscriptionClient) initFollowup() {
+	sc.followupP = &ptp.FollowUp{
 		Header: ptp.Header{
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageFollowUp, 0),
 			Version:         ptp.Version,
 			MessageLength:   uint16(binary.Size(ptp.FollowUp{})),
 			DomainNumber:    0,
 			FlagField:       ptp.FlagUnicast,
-			SequenceID:      sc.sequenceID,
+			SequenceID:      0,
 			SourcePortIdentity: ptp.PortIdentity{
 				PortNumber:    1,
 				ClockIdentity: sc.serverConfig.clockIdentity,
 			},
-			LogMessageInterval: i,
+			LogMessageInterval: 0,
 			ControlField:       2,
 		},
 		FollowUpBody: ptp.FollowUpBody{
-			PreciseOriginTimestamp: ptp.NewTimestamp(hwts),
+			PreciseOriginTimestamp: ptp.NewTimestamp(time.Now()),
 		},
 	}
 }
 
-// announcePacket generates ptp Announce packet
-func (sc *SubscriptionClient) announcePacket() *ptp.Announce {
+// followupPacket generates ptp Follow Up packet
+func (sc *SubscriptionClient) followupPacket(hwts time.Time) *ptp.FollowUp {
 	i, err := ptp.NewLogInterval(sc.interval)
 	if err != nil {
 		log.Errorf("Failed to get interval: %v", err)
 	}
-	return &ptp.Announce{
+
+	sc.followupP.SequenceID = sc.sequenceID
+	sc.followupP.LogMessageInterval = i
+	sc.followupP.PreciseOriginTimestamp = ptp.NewTimestamp(hwts)
+	return sc.followupP
+}
+
+func (sc *SubscriptionClient) initAnnounce() {
+	sc.announceP = &ptp.Announce{
 		Header: ptp.Header{
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageAnnounce, 0),
 			Version:         ptp.Version,
 			MessageLength:   uint16(binary.Size(ptp.Announce{})),
 			DomainNumber:    0,
 			FlagField:       ptp.FlagUnicast | ptp.FlagPTPTimescale,
-			SequenceID:      sc.sequenceID,
+			SequenceID:      0,
 			SourcePortIdentity: ptp.PortIdentity{
 				PortNumber:    1,
 				ClockIdentity: sc.serverConfig.clockIdentity,
 			},
-			LogMessageInterval: i,
+			LogMessageInterval: 0,
 			ControlField:       5,
 		},
 		AnnounceBody: ptp.AnnounceBody{
-			CurrentUTCOffset:     int16(sc.serverConfig.UTCOffset.Seconds()),
+			CurrentUTCOffset:     0,
 			Reserved:             0,
 			GrandmasterPriority1: 128,
 			GrandmasterClockQuality: ptp.ClockQuality{
@@ -280,4 +296,18 @@ func (sc *SubscriptionClient) announcePacket() *ptp.Announce {
 			TimeSource:           ptp.TimeSourceGNSS,
 		},
 	}
+}
+
+// announcePacket generates ptp Announce packet
+func (sc *SubscriptionClient) announcePacket() *ptp.Announce {
+	i, err := ptp.NewLogInterval(sc.interval)
+	if err != nil {
+		log.Errorf("Failed to get interval: %v", err)
+	}
+
+	sc.announceP.SequenceID = sc.sequenceID
+	sc.announceP.LogMessageInterval = i
+	sc.announceP.CurrentUTCOffset = int16(sc.serverConfig.UTCOffset.Seconds())
+
+	return sc.announceP
 }
