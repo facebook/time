@@ -48,7 +48,7 @@ func TestWorkerQueue(t *testing.T) {
 
 	interval := time.Millisecond
 	expire := time.Now().Add(time.Millisecond)
-	sc := NewSubscriptionClient(queue, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, interval, expire)
+	sc := NewSubscriptionClient(w, net.ParseIP("127.0.0.1"), ptp.MessageAnnounce, c, interval, expire)
 
 	for i := 0; i < 10; i++ {
 		w.queue <- sc

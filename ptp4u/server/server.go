@@ -39,8 +39,6 @@ type Server struct {
 	Stats  stats.Stats
 	sw     []*sendWorker
 
-	queue chan *SubscriptionClient
-
 	eventConn   *net.UDPConn
 	generalConn *net.UDPConn
 	clients     syncMapCli
@@ -66,15 +64,16 @@ func (s *Server) Start() error {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	// Here we will put the tasks needed to be processed
-	s.queue = make(chan *SubscriptionClient, s.Config.QueueSize)
-
 	// start X workers
 	s.sw = make([]*sendWorker, s.Config.Workers)
 	for i := 0; i < s.Config.Workers; i++ {
+		// Create subscription channels for every worker.
+		// Here we will put the tasks needed to be processed
+		queue := make(chan *SubscriptionClient, s.Config.QueueSize)
+		// Each worker to monitor own queue
 		s.sw[i] = &sendWorker{
 			id:     i,
-			queue:  s.queue,
+			queue:  queue,
 			config: s.Config,
 			stats:  s.Stats,
 		}
@@ -100,7 +99,6 @@ func (s *Server) Start() error {
 			<-time.After(s.Config.MetricInterval)
 			s.inventoryClients()
 			s.Stats.SetUTCOffset(int64(s.Config.UTCOffset.Seconds()))
-			s.Stats.SetWorkerQueue(int64(len(s.queue)))
 
 			s.Stats.Snapshot()
 			s.Stats.Reset()
@@ -124,6 +122,25 @@ func (s *Server) Start() error {
 	// Wait for ANY gorouine to finish
 	wg.Wait()
 	return fmt.Errorf("one of server routines finished")
+}
+
+// findLeastBusyWorkerID searches for the worker with the least load.
+// Because HW timestamping is a very slow operation it's extremely
+// important to balance load between workers not just by number of
+// clients, but by number of packets per interval.
+func (s *Server) findLeastBusyWorkerID() int {
+	// Determine which worker is the least busy
+	var leastBusyWorkerLoad int64
+	leastBusyWorkerID := 0
+
+	for id, worker := range s.sw {
+		if id == 0 || worker.load < leastBusyWorkerLoad {
+			leastBusyWorkerID = id
+			leastBusyWorkerLoad = worker.load
+		}
+	}
+	log.Debugf("leastBusyWorkerID: %d with load: %d", leastBusyWorkerID, leastBusyWorkerLoad)
+	return leastBusyWorkerID
 }
 
 // startEventListener launches the listener which listens to subscription requests
@@ -304,7 +321,7 @@ func (s *Server) handleGeneralMessage(request []byte, clientIP net.IP) {
 
 					sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
 					if sc == nil {
-						sc = NewSubscriptionClient(s.queue, clientIP, grantType, s.Config, intervalt, expire)
+						sc = NewSubscriptionClient(s.sw[s.findLeastBusyWorkerID()], clientIP, grantType, s.Config, intervalt, expire)
 						s.registerSubscription(signaling.SourcePortIdentity, grantType, sc)
 					} else {
 						// Update existing subscription data
