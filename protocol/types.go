@@ -78,12 +78,10 @@ func NewSdoIDAndMsgType(msgType MessageType, sdoID uint8) SdoIDAndMsgType {
 
 // ProbeMsgType reads first 8 bits of data and tries to decode it to SdoIDAndMsgType, then return MessageType
 func ProbeMsgType(data []byte) (msg MessageType, err error) {
-	r := bytes.NewReader(data)
-	var sdoIDAndMsgType SdoIDAndMsgType
-	if err := binary.Read(r, binary.BigEndian, &sdoIDAndMsgType); err != nil {
-		return msg, err
+	if len(data) < 1 {
+		return 0, fmt.Errorf("not enough data to probe MsgType")
 	}
-	return sdoIDAndMsgType.MsgType(), nil
+	return SdoIDAndMsgType(data[0]).MsgType(), nil
 }
 
 // TLVType is type for TLV types
@@ -94,6 +92,8 @@ type TLV interface {
 	Type() TLVType
 }
 
+const tlvHeadSize = 4
+
 // TLVHead is a common part of all TLVs
 type TLVHead struct {
 	TLVType     TLVType
@@ -103,6 +103,11 @@ type TLVHead struct {
 // Type implements TLV interface
 func (t TLVHead) Type() TLVType {
 	return t.TLVType
+}
+
+func tlvHeadMarshalBinaryTo(t *TLVHead, b []byte) {
+	binary.BigEndian.PutUint16(b, uint16(t.TLVType))
+	binary.BigEndian.PutUint16(b[2:], t.LengthField)
 }
 
 // As per Table 52 tlvType values

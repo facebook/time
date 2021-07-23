@@ -17,7 +17,6 @@ limitations under the License.
 package server
 
 import (
-	"bytes"
 	"net"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
@@ -67,7 +66,7 @@ func (s *sendWorker) Start() {
 	}
 	defer gconn.Close()
 
-	buf := &bytes.Buffer{}
+	buf := make([]byte, ptp.PayloadSizeBytes)
 
 	// reusable buffers for ReadTXtimestampBuf
 	bbuf := make([]byte, ptp.PayloadSizeBytes)
@@ -85,7 +84,6 @@ func (s *sendWorker) Start() {
 
 	for c := range s.queue {
 		// clean up buffers
-		buf.Reset()
 		copy(bbuf, emptyb)
 		copy(oob, emptyo)
 		copy(tbuf, emptyb)
@@ -98,13 +96,14 @@ func (s *sendWorker) Start() {
 			// send sync
 
 			sync := c.syncPacket()
-			if err := ptp.BytesTo(sync, buf); err != nil {
+			n, err := ptp.BytesTo(sync, buf)
+			if err != nil {
 				log.Errorf("Failed to generate the sync packet: %v", err)
 				continue
 			}
 			log.Debugf("Sending sync")
 			log.Tracef("Sending sync %+v to %s from %d", sync, c.ecliAddr, econn.LocalAddr().(*net.UDPAddr).Port)
-			_, err = econn.WriteTo(buf.Bytes(), c.ecliAddr)
+			_, err = econn.WriteTo(buf[:n], c.ecliAddr)
 			if err != nil {
 				log.Errorf("Failed to send the sync packet: %v", err)
 				continue
@@ -123,16 +122,16 @@ func (s *sendWorker) Start() {
 			log.Debugf("Read TX timestamp: %v", txTS)
 
 			// send followup
-			buf.Reset()
 			followup := c.followupPacket(txTS)
-			if err := ptp.BytesTo(followup, buf); err != nil {
+			n, err = ptp.BytesTo(followup, buf)
+			if err != nil {
 				log.Errorf("Failed to generate the followup packet: %v", err)
 				continue
 			}
 			log.Debugf("Sending followup")
 			log.Tracef("Sending followup %+v with ts: %s to %s from %d", followup, followup.FollowUpBody.PreciseOriginTimestamp.Time(), c.gcliAddr, gconn.LocalAddr().(*net.UDPAddr).Port)
 
-			_, err = gconn.WriteTo(buf.Bytes(), c.gcliAddr)
+			_, err = gconn.WriteTo(buf[:n], c.gcliAddr)
 			if err != nil {
 				log.Errorf("Failed to send the followup packet: %v", err)
 				continue
@@ -141,14 +140,15 @@ func (s *sendWorker) Start() {
 		case ptp.MessageAnnounce:
 			// send announce
 			announce := c.announcePacket()
-			if err := ptp.BytesTo(announce, buf); err != nil {
+			n, err := ptp.BytesTo(announce, buf)
+			if err != nil {
 				log.Errorf("Failed to prepare the unicast announce: %v", err)
 				continue
 			}
 			log.Debugf("Sending announce")
 			log.Tracef("Sending announce %+v to %s from %d", announce, c.gcliAddr, gconn.LocalAddr().(*net.UDPAddr).Port)
 
-			_, err = gconn.WriteTo(buf.Bytes(), c.gcliAddr)
+			_, err = gconn.WriteTo(buf[:n], c.gcliAddr)
 			if err != nil {
 				log.Errorf("Failed to send the unicast announce: %v", err)
 				continue
