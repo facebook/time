@@ -23,7 +23,6 @@ import (
 	"encoding"
 	"encoding/binary"
 	"fmt"
-	"io"
 )
 
 // Version is what version of PTP protocol we implement
@@ -66,6 +65,26 @@ type Header struct {
 	LogMessageInterval  LogInterval // see Table 42 Values of logMessageInterval field
 }
 
+const headerSize = 34 // bytes
+
+// unmarshalHeader is not a Header.UnmarshalBinary to prevent all packets
+// from having default (and incomplete) UnmarshalBinary implementation through embedding
+func unmarshalHeader(p *Header, b []byte) {
+	p.SdoIDAndMsgType = SdoIDAndMsgType(b[0])
+	p.Version = b[1]
+	p.MessageLength = binary.BigEndian.Uint16(b[2:])
+	p.DomainNumber = b[4]
+	p.MinorSdoID = b[5]
+	p.FlagField = binary.BigEndian.Uint16(b[6:])
+	p.CorrectionField = Correction(binary.BigEndian.Uint64(b[8:]))
+	p.MessageTypeSpecific = binary.BigEndian.Uint32(b[16:])
+	p.SourcePortIdentity.ClockIdentity = ClockIdentity(binary.BigEndian.Uint64(b[20:]))
+	p.SourcePortIdentity.PortNumber = binary.BigEndian.Uint16(b[28:])
+	p.SequenceID = binary.BigEndian.Uint16(b[30:])
+	p.ControlField = b[32]
+	p.LogMessageInterval = LogInterval(b[33])
+}
+
 // MessageType returns MessageType
 func (p *Header) MessageType() MessageType {
 	return p.SdoIDAndMsgType.MsgType()
@@ -74,6 +93,25 @@ func (p *Header) MessageType() MessageType {
 // SetSequence populates sequence field
 func (p *Header) SetSequence(sequence uint16) {
 	p.SequenceID = sequence
+}
+
+// headerMarshalBinaryTo is not a Header.MarshalBinaryTo to prevent all packets
+// from having default (and incomplete) MarshalBinaryTo implementation through embedding
+func headerMarshalBinaryTo(p *Header, b []byte) int {
+	b[0] = byte(p.SdoIDAndMsgType)
+	b[1] = byte(p.Version)
+	binary.BigEndian.PutUint16(b[2:], p.MessageLength)
+	b[4] = byte(p.DomainNumber)
+	b[5] = byte(p.MinorSdoID)
+	binary.BigEndian.PutUint16(b[6:], p.FlagField)
+	binary.BigEndian.PutUint64(b[8:], uint64(p.CorrectionField))
+	binary.BigEndian.PutUint32(b[16:], p.MessageTypeSpecific)
+	binary.BigEndian.PutUint64(b[20:], uint64(p.SourcePortIdentity.ClockIdentity))
+	binary.BigEndian.PutUint16(b[28:], p.SourcePortIdentity.PortNumber)
+	binary.BigEndian.PutUint16(b[30:], p.SequenceID)
+	b[32] = byte(p.ControlField)
+	b[33] = byte(p.LogMessageInterval)
+	return headerSize
 }
 
 // flags used in FlagField as per Table 37 Values of flagField
@@ -123,6 +161,33 @@ type Announce struct {
 	AnnounceBody
 }
 
+func (p *Announce) MarshalBinaryTo(b []byte) (int, error) {
+	if len(b) < headerSize+30 {
+		return 0, fmt.Errorf("not enough buffer to write Announce")
+	}
+	n := headerMarshalBinaryTo(&p.Header, b)
+	copy(b[n:], p.OriginTimestamp.Seconds[:]) //uint48
+	binary.BigEndian.PutUint32(b[n+6:], p.OriginTimestamp.Nanoseconds)
+	binary.BigEndian.PutUint16(b[n+10:], uint16(p.CurrentUTCOffset))
+	b[n+12] = byte(p.Reserved)
+	b[n+13] = byte(p.GrandmasterPriority1)
+	b[n+14] = byte(p.GrandmasterClockQuality.ClockClass)
+	b[n+15] = byte(p.GrandmasterClockQuality.ClockAccuracy)
+	binary.BigEndian.PutUint16(b[n+16:], p.GrandmasterClockQuality.OffsetScaledLogVariance)
+	b[n+18] = byte(p.GrandmasterPriority2)
+	binary.BigEndian.PutUint64(b[n+19:], uint64(p.GrandmasterIdentity))
+	binary.BigEndian.PutUint16(b[n+27:], p.StepsRemoved)
+	b[n+29] = byte(p.TimeSource)
+	return n + 30, nil
+}
+
+// MarshalBinary converts packet to []bytes
+func (p *Announce) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 64)
+	n, err := p.MarshalBinaryTo(buf)
+	return buf[:n], err
+}
+
 // SyncDelayReqBody Table 44 Sync and Delay_Req message fields
 type SyncDelayReqBody struct {
 	OriginTimestamp Timestamp
@@ -132,6 +197,33 @@ type SyncDelayReqBody struct {
 type SyncDelayReq struct {
 	Header
 	SyncDelayReqBody
+}
+
+func (p *SyncDelayReq) MarshalBinaryTo(b []byte) (int, error) {
+	if len(b) < headerSize+10 {
+		return 0, fmt.Errorf("not enough buffer to write SyncDelayReq")
+	}
+	n := headerMarshalBinaryTo(&p.Header, b)
+	copy(b[n:], p.OriginTimestamp.Seconds[:]) //uint48
+	binary.BigEndian.PutUint32(b[n+6:], p.OriginTimestamp.Nanoseconds)
+	return n + 10, nil
+}
+
+// MarshalBinary converts packet to []bytes
+func (p *SyncDelayReq) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 44)
+	n, err := p.MarshalBinaryTo(buf)
+	return buf[:n], err
+}
+
+func (p *SyncDelayReq) UnmarshalBinary(b []byte) error {
+	if len(b) < headerSize+10 {
+		return fmt.Errorf("not enough data to decode SyncDelayReq")
+	}
+	unmarshalHeader(&p.Header, b)
+	copy(p.OriginTimestamp.Seconds[:], b[headerSize:]) //uint48
+	p.OriginTimestamp.Nanoseconds = binary.BigEndian.Uint32(b[headerSize+6:])
+	return nil
 }
 
 // FollowUpBody Table 45 Follow_Up message fields
@@ -145,6 +237,33 @@ type FollowUp struct {
 	FollowUpBody
 }
 
+func (p *FollowUp) MarshalBinaryTo(b []byte) (int, error) {
+	if len(b) < headerSize+10 {
+		return 0, fmt.Errorf("not enough buffer to write FollowUp")
+	}
+	n := headerMarshalBinaryTo(&p.Header, b)
+	copy(b[n:], p.PreciseOriginTimestamp.Seconds[:]) //uint48
+	binary.BigEndian.PutUint32(b[n+6:], p.PreciseOriginTimestamp.Nanoseconds)
+	return n + 10, nil
+}
+
+// MarshalBinary converts packet to []bytes
+func (p *FollowUp) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 44)
+	n, err := p.MarshalBinaryTo(buf)
+	return buf[:n], err
+}
+
+func (p *FollowUp) UnmarshalBinary(b []byte) error {
+	if len(b) < headerSize+10 {
+		return fmt.Errorf("not enough data to decode FollowUp")
+	}
+	unmarshalHeader(&p.Header, b)
+	copy(p.PreciseOriginTimestamp.Seconds[:], b[headerSize:]) //uint48
+	p.PreciseOriginTimestamp.Nanoseconds = binary.BigEndian.Uint32(b[headerSize+6:])
+	return nil
+}
+
 // DelayRespBody Table 46 Delay_Resp message fields
 type DelayRespBody struct {
 	ReceiveTimestamp       Timestamp
@@ -155,6 +274,37 @@ type DelayRespBody struct {
 type DelayResp struct {
 	Header
 	DelayRespBody
+}
+
+func (p *DelayResp) MarshalBinaryTo(b []byte) (int, error) {
+	if len(b) < headerSize+20 {
+		return 0, fmt.Errorf("not enough buffer to write DelayResp")
+	}
+	n := headerMarshalBinaryTo(&p.Header, b)
+	copy(b[n:], p.ReceiveTimestamp.Seconds[:]) //uint48
+	binary.BigEndian.PutUint32(b[n+6:], p.ReceiveTimestamp.Nanoseconds)
+	binary.BigEndian.PutUint64(b[n+10:], uint64(p.RequestingPortIdentity.ClockIdentity))
+	binary.BigEndian.PutUint16(b[n+18:], p.RequestingPortIdentity.PortNumber)
+	return n + 20, nil
+}
+
+// MarshalBinary converts packet to []bytes
+func (p *DelayResp) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 54)
+	n, err := p.MarshalBinaryTo(buf)
+	return buf[:n], err
+}
+
+func (p *DelayResp) UnmarshalBinary(b []byte) error {
+	if len(b) < headerSize+20 {
+		return fmt.Errorf("not enough data to decode DelayResp")
+	}
+	unmarshalHeader(&p.Header, b)
+	copy(p.ReceiveTimestamp.Seconds[:], b[headerSize:]) //uint48
+	p.ReceiveTimestamp.Nanoseconds = binary.BigEndian.Uint32(b[headerSize+6:])
+	p.RequestingPortIdentity.ClockIdentity = ClockIdentity(binary.BigEndian.Uint64(b[headerSize+10:]))
+	p.RequestingPortIdentity.PortNumber = binary.BigEndian.Uint16(b[headerSize+18:])
+	return nil
 }
 
 // PDelayReqBody Table 47 Pdelay_Req message fields
@@ -199,26 +349,24 @@ type Packet interface {
 	SetSequence(uint16)
 }
 
-// BinaryMarshalerTo is an interface implemented by an object that can marshal itself into a binary form into provided io.Writer
+// BinaryMarshalerTo is an interface implemented by an object that can marshal itself into a binary form into provided []byte
 type BinaryMarshalerTo interface {
-	MarshalBinaryTo(io.Writer) error
+	MarshalBinaryTo([]byte) (int, error)
 }
 
-// BytesTo converts any packet to bytes and writes those bytes into provided io.Writer
-func BytesTo(p Packet, buf io.Writer) error {
-	// interface smuggling
-	if pp, ok := p.(BinaryMarshalerTo); ok {
-		if err := pp.MarshalBinaryTo(buf); err != nil {
-			return err
-		}
-		return binary.Write(buf, binary.BigEndian, []byte{0, 0})
-	}
-	err := binary.Write(buf, binary.BigEndian, p)
+// BytesTo marhals packets that support this optimized marshalling into []byte
+func BytesTo(p BinaryMarshalerTo, buf []byte) (int, error) {
+	n, err := p.MarshalBinaryTo(buf)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return binary.Write(buf, binary.BigEndian, []byte{0, 0})
+	// add two zero bytes
+	buf[n] = 0x0
+	buf[n+1] = 0x0
+	return n + 2, nil
 }
+
+var twoZeros = []byte{0, 0}
 
 // Bytes converts any packet to []bytes
 // PTP over UDPv6 requires adding extra two bytes that
@@ -229,14 +377,14 @@ func Bytes(p Packet) ([]byte, error) {
 	// interface smuggling
 	if pp, ok := p.(encoding.BinaryMarshaler); ok {
 		b, err := pp.MarshalBinary()
-		return append(b, []byte{0, 0}...), err
+		return append(b, twoZeros...), err
 	}
 	var bytes bytes.Buffer
 	err := binary.Write(&bytes, binary.BigEndian, p)
 	if err != nil {
 		return nil, err
 	}
-	err = binary.Write(&bytes, binary.BigEndian, []byte{0, 0})
+	err = binary.Write(&bytes, binary.BigEndian, twoZeros)
 	return bytes.Bytes(), err
 }
 

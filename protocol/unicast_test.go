@@ -222,3 +222,60 @@ func Test_parseGrantUnicastTransmission(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, &want, pp)
 }
+
+func BenchmarkWriteSignaling(b *testing.B) {
+	p := &Signaling{
+		Header: Header{
+			SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageSignaling, 0),
+			Version:             2,
+			MessageLength:       56,
+			DomainNumber:        0,
+			MinorSdoID:          0,
+			FlagField:           FlagUnicast | FlagTwoStep,
+			CorrectionField:     0,
+			MessageTypeSpecific: 0,
+			SourcePortIdentity: PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: 16437344792485782624,
+			},
+			SequenceID:         7620,
+			ControlField:       5,
+			LogMessageInterval: 0x7f,
+		},
+		TargetPortIdentity: PortIdentity{
+			PortNumber:    1,
+			ClockIdentity: 5212879185253000328,
+		},
+		TLVs: []TLV{
+			&GrantUnicastTransmissionTLV{
+				TLVHead: TLVHead{
+					TLVType:     TLVGrantUnicastTransmission,
+					LengthField: 8,
+				},
+				MsgTypeAndReserved:    NewUnicastMsgTypeAndFlags(MessageAnnounce, 0),
+				LogInterMessagePeriod: 1,
+				DurationField:         60,
+				Renewal:               1,
+			},
+		},
+	}
+	buf := make([]byte, 64)
+	for n := 0; n < b.N; n++ {
+		_, _ = BytesTo(p, buf)
+	}
+}
+
+func BenchmarkReadSignaling(b *testing.B) {
+	raw := []uint8{0x0c, 0x02, 0x00, 0x38, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0xe4, 0x1d, 0x2d, 0xff, 0xfe, 0xbb, 0x64, 0x60, 0x00,
+		0x01, 0x1d, 0xc4, 0x05, 0x7f, 0x48, 0x57, 0xdd, 0xff,
+		0xfe, 0x08, 0x64, 0x88, 0x00, 0x01, 0x00, 0x05, 0x00,
+		0x08, 0xb0, 0x01, 0x00, 0x00, 0x00, 0x3c, 0x00, 0x01,
+		0x00, 0x00,
+	}
+	p := &Signaling{}
+	for n := 0; n < b.N; n++ {
+		_ = p.UnmarshalBinary(raw)
+	}
+}
