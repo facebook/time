@@ -109,7 +109,8 @@ func EnableHWTimestampsSocket(conn *net.UDPConn, iface string) error {
 	// Enable hardware timestamp capabilities on socket
 	flags := unix.SOF_TIMESTAMPING_TX_HARDWARE |
 		unix.SOF_TIMESTAMPING_RX_HARDWARE |
-		unix.SOF_TIMESTAMPING_RAW_HARDWARE
+		unix.SOF_TIMESTAMPING_RAW_HARDWARE |
+		unix.SOF_TIMESTAMPING_OPT_TSONLY // Makes the kernel return the timestamp as a cmsg alongside an empty packet, as opposed to alongside the original packet.
 	// Allow reading of HW timestamps via socket
 	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_TIMESTAMPING, flags); err != nil {
 		return err
@@ -131,7 +132,8 @@ func EnableSWTimestampsSocket(conn *net.UDPConn) error {
 
 	flags := unix.SOF_TIMESTAMPING_TX_SOFTWARE |
 		unix.SOF_TIMESTAMPING_RX_SOFTWARE |
-		unix.SOF_TIMESTAMPING_SOFTWARE
+		unix.SOF_TIMESTAMPING_SOFTWARE |
+		unix.SOF_TIMESTAMPING_OPT_TSONLY // Makes the kernel return the timestamp as a cmsg alongside an empty packet, as opposed to alongside the original packet.
 	// Allow reading of SW timestamps via socket
 	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_TIMESTAMPING, flags); err != nil {
 		return err
@@ -247,7 +249,7 @@ func ReadTXtimestampBuf(connFd int, buf, oob, tbuf, toob []byte) (time.Time, int
 			return timestamp, attempts, nil
 		}
 	}
-	return time.Time{}, 0, fmt.Errorf("failed to find HW timestamp in MSG_ERRQUEUE")
+	return time.Time{}, 0, fmt.Errorf("failed to find TX HW timestamp in MSG_ERRQUEUE")
 }
 
 // ReadTXtimestamp returns HW TX timestamp
@@ -296,5 +298,5 @@ func ReadPacketWithRXTimestampBuf(conn *net.UDPConn, buf, oob []byte) (int, net.
 			return bbuf, addr.IP, timestamp, nil
 		}
 	}
-	return 0, nil, time.Time{}, fmt.Errorf("failed to find HW timestamp in MSG_ERRQUEUE")
+	return 0, nil, time.Time{}, fmt.Errorf("failed to find RX HW timestamp in MSG_ERRQUEUE")
 }
