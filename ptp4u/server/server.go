@@ -31,6 +31,7 @@ import (
 	ptp "github.com/facebookincubator/ptp/protocol"
 	"github.com/facebookincubator/ptp/ptp4u/stats"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 // Server is PTP unicast server
@@ -39,9 +40,14 @@ type Server struct {
 	Stats  stats.Stats
 	sw     []*sendWorker
 
-	eventConn   *net.UDPConn
-	generalConn *net.UDPConn
-	clients     syncMapCli
+	clients syncMapCli
+
+	// server source fds
+	eFd int
+	gFd int
+	// client socket addresses
+	eclisa syncMapSock
+	gclisa syncMapSock
 }
 
 // Start the workers send bind to event and general UDP ports
@@ -57,6 +63,8 @@ func (s *Server) Start() error {
 	}
 
 	s.clients.init()
+	s.eclisa.init()
+	s.gclisa.init()
 
 	// Call wg.Add(1) ONLY once
 	// If ANY goroutine finishes no matter how many of them we run
@@ -147,19 +155,25 @@ func (s *Server) findLeastBusyWorkerID() int {
 func (s *Server) startEventListener() {
 	var err error
 	log.Infof("Binding on %s %d", s.Config.IP, ptp.PortEvent)
-	s.eventConn, err = net.ListenUDP("udp", &net.UDPAddr{IP: s.Config.IP, Port: ptp.PortEvent})
+	eventConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: s.Config.IP, Port: ptp.PortEvent})
 	if err != nil {
 		log.Fatalf("Listening error: %s", err)
 	}
-	defer s.eventConn.Close()
+	defer eventConn.Close()
+
+	// get connection file descriptor
+	s.eFd, err = ptp.ConnFd(eventConn)
+	if err != nil {
+		log.Fatalf("Getting event connection FD: %s", err)
+	}
 
 	// Enable RX timestamps. Delay requests need to be timestamped by ptp4u on receipt
 	if s.Config.TimestampType == ptp.HWTIMESTAMP {
-		if err := ptp.EnableHWTimestampsSocket(s.eventConn, s.Config.Interface); err != nil {
+		if err := ptp.EnableHWTimestampsSocket(s.eFd, s.Config.Interface); err != nil {
 			log.Fatalf("Cannot enable hardware RX timestamps")
 		}
 	} else if s.Config.TimestampType == ptp.SWTIMESTAMP {
-		if err := ptp.EnableSWTimestampsSocket(s.eventConn); err != nil {
+		if err := ptp.EnableSWTimestampsSocket(s.eFd); err != nil {
 			log.Fatalf("Cannot enable software RX timestamps")
 		}
 	} else {
@@ -167,9 +181,9 @@ func (s *Server) startEventListener() {
 	}
 
 	for {
-		request, clientIP, rxTS, err := ptp.ReadPacketWithRXTimestamp(s.eventConn)
+		request, clientIP, rxTS, err := ptp.ReadPacketWithRXTimestamp(eventConn)
 		if err != nil {
-			log.Errorf("Failed to read packet on %s: %v", s.eventConn.LocalAddr(), err)
+			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
 			continue
 		}
 		if s.Config.TimestampType != ptp.HWTIMESTAMP {
@@ -184,16 +198,22 @@ func (s *Server) startEventListener() {
 func (s *Server) startGeneralListener() {
 	var err error
 	log.Infof("Binding on %s %d", s.Config.IP, ptp.PortGeneral)
-	s.generalConn, err = net.ListenUDP("udp", &net.UDPAddr{IP: s.Config.IP, Port: ptp.PortGeneral})
+	generalConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: s.Config.IP, Port: ptp.PortGeneral})
 	if err != nil {
 		log.Fatalf("Listening error: %s", err)
 	}
-	defer s.generalConn.Close()
+	defer generalConn.Close()
+
+	// get connection file descriptor
+	s.gFd, err = ptp.ConnFd(generalConn)
+	if err != nil {
+		log.Fatalf("Getting general connection FD: %s", err)
+	}
 
 	for {
-		request, clientIP, err := readPacket(s.generalConn)
+		request, clientIP, err := readPacket(generalConn)
 		if err != nil {
-			log.Errorf("Failed to read packet on %s: %v", s.generalConn.LocalAddr(), err)
+			log.Errorf("Failed to read packet on %s: %v", generalConn.LocalAddr(), err)
 			continue
 		}
 
@@ -263,8 +283,9 @@ func (s *Server) handleEventMessage(request []byte, clientIP net.IP, rxTS time.T
 			log.Errorf("Failed to prepare the delay response: %v", err)
 			return
 		}
-		gcliAddr := &net.UDPAddr{IP: clientIP, Port: ptp.PortGeneral}
-		_, err = s.generalConn.WriteTo(dRespb, gcliAddr)
+		// Client socket addr
+		gclisa := s.gclisa.loadOrStore(clientIP, ptp.PortGeneral)
+		err = unix.Sendto(s.gFd, dRespb, 0, gclisa)
 		if err != nil {
 			log.Errorf("Failed to send the delay response: %v", err)
 			return
@@ -303,6 +324,9 @@ func (s *Server) handleGeneralMessage(request []byte, clientIP net.IP) {
 				log.Debugf("Got %s grant request", grantType)
 				log.Tracef("Got %s grant request: %+v", grantType, tlv)
 
+				// Socket addr
+				gclisa := s.gclisa.loadOrStore(clientIP, ptp.PortGeneral)
+
 				switch grantType {
 				case ptp.MessageAnnounce, ptp.MessageSync:
 					duration := v.DurationField
@@ -313,7 +337,7 @@ func (s *Server) handleGeneralMessage(request []byte, clientIP net.IP) {
 					// Reject queries out of limit
 					if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
 						log.Warningf("Got too demanding %s request. Duration: %s, Interval: %s. Rejecting. Consider changing -maxsubduration and -minsubinterval", grantType, durationt, intervalt)
-						s.sendGrant(grantType, signaling, v.MsgTypeAndReserved, interval, 0, clientIP)
+						s.sendGrant(grantType, signaling, v.MsgTypeAndReserved, interval, 0, gclisa)
 						return
 					}
 
@@ -321,7 +345,8 @@ func (s *Server) handleGeneralMessage(request []byte, clientIP net.IP) {
 
 					sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
 					if sc == nil {
-						sc = NewSubscriptionClient(s.sw[s.findLeastBusyWorkerID()], clientIP, grantType, s.Config, intervalt, expire)
+						eclisa := s.eclisa.loadOrStore(clientIP, ptp.PortEvent)
+						sc = NewSubscriptionClient(s.sw[s.findLeastBusyWorkerID()], eclisa, gclisa, grantType, s.Config, intervalt, expire)
 						s.registerSubscription(signaling.SourcePortIdentity, grantType, sc)
 					} else {
 						// Update existing subscription data
@@ -335,11 +360,11 @@ func (s *Server) handleGeneralMessage(request []byte, clientIP net.IP) {
 					}
 
 					// Send confirmation grant
-					s.sendGrant(grantType, signaling, v.MsgTypeAndReserved, interval, duration, clientIP)
+					s.sendGrant(grantType, signaling, v.MsgTypeAndReserved, interval, duration, gclisa)
 
 				case ptp.MessageDelayResp:
 					// Send confirmation grant
-					s.sendGrant(grantType, signaling, v.MsgTypeAndReserved, 0, v.DurationField, clientIP)
+					s.sendGrant(grantType, signaling, v.MsgTypeAndReserved, 0, v.DurationField, gclisa)
 
 				default:
 					log.Errorf("Got unsupported grant type %s", grantType)
@@ -382,15 +407,14 @@ func (s *Server) inventoryClients() {
 }
 
 // sendGrant sends a Unicast Grant message
-func (s *Server) sendGrant(t ptp.MessageType, sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32, clientIP net.IP) {
+func (s *Server) sendGrant(t ptp.MessageType, sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32, sa unix.Sockaddr) {
 	grant := s.grantUnicastTransmission(sg, mt, interval, duration)
 	grantb, err := ptp.Bytes(grant)
 	if err != nil {
 		log.Errorf("Failed to prepare the unicast grant: %v", err)
 		return
 	}
-	gcliAddr := &net.UDPAddr{IP: clientIP, Port: ptp.PortGeneral}
-	_, err = s.generalConn.WriteTo(grantb, gcliAddr)
+	err = unix.Sendto(s.gFd, grantb, 0, sa)
 	if err != nil {
 		log.Errorf("Failed to send the unicast grant: %v", err)
 		return
@@ -452,5 +476,45 @@ func (s *Server) delayRespPacket(h *ptp.Header, received time.Time) *ptp.DelayRe
 			ReceiveTimestamp:       ptp.NewTimestamp(received),
 			RequestingPortIdentity: h.SourcePortIdentity,
 		},
+	}
+}
+
+// Sock
+type syncMapSock struct {
+	sync.Mutex
+	m map[string]unix.Sockaddr
+}
+
+// init initializes the underlying map
+func (s *syncMapSock) init() {
+	s.m = make(map[string]unix.Sockaddr)
+}
+
+// load gets the value by the key
+func (s *syncMapSock) loadOrStore(ip net.IP, port int) unix.Sockaddr {
+	key := ip.String()
+	s.Lock()
+	val, ok := s.m[key]
+	s.Unlock()
+	if !ok {
+		val = ipToSockaddr(ip, port)
+		s.Lock()
+		s.m[key] = val
+		s.Unlock()
+	}
+
+	return val
+}
+
+// Somewhat copy from https://github.com/golang/go/blob/16cd770e0668a410a511680b2ac1412e554bd27b/src/net/ipsock_posix.go#L145
+func ipToSockaddr(ip net.IP, port int) unix.Sockaddr {
+	if ip.To4() != nil {
+		sa := &unix.SockaddrInet4{Port: port}
+		copy(sa.Addr[:], ip.To4())
+		return sa
+	} else {
+		sa := &unix.SockaddrInet6{Port: port}
+		copy(sa.Addr[:], ip.To16())
+		return sa
 	}
 }

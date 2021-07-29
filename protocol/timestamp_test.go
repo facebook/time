@@ -52,7 +52,7 @@ func Test_ReadTXtimestamp(t *testing.T) {
 	require.Equal(t, maxTXTS, attempts)
 	require.Equal(t, fmt.Errorf("no TX timestamp found after %d tries", maxTXTS), err)
 
-	err = EnableSWTimestampsSocket(conn)
+	err = EnableSWTimestampsSocket(connFd)
 	require.Nil(t, err)
 
 	addr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 12345}

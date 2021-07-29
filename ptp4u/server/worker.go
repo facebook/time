@@ -22,6 +22,7 @@ import (
 	ptp "github.com/facebookincubator/ptp/protocol"
 	"github.com/facebookincubator/ptp/ptp4u/stats"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 // sendWorker monitors the queue of jobs
@@ -49,11 +50,11 @@ func (s *sendWorker) Start() {
 
 	// Syncs sent from event port
 	if s.config.TimestampType == ptp.HWTIMESTAMP {
-		if err := ptp.EnableHWTimestampsSocket(econn, s.config.Interface); err != nil {
+		if err := ptp.EnableHWTimestampsSocket(eFd, s.config.Interface); err != nil {
 			log.Fatalf("Failed to enable RX hardware timestamps: %v", err)
 		}
 	} else if s.config.TimestampType == ptp.SWTIMESTAMP {
-		if err := ptp.EnableSWTimestampsSocket(econn); err != nil {
+		if err := ptp.EnableSWTimestampsSocket(eFd); err != nil {
 			log.Fatalf("Unable to enable RX software timestamps")
 		}
 	} else {
@@ -65,6 +66,12 @@ func (s *sendWorker) Start() {
 		log.Fatalf("Binding to general socket error: %s", err)
 	}
 	defer gconn.Close()
+
+	// get connection file descriptor
+	gFd, err := ptp.ConnFd(gconn)
+	if err != nil {
+		log.Fatalf("Getting general connection FD: %s", err)
+	}
 
 	buf := make([]byte, ptp.PayloadSizeBytes)
 
@@ -89,7 +96,7 @@ func (s *sendWorker) Start() {
 		copy(tbuf, emptyb)
 		copy(toob, emptyo)
 
-		log.Debugf("Processing client: %s", c.ecliAddr.IP)
+		log.Debugf("Processing client: %s", c.eclisa)
 
 		switch c.subscriptionType {
 		case ptp.MessageSync:
@@ -102,8 +109,9 @@ func (s *sendWorker) Start() {
 				continue
 			}
 			log.Debugf("Sending sync")
-			log.Tracef("Sending sync %+v to %s from %d", sync, c.ecliAddr, econn.LocalAddr().(*net.UDPAddr).Port)
-			_, err = econn.WriteTo(buf[:n], c.ecliAddr)
+			log.Tracef("Sending sync %+v to %s from %d", sync, c.eclisa, econn.LocalAddr().(*net.UDPAddr).Port)
+
+			err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
 			if err != nil {
 				log.Errorf("Failed to send the sync packet: %v", err)
 				continue
@@ -129,9 +137,9 @@ func (s *sendWorker) Start() {
 				continue
 			}
 			log.Debugf("Sending followup")
-			log.Tracef("Sending followup %+v with ts: %s to %s from %d", followup, followup.FollowUpBody.PreciseOriginTimestamp.Time(), c.gcliAddr, gconn.LocalAddr().(*net.UDPAddr).Port)
+			log.Tracef("Sending followup %+v with ts: %s to %s from %d", followup, followup.FollowUpBody.PreciseOriginTimestamp.Time(), c.gclisa, gconn.LocalAddr().(*net.UDPAddr).Port)
 
-			_, err = gconn.WriteTo(buf[:n], c.gcliAddr)
+			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 			if err != nil {
 				log.Errorf("Failed to send the followup packet: %v", err)
 				continue
@@ -146,9 +154,9 @@ func (s *sendWorker) Start() {
 				continue
 			}
 			log.Debugf("Sending announce")
-			log.Tracef("Sending announce %+v to %s from %d", announce, c.gcliAddr, gconn.LocalAddr().(*net.UDPAddr).Port)
+			log.Tracef("Sending announce %+v to %s from %d", announce, c.gclisa, gconn.LocalAddr().(*net.UDPAddr).Port)
 
-			_, err = gconn.WriteTo(buf[:n], c.gcliAddr)
+			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 			if err != nil {
 				log.Errorf("Failed to send the unicast announce: %v", err)
 				continue
