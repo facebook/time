@@ -17,13 +17,13 @@ package server
 
 import (
 	"encoding/binary"
-	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 // SubscriptionClient is sending subscriptionType messages periodically
@@ -39,9 +39,9 @@ type SubscriptionClient struct {
 	sequenceID uint16
 	running    bool
 
-	// addresses
-	ecliAddr *net.UDPAddr
-	gcliAddr *net.UDPAddr
+	// socket addresses
+	eclisa unix.Sockaddr
+	gclisa unix.Sockaddr
 
 	// packets
 	syncP     *ptp.SyncDelayReq
@@ -50,10 +50,10 @@ type SubscriptionClient struct {
 }
 
 // NewSubscriptionClient gets minimal required arguments to create a subscription
-func NewSubscriptionClient(w *sendWorker, ip net.IP, st ptp.MessageType, sc *Config, i time.Duration, e time.Time) *SubscriptionClient {
+func NewSubscriptionClient(w *sendWorker, eclisa, gclisa unix.Sockaddr, st ptp.MessageType, sc *Config, i time.Duration, e time.Time) *SubscriptionClient {
 	s := &SubscriptionClient{
-		ecliAddr:         &net.UDPAddr{IP: ip, Port: ptp.PortEvent},
-		gcliAddr:         &net.UDPAddr{IP: ip, Port: ptp.PortGeneral},
+		eclisa:           eclisa,
+		gclisa:           gclisa,
 		subscriptionType: st,
 		interval:         i,
 		expire:           e,
@@ -83,8 +83,8 @@ func (sc *SubscriptionClient) Start() {
 	l := 10 * time.Second.Microseconds() / sc.interval.Microseconds()
 	atomic.AddInt64(&sc.worker.load, l)
 	defer atomic.AddInt64(&sc.worker.load, -l)
-	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, sc.ecliAddr.IP)
-	log.Debugf("Starting a new %s subscription for %s with load %d with interval %s which expires in %s", sc.subscriptionType, sc.ecliAddr.IP, l, sc.interval, sc.expire)
+	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, sc.eclisa)
+	log.Debugf("Starting a new %s subscription for %s with load %d with interval %s which expires in %s", sc.subscriptionType, sc.eclisa, l, sc.interval, sc.expire)
 
 	// Send first message right away
 	sc.worker.queue <- sc
@@ -94,12 +94,12 @@ func (sc *SubscriptionClient) Start() {
 
 	defer intervalTicker.Stop()
 	for range intervalTicker.C {
-		log.Debugf("Subscription %s for %s is valid until %s", sc.subscriptionType, sc.ecliAddr.IP, sc.expire)
+		log.Debugf("Subscription %s for %s is valid until %s", sc.subscriptionType, sc.eclisa, sc.expire)
 		if !sc.Running() {
 			return
 		}
 		if time.Now().After(sc.expire) {
-			log.Infof("Subscription %s is over for %s", sc.subscriptionType, sc.ecliAddr.IP)
+			log.Infof("Subscription %s is over for %s", sc.subscriptionType, sc.eclisa)
 			// TODO send cancellation
 			return
 		}

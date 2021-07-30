@@ -211,9 +211,15 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 		return err
 	}
 
+	// get FD of the connection. Can be optimized by doing this when connection is created
+	connFd, err := ptp.ConnFd(eventConn)
+	if err != nil {
+		return err
+	}
+
 	// we need to enable HW or SW timestamps on event port
-	if err := ptp.EnableHWTimestampsSocket(eventConn, c.cfg.Iface); err != nil {
-		if err := ptp.EnableSWTimestampsSocket(eventConn); err != nil {
+	if err := ptp.EnableHWTimestampsSocket(connFd, c.cfg.Iface); err != nil {
+		if err := ptp.EnableSWTimestampsSocket(connFd); err != nil {
 			return fmt.Errorf("failed to enable timestamps on port %d: %v", ptp.PortEvent, err)
 		}
 		log.Warningf("Failed to enable hardware timestamps on port %d, falling back to software timestamps", ptp.PortEvent)

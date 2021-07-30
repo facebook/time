@@ -95,13 +95,7 @@ func ioctlTimestamp(fd int, ifname string) error {
 }
 
 // EnableHWTimestampsSocket enables HW timestamps on the socket
-func EnableHWTimestampsSocket(conn *net.UDPConn, iface string) error {
-	// Get socket fd
-	connFd, err := ConnFd(conn)
-	if err != nil {
-		return err
-	}
-
+func EnableHWTimestampsSocket(connFd int, iface string) error {
 	if err := ioctlTimestamp(connFd, iface); err != nil {
 		return err
 	}
@@ -123,13 +117,7 @@ func EnableHWTimestampsSocket(conn *net.UDPConn, iface string) error {
 }
 
 // EnableSWTimestampsSocket enables SW timestamps on the socket
-func EnableSWTimestampsSocket(conn *net.UDPConn) error {
-	// Get socket fd
-	connFd, err := ConnFd(conn)
-	if err != nil {
-		return err
-	}
-
+func EnableSWTimestampsSocket(connFd int) error {
 	flags := unix.SOF_TIMESTAMPING_TX_SOFTWARE |
 		unix.SOF_TIMESTAMPING_RX_SOFTWARE |
 		unix.SOF_TIMESTAMPING_SOFTWARE |
