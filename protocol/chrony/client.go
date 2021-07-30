@@ -109,6 +109,16 @@ func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 			ReplyHead: *head,
 			NTPData:   *newNTPData(data),
 		}, nil
+	case rpyServerStats2:
+		data := new(ServerStats2)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplyServerStats2{
+			ReplyHead:    *head,
+			ServerStats2: *data,
+		}, nil
 	default:
 		return nil, fmt.Errorf("not implemented reply type %d from %+v", head.Reply, head)
 	}

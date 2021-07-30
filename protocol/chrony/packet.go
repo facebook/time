@@ -63,11 +63,12 @@ const (
 
 // reply types
 const (
-	rpyNSources    ReplyType = 2
-	rpySourceData  ReplyType = 3
-	rpyTracking    ReplyType = 5
-	rpyServerStats ReplyType = 14
-	rpyNTPData     ReplyType = 16
+	rpyNSources     ReplyType = 2
+	rpySourceData   ReplyType = 3
+	rpyTracking     ReplyType = 5
+	rpyServerStats  ReplyType = 14
+	rpyNTPData      ReplyType = 16
+	rpyServerStats2 ReplyType = 22
 )
 
 // source modes
@@ -500,6 +501,24 @@ type ServerStats struct {
 type ReplyServerStats struct {
 	ReplyHead
 	ServerStats
+}
+
+// ServerStats2 contains parsed version of 'serverstats2' reply
+type ServerStats2 struct {
+	NTPHits     uint32
+	NKEHits     uint32
+	CMDHits     uint32
+	NTPDrops    uint32
+	NKEDrops    uint32
+	CMDDrops    uint32
+	LogDrops    uint32
+	NTPAuthHits uint32
+}
+
+// ReplyServerStats2 is a usable version of 'serverstats2' response
+type ReplyServerStats2 struct {
+	ReplyHead
+	ServerStats2
 }
 
 // here go request constuctors

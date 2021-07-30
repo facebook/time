@@ -68,11 +68,14 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 	statsReq := chrony.NewServerStatsPacket()
 	packet, err = n.Client.Communicate(statsReq)
 	if err == nil {
-		stats, ok := packet.(*chrony.ReplyServerStats)
-		if !ok {
+		switch stats := packet.(type) {
+		case *chrony.ReplyServerStats:
+			result.ServerStats = NewServerStatsFromChrony(stats)
+		case *chrony.ReplyServerStats2:
+			result.ServerStats = NewServerStatsFromChrony2(stats)
+		default:
 			return nil, errors.Errorf("Got wrong 'serverstats' response %+v", packet)
 		}
-		result.ServerStats = NewServerStatsFromChrony(stats)
 		log.Debugf("ServerStats: %v", result.ServerStats)
 	} else if err != chrony.ErrNotAuthorized {
 		return nil, errors.Wrap(err, "failed to get 'serverstats' response")
