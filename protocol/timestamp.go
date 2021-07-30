@@ -19,7 +19,6 @@ package protocol
 // Here we have basic HW and SW timestamping support
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -50,6 +49,19 @@ const (
 	// SWTIMESTAMP is a software timestmap
 	SWTIMESTAMP = "software"
 )
+
+var timestamping = unix.SO_TIMESTAMPING_NEW
+
+func init() {
+	// if kernel is older than 5, it doesn't support unix.SO_TIMESTAMPING_NEW
+	var uname unix.Utsname
+	if err := unix.Uname(&uname); err == nil {
+		if uname.Release[0] < '5' {
+			// reading such timestamps on 32bit machines will not work, but we can't support everything
+			timestamping = unix.SO_TIMESTAMPING
+		}
+	}
+}
 
 // Ifreq is a struct for ioctl ethernet manipulation syscalls.
 type ifreq struct {
@@ -106,7 +118,7 @@ func EnableHWTimestampsSocket(connFd int, iface string) error {
 		unix.SOF_TIMESTAMPING_RAW_HARDWARE |
 		unix.SOF_TIMESTAMPING_OPT_TSONLY // Makes the kernel return the timestamp as a cmsg alongside an empty packet, as opposed to alongside the original packet.
 	// Allow reading of HW timestamps via socket
-	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_TIMESTAMPING, flags); err != nil {
+	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, timestamping, flags); err != nil {
 		return err
 	}
 
@@ -123,7 +135,7 @@ func EnableSWTimestampsSocket(connFd int) error {
 		unix.SOF_TIMESTAMPING_SOFTWARE |
 		unix.SOF_TIMESTAMPING_OPT_TSONLY // Makes the kernel return the timestamp as a cmsg alongside an empty packet, as opposed to alongside the original packet.
 	// Allow reading of SW timestamps via socket
-	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_TIMESTAMPING, flags); err != nil {
+	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, timestamping, flags); err != nil {
 		return err
 	}
 
@@ -135,12 +147,11 @@ func EnableSWTimestampsSocket(connFd int) error {
 
 // byteToTime converts LittleEndian bytes into a timestamp
 func byteToTime(data []byte) (time.Time, error) {
-	ts := &unix.Timespec{}
-	b := bytes.NewReader(data)
-	if err := binary.Read(b, binary.LittleEndian, ts); err != nil {
-		return time.Time{}, err
-	}
-	return time.Unix(ts.Unix()), nil
+	// __kernel_timespec from linux/time_types.h
+	// can't use unix.Timespec which is old timespec that uses 32bit ints on 386 platform.
+	sec := int64(binary.LittleEndian.Uint64(data[0:8]))
+	nsec := int64(binary.LittleEndian.Uint64(data[8:]))
+	return time.Unix(sec, nsec), nil
 }
 
 /*
@@ -150,8 +161,8 @@ feature. Only one field is non-zero at any time. Most timestamps
 are passed in ts[0]. Hardware timestamps are passed in ts[2].
 */
 func scmDataToTime(data []byte) (ts time.Time, err error) {
-	// on 32bit platforms Timespec is 8bits, while on 64bit it's 16bits
-	size := unsafe.Sizeof(unix.Timespec{})
+	// 2 x 64bit ints
+	size := 16
 	// first, try to use hardware timestamps
 	ts, err = byteToTime(data[size*2 : size*3])
 	if err != nil {
@@ -228,7 +239,7 @@ func ReadTXtimestampBuf(connFd int, buf, oob, tbuf, toob []byte) (time.Time, int
 
 	for _, m := range ms {
 		// There are different socket control messages in the queue from time to time
-		if m.Header.Level == unix.SOL_SOCKET && m.Header.Type == unix.SO_TIMESTAMPING {
+		if m.Header.Level == unix.SOL_SOCKET && int(m.Header.Type) == timestamping {
 			timestamp, err := scmDataToTime(m.Data)
 			if err != nil {
 				return time.Time{}, 0, err
@@ -277,7 +288,7 @@ func ReadPacketWithRXTimestampBuf(conn *net.UDPConn, buf, oob []byte) (int, net.
 
 	for _, m := range ms {
 		// There are different socket control messages in the queue from time to time
-		if m.Header.Level == unix.SOL_SOCKET && m.Header.Type == unix.SO_TIMESTAMPING {
+		if m.Header.Level == unix.SOL_SOCKET && int(m.Header.Type) == timestamping {
 			timestamp, err := scmDataToTime(m.Data)
 			if err != nil {
 				return 0, addr.IP, time.Time{}, err

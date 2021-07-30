@@ -19,7 +19,6 @@ package protocol
 import (
 	"fmt"
 	"net"
-	"strconv"
 	"testing"
 	"time"
 
@@ -29,10 +28,6 @@ import (
 // Testing conversion so if Packet structure changes we notice
 func Test_byteToTime(t *testing.T) {
 	timeb := []byte{63, 155, 21, 96, 0, 0, 0, 0, 52, 156, 191, 42, 0, 0, 0, 0}
-	// time_t is 32 bit on Linux 386
-	if strconv.IntSize == 32 {
-		timeb = []byte{63, 155, 21, 96, 52, 156, 191, 42}
-	}
 	res, err := byteToTime(timeb)
 	require.Nil(t, err)
 
@@ -81,23 +76,6 @@ func Test_scmDataToTime(t *testing.T) {
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	}
-	if strconv.IntSize == 32 {
-		hwData = []byte{
-			0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0,
-			63, 155, 21, 96, 52, 156, 191, 42,
-		}
-		swData = []byte{
-			63, 155, 21, 96, 52, 156, 191, 42,
-			0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0,
-		}
-		noData = []byte{
-			0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0,
-		}
 	}
 
 	tests := []struct {
