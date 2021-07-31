@@ -262,13 +262,13 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 		doneChan := make(chan error, 1)
 		go func() {
 			for {
-				response, addr, rxtx, err := ptp.ReadPacketWithRXTimestamp(eventConn)
+				response, addr, rxtx, err := ptp.ReadPacketWithRXTimestamp(connFd)
 				if err != nil {
 					doneChan <- err
 					return
 				}
 				log.Debugf("got packet on port 319, addr = %v", addr)
-				if !addr.Equal(eventAddr.IP) {
+				if !ptp.SockaddrToIP(addr).Equal(eventAddr.IP) {
 					log.Warningf("ignoring packets from server %v", addr)
 				}
 				c.inChan <- &inPacket{data: response, ts: rxtx}

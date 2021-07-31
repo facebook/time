@@ -96,7 +96,7 @@ func (s *sendWorker) Start() {
 		copy(tbuf, emptyb)
 		copy(toob, emptyo)
 
-		log.Debugf("Processing client: %s", c.eclisa)
+		log.Debugf("Processing client: %s", ptp.SockaddrToIP(c.eclisa))
 
 		switch c.subscriptionType {
 		case ptp.MessageSync:
@@ -109,7 +109,7 @@ func (s *sendWorker) Start() {
 				continue
 			}
 			log.Debugf("Sending sync")
-			log.Tracef("Sending sync %+v to %s from %d", sync, c.eclisa, econn.LocalAddr().(*net.UDPAddr).Port)
+			log.Tracef("Sending sync %+v to %s from %d", sync, ptp.SockaddrToIP(c.eclisa), econn.LocalAddr().(*net.UDPAddr).Port)
 
 			err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
 			if err != nil {
@@ -137,7 +137,7 @@ func (s *sendWorker) Start() {
 				continue
 			}
 			log.Debugf("Sending followup")
-			log.Tracef("Sending followup %+v with ts: %s to %s from %d", followup, followup.FollowUpBody.PreciseOriginTimestamp.Time(), c.gclisa, gconn.LocalAddr().(*net.UDPAddr).Port)
+			log.Tracef("Sending followup %+v with ts: %s to %s from %d", followup, followup.FollowUpBody.PreciseOriginTimestamp.Time(), ptp.SockaddrToIP(c.gclisa), gconn.LocalAddr().(*net.UDPAddr).Port)
 
 			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 			if err != nil {
@@ -154,7 +154,7 @@ func (s *sendWorker) Start() {
 				continue
 			}
 			log.Debugf("Sending announce")
-			log.Tracef("Sending announce %+v to %s from %d", announce, c.gclisa, gconn.LocalAddr().(*net.UDPAddr).Port)
+			log.Tracef("Sending announce %+v to %s from %d", announce, ptp.SockaddrToIP(c.gclisa), gconn.LocalAddr().(*net.UDPAddr).Port)
 
 			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 			if err != nil {

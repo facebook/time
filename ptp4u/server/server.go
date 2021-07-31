@@ -45,9 +45,6 @@ type Server struct {
 	// server source fds
 	eFd int
 	gFd int
-	// client socket addresses
-	eclisa syncMapSock
-	gclisa syncMapSock
 }
 
 // Start the workers send bind to event and general UDP ports
@@ -63,8 +60,6 @@ func (s *Server) Start() error {
 	}
 
 	s.clients.init()
-	s.eclisa.init()
-	s.gclisa.init()
 
 	// Call wg.Add(1) ONLY once
 	// If ANY goroutine finishes no matter how many of them we run
@@ -180,8 +175,13 @@ func (s *Server) startEventListener() {
 		log.Fatalf("Unrecognized timestamp type: %s", s.Config.TimestampType)
 	}
 
+	err = unix.SetNonblock(s.eFd, false)
+	if err != nil {
+		log.Fatalf("Failed to set socket to blocking: %s", err)
+	}
+
 	for {
-		request, clientIP, rxTS, err := ptp.ReadPacketWithRXTimestamp(eventConn)
+		request, clisa, rxTS, err := ptp.ReadPacketWithRXTimestamp(s.eFd)
 		if err != nil {
 			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
 			continue
@@ -190,7 +190,7 @@ func (s *Server) startEventListener() {
 			rxTS = rxTS.Add(s.Config.UTCOffset)
 		}
 		log.Debugf("Read RX timestamp: %v", rxTS)
-		go s.handleEventMessage(request, clientIP, rxTS)
+		go s.handleEventMessage(request, clisa, rxTS)
 	}
 }
 
@@ -210,25 +210,30 @@ func (s *Server) startGeneralListener() {
 		log.Fatalf("Getting general connection FD: %s", err)
 	}
 
+	err = unix.SetNonblock(s.gFd, false)
+	if err != nil {
+		log.Fatalf("Failed to set socket to blocking: %s", err)
+	}
+
 	for {
-		request, clientIP, err := readPacket(generalConn)
+		request, clisa, err := readPacket(s.gFd)
 		if err != nil {
 			log.Errorf("Failed to read packet on %s: %v", generalConn.LocalAddr(), err)
 			continue
 		}
 
-		go s.handleGeneralMessage(request, clientIP)
+		go s.handleGeneralMessage(request, clisa)
 	}
 }
 
-func readPacket(conn *net.UDPConn) (packet []byte, clientIP net.IP, err error) {
+func readPacket(connFd int) ([]byte, unix.Sockaddr, error) {
 	buf := make([]byte, 128)
-	n, remAddr, err := conn.ReadFromUDP(buf)
+	n, saddr, err := unix.Recvfrom(connFd, buf, 0)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return buf[:n], remAddr.IP, err
+	return buf[:n], saddr, err
 }
 
 // client retrieves an existing client
@@ -260,7 +265,7 @@ func (s *Server) registerSubscription(clientID ptp.PortIdentity, st ptp.MessageT
 }
 
 // handleEventMessage is a handler which gets called every time Event Message arrives
-func (s *Server) handleEventMessage(request []byte, clientIP net.IP, rxTS time.Time) {
+func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS time.Time) {
 	msgType, err := ptp.ProbeMsgType(request)
 	if err != nil {
 		log.Errorf("Failed to probe the ptp message type: %v", err)
@@ -284,8 +289,7 @@ func (s *Server) handleEventMessage(request []byte, clientIP net.IP, rxTS time.T
 			return
 		}
 		// Client socket addr
-		gclisa := s.gclisa.loadOrStore(clientIP, ptp.PortGeneral)
-		err = unix.Sendto(s.gFd, dRespb, 0, gclisa)
+		err = unix.Sendto(s.gFd, dRespb, 0, clisa)
 		if err != nil {
 			log.Errorf("Failed to send the delay response: %v", err)
 			return
@@ -302,7 +306,7 @@ func (s *Server) handleEventMessage(request []byte, clientIP net.IP, rxTS time.T
 }
 
 // handleGeneralMessage is a handler which gets called every time General Message arrives
-func (s *Server) handleGeneralMessage(request []byte, clientIP net.IP) {
+func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 	msgType, err := ptp.ProbeMsgType(request)
 	if err != nil {
 		log.Errorf("Failed to probe the ptp message type: %v", err)
@@ -324,9 +328,6 @@ func (s *Server) handleGeneralMessage(request []byte, clientIP net.IP) {
 				log.Debugf("Got %s grant request", grantType)
 				log.Tracef("Got %s grant request: %+v", grantType, tlv)
 
-				// Socket addr
-				gclisa := s.gclisa.loadOrStore(clientIP, ptp.PortGeneral)
-
 				switch grantType {
 				case ptp.MessageAnnounce, ptp.MessageSync:
 					duration := v.DurationField
@@ -345,7 +346,8 @@ func (s *Server) handleGeneralMessage(request []byte, clientIP net.IP) {
 
 					sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
 					if sc == nil {
-						eclisa := s.eclisa.loadOrStore(clientIP, ptp.PortEvent)
+						ip := ptp.SockaddrToIP(gclisa)
+						eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
 						sc = NewSubscriptionClient(s.sw[s.findLeastBusyWorkerID()], eclisa, gclisa, grantType, s.Config, intervalt, expire)
 						s.registerSubscription(signaling.SourcePortIdentity, grantType, sc)
 					} else {
@@ -476,45 +478,5 @@ func (s *Server) delayRespPacket(h *ptp.Header, received time.Time) *ptp.DelayRe
 			ReceiveTimestamp:       ptp.NewTimestamp(received),
 			RequestingPortIdentity: h.SourcePortIdentity,
 		},
-	}
-}
-
-// Sock
-type syncMapSock struct {
-	sync.Mutex
-	m map[string]unix.Sockaddr
-}
-
-// init initializes the underlying map
-func (s *syncMapSock) init() {
-	s.m = make(map[string]unix.Sockaddr)
-}
-
-// load gets the value by the key
-func (s *syncMapSock) loadOrStore(ip net.IP, port int) unix.Sockaddr {
-	key := ip.String()
-	s.Lock()
-	val, ok := s.m[key]
-	s.Unlock()
-	if !ok {
-		val = ipToSockaddr(ip, port)
-		s.Lock()
-		s.m[key] = val
-		s.Unlock()
-	}
-
-	return val
-}
-
-// Somewhat copy from https://github.com/golang/go/blob/16cd770e0668a410a511680b2ac1412e554bd27b/src/net/ipsock_posix.go#L145
-func ipToSockaddr(ip net.IP, port int) unix.Sockaddr {
-	if ip.To4() != nil {
-		sa := &unix.SockaddrInet4{Port: port}
-		copy(sa.Addr[:], ip.To4())
-		return sa
-	} else {
-		sa := &unix.SockaddrInet6{Port: port}
-		copy(sa.Addr[:], ip.To16())
-		return sa
 	}
 }
