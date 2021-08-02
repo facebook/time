@@ -19,7 +19,6 @@ package checker
 import (
 	"strconv"
 
-	"github.com/facebookincubator/ntp/protocol/chrony"
 	"github.com/facebookincubator/ntp/protocol/control"
 )
 
@@ -54,12 +53,4 @@ func NewServerStatsFromNTP(p *control.NTPControlMsg) (*ServerStats, error) {
 		PacketsReceived: received,
 		PacketsDropped:  dropped,
 	}, nil
-}
-
-// NewServerStatsFromChrony constructs ServerStats from chrony ServerStats packet
-func NewServerStatsFromChrony(s *chrony.ReplyServerStats) *ServerStats {
-	return &ServerStats{
-		PacketsReceived: uint64(s.NTPHits),
-		PacketsDropped:  uint64(s.NTPDrops),
-	}
 }

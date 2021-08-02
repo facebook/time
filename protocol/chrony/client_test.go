@@ -94,37 +94,6 @@ func TestCommunicateError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestCommunicateAuthError(t *testing.T) {
-	var err error
-	buf := &bytes.Buffer{}
-	packetHead := ReplyHead{
-		Version:  protoVersionNumber,
-		PKTType:  pktTypeCmdReply,
-		Res1:     0,
-		Res2:     0,
-		Command:  reqTracking,
-		Reply:    rpyTracking,
-		Status:   sttUnauth,
-		Pad1:     0,
-		Pad2:     0,
-		Pad3:     0,
-		Sequence: 2,
-		Pad4:     0,
-		Pad5:     0,
-	}
-	packetBody := replyTrackingContent{}
-	err = binary.Write(buf, binary.BigEndian, packetHead)
-	require.NoError(t, err)
-	err = binary.Write(buf, binary.BigEndian, packetBody)
-	require.NoError(t, err)
-	conn := newConn([]*bytes.Buffer{
-		buf,
-	})
-	client := Client{Sequence: 1, Connection: conn}
-	_, err = client.Communicate(NewTrackingPacket())
-	require.Equal(t, ErrNotAuthorized, err)
-}
-
 // Test if we can read reply properly
 func TestCommunicateOK(t *testing.T) {
 	var err error

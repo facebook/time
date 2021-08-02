@@ -46,26 +46,12 @@ const netFile = "/proc/net/udp6"
 
 func getDefaultServer(f flavour) string {
 	if f == flavourChrony {
-		_, err := os.Stat(chrony.ChronySocketPath)
-		if err == nil {
-			return chrony.ChronySocketPath
-		}
-		log.Debug("Unable to use chrony socket for communication, operating in degraded mode")
 		return "[::1]:323"
 	}
 	return "[::1]:123"
 }
 
 func getFlavour() flavour {
-	// chronyd can be listening to udp6 intermittently,
-	// it is safe to talk to chronyd over unix socket
-	_, err := os.Stat(chrony.ChronySocketPath)
-	if err == nil {
-		log.Debug("Will use chrony protocol (socket file found)")
-		return flavourChrony
-	}
-
-	// fallback to udp detetcion, such as when running from tupperware
 	f, err := os.Open(netFile)
 	if err != nil {
 		return flavourNTPD

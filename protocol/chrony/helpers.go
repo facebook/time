@@ -25,13 +25,6 @@ import (
 	"unicode"
 )
 
-// ErrNotAuthorized identifies failure to get data from Chronyd when we are not authorized to do so
-// (like asking for NTP data over UDP instead of unix socket)
-var ErrNotAuthorized = errors.New("Not authorized")
-
-// ChronySocketPath is the default path to chronyd socket
-const ChronySocketPath = "/var/run/chrony/chronyd.sock"
-
 // ChronyPortV6Regexp is a regexp to find anything that listens on port 323
 // hex(323) = '0x143'
 const ChronyPortV6Regexp = "[0-9]+: [0-9A-Z]+:0143 .*"
