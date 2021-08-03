@@ -29,10 +29,10 @@ import (
 
 func TestRunning(t *testing.T) {
 	sc := SubscriptionClient{}
-	sc.setRunning(true)
+	sc.SetRunning(true)
 	require.True(t, sc.Running())
 
-	sc.setRunning(false)
+	sc.SetRunning(false)
 	require.False(t, sc.Running())
 }
 

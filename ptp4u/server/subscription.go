@@ -74,7 +74,7 @@ func NewSubscriptionClient(w *sendWorker, eclisa, gclisa unix.Sockaddr, st ptp.M
 
 // Start launches the subscription timers and exit on expire
 func (sc *SubscriptionClient) Start() {
-	sc.setRunning(true)
+	sc.SetRunning(true)
 	defer sc.Stop()
 	/*
 		Calculate the load we add to the worker. Ex:
@@ -123,7 +123,7 @@ func (sc *SubscriptionClient) Once() {
 }
 
 // setRunning sets running with the lock
-func (sc *SubscriptionClient) setRunning(running bool) {
+func (sc *SubscriptionClient) SetRunning(running bool) {
 	sc.Lock()
 	defer sc.Unlock()
 	sc.running = running
@@ -138,7 +138,7 @@ func (sc *SubscriptionClient) Running() bool {
 
 // Stop stops the subscription
 func (sc *SubscriptionClient) Stop() {
-	sc.setRunning(false)
+	sc.SetRunning(false)
 }
 
 type syncMapCli struct {
