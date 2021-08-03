@@ -239,7 +239,7 @@ func (s *Server) startGeneralListener() {
 	for i := 0; i < s.Config.Workers; i++ {
 		go func() {
 			defer wg.Done()
-			buf := make([]byte, 128)
+			buf := make([]byte, ptp.PayloadSizeBytes)
 
 			for {
 				bbuf, clisa, err := readPacketBuf(s.gFd, buf)
