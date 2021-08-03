@@ -36,7 +36,7 @@ const (
 	// Control is a socket control message containing TX/RX timestamp
 	// If the read fails we may endup with multiple timestamps in the buffer
 	// which is best to read right away
-	ControlSizeBytes = 128
+	ControlSizeBytes = 64
 	// ptp packets usually up to 66 bytes
 	PayloadSizeBytes = 128
 	// look only for X sequential TS
