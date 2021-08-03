@@ -180,18 +180,33 @@ func (s *Server) startEventListener() {
 		log.Fatalf("Failed to set socket to blocking: %s", err)
 	}
 
-	for {
-		request, clisa, rxTS, err := ptp.ReadPacketWithRXTimestamp(s.eFd)
-		if err != nil {
-			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
-			continue
-		}
-		if s.Config.TimestampType != ptp.HWTIMESTAMP {
-			rxTS = rxTS.Add(s.Config.UTCOffset)
-		}
-		log.Debugf("Read RX timestamp: %v", rxTS)
-		go s.handleEventMessage(request, clisa, rxTS)
+	// Call wg.Add(1) ONLY once
+	// If ANY goroutine finishes no matter how many of them we run
+	// wg.Done will unblock
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	for i := 0; i < s.Config.Workers; i++ {
+		go func() {
+			defer wg.Done()
+			buf := make([]byte, ptp.PayloadSizeBytes)
+			oob := make([]byte, ptp.ControlSizeBytes)
+
+			for {
+				bbuf, clisa, rxTS, err := ptp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
+				if err != nil {
+					log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
+					continue
+				}
+				if s.Config.TimestampType != ptp.HWTIMESTAMP {
+					rxTS = rxTS.Add(s.Config.UTCOffset)
+				}
+				log.Debugf("Read RX timestamp: %v", rxTS)
+				s.handleEventMessage(buf[:bbuf], clisa, rxTS)
+			}
+		}()
 	}
+	wg.Wait()
 }
 
 // startGeneralListener launches the listener which listens to announces
@@ -215,25 +230,37 @@ func (s *Server) startGeneralListener() {
 		log.Fatalf("Failed to set socket to blocking: %s", err)
 	}
 
-	for {
-		request, clisa, err := readPacket(s.gFd)
-		if err != nil {
-			log.Errorf("Failed to read packet on %s: %v", generalConn.LocalAddr(), err)
-			continue
-		}
+	// Call wg.Add(1) ONLY once
+	// If ANY goroutine finishes no matter how many of them we run
+	// wg.Done will unblock
+	var wg sync.WaitGroup
+	wg.Add(1)
 
-		go s.handleGeneralMessage(request, clisa)
+	for i := 0; i < s.Config.Workers; i++ {
+		go func() {
+			defer wg.Done()
+			buf := make([]byte, 128)
+
+			for {
+				bbuf, clisa, err := readPacketBuf(s.gFd, buf)
+				if err != nil {
+					log.Errorf("Failed to read packet on %s: %v", generalConn.LocalAddr(), err)
+					continue
+				}
+				s.handleGeneralMessage(buf[:bbuf], clisa)
+			}
+		}()
 	}
+	wg.Wait()
 }
 
-func readPacket(connFd int) ([]byte, unix.Sockaddr, error) {
-	buf := make([]byte, 128)
+func readPacketBuf(connFd int, buf []byte) (int, unix.Sockaddr, error) {
 	n, saddr, err := unix.Recvfrom(connFd, buf, 0)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, err
 	}
 
-	return buf[:n], saddr, err
+	return n, saddr, err
 }
 
 // client retrieves an existing client
@@ -284,6 +311,7 @@ func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS ti
 
 		log.Debugf("Got delay request")
 		log.Tracef("Got delay request: %+v", dReq)
+		// Find subscription
 		sc := s.findSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
 		if sc == nil {
 			log.Warningf("Delay request from %s is not in the subscription list", ptp.SockaddrToIP(clisa))
