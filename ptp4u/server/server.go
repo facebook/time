@@ -311,7 +311,6 @@ func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS ti
 
 		log.Debugf("Got delay request")
 		log.Tracef("Got delay request: %+v", dReq)
-		// Find subscription
 		sc := s.findSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
 		if sc == nil {
 			log.Warningf("Delay request from %s is not in the subscription list", ptp.SockaddrToIP(clisa))
