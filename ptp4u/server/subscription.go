@@ -44,9 +44,10 @@ type SubscriptionClient struct {
 	gclisa unix.Sockaddr
 
 	// packets
-	syncP     *ptp.SyncDelayReq
-	followupP *ptp.FollowUp
-	announceP *ptp.Announce
+	syncP      *ptp.SyncDelayReq
+	followupP  *ptp.FollowUp
+	announceP  *ptp.Announce
+	delayRespP *ptp.DelayResp
 }
 
 // NewSubscriptionClient gets minimal required arguments to create a subscription
@@ -64,6 +65,7 @@ func NewSubscriptionClient(w *sendWorker, eclisa, gclisa unix.Sockaddr, st ptp.M
 	s.initSync()
 	s.initFollowup()
 	s.initAnnounce()
+	s.initDelayResp()
 
 	return s
 }
@@ -87,7 +89,7 @@ func (sc *SubscriptionClient) Start() {
 	log.Debugf("Starting a new %s subscription for %s with load %d with interval %s which expires in %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa), l, sc.interval, sc.expire)
 
 	// Send first message right away
-	sc.worker.queue <- sc
+	sc.Once()
 
 	intervalTicker := time.NewTicker(sc.interval)
 	oldInterval := sc.interval
@@ -109,8 +111,13 @@ func (sc *SubscriptionClient) Start() {
 			oldInterval = sc.interval
 		}
 		// Add myself to the worker queue
-		sc.worker.queue <- sc
+		sc.Once()
 	}
+}
+
+// Once adds itself to the worker queue once
+func (sc *SubscriptionClient) Once() {
+	sc.worker.queue <- sc
 }
 
 // setRunning sets running with the lock
@@ -321,4 +328,37 @@ func (sc *SubscriptionClient) announcePacket() *ptp.Announce {
 	sc.announceP.CurrentUTCOffset = int16(sc.serverConfig.UTCOffset.Seconds())
 
 	return sc.announceP
+}
+
+func (sc *SubscriptionClient) initDelayResp() {
+	sc.delayRespP = &ptp.DelayResp{
+		Header: ptp.Header{
+			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageDelayResp, 0),
+			Version:         ptp.Version,
+			MessageLength:   uint16(binary.Size(ptp.DelayResp{})),
+			DomainNumber:    0,
+			FlagField:       ptp.FlagUnicast,
+			SequenceID:      0,
+			SourcePortIdentity: ptp.PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: sc.serverConfig.clockIdentity,
+			},
+			LogMessageInterval: 0x7f,
+			ControlField:       3,
+			CorrectionField:    0,
+		},
+		DelayRespBody: ptp.DelayRespBody{},
+	}
+}
+
+// delayRespPacket generates ptp Delay Response packet
+func (sc *SubscriptionClient) delayRespPacket(h *ptp.Header, received time.Time) *ptp.DelayResp {
+	sc.delayRespP.SequenceID = h.SequenceID
+	sc.delayRespP.CorrectionField = h.CorrectionField
+	sc.delayRespP.DelayRespBody = ptp.DelayRespBody{
+		ReceiveTimestamp:       ptp.NewTimestamp(received),
+		RequestingPortIdentity: h.SourcePortIdentity,
+	}
+
+	return sc.delayRespP
 }

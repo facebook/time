@@ -272,6 +272,8 @@ func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS ti
 		return
 	}
 
+	s.Stats.IncRX(msgType)
+
 	switch msgType {
 	case ptp.MessageDelayReq:
 		dReq := &ptp.SyncDelayReq{}
@@ -282,27 +284,17 @@ func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS ti
 
 		log.Debugf("Got delay request")
 		log.Tracef("Got delay request: %+v", dReq)
-		dResp := s.delayRespPacket(&dReq.Header, rxTS)
-		dRespb, err := ptp.Bytes(dResp)
-		if err != nil {
-			log.Errorf("Failed to prepare the delay response: %v", err)
+		sc := s.findSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
+		if sc == nil {
+			log.Warningf("Delay request from %s is not in the subscription list", ptp.SockaddrToIP(clisa))
 			return
 		}
-		// Client socket addr
-		err = unix.Sendto(s.gFd, dRespb, 0, clisa)
-		if err != nil {
-			log.Errorf("Failed to send the delay response: %v", err)
-			return
-		}
-		log.Debugf("Sent delay response")
-		log.Tracef("Sent delay response: %+v", dResp)
-		s.Stats.IncTX(ptp.MessageDelayResp)
-
+		_ = sc.delayRespPacket(&dReq.Header, rxTS)
+		sc.Once()
 	default:
 		log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)
 	}
 
-	s.Stats.IncRX(msgType)
 }
 
 // handleGeneralMessage is a handler which gets called every time General Message arrives
@@ -365,6 +357,13 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 					s.sendGrant(grantType, signaling, v.MsgTypeAndReserved, interval, duration, gclisa)
 
 				case ptp.MessageDelayResp:
+					sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
+					if sc == nil {
+						ip := ptp.SockaddrToIP(gclisa)
+						eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
+						sc = NewSubscriptionClient(s.sw[s.findLeastBusyWorkerID()], eclisa, gclisa, grantType, s.Config, time.Second, time.Time{})
+						s.registerSubscription(signaling.SourcePortIdentity, grantType, sc)
+					}
 					// Send confirmation grant
 					s.sendGrant(grantType, signaling, v.MsgTypeAndReserved, 0, v.DurationField, gclisa)
 
@@ -454,29 +453,4 @@ func (s *Server) grantUnicastTransmission(sg *ptp.Signaling, mt ptp.UnicastMsgTy
 	m.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{}))
 
 	return m
-}
-
-// delayRespPacket generates ptp Delay Response packet
-func (s *Server) delayRespPacket(h *ptp.Header, received time.Time) *ptp.DelayResp {
-	return &ptp.DelayResp{
-		Header: ptp.Header{
-			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageDelayResp, 0),
-			Version:         ptp.Version,
-			MessageLength:   uint16(binary.Size(ptp.DelayResp{})),
-			DomainNumber:    0,
-			FlagField:       ptp.FlagUnicast,
-			SequenceID:      h.SequenceID,
-			SourcePortIdentity: ptp.PortIdentity{
-				PortNumber:    1,
-				ClockIdentity: s.Config.clockIdentity,
-			},
-			LogMessageInterval: 0x7f,
-			ControlField:       3,
-			CorrectionField:    h.CorrectionField,
-		},
-		DelayRespBody: ptp.DelayRespBody{
-			ReceiveTimestamp:       ptp.NewTimestamp(received),
-			RequestingPortIdentity: h.SourcePortIdentity,
-		},
-	}
 }
