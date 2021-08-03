@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"encoding/binary"
 	"net"
 	"testing"
 	"time"
@@ -206,4 +207,37 @@ func TestDelayRespPacket(t *testing.T) {
 	require.Equal(t, sp, dResp.Header.SourcePortIdentity)
 	require.Equal(t, now.Unix(), dResp.DelayRespBody.ReceiveTimestamp.Time().Unix())
 	require.Equal(t, ptp.FlagUnicast, dResp.Header.FlagField)
+}
+
+func TestGrantPacket(t *testing.T) {
+	interval := 3 * time.Second
+
+	w := &sendWorker{}
+	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
+	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sg := &ptp.Signaling{}
+
+	mt := ptp.NewUnicastMsgTypeAndFlags(ptp.MessageAnnounce, 0)
+	i, err := ptp.NewLogInterval(interval)
+	require.NoError(t, err)
+	duration := uint32(3)
+
+	tlv := &ptp.GrantUnicastTransmissionTLV{
+		TLVHead: ptp.TLVHead{
+			TLVType:     ptp.TLVGrantUnicastTransmission,
+			LengthField: uint16(binary.Size(ptp.GrantUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{})),
+		},
+		MsgTypeAndReserved:    mt,
+		LogInterMessagePeriod: i,
+		DurationField:         duration,
+		Reserved:              0,
+		Renewal:               1,
+	}
+
+	sc.initGrant()
+	grant := sc.grantPacket(sg, mt, i, duration)
+
+	require.Equal(t, tlv, grant.TLVs[0])
+
 }
