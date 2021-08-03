@@ -153,28 +153,3 @@ func TestServerInventoryClients(t *testing.T) {
 	s.inventoryClients()
 	require.Equal(t, 0, len(s.clients.keys()))
 }
-
-func TestDelayRespPacket(t *testing.T) {
-	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
-	st := stats.NewJSONStats()
-	s := Server{Config: c, Stats: st}
-	sp := ptp.PortIdentity{
-		PortNumber:    1,
-		ClockIdentity: ptp.ClockIdentity(1234),
-	}
-	h := &ptp.Header{
-		SequenceID:         42,
-		CorrectionField:    ptp.NewCorrection(100500),
-		SourcePortIdentity: sp,
-	}
-
-	now := time.Now()
-
-	dResp := s.delayRespPacket(h, now)
-	// Unicast flag
-	require.Equal(t, uint16(42), dResp.Header.SequenceID)
-	require.Equal(t, 100500, int(dResp.Header.CorrectionField.Nanoseconds()))
-	require.Equal(t, sp, dResp.Header.SourcePortIdentity)
-	require.Equal(t, now.Unix(), dResp.DelayRespBody.ReceiveTimestamp.Time().Unix())
-	require.Equal(t, ptp.FlagUnicast, dResp.Header.FlagField)
-}

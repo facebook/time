@@ -101,7 +101,6 @@ func (s *sendWorker) Start() {
 		switch c.subscriptionType {
 		case ptp.MessageSync:
 			// send sync
-
 			sync := c.syncPacket()
 			n, err := ptp.BytesTo(sync, buf)
 			if err != nil {
@@ -150,7 +149,7 @@ func (s *sendWorker) Start() {
 			announce := c.announcePacket()
 			n, err := ptp.BytesTo(announce, buf)
 			if err != nil {
-				log.Errorf("Failed to prepare the unicast announce: %v", err)
+				log.Errorf("Failed to prepare the announce packet: %v", err)
 				continue
 			}
 			log.Debugf("Sending announce")
@@ -158,10 +157,28 @@ func (s *sendWorker) Start() {
 
 			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 			if err != nil {
-				log.Errorf("Failed to send the unicast announce: %v", err)
+				log.Errorf("Failed to send the announce packet: %v", err)
 				continue
 			}
 			s.stats.IncTX(ptp.MessageAnnounce)
+
+		case ptp.MessageDelayResp:
+			// send delay response
+			n, err := ptp.BytesTo(c.delayRespP, buf)
+			if err != nil {
+				log.Errorf("Failed to prepare the delay response packet: %v", err)
+				continue
+			}
+			log.Debugf("Sending delay response")
+			log.Tracef("Sending delay response %+v to %s from %d", c.delayRespP, ptp.SockaddrToIP(c.gclisa), gconn.LocalAddr().(*net.UDPAddr).Port)
+
+			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
+			if err != nil {
+				log.Errorf("Failed to send the delay response: %v", err)
+				return
+			}
+			s.stats.IncTX(ptp.MessageDelayResp)
+
 		default:
 			log.Errorf("Unknown subscription type: %v", c.subscriptionType)
 			continue

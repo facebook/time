@@ -115,3 +115,95 @@ func TestSyncMapCli(t *testing.T) {
 	require.Equal(t, val, valt)
 	require.Equal(t, 1, len(sm.keys()))
 }
+
+func TestSyncPacket(t *testing.T) {
+	sequenceID := uint16(42)
+
+	w := &sendWorker{}
+	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
+	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc.sequenceID = sequenceID
+
+	sc.initSync()
+	sync := sc.syncPacket()
+	require.Equal(t, sequenceID, sync.Header.SequenceID)
+}
+
+func TestFollowupPacket(t *testing.T) {
+	sequenceID := uint16(42)
+	now := time.Now()
+	interval := 3 * time.Second
+
+	w := &sendWorker{}
+	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
+	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc.sequenceID = sequenceID
+	sc.interval = interval
+
+	i, err := ptp.NewLogInterval(interval)
+	require.NoError(t, err)
+
+	sc.initFollowup()
+	followup := sc.followupPacket(now)
+	require.Equal(t, sequenceID, followup.Header.SequenceID)
+	require.Equal(t, i, followup.Header.LogMessageInterval)
+	require.Equal(t, now.Unix(), followup.FollowUpBody.PreciseOriginTimestamp.Time().Unix())
+}
+
+func TestAnnouncePacket(t *testing.T) {
+	UTCOffset := 3 * time.Second
+	sequenceID := uint16(42)
+	interval := 3 * time.Second
+
+	w := &sendWorker{}
+	c := &Config{clockIdentity: ptp.ClockIdentity(1234), UTCOffset: UTCOffset}
+	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc.sequenceID = sequenceID
+	sc.interval = interval
+
+	i, err := ptp.NewLogInterval(interval)
+	require.NoError(t, err)
+
+	sp := ptp.PortIdentity{
+		PortNumber:    1,
+		ClockIdentity: ptp.ClockIdentity(1234),
+	}
+
+	sc.initAnnounce()
+	announce := sc.announcePacket()
+	require.Equal(t, sequenceID, announce.Header.SequenceID)
+	require.Equal(t, sp, announce.Header.SourcePortIdentity)
+	require.Equal(t, i, announce.Header.LogMessageInterval)
+	require.Equal(t, int16(UTCOffset.Seconds()), announce.AnnounceBody.CurrentUTCOffset)
+}
+
+func TestDelayRespPacket(t *testing.T) {
+	sequenceID := uint16(42)
+	now := time.Now()
+
+	w := &sendWorker{}
+	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
+	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+
+	sp := ptp.PortIdentity{
+		PortNumber:    1,
+		ClockIdentity: ptp.ClockIdentity(1234),
+	}
+	h := &ptp.Header{
+		SequenceID:         sequenceID,
+		CorrectionField:    ptp.NewCorrection(100500),
+		SourcePortIdentity: sp,
+	}
+
+	sc.initDelayResp()
+	dResp := sc.delayRespPacket(h, now)
+	require.Equal(t, sequenceID, dResp.Header.SequenceID)
+	require.Equal(t, 100500, int(dResp.Header.CorrectionField.Nanoseconds()))
+	require.Equal(t, sp, dResp.Header.SourcePortIdentity)
+	require.Equal(t, now.Unix(), dResp.DelayRespBody.ReceiveTimestamp.Time().Unix())
+	require.Equal(t, ptp.FlagUnicast, dResp.Header.FlagField)
+}
