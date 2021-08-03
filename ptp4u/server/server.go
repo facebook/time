@@ -22,7 +22,6 @@ In addition, it run checker, announce and stats implementations
 package server
 
 import (
-	"encoding/binary"
 	"fmt"
 	"net"
 	"sync"
@@ -354,13 +353,6 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 
 					interval := v.LogInterMessagePeriod
 					intervalt := interval.Duration()
-					// Reject queries out of limit
-					if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
-						log.Warningf("Got too demanding %s request. Duration: %s, Interval: %s. Rejecting. Consider changing -maxsubduration and -minsubinterval", grantType, durationt, intervalt)
-						s.sendGrant(grantType, signaling, v.MsgTypeAndReserved, interval, 0, gclisa)
-						return
-					}
-
 					expire := time.Now().Add(durationt)
 
 					sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
@@ -375,13 +367,20 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 						sc.interval = intervalt
 					}
 
+					// Reject queries out of limit
+					if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
+						log.Warningf("Got too demanding %s request. Duration: %s, Interval: %s. Rejecting. Consider changing -maxsubduration and -minsubinterval", grantType, durationt, intervalt)
+						s.sendGrant(sc, grantType, signaling, v.MsgTypeAndReserved, interval, 0, gclisa)
+						return
+					}
+
 					// The subscription is over or a new cli. Starting
 					if !sc.running {
 						go sc.Start()
 					}
 
 					// Send confirmation grant
-					s.sendGrant(grantType, signaling, v.MsgTypeAndReserved, interval, duration, gclisa)
+					s.sendGrant(sc, grantType, signaling, v.MsgTypeAndReserved, interval, duration, gclisa)
 
 				case ptp.MessageDelayResp:
 					sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
@@ -392,7 +391,7 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 						s.registerSubscription(signaling.SourcePortIdentity, grantType, sc)
 					}
 					// Send confirmation grant
-					s.sendGrant(grantType, signaling, v.MsgTypeAndReserved, 0, v.DurationField, gclisa)
+					s.sendGrant(sc, grantType, signaling, v.MsgTypeAndReserved, 0, v.DurationField, gclisa)
 
 				default:
 					log.Errorf("Got unsupported grant type %s", grantType)
@@ -435,8 +434,8 @@ func (s *Server) inventoryClients() {
 }
 
 // sendGrant sends a Unicast Grant message
-func (s *Server) sendGrant(t ptp.MessageType, sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32, sa unix.Sockaddr) {
-	grant := s.grantUnicastTransmission(sg, mt, interval, duration)
+func (s *Server) sendGrant(sc *SubscriptionClient, t ptp.MessageType, sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32, sa unix.Sockaddr) {
+	grant := sc.grantPacket(sg, mt, interval, duration)
 	grantb, err := ptp.Bytes(grant)
 	if err != nil {
 		log.Errorf("Failed to prepare the unicast grant: %v", err)
@@ -450,34 +449,4 @@ func (s *Server) sendGrant(t ptp.MessageType, sg *ptp.Signaling, mt ptp.UnicastM
 	log.Debugf("Sent unicast grant")
 	log.Tracef("Sent unicast grant: %+v, %+v", grant, grant.TLVs[0])
 	s.Stats.IncTXSignaling(t)
-}
-
-// grantUnicastTransmission generates ptp Signaling packet granting the requested subscription
-func (s *Server) grantUnicastTransmission(sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32) *ptp.Signaling {
-	m := &ptp.Signaling{
-		Header:             sg.Header,
-		TargetPortIdentity: sg.SourcePortIdentity,
-		TLVs: []ptp.TLV{
-			&ptp.GrantUnicastTransmissionTLV{
-				TLVHead: ptp.TLVHead{
-					TLVType:     ptp.TLVGrantUnicastTransmission,
-					LengthField: uint16(binary.Size(ptp.GrantUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{})),
-				},
-				MsgTypeAndReserved:    mt,
-				LogInterMessagePeriod: interval,
-				DurationField:         duration,
-				Reserved:              0,
-				Renewal:               1,
-			},
-		},
-	}
-
-	m.Header.FlagField = ptp.FlagUnicast
-	m.Header.SourcePortIdentity = ptp.PortIdentity{
-		PortNumber:    1,
-		ClockIdentity: s.Config.clockIdentity,
-	}
-	m.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{}))
-
-	return m
 }

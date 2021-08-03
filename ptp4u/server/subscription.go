@@ -48,6 +48,7 @@ type SubscriptionClient struct {
 	followupP  *ptp.FollowUp
 	announceP  *ptp.Announce
 	delayRespP *ptp.DelayResp
+	grant      *ptp.Signaling
 }
 
 // NewSubscriptionClient gets minimal required arguments to create a subscription
@@ -66,6 +67,7 @@ func NewSubscriptionClient(w *sendWorker, eclisa, gclisa unix.Sockaddr, st ptp.M
 	s.initFollowup()
 	s.initAnnounce()
 	s.initDelayResp()
+	s.initGrant()
 
 	return s
 }
@@ -361,4 +363,39 @@ func (sc *SubscriptionClient) delayRespPacket(h *ptp.Header, received time.Time)
 	}
 
 	return sc.delayRespP
+}
+
+func (sc *SubscriptionClient) initGrant() {
+	sc.grant = &ptp.Signaling{
+		Header:             ptp.Header{},
+		TargetPortIdentity: ptp.PortIdentity{},
+		TLVs: []ptp.TLV{
+			&ptp.GrantUnicastTransmissionTLV{},
+		},
+	}
+}
+
+// grantUnicastTransmission generates ptp Signaling packet granting the requested subscription
+func (sc *SubscriptionClient) grantPacket(sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32) *ptp.Signaling {
+	sc.grant.Header = sg.Header
+	sc.grant.TargetPortIdentity = sg.SourcePortIdentity
+	sc.grant.Header.FlagField = ptp.FlagUnicast
+	sc.grant.Header.SourcePortIdentity = ptp.PortIdentity{
+		PortNumber:    1,
+		ClockIdentity: sc.serverConfig.clockIdentity,
+	}
+	sc.grant.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{}))
+
+	sc.grant.TLVs[0] = &ptp.GrantUnicastTransmissionTLV{
+		TLVHead: ptp.TLVHead{
+			TLVType:     ptp.TLVGrantUnicastTransmission,
+			LengthField: uint16(binary.Size(ptp.GrantUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{})),
+		},
+		MsgTypeAndReserved:    mt,
+		LogInterMessagePeriod: interval,
+		DurationField:         duration,
+		Reserved:              0,
+		Renewal:               1,
+	}
+	return sc.grant
 }
