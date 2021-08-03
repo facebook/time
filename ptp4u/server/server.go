@@ -348,11 +348,8 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 
 				switch grantType {
 				case ptp.MessageAnnounce, ptp.MessageSync:
-					duration := v.DurationField
-					durationt := time.Duration(duration) * time.Second
-
-					interval := v.LogInterMessagePeriod
-					intervalt := interval.Duration()
+					durationt := time.Duration(v.DurationField) * time.Second
+					intervalt := v.LogInterMessagePeriod.Duration()
 					expire := time.Now().Add(durationt)
 
 					sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
@@ -370,7 +367,7 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 					// Reject queries out of limit
 					if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
 						log.Warningf("Got too demanding %s request. Duration: %s, Interval: %s. Rejecting. Consider changing -maxsubduration and -minsubinterval", grantType, durationt, intervalt)
-						s.sendGrant(sc, grantType, signaling, v.MsgTypeAndReserved, interval, 0, gclisa)
+						s.sendGrant(sc, grantType, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0, gclisa)
 						return
 					}
 
@@ -380,7 +377,7 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 					}
 
 					// Send confirmation grant
-					s.sendGrant(sc, grantType, signaling, v.MsgTypeAndReserved, interval, duration, gclisa)
+					s.sendGrant(sc, grantType, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
 
 				case ptp.MessageDelayResp:
 					sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
@@ -390,6 +387,8 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 						sc = NewSubscriptionClient(s.sw[s.findLeastBusyWorkerID()], eclisa, gclisa, grantType, s.Config, time.Second, time.Time{})
 						s.registerSubscription(signaling.SourcePortIdentity, grantType, sc)
 					}
+					sc.SetRunning(true)
+
 					// Send confirmation grant
 					s.sendGrant(sc, grantType, signaling, v.MsgTypeAndReserved, 0, v.DurationField, gclisa)
 
