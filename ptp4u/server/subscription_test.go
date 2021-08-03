@@ -40,7 +40,7 @@ func TestSubscriptionStart(t *testing.T) {
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 1 * time.Minute
 	expire := time.Now().Add(1 * time.Second)
-	sa := ipToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
 	go sc.Start()
@@ -55,7 +55,7 @@ func TestSubscriptionStop(t *testing.T) {
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 10 * time.Millisecond
 	expire := time.Now().Add(1 * time.Second)
-	sa := ipToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
 	go sc.Start()
@@ -69,7 +69,7 @@ func TestSubscriptionStop(t *testing.T) {
 func TestSubscriptionflags(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
-	sa := ipToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
 	require.Equal(t, ptp.FlagUnicast|ptp.FlagTwoStep, sc.syncPacket().Header.FlagField)

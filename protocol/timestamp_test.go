@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 )
 
 // Testing conversion so if Packet structure changes we notice
@@ -114,4 +115,34 @@ func Test_scmDataToTime(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIPToSockaddr(t *testing.T) {
+	ip4 := net.ParseIP("127.0.0.1")
+	ip6 := net.ParseIP("::1")
+	port := 123
+
+	expectedSA4 := &unix.SockaddrInet4{Port: port}
+	copy(expectedSA4.Addr[:], ip4.To4())
+
+	expectedSA6 := &unix.SockaddrInet6{Port: port}
+	copy(expectedSA6.Addr[:], ip6.To16())
+
+	sa4 := IPToSockaddr(ip4, port)
+	sa6 := IPToSockaddr(ip6, port)
+
+	require.Equal(t, expectedSA4, sa4)
+	require.Equal(t, expectedSA6, sa6)
+}
+
+func TestSockaddrToIP(t *testing.T) {
+	ip4 := net.ParseIP("127.0.0.1")
+	ip6 := net.ParseIP("::1")
+	port := 123
+
+	sa4 := IPToSockaddr(ip4, port)
+	sa6 := IPToSockaddr(ip6, port)
+
+	require.Equal(t, ip4.String(), SockaddrToIP(sa4).String())
+	require.Equal(t, ip6.String(), SockaddrToIP(sa6).String())
 }

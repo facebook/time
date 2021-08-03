@@ -83,8 +83,8 @@ func (sc *SubscriptionClient) Start() {
 	l := 10 * time.Second.Microseconds() / sc.interval.Microseconds()
 	atomic.AddInt64(&sc.worker.load, l)
 	defer atomic.AddInt64(&sc.worker.load, -l)
-	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, sc.eclisa)
-	log.Debugf("Starting a new %s subscription for %s with load %d with interval %s which expires in %s", sc.subscriptionType, sc.eclisa, l, sc.interval, sc.expire)
+	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
+	log.Debugf("Starting a new %s subscription for %s with load %d with interval %s which expires in %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa), l, sc.interval, sc.expire)
 
 	// Send first message right away
 	sc.worker.queue <- sc
@@ -94,12 +94,12 @@ func (sc *SubscriptionClient) Start() {
 
 	defer intervalTicker.Stop()
 	for range intervalTicker.C {
-		log.Debugf("Subscription %s for %s is valid until %s", sc.subscriptionType, sc.eclisa, sc.expire)
+		log.Debugf("Subscription %s for %s is valid until %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa), sc.expire)
 		if !sc.Running() {
 			return
 		}
 		if time.Now().After(sc.expire) {
-			log.Infof("Subscription %s is over for %s", sc.subscriptionType, sc.eclisa)
+			log.Infof("Subscription %s is over for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
 			// TODO send cancellation
 			return
 		}

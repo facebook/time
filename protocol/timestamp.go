@@ -264,19 +264,19 @@ func ReadTXtimestamp(connFd int) (time.Time, int, error) {
 }
 
 // ReadPacketWithRXTimestamp returns byte packet and HW RX timestamp
-func ReadPacketWithRXTimestamp(conn *net.UDPConn) ([]byte, net.IP, time.Time, error) {
+func ReadPacketWithRXTimestamp(connFd int) ([]byte, unix.Sockaddr, time.Time, error) {
 	// Accessing hw timestamp
 	buf := make([]byte, PayloadSizeBytes)
 	oob := make([]byte, ControlSizeBytes)
 
-	bbuf, ip, t, err := ReadPacketWithRXTimestampBuf(conn, buf, oob)
-	return buf[:bbuf], ip, t, err
+	bbuf, sa, t, err := ReadPacketWithRXTimestampBuf(connFd, buf, oob)
+	return buf[:bbuf], sa, t, err
 }
 
 // ReadPacketWithRXTimestampBuf writes byte packet into provide buffer buf, and returns number of bytes copied to the buffer, client ip and HW RX timestamp.
 // oob buffer can be reaused after ReadPacketWithRXTimestampBuf call.
-func ReadPacketWithRXTimestampBuf(conn *net.UDPConn, buf, oob []byte) (int, net.IP, time.Time, error) {
-	bbuf, boob, _, addr, err := conn.ReadMsgUDP(buf, oob)
+func ReadPacketWithRXTimestampBuf(connFd int, buf, oob []byte) (int, unix.Sockaddr, time.Time, error) {
+	bbuf, boob, _, saddr, err := unix.Recvmsg(connFd, buf, oob, 0)
 	if err != nil {
 		return 0, nil, time.Time{}, fmt.Errorf("failed to read timestamp: %v", err)
 	}
@@ -291,11 +291,37 @@ func ReadPacketWithRXTimestampBuf(conn *net.UDPConn, buf, oob []byte) (int, net.
 		if m.Header.Level == unix.SOL_SOCKET && int(m.Header.Type) == timestamping {
 			timestamp, err := scmDataToTime(m.Data)
 			if err != nil {
-				return 0, addr.IP, time.Time{}, err
+				return 0, nil, time.Time{}, err
 			}
 
-			return bbuf, addr.IP, timestamp, nil
+			return bbuf, saddr, timestamp, nil
 		}
 	}
 	return 0, nil, time.Time{}, fmt.Errorf("failed to find RX HW timestamp in MSG_ERRQUEUE")
+}
+
+// IPToSockaddr converts IP + port into a socket address
+// Somewhat copy from https://github.com/golang/go/blob/16cd770e0668a410a511680b2ac1412e554bd27b/src/net/ipsock_posix.go#L145
+func IPToSockaddr(ip net.IP, port int) unix.Sockaddr {
+	if ip.To4() != nil {
+		sa := &unix.SockaddrInet4{Port: port}
+		copy(sa.Addr[:], ip.To4())
+		return sa
+	} else {
+		sa := &unix.SockaddrInet6{Port: port}
+		copy(sa.Addr[:], ip.To16())
+		return sa
+	}
+}
+
+// SockaddrToIP converts socket address to an IP
+// Somewhat copy from https://github.com/golang/go/blob/658b5e66ecbc41a49e6fb5aa63c5d9c804cf305f/src/net/udpsock_posix.go#L15
+func SockaddrToIP(sa unix.Sockaddr) net.IP {
+	switch sa := sa.(type) {
+	case *unix.SockaddrInet4:
+		return sa.Addr[0:]
+	case *unix.SockaddrInet6:
+		return sa.Addr[0:]
+	}
+	return nil
 }
