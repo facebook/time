@@ -36,11 +36,13 @@ const (
 	// Control is a socket control message containing TX/RX timestamp
 	// If the read fails we may endup with multiple timestamps in the buffer
 	// which is best to read right away
-	ControlSizeBytes = 64
+	ControlSizeBytes = 128
 	// ptp packets usually up to 66 bytes
 	PayloadSizeBytes = 128
 	// look only for X sequential TS
 	maxTXTS = 100
+	// Socket Control Message Header Offset on Linux
+	SocketControlMessageHeaderOffset = 16
 )
 
 const (
@@ -154,6 +156,22 @@ func byteToTime(data []byte) (time.Time, error) {
 	return time.Unix(sec, nsec), nil
 }
 
+// socketControlMessageTimestamp is a very optimised version of ParseSocketControlMessage
+// https://github.com/golang/go/blob/2ebe77a2fda1ee9ff6fd9a3e08933ad1ebaea039/src/syscall/sockcmsg_unix.go#L40
+// which only parses the timestamp message type.
+func socketControlMessageTimestamp(b []byte) (time.Time, error) {
+	mlen := 0
+	for i := 0; i < len(b); i += mlen {
+		h := (*unix.Cmsghdr)(unsafe.Pointer(&b[i]))
+		mlen = int(h.Len)
+
+		if h.Level == unix.SOL_SOCKET && int(h.Type) == timestamping {
+			return scmDataToTime(b[i+SocketControlMessageHeaderOffset : i+mlen])
+		}
+	}
+	return time.Time{}, fmt.Errorf("failed to find timestamp in socket control message")
+}
+
 /*
 scmDataToTime parses SocketControlMessage Data field into time.Time.
 The structure can return up to three timestamps. This is a legacy
@@ -231,24 +249,8 @@ func ReadTXtimestampBuf(connFd int, buf, oob, tbuf, toob []byte) (time.Time, int
 	if !txfound {
 		return time.Time{}, attempts, fmt.Errorf("no TX timestamp found after %d tries", maxTXTS)
 	}
-
-	ms, err := unix.ParseSocketControlMessage(oob[:boob])
-	if err != nil {
-		return time.Time{}, 0, err
-	}
-
-	for _, m := range ms {
-		// There are different socket control messages in the queue from time to time
-		if m.Header.Level == unix.SOL_SOCKET && int(m.Header.Type) == timestamping {
-			timestamp, err := scmDataToTime(m.Data)
-			if err != nil {
-				return time.Time{}, 0, err
-			}
-
-			return timestamp, attempts, nil
-		}
-	}
-	return time.Time{}, 0, fmt.Errorf("failed to find TX HW timestamp in MSG_ERRQUEUE")
+	timestamp, err := socketControlMessageTimestamp(oob[:boob])
+	return timestamp, attempts, err
 }
 
 // ReadTXtimestamp returns HW TX timestamp
@@ -281,23 +283,8 @@ func ReadPacketWithRXTimestampBuf(connFd int, buf, oob []byte) (int, unix.Sockad
 		return 0, nil, time.Time{}, fmt.Errorf("failed to read timestamp: %v", err)
 	}
 
-	ms, err := unix.ParseSocketControlMessage(oob[:boob])
-	if err != nil {
-		return 0, nil, time.Time{}, err
-	}
-
-	for _, m := range ms {
-		// There are different socket control messages in the queue from time to time
-		if m.Header.Level == unix.SOL_SOCKET && int(m.Header.Type) == timestamping {
-			timestamp, err := scmDataToTime(m.Data)
-			if err != nil {
-				return 0, nil, time.Time{}, err
-			}
-
-			return bbuf, saddr, timestamp, nil
-		}
-	}
-	return 0, nil, time.Time{}, fmt.Errorf("failed to find RX HW timestamp in MSG_ERRQUEUE")
+	timestamp, err := socketControlMessageTimestamp(oob[:boob])
+	return bbuf, saddr, timestamp, err
 }
 
 // IPToSockaddr converts IP + port into a socket address

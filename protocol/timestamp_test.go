@@ -146,3 +146,19 @@ func TestSockaddrToIP(t *testing.T) {
 	require.Equal(t, ip4.String(), SockaddrToIP(sa4).String())
 	require.Equal(t, ip6.String(), SockaddrToIP(sa6).String())
 }
+
+/*
+o: [60 0 0 0 0 0 0 0 41 0 0 0 25 0 0 0 42 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 64 0 0 0 0 0 0 0 1 0 0 0 65 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 230 180 10 97 0 0 0 0 239 83 199 39 0 0 0 0 ]
+Data [{Header:{Len:60 Level:41 Type:25} Data:[42 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]}, {Header:{Len:64 Level:1 Type:65} Data:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 230 180 10 97 0 0 0 0 239 83 199 39 0 0 0 0]}]
+*/
+func TestSocketControlMessageTimestamp(t *testing.T) {
+	if timestamping != unix.SO_TIMESTAMPING_NEW {
+		t.Skip("This test supports SO_TIMESTAMPING_NEW only. No sample of SO_TIMESTAMPING")
+	}
+
+	b := []byte{60, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 25, 0, 0, 0, 42, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 65, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 230, 180, 10, 97, 0, 0, 0, 0, 239, 83, 199, 39, 0, 0, 0, 0}
+	ts, err := socketControlMessageTimestamp(b)
+	require.NoError(t, err)
+	require.Equal(t, int64(1628091622667374575), ts.UnixNano())
+
+}
