@@ -162,15 +162,16 @@ func (s *Server) startEventListener() {
 	}
 
 	// Enable RX timestamps. Delay requests need to be timestamped by ptp4u on receipt
-	if s.Config.TimestampType == ptp.HWTIMESTAMP {
+	switch s.Config.TimestampType {
+	case ptp.HWTIMESTAMP:
 		if err := ptp.EnableHWTimestampsSocket(s.eFd, s.Config.Interface); err != nil {
 			log.Fatalf("Cannot enable hardware RX timestamps")
 		}
-	} else if s.Config.TimestampType == ptp.SWTIMESTAMP {
+	case ptp.SWTIMESTAMP:
 		if err := ptp.EnableSWTimestampsSocket(s.eFd); err != nil {
 			log.Fatalf("Cannot enable software RX timestamps")
 		}
-	} else {
+	default:
 		log.Fatalf("Unrecognized timestamp type: %s", s.Config.TimestampType)
 	}
 
@@ -315,7 +316,7 @@ func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS ti
 			log.Warningf("Delay request from %s is not in the subscription list", ptp.SockaddrToIP(clisa))
 			return
 		}
-		_ = sc.delayRespPacket(&dReq.Header, rxTS)
+		sc.delayRespPacket(&dReq.Header, rxTS)
 		sc.Once()
 	default:
 		log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)
@@ -367,7 +368,7 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 					// Reject queries out of limit
 					if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
 						log.Warningf("Got too demanding %s request. Duration: %s, Interval: %s. Rejecting. Consider changing -maxsubduration and -minsubinterval", grantType, durationt, intervalt)
-						s.sendGrant(sc, grantType, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0, gclisa)
+						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0, gclisa)
 						return
 					}
 
@@ -377,7 +378,7 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 					}
 
 					// Send confirmation grant
-					s.sendGrant(sc, grantType, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
+					s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
 
 				case ptp.MessageDelayResp:
 					sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
@@ -390,7 +391,7 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 					sc.SetRunning(true)
 
 					// Send confirmation grant
-					s.sendGrant(sc, grantType, signaling, v.MsgTypeAndReserved, 0, v.DurationField, gclisa)
+					s.sendGrant(sc, signaling, v.MsgTypeAndReserved, 0, v.DurationField, gclisa)
 
 				default:
 					log.Errorf("Got unsupported grant type %s", grantType)
@@ -433,7 +434,7 @@ func (s *Server) inventoryClients() {
 }
 
 // sendGrant sends a Unicast Grant message
-func (s *Server) sendGrant(sc *SubscriptionClient, t ptp.MessageType, sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32, sa unix.Sockaddr) {
+func (s *Server) sendGrant(sc *SubscriptionClient, sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32, sa unix.Sockaddr) {
 	grant := sc.grantPacket(sg, mt, interval, duration)
 	grantb, err := ptp.Bytes(grant)
 	if err != nil {
@@ -447,5 +448,5 @@ func (s *Server) sendGrant(sc *SubscriptionClient, t ptp.MessageType, sg *ptp.Si
 	}
 	log.Debugf("Sent unicast grant")
 	log.Tracef("Sent unicast grant: %+v, %+v", grant, grant.TLVs[0])
-	s.Stats.IncTXSignaling(t)
+	s.Stats.IncTXSignaling(sc.subscriptionType)
 }
