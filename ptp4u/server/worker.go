@@ -49,15 +49,16 @@ func (s *sendWorker) Start() {
 	}
 
 	// Syncs sent from event port
-	if s.config.TimestampType == ptp.HWTIMESTAMP {
+	switch s.config.TimestampType {
+	case ptp.HWTIMESTAMP:
 		if err := ptp.EnableHWTimestampsSocket(eFd, s.config.Interface); err != nil {
 			log.Fatalf("Failed to enable RX hardware timestamps: %v", err)
 		}
-	} else if s.config.TimestampType == ptp.SWTIMESTAMP {
+	case ptp.SWTIMESTAMP:
 		if err := ptp.EnableSWTimestampsSocket(eFd); err != nil {
 			log.Fatalf("Unable to enable RX software timestamps")
 		}
-	} else {
+	default:
 		log.Fatalf("Unrecognized timestamp type: %s", s.config.TimestampType)
 	}
 
@@ -83,19 +84,9 @@ func (s *sendWorker) Start() {
 	tbuf := make([]byte, ptp.PayloadSizeBytes)
 	toob := make([]byte, ptp.ControlSizeBytes)
 
-	// arrays of zeroes to reset buffers
-	emptyb := make([]byte, ptp.PayloadSizeBytes)
-	emptyo := make([]byte, ptp.ControlSizeBytes)
-
 	// TODO: Enable dscp accordingly
 
 	for c := range s.queue {
-		// clean up buffers
-		copy(bbuf, emptyb)
-		copy(oob, emptyo)
-		copy(tbuf, emptyb)
-		copy(toob, emptyo)
-
 		log.Debugf("Processing client: %s", ptp.SockaddrToIP(c.eclisa))
 
 		switch c.subscriptionType {
@@ -115,7 +106,7 @@ func (s *sendWorker) Start() {
 				log.Errorf("Failed to send the sync packet: %v", err)
 				continue
 			}
-			s.stats.IncTX(ptp.MessageSync)
+			s.stats.IncTX(c.subscriptionType)
 
 			txTS, attempts, err := ptp.ReadTXtimestampBuf(eFd, bbuf, oob, tbuf, toob)
 			s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
@@ -160,7 +151,7 @@ func (s *sendWorker) Start() {
 				log.Errorf("Failed to send the announce packet: %v", err)
 				continue
 			}
-			s.stats.IncTX(ptp.MessageAnnounce)
+			s.stats.IncTX(c.subscriptionType)
 
 		case ptp.MessageDelayResp:
 			// send delay response
@@ -177,7 +168,7 @@ func (s *sendWorker) Start() {
 				log.Errorf("Failed to send the delay response: %v", err)
 				return
 			}
-			s.stats.IncTX(ptp.MessageDelayResp)
+			s.stats.IncTX(c.subscriptionType)
 
 		default:
 			log.Errorf("Unknown subscription type: %v", c.subscriptionType)
