@@ -17,13 +17,50 @@ limitations under the License.
 package checker
 
 import (
+	"fmt"
 	"io"
+	"net"
+	"os"
+	"path"
 
 	"github.com/facebookincubator/ntp/protocol/chrony"
 	"github.com/facebookincubator/ntp/protocol/control"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
+
+type chronyConn struct {
+	net.Conn
+	local string
+}
+
+// DialUnix opens a unixgram connection with chrony
+func DialUnix(address string) (*chronyConn, error) {
+	base, _ := path.Split(address)
+	local := path.Join(base, fmt.Sprintf("chronyc.%d.sock", os.Getpid()))
+	conn, err := net.DialUnix("unixgram",
+		&net.UnixAddr{Name: local, Net: "unixgram"},
+		&net.UnixAddr{Name: address, Net: "unixgram"},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(local, 0666); err != nil {
+		return nil, err
+	}
+	return &chronyConn{Conn: conn, local: local}, nil
+}
+
+// Close closes the unixgram connection with chrony
+func (c *chronyConn) Close() error {
+	if err := os.RemoveAll(c.local); err != nil {
+		return err
+	}
+	if err := c.Conn.Close(); err != nil {
+		return err
+	}
+	return nil
+}
 
 type chronyClient interface {
 	Communicate(packet chrony.RequestPacket) (chrony.ResponsePacket, error)
