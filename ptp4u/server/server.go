@@ -201,7 +201,6 @@ func (s *Server) startEventListener() {
 				if s.Config.TimestampType != ptp.HWTIMESTAMP {
 					rxTS = rxTS.Add(s.Config.UTCOffset)
 				}
-				log.Debugf("Read RX timestamp: %v", rxTS)
 				s.handleEventMessage(buf[:bbuf], clisa, rxTS)
 			}
 		}()
@@ -310,13 +309,12 @@ func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS ti
 		}
 
 		log.Debugf("Got delay request")
-		log.Tracef("Got delay request: %+v", dReq)
 		sc := s.findSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
 		if sc == nil {
 			log.Warningf("Delay request from %s is not in the subscription list", ptp.SockaddrToIP(clisa))
 			return
 		}
-		sc.delayRespPacket(&dReq.Header, rxTS)
+		sc.UpdateDelayResp(&dReq.Header, rxTS)
 		sc.Once()
 	default:
 		log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)
@@ -345,7 +343,6 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 			case *ptp.RequestUnicastTransmissionTLV:
 				grantType := v.MsgTypeAndReserved.MsgType()
 				log.Debugf("Got %s grant request", grantType)
-				log.Tracef("Got %s grant request: %+v", grantType, tlv)
 
 				switch grantType {
 				case ptp.MessageAnnounce, ptp.MessageSync:
@@ -435,8 +432,8 @@ func (s *Server) inventoryClients() {
 
 // sendGrant sends a Unicast Grant message
 func (s *Server) sendGrant(sc *SubscriptionClient, sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32, sa unix.Sockaddr) {
-	grant := sc.grantPacket(sg, mt, interval, duration)
-	grantb, err := ptp.Bytes(grant)
+	sc.UpdateGrant(sg, mt, interval, duration)
+	grantb, err := ptp.Bytes(sc.Grant())
 	if err != nil {
 		log.Errorf("Failed to prepare the unicast grant: %v", err)
 		return
@@ -447,6 +444,5 @@ func (s *Server) sendGrant(sc *SubscriptionClient, sg *ptp.Signaling, mt ptp.Uni
 		return
 	}
 	log.Debugf("Sent unicast grant")
-	log.Tracef("Sent unicast grant: %+v, %+v", grant, grant.TLVs[0])
 	s.Stats.IncTXSignaling(sc.subscriptionType)
 }
