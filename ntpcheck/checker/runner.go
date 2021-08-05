@@ -18,10 +18,8 @@ package checker
 
 import (
 	"bufio"
-	"fmt"
 	"net"
 	"os"
-	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -93,7 +91,6 @@ func getChecker(f flavour, conn net.Conn) Runner {
 
 // RunCheck is a simple wrapper to connect to address and run NTPCheck.Run()
 func RunCheck(address string) (*NTPCheckResult, error) {
-	var checker Runner
 	var err error
 	var conn net.Conn
 	timeout := 5 * time.Second
@@ -103,36 +100,18 @@ func RunCheck(address string) (*NTPCheckResult, error) {
 		address = getDefaultServer(flavour)
 	}
 	if strings.HasPrefix(address, "/") {
-		addr, err := net.ResolveUnixAddr("unixgram", address)
-		if err != nil {
-			return nil, err
-		}
-		base, _ := path.Split(address)
-		local := path.Join(base, fmt.Sprintf("chronyc.%d.sock", os.Getpid()))
-		localAddr, _ := net.ResolveUnixAddr("unixgram", local)
-		conn, err = net.DialUnix("unixgram", localAddr, addr)
-		if err != nil {
-			return nil, err
-		}
-		defer conn.Close()
-		defer os.RemoveAll(local)
-		if err := os.Chmod(local, 0666); err != nil {
-			return nil, err
-		}
-		if err := conn.SetReadDeadline(deadline); err != nil {
-			return nil, err
-		}
+		conn, err = DialUnix(address)
 	} else {
 		conn, err = net.DialTimeout("udp", address, timeout)
-		if err != nil {
-			return nil, err
-		}
-		defer conn.Close()
-		if err := conn.SetReadDeadline(deadline); err != nil {
-			return nil, err
-		}
 	}
-	checker = getChecker(flavour, conn)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	if err := conn.SetReadDeadline(deadline); err != nil {
+		return nil, err
+	}
+	checker := getChecker(flavour, conn)
 	log.Debugf("connected to %s", address)
 	return checker.Run()
 }
