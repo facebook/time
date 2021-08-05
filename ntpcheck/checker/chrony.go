@@ -101,23 +101,6 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 	result.Event = "clock_sync" // no real events for chrony
 	result.SysVars = NewSystemVariablesFromChrony(tracking)
 
-	// server stats (best effort, works only over unix socket)
-	statsReq := chrony.NewServerStatsPacket()
-	packet, err = n.Client.Communicate(statsReq)
-	if err == nil {
-		switch stats := packet.(type) {
-		case *chrony.ReplyServerStats:
-			result.ServerStats = NewServerStatsFromChrony(stats)
-		case *chrony.ReplyServerStats2:
-			result.ServerStats = NewServerStatsFromChrony2(stats)
-		default:
-			return nil, errors.Errorf("Got wrong 'serverstats' response %+v", packet)
-		}
-		log.Debugf("ServerStats: %v", result.ServerStats)
-	} else if err != chrony.ErrNotAuthorized {
-		return nil, errors.Wrap(err, "failed to get 'serverstats' response")
-	}
-
 	// sources list
 	sourcesReq := chrony.NewSourcesPacket()
 	packet, err = n.Client.Communicate(sourcesReq)
@@ -176,6 +159,26 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 	}
 
 	return result, nil
+}
+
+// ServerStats return server stats
+func (n *ChronyCheck) ServerStats() (*ServerStats, error) {
+	statsReq := chrony.NewServerStatsPacket()
+	packet, err := n.Client.Communicate(statsReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get 'serverstats' response")
+	}
+	var serverStats *ServerStats
+	switch stats := packet.(type) {
+	case *chrony.ReplyServerStats:
+		serverStats = NewServerStatsFromChrony(stats)
+	case *chrony.ReplyServerStats2:
+		serverStats = NewServerStatsFromChrony2(stats)
+	default:
+		return nil, errors.Errorf("Got wrong 'serverstats' response %+v", packet)
+	}
+	log.Debugf("ServerStats: %v", serverStats)
+	return serverStats, nil
 }
 
 // NewChronyCheck is a constructor for ChronyCheck

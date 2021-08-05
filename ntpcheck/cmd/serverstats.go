@@ -26,11 +26,8 @@ import (
 	"github.com/facebookincubator/ntp/ntpcheck/checker"
 )
 
-func printServerStats(r *checker.NTPCheckResult) error {
-	if r.ServerStats == nil {
-		return fmt.Errorf("no server stats present (chrony is supported only over unix socket, required ntpd version 4.2.8+)")
-	}
-	toPrint, err := json.Marshal(r.ServerStats)
+func printServerStats(r *checker.ServerStats) error {
+	toPrint, err := json.Marshal(r)
 	if err != nil {
 		return err
 	}
@@ -49,7 +46,7 @@ var serverStatsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ConfigureVerbosity()
 
-		result, err := checker.RunCheck(server)
+		result, err := checker.RunServerStats(server)
 		if err != nil {
 			log.Fatal(err)
 		}

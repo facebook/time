@@ -127,28 +127,6 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 	}
 	result.SysVars = sys
 
-	// Server stats. Best effort (ntpd 4.2.8+)
-	// With NTPD 4.2.8+ we can read SystemStats from system variables: 'ss_received', 'ss_declined' and so on.
-	// Older NTPD 4.2.6 uses custom mode 7 NTP messaging that is not implemented in this library
-	serverVars, err := n.ReadServerVariables()
-	if err == nil {
-		log.Debugf("Got system 'read variables' response:")
-		log.Debugf("Version: %v", serverVars.GetVersion())
-		log.Debugf("Mode: %v", serverVars.GetMode())
-		log.Debugf("Response: %v", serverVars.IsResponse())
-		log.Debugf("Error: %v", serverVars.HasError())
-		log.Debugf("More: %v", serverVars.HasMore())
-		log.Debugf("Data string: '%s'", string(serverVars.Data))
-
-		if !serverVars.HasError() && len(serverVars.Data) > 0 {
-			serverStats, err := NewServerStatsFromNTP(serverVars)
-			if err != nil {
-				return nil, errors.Errorf("Got bad 'server variables' response %+v", packet)
-			}
-			result.ServerStats = serverStats
-		}
-	}
-
 	assocs, err := packet.GetAssociations()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get associations list from response packet for associationID=0")
@@ -180,6 +158,33 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 
 	}
 	return result, nil
+}
+
+// ServerStats return server stats
+func (n *NTPCheck) ServerStats() (*ServerStats, error) {
+	serverVars, err := n.ReadServerVariables()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get 'server variables' packet from NTP server")
+	}
+
+	log.Debugf("Got system 'read variables' response:")
+	log.Debugf("Version: %v", serverVars.GetVersion())
+	log.Debugf("Mode: %v", serverVars.GetMode())
+	log.Debugf("Response: %v", serverVars.IsResponse())
+	log.Debugf("Error: %v", serverVars.HasError())
+	log.Debugf("More: %v", serverVars.HasMore())
+	log.Debugf("Data string: '%s'", string(serverVars.Data))
+
+	if serverVars.HasError() || !(len(serverVars.Data) > 0) {
+		return nil, errors.Errorf("Got bad 'server variables' response %+v", serverVars)
+	}
+
+	serverStats, err := NewServerStatsFromNTP(serverVars)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create ServerStats structure from response packet for server")
+	}
+
+	return serverStats, nil
 }
 
 // NewNTPCheck is a contructor for NTPCheck
