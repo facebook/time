@@ -73,9 +73,12 @@ func TestSubscriptionflags(t *testing.T) {
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
-	require.Equal(t, ptp.FlagUnicast|ptp.FlagTwoStep, sc.syncPacket().Header.FlagField)
-	require.Equal(t, ptp.FlagUnicast, sc.followupPacket(time.Now()).Header.FlagField)
-	require.Equal(t, ptp.FlagUnicast|ptp.FlagPTPTimescale, sc.announcePacket().Header.FlagField)
+	sc.UpdateSync()
+	sc.UpdateFollowup(time.Now())
+	sc.UpdateAnnounce()
+	require.Equal(t, ptp.FlagUnicast|ptp.FlagTwoStep, sc.Sync().Header.FlagField)
+	require.Equal(t, ptp.FlagUnicast, sc.Followup().Header.FlagField)
+	require.Equal(t, ptp.FlagUnicast|ptp.FlagPTPTimescale, sc.Announce().Header.FlagField)
 }
 
 func TestSyncMapSub(t *testing.T) {
@@ -127,8 +130,9 @@ func TestSyncPacket(t *testing.T) {
 	sc.sequenceID = sequenceID
 
 	sc.initSync()
-	sync := sc.syncPacket()
-	require.Equal(t, sequenceID, sync.Header.SequenceID)
+	sc.IncSequenceID()
+	sc.UpdateSync()
+	require.Equal(t, uint16(sequenceID+1), sc.Sync().Header.SequenceID)
 }
 
 func TestFollowupPacket(t *testing.T) {
@@ -147,10 +151,11 @@ func TestFollowupPacket(t *testing.T) {
 	require.NoError(t, err)
 
 	sc.initFollowup()
-	followup := sc.followupPacket(now)
-	require.Equal(t, sequenceID, followup.Header.SequenceID)
-	require.Equal(t, i, followup.Header.LogMessageInterval)
-	require.Equal(t, now.Unix(), followup.FollowUpBody.PreciseOriginTimestamp.Time().Unix())
+	sc.IncSequenceID()
+	sc.UpdateFollowup(now)
+	require.Equal(t, sequenceID+1, sc.Followup().Header.SequenceID)
+	require.Equal(t, i, sc.Followup().Header.LogMessageInterval)
+	require.Equal(t, now.Unix(), sc.Followup().FollowUpBody.PreciseOriginTimestamp.Time().Unix())
 }
 
 func TestAnnouncePacket(t *testing.T) {
@@ -174,11 +179,12 @@ func TestAnnouncePacket(t *testing.T) {
 	}
 
 	sc.initAnnounce()
-	announce := sc.announcePacket()
-	require.Equal(t, sequenceID, announce.Header.SequenceID)
-	require.Equal(t, sp, announce.Header.SourcePortIdentity)
-	require.Equal(t, i, announce.Header.LogMessageInterval)
-	require.Equal(t, int16(UTCOffset.Seconds()), announce.AnnounceBody.CurrentUTCOffset)
+	sc.IncSequenceID()
+	sc.UpdateAnnounce()
+	require.Equal(t, sequenceID+1, sc.Announce().Header.SequenceID)
+	require.Equal(t, sp, sc.Announce().Header.SourcePortIdentity)
+	require.Equal(t, i, sc.Announce().Header.LogMessageInterval)
+	require.Equal(t, int16(UTCOffset.Seconds()), sc.Announce().AnnounceBody.CurrentUTCOffset)
 }
 
 func TestDelayRespPacket(t *testing.T) {
@@ -201,12 +207,12 @@ func TestDelayRespPacket(t *testing.T) {
 	}
 
 	sc.initDelayResp()
-	dResp := sc.delayRespPacket(h, now)
-	require.Equal(t, sequenceID, dResp.Header.SequenceID)
-	require.Equal(t, 100500, int(dResp.Header.CorrectionField.Nanoseconds()))
-	require.Equal(t, sp, dResp.Header.SourcePortIdentity)
-	require.Equal(t, now.Unix(), dResp.DelayRespBody.ReceiveTimestamp.Time().Unix())
-	require.Equal(t, ptp.FlagUnicast, dResp.Header.FlagField)
+	sc.UpdateDelayResp(h, now)
+	require.Equal(t, sequenceID, sc.DelayResp().Header.SequenceID)
+	require.Equal(t, 100500, int(sc.DelayResp().Header.CorrectionField.Nanoseconds()))
+	require.Equal(t, sp, sc.DelayResp().Header.SourcePortIdentity)
+	require.Equal(t, now.Unix(), sc.DelayResp().DelayRespBody.ReceiveTimestamp.Time().Unix())
+	require.Equal(t, ptp.FlagUnicast, sc.DelayResp().Header.FlagField)
 }
 
 func TestGrantPacket(t *testing.T) {
@@ -236,8 +242,8 @@ func TestGrantPacket(t *testing.T) {
 	}
 
 	sc.initGrant()
-	grant := sc.grantPacket(sg, mt, i, duration)
+	sc.UpdateGrant(sg, mt, i, duration)
 
-	require.Equal(t, tlv, grant.TLVs[0])
+	require.Equal(t, tlv, sc.Grant().TLVs[0])
 
 }

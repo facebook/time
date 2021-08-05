@@ -17,6 +17,7 @@ package server
 
 import (
 	"encoding/binary"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -88,7 +89,7 @@ func (sc *SubscriptionClient) Start() {
 	atomic.AddInt64(&sc.worker.load, l)
 	defer atomic.AddInt64(&sc.worker.load, -l)
 	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
-	log.Debugf("Starting a new %s subscription for %s with load %d with interval %s which expires in %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa), l, sc.interval, sc.expire)
+	over := fmt.Sprintf("Subscription %s is over for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
 
 	// Send first message right away
 	sc.Once()
@@ -98,12 +99,11 @@ func (sc *SubscriptionClient) Start() {
 
 	defer intervalTicker.Stop()
 	for range intervalTicker.C {
-		log.Debugf("Subscription %s for %s is valid until %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa), sc.expire)
 		if !sc.Running() {
 			return
 		}
 		if time.Now().After(sc.expire) {
-			log.Infof("Subscription %s is over for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
+			log.Infof(over)
 			// TODO send cancellation
 			return
 		}
@@ -139,6 +139,196 @@ func (sc *SubscriptionClient) Running() bool {
 // Stop stops the subscription
 func (sc *SubscriptionClient) Stop() {
 	sc.SetRunning(false)
+}
+
+// Stop stops the subscription
+func (sc *SubscriptionClient) IncSequenceID() {
+	sc.sequenceID++
+}
+
+func (sc *SubscriptionClient) initSync() {
+	sc.syncP = &ptp.SyncDelayReq{
+		Header: ptp.Header{
+			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageSync, 0),
+			Version:         ptp.Version,
+			MessageLength:   uint16(binary.Size(ptp.SyncDelayReq{})),
+			DomainNumber:    0,
+			FlagField:       ptp.FlagUnicast | ptp.FlagTwoStep,
+			SequenceID:      0,
+			SourcePortIdentity: ptp.PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: sc.serverConfig.clockIdentity,
+			},
+			LogMessageInterval: 0x7f,
+			ControlField:       0,
+		},
+	}
+}
+
+// UpdateSync updates ptp Sync packet
+func (sc *SubscriptionClient) UpdateSync() {
+	sc.syncP.SequenceID = sc.sequenceID
+}
+
+// Sync returns ptp Sync packet
+func (sc *SubscriptionClient) Sync() *ptp.SyncDelayReq {
+	return sc.syncP
+}
+
+func (sc *SubscriptionClient) initFollowup() {
+	sc.followupP = &ptp.FollowUp{
+		Header: ptp.Header{
+			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageFollowUp, 0),
+			Version:         ptp.Version,
+			MessageLength:   uint16(binary.Size(ptp.FollowUp{})),
+			DomainNumber:    0,
+			FlagField:       ptp.FlagUnicast,
+			SequenceID:      0,
+			SourcePortIdentity: ptp.PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: sc.serverConfig.clockIdentity,
+			},
+			LogMessageInterval: 0,
+			ControlField:       2,
+		},
+		FollowUpBody: ptp.FollowUpBody{
+			PreciseOriginTimestamp: ptp.NewTimestamp(time.Now()),
+		},
+	}
+}
+
+// UpdateFollowup updates ptp Follow Up packet
+func (sc *SubscriptionClient) UpdateFollowup(hwts time.Time) {
+	i, _ := ptp.NewLogInterval(sc.interval)
+	sc.followupP.SequenceID = sc.sequenceID
+	sc.followupP.LogMessageInterval = i
+	sc.followupP.PreciseOriginTimestamp = ptp.NewTimestamp(hwts)
+}
+
+// Followup returns ptp Follow Up packet
+func (sc *SubscriptionClient) Followup() *ptp.FollowUp {
+	return sc.followupP
+}
+
+func (sc *SubscriptionClient) initAnnounce() {
+	sc.announceP = &ptp.Announce{
+		Header: ptp.Header{
+			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageAnnounce, 0),
+			Version:         ptp.Version,
+			MessageLength:   uint16(binary.Size(ptp.Announce{})),
+			DomainNumber:    0,
+			FlagField:       ptp.FlagUnicast | ptp.FlagPTPTimescale,
+			SequenceID:      0,
+			SourcePortIdentity: ptp.PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: sc.serverConfig.clockIdentity,
+			},
+			LogMessageInterval: 0,
+			ControlField:       5,
+		},
+		AnnounceBody: ptp.AnnounceBody{
+			CurrentUTCOffset:     0,
+			Reserved:             0,
+			GrandmasterPriority1: 128,
+			GrandmasterClockQuality: ptp.ClockQuality{
+				ClockClass:              6,
+				ClockAccuracy:           33, // 0x21 - Time Accurate within 100ns
+				OffsetScaledLogVariance: 23008,
+			},
+			GrandmasterPriority2: 128,
+			GrandmasterIdentity:  sc.serverConfig.clockIdentity,
+			StepsRemoved:         0,
+			TimeSource:           ptp.TimeSourceGNSS,
+		},
+	}
+}
+
+// UpdateAnnounce updates ptp Announce packet
+func (sc *SubscriptionClient) UpdateAnnounce() {
+	i, _ := ptp.NewLogInterval(sc.interval)
+	sc.announceP.SequenceID = sc.sequenceID
+	sc.announceP.LogMessageInterval = i
+	sc.announceP.CurrentUTCOffset = int16(sc.serverConfig.UTCOffset.Seconds())
+}
+
+// Announce returns ptp Announce packet
+func (sc *SubscriptionClient) Announce() *ptp.Announce {
+	return sc.announceP
+}
+
+func (sc *SubscriptionClient) initDelayResp() {
+	sc.delayRespP = &ptp.DelayResp{
+		Header: ptp.Header{
+			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageDelayResp, 0),
+			Version:         ptp.Version,
+			MessageLength:   uint16(binary.Size(ptp.DelayResp{})),
+			DomainNumber:    0,
+			FlagField:       ptp.FlagUnicast,
+			SequenceID:      0,
+			SourcePortIdentity: ptp.PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: sc.serverConfig.clockIdentity,
+			},
+			LogMessageInterval: 0x7f,
+			ControlField:       3,
+			CorrectionField:    0,
+		},
+		DelayRespBody: ptp.DelayRespBody{},
+	}
+}
+
+// UpdateDelayResp updates ptp Delay Response packet
+func (sc *SubscriptionClient) UpdateDelayResp(h *ptp.Header, received time.Time) {
+	sc.delayRespP.SequenceID = h.SequenceID
+	sc.delayRespP.CorrectionField = h.CorrectionField
+	sc.delayRespP.DelayRespBody = ptp.DelayRespBody{
+		ReceiveTimestamp:       ptp.NewTimestamp(received),
+		RequestingPortIdentity: h.SourcePortIdentity,
+	}
+}
+
+// DelayResp returns ptp Delay Response packet
+func (sc *SubscriptionClient) DelayResp() *ptp.DelayResp {
+	return sc.delayRespP
+}
+
+func (sc *SubscriptionClient) initGrant() {
+	sc.grant = &ptp.Signaling{
+		Header:             ptp.Header{},
+		TargetPortIdentity: ptp.PortIdentity{},
+		TLVs: []ptp.TLV{
+			&ptp.GrantUnicastTransmissionTLV{},
+		},
+	}
+}
+
+// UpdateGrant updates ptp Signaling packet granting the requested subscription
+func (sc *SubscriptionClient) UpdateGrant(sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32) {
+	sc.grant.Header = sg.Header
+	sc.grant.TargetPortIdentity = sg.SourcePortIdentity
+	sc.grant.Header.FlagField = ptp.FlagUnicast
+	sc.grant.Header.SourcePortIdentity = ptp.PortIdentity{
+		PortNumber:    1,
+		ClockIdentity: sc.serverConfig.clockIdentity,
+	}
+	sc.grant.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{}))
+
+	sc.grant.TLVs[0] = &ptp.GrantUnicastTransmissionTLV{
+		TLVHead: ptp.TLVHead{
+			TLVType:     ptp.TLVGrantUnicastTransmission,
+			LengthField: uint16(binary.Size(ptp.GrantUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{})),
+		},
+		MsgTypeAndReserved:    mt,
+		LogInterMessagePeriod: interval,
+		DurationField:         duration,
+		Reserved:              0,
+		Renewal:               1,
+	}
+}
+
+// Grant returns ptp Signaling packet granting the requested subscription
+func (sc *SubscriptionClient) Grant() *ptp.Signaling {
+	return sc.grant
 }
 
 type syncMapCli struct {
@@ -223,179 +413,4 @@ func (s *syncMapSub) keys() []ptp.MessageType {
 	}
 	s.Unlock()
 	return keys
-}
-
-func (sc *SubscriptionClient) initSync() {
-	sc.syncP = &ptp.SyncDelayReq{
-		Header: ptp.Header{
-			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageSync, 0),
-			Version:         ptp.Version,
-			MessageLength:   uint16(binary.Size(ptp.SyncDelayReq{})),
-			DomainNumber:    0,
-			FlagField:       ptp.FlagUnicast | ptp.FlagTwoStep,
-			SequenceID:      0,
-			SourcePortIdentity: ptp.PortIdentity{
-				PortNumber:    1,
-				ClockIdentity: sc.serverConfig.clockIdentity,
-			},
-			LogMessageInterval: 0x7f,
-			ControlField:       0,
-		},
-	}
-}
-
-// syncPacket generates ptp Sync packet
-func (sc *SubscriptionClient) syncPacket() *ptp.SyncDelayReq {
-	sc.syncP.SequenceID = sc.sequenceID
-	return sc.syncP
-}
-
-func (sc *SubscriptionClient) initFollowup() {
-	sc.followupP = &ptp.FollowUp{
-		Header: ptp.Header{
-			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageFollowUp, 0),
-			Version:         ptp.Version,
-			MessageLength:   uint16(binary.Size(ptp.FollowUp{})),
-			DomainNumber:    0,
-			FlagField:       ptp.FlagUnicast,
-			SequenceID:      0,
-			SourcePortIdentity: ptp.PortIdentity{
-				PortNumber:    1,
-				ClockIdentity: sc.serverConfig.clockIdentity,
-			},
-			LogMessageInterval: 0,
-			ControlField:       2,
-		},
-		FollowUpBody: ptp.FollowUpBody{
-			PreciseOriginTimestamp: ptp.NewTimestamp(time.Now()),
-		},
-	}
-}
-
-// followupPacket generates ptp Follow Up packet
-func (sc *SubscriptionClient) followupPacket(hwts time.Time) *ptp.FollowUp {
-	i, err := ptp.NewLogInterval(sc.interval)
-	if err != nil {
-		log.Errorf("Failed to get interval: %v", err)
-	}
-
-	sc.followupP.SequenceID = sc.sequenceID
-	sc.followupP.LogMessageInterval = i
-	sc.followupP.PreciseOriginTimestamp = ptp.NewTimestamp(hwts)
-	return sc.followupP
-}
-
-func (sc *SubscriptionClient) initAnnounce() {
-	sc.announceP = &ptp.Announce{
-		Header: ptp.Header{
-			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageAnnounce, 0),
-			Version:         ptp.Version,
-			MessageLength:   uint16(binary.Size(ptp.Announce{})),
-			DomainNumber:    0,
-			FlagField:       ptp.FlagUnicast | ptp.FlagPTPTimescale,
-			SequenceID:      0,
-			SourcePortIdentity: ptp.PortIdentity{
-				PortNumber:    1,
-				ClockIdentity: sc.serverConfig.clockIdentity,
-			},
-			LogMessageInterval: 0,
-			ControlField:       5,
-		},
-		AnnounceBody: ptp.AnnounceBody{
-			CurrentUTCOffset:     0,
-			Reserved:             0,
-			GrandmasterPriority1: 128,
-			GrandmasterClockQuality: ptp.ClockQuality{
-				ClockClass:              6,
-				ClockAccuracy:           33, // 0x21 - Time Accurate within 100ns
-				OffsetScaledLogVariance: 23008,
-			},
-			GrandmasterPriority2: 128,
-			GrandmasterIdentity:  sc.serverConfig.clockIdentity,
-			StepsRemoved:         0,
-			TimeSource:           ptp.TimeSourceGNSS,
-		},
-	}
-}
-
-// announcePacket generates ptp Announce packet
-func (sc *SubscriptionClient) announcePacket() *ptp.Announce {
-	i, err := ptp.NewLogInterval(sc.interval)
-	if err != nil {
-		log.Errorf("Failed to get interval: %v", err)
-	}
-
-	sc.announceP.SequenceID = sc.sequenceID
-	sc.announceP.LogMessageInterval = i
-	sc.announceP.CurrentUTCOffset = int16(sc.serverConfig.UTCOffset.Seconds())
-
-	return sc.announceP
-}
-
-func (sc *SubscriptionClient) initDelayResp() {
-	sc.delayRespP = &ptp.DelayResp{
-		Header: ptp.Header{
-			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageDelayResp, 0),
-			Version:         ptp.Version,
-			MessageLength:   uint16(binary.Size(ptp.DelayResp{})),
-			DomainNumber:    0,
-			FlagField:       ptp.FlagUnicast,
-			SequenceID:      0,
-			SourcePortIdentity: ptp.PortIdentity{
-				PortNumber:    1,
-				ClockIdentity: sc.serverConfig.clockIdentity,
-			},
-			LogMessageInterval: 0x7f,
-			ControlField:       3,
-			CorrectionField:    0,
-		},
-		DelayRespBody: ptp.DelayRespBody{},
-	}
-}
-
-// delayRespPacket generates ptp Delay Response packet
-func (sc *SubscriptionClient) delayRespPacket(h *ptp.Header, received time.Time) *ptp.DelayResp {
-	sc.delayRespP.SequenceID = h.SequenceID
-	sc.delayRespP.CorrectionField = h.CorrectionField
-	sc.delayRespP.DelayRespBody = ptp.DelayRespBody{
-		ReceiveTimestamp:       ptp.NewTimestamp(received),
-		RequestingPortIdentity: h.SourcePortIdentity,
-	}
-
-	return sc.delayRespP
-}
-
-func (sc *SubscriptionClient) initGrant() {
-	sc.grant = &ptp.Signaling{
-		Header:             ptp.Header{},
-		TargetPortIdentity: ptp.PortIdentity{},
-		TLVs: []ptp.TLV{
-			&ptp.GrantUnicastTransmissionTLV{},
-		},
-	}
-}
-
-// grantUnicastTransmission generates ptp Signaling packet granting the requested subscription
-func (sc *SubscriptionClient) grantPacket(sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32) *ptp.Signaling {
-	sc.grant.Header = sg.Header
-	sc.grant.TargetPortIdentity = sg.SourcePortIdentity
-	sc.grant.Header.FlagField = ptp.FlagUnicast
-	sc.grant.Header.SourcePortIdentity = ptp.PortIdentity{
-		PortNumber:    1,
-		ClockIdentity: sc.serverConfig.clockIdentity,
-	}
-	sc.grant.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{}))
-
-	sc.grant.TLVs[0] = &ptp.GrantUnicastTransmissionTLV{
-		TLVHead: ptp.TLVHead{
-			TLVType:     ptp.TLVGrantUnicastTransmission,
-			LengthField: uint16(binary.Size(ptp.GrantUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{})),
-		},
-		MsgTypeAndReserved:    mt,
-		LogInterMessagePeriod: interval,
-		DurationField:         duration,
-		Reserved:              0,
-		Renewal:               1,
-	}
-	return sc.grant
 }

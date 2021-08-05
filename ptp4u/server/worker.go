@@ -18,6 +18,7 @@ package server
 
 import (
 	"net"
+	"time"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
 	"github.com/facebookincubator/ptp/ptp4u/stats"
@@ -86,20 +87,23 @@ func (s *sendWorker) Start() {
 
 	// TODO: Enable dscp accordingly
 
-	for c := range s.queue {
-		log.Debugf("Processing client: %s", ptp.SockaddrToIP(c.eclisa))
+	var (
+		n        int
+		attempts int
+		txTS     time.Time
+	)
 
+	for c := range s.queue {
 		switch c.subscriptionType {
 		case ptp.MessageSync:
 			// send sync
-			sync := c.syncPacket()
-			n, err := ptp.BytesTo(sync, buf)
+			c.UpdateSync()
+			n, err = ptp.BytesTo(c.Sync(), buf)
 			if err != nil {
 				log.Errorf("Failed to generate the sync packet: %v", err)
 				continue
 			}
 			log.Debugf("Sending sync")
-			log.Tracef("Sending sync %+v to %s from %d", sync, ptp.SockaddrToIP(c.eclisa), econn.LocalAddr().(*net.UDPAddr).Port)
 
 			err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
 			if err != nil {
@@ -108,7 +112,7 @@ func (s *sendWorker) Start() {
 			}
 			s.stats.IncTX(c.subscriptionType)
 
-			txTS, attempts, err := ptp.ReadTXtimestampBuf(eFd, bbuf, oob, tbuf, toob)
+			txTS, attempts, err = ptp.ReadTXtimestampBuf(eFd, bbuf, oob, tbuf, toob)
 			s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
 			if err != nil {
 				log.Warningf("Failed to read TX timestamp: %v", err)
@@ -117,17 +121,15 @@ func (s *sendWorker) Start() {
 			if s.config.TimestampType != ptp.HWTIMESTAMP {
 				txTS = txTS.Add(s.config.UTCOffset)
 			}
-			log.Debugf("Read TX timestamp: %v", txTS)
 
 			// send followup
-			followup := c.followupPacket(txTS)
-			n, err = ptp.BytesTo(followup, buf)
+			c.UpdateFollowup(txTS)
+			n, err = ptp.BytesTo(c.Followup(), buf)
 			if err != nil {
 				log.Errorf("Failed to generate the followup packet: %v", err)
 				continue
 			}
 			log.Debugf("Sending followup")
-			log.Tracef("Sending followup %+v with ts: %s to %s from %d", followup, followup.FollowUpBody.PreciseOriginTimestamp.Time(), ptp.SockaddrToIP(c.gclisa), gconn.LocalAddr().(*net.UDPAddr).Port)
 
 			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 			if err != nil {
@@ -137,14 +139,13 @@ func (s *sendWorker) Start() {
 			s.stats.IncTX(ptp.MessageFollowUp)
 		case ptp.MessageAnnounce:
 			// send announce
-			announce := c.announcePacket()
-			n, err := ptp.BytesTo(announce, buf)
+			c.UpdateAnnounce()
+			n, err = ptp.BytesTo(c.Announce(), buf)
 			if err != nil {
 				log.Errorf("Failed to prepare the announce packet: %v", err)
 				continue
 			}
 			log.Debugf("Sending announce")
-			log.Tracef("Sending announce %+v to %s from %d", announce, ptp.SockaddrToIP(c.gclisa), gconn.LocalAddr().(*net.UDPAddr).Port)
 
 			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 			if err != nil {
@@ -155,13 +156,12 @@ func (s *sendWorker) Start() {
 
 		case ptp.MessageDelayResp:
 			// send delay response
-			n, err := ptp.BytesTo(c.delayRespP, buf)
+			n, err = ptp.BytesTo(c.DelayResp(), buf)
 			if err != nil {
 				log.Errorf("Failed to prepare the delay response packet: %v", err)
 				continue
 			}
 			log.Debugf("Sending delay response")
-			log.Tracef("Sending delay response %+v to %s from %d", c.delayRespP, ptp.SockaddrToIP(c.gclisa), gconn.LocalAddr().(*net.UDPAddr).Port)
 
 			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 			if err != nil {
@@ -175,7 +175,7 @@ func (s *sendWorker) Start() {
 			continue
 		}
 
-		c.sequenceID++
+		c.IncSequenceID()
 		s.stats.SetMaxWorkerLoad(s.id, s.load)
 		s.stats.SetMaxWorkerQueue(s.id, int64(len(s.queue)))
 	}
