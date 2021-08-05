@@ -63,3 +63,11 @@ func NewServerStatsFromChrony(s *chrony.ReplyServerStats) *ServerStats {
 		PacketsDropped:  uint64(s.NTPDrops),
 	}
 }
+
+// NewServerStatsFromChrony2 constructs ServerStats from chrony ServerStats2 packet
+func NewServerStatsFromChrony2(s *chrony.ReplyServerStats2) *ServerStats {
+	return &ServerStats{
+		PacketsReceived: uint64(s.NTPHits),
+		PacketsDropped:  uint64(s.NTPDrops),
+	}
+}
