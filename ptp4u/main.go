@@ -39,7 +39,7 @@ func main() {
 	flag.StringVar(&ipaddr, "ip", "::", "IP to bind on")
 	flag.StringVar(&pprofaddr, "pprofaddr", "", "host:port for the pprof to bind")
 	flag.StringVar(&c.Interface, "iface", "eth0", "Set the interface")
-	flag.StringVar(&c.LogLevel, "loglevel", "info", "Set a log level. Can be: trace, debug, info, warning, error")
+	flag.StringVar(&c.LogLevel, "loglevel", "warning", "Set a log level. Can be: debug, info, warning, error")
 	flag.DurationVar(&c.MinSubInterval, "minsubinterval", 1*time.Second, "Minimum interval of the sync/announce subscription messages")
 	flag.DurationVar(&c.MaxSubDuration, "maxsubduration", 10*time.Minute, "Maximum sync/announce subscription duration")
 	flag.StringVar(&c.TimestampType, "timestamptype", ptp.HWTIMESTAMP, fmt.Sprintf("Timestamp type. Can be: %s, %s", ptp.HWTIMESTAMP, ptp.SWTIMESTAMP))
@@ -53,8 +53,6 @@ func main() {
 	flag.Parse()
 
 	switch c.LogLevel {
-	case "trace":
-		log.SetLevel(log.TraceLevel)
 	case "debug":
 		log.SetLevel(log.DebugLevel)
 	case "info":
