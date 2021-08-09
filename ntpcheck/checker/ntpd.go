@@ -123,7 +123,7 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 
 	sys, err := NewSystemVariablesFromNTP(infoPacket)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create System structure from response packet for server")
+		return nil, errors.Wrapf(err, "failed to create System structure from response packet")
 	}
 	result.SysVars = sys
 
@@ -181,7 +181,7 @@ func (n *NTPCheck) ServerStats() (*ServerStats, error) {
 
 	serverStats, err := NewServerStatsFromNTP(serverVars)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create ServerStats structure from response packet for server")
+		return nil, errors.Wrapf(err, "failed to create ServerStats structure from response packet")
 	}
 
 	return serverStats, nil

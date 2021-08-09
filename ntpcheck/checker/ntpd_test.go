@@ -68,7 +68,7 @@ var psWordBinary = psWord.Word()
 
 var assocData = assocIDpair(2, psWordBinary)
 
-func TestNTPCheck_Run(t *testing.T) {
+func TestNTPCheckRun(t *testing.T) {
 	prepdOutputs := []*control.NTPControlMsg{
 		// system status
 		&control.NTPControlMsg{
@@ -146,7 +146,7 @@ func TestNTPCheck_Run(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestNTPCheck_ServerStats(t *testing.T) {
+func TestNTPCheckServerStats(t *testing.T) {
 	prepdOutputs := []*control.NTPControlMsg{
 		// read server variables
 		&control.NTPControlMsg{
