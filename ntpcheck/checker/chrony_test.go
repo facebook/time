@@ -103,7 +103,7 @@ var replyND1 = &chrony.ReplyNTPData{
 }
 
 // run over TCP/IP, no ReplySourceData availabe
-func TestChronyCheck_RunDegraded(t *testing.T) {
+func TestChronyCheckRunDegraded(t *testing.T) {
 	prepdOutputs := []chrony.ResponsePacket{
 		// tracking
 		replyTracking,
@@ -167,7 +167,7 @@ func TestChronyCheck_RunDegraded(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestChronyCheck_Run(t *testing.T) {
+func TestChronyCheckRun(t *testing.T) {
 	prepdOutputs := []chrony.ResponsePacket{
 		// tracking
 		replyTracking,
@@ -237,7 +237,7 @@ func TestChronyCheck_Run(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestChronyCheck_ServerStats(t *testing.T) {
+func TestChronyCheckServerStats(t *testing.T) {
 	prepdOutputs := []chrony.ResponsePacket{
 		// server stats
 		replyServerStats,
