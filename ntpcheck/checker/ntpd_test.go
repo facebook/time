@@ -94,15 +94,6 @@ func TestNTPCheck_Run(t *testing.T) {
 			},
 			Data: []uint8("stratum=3,offset=0.1,hpoll=1024,ppoll=10,refid=0001E240,reftime=0x01"),
 		},
-		// read server variables
-		&control.NTPControlMsg{
-			NTPControlMsgHead: control.NTPControlMsgHead{
-				VnMode:        vnMode,
-				REMOp:         control.MakeREMOp(true, false, false, control.OpReadVariables),
-				AssociationID: 0,
-			},
-			Data: []uint8("ss_received=1234,ss_badformat=5670,ss_badauth=5,ss_declined=1,ss_restricted=1,ss_limited=1"),
-		},
 		// read peer variables
 		&control.NTPControlMsg{
 			NTPControlMsgHead: control.NTPControlMsgHead{
@@ -144,10 +135,6 @@ func TestNTPCheck_Run(t *testing.T) {
 				Flashers:   []string{},
 			},
 		},
-		ServerStats: &ServerStats{
-			PacketsReceived: 1234,
-			PacketsDropped:  5678,
-		},
 	}
 
 	check := &NTPCheck{
@@ -155,6 +142,33 @@ func TestNTPCheck_Run(t *testing.T) {
 	}
 
 	got, err := check.Run()
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
+
+func TestNTPCheck_ServerStats(t *testing.T) {
+	prepdOutputs := []*control.NTPControlMsg{
+		// read server variables
+		&control.NTPControlMsg{
+			NTPControlMsgHead: control.NTPControlMsgHead{
+				VnMode:        vnMode,
+				REMOp:         control.MakeREMOp(true, false, false, control.OpReadVariables),
+				AssociationID: 0,
+			},
+			Data: []uint8("ss_received=1234,ss_badformat=5670,ss_badauth=5,ss_declined=1,ss_restricted=1,ss_limited=1"),
+		},
+	}
+
+	want := &ServerStats{
+		PacketsReceived: 1234,
+		PacketsDropped:  5678,
+	}
+
+	check := &NTPCheck{
+		Client: &fakeNTPClient{readCount: 0, outputs: prepdOutputs},
+	}
+
+	got, err := check.ServerStats()
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }

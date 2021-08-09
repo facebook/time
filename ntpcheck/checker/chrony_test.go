@@ -107,8 +107,6 @@ func TestChronyCheck_RunDegraded(t *testing.T) {
 	prepdOutputs := []chrony.ResponsePacket{
 		// tracking
 		replyTracking,
-		// server stats
-		replyServerStats,
 		// get list of sources
 		replySources,
 		// first source
@@ -158,10 +156,6 @@ func TestChronyCheck_RunDegraded(t *testing.T) {
 				Flashers:   []string{},
 			},
 		},
-		ServerStats: &ServerStats{
-			PacketsReceived: 1234,
-			PacketsDropped:  5678,
-		},
 	}
 
 	check := &ChronyCheck{
@@ -177,8 +171,6 @@ func TestChronyCheck_Run(t *testing.T) {
 	prepdOutputs := []chrony.ResponsePacket{
 		// tracking
 		replyTracking,
-		// server stats
-		replyServerStats,
 		// get list of sources
 		replySources,
 		// first source
@@ -234,10 +226,6 @@ func TestChronyCheck_Run(t *testing.T) {
 				Flashers:   []string{},
 			},
 		},
-		ServerStats: &ServerStats{
-			PacketsReceived: 1234,
-			PacketsDropped:  5678,
-		},
 	}
 
 	check := &ChronyCheck{
@@ -245,6 +233,26 @@ func TestChronyCheck_Run(t *testing.T) {
 	}
 
 	got, err := check.Run()
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
+
+func TestChronyCheck_ServerStats(t *testing.T) {
+	prepdOutputs := []chrony.ResponsePacket{
+		// server stats
+		replyServerStats,
+	}
+
+	want := &ServerStats{
+		PacketsReceived: 1234,
+		PacketsDropped:  5678,
+	}
+
+	check := &ChronyCheck{
+		Client: &fakeChronyClient{readCount: 0, outputs: prepdOutputs},
+	}
+
+	got, err := check.ServerStats()
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }

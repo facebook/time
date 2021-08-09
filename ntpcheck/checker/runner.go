@@ -31,6 +31,7 @@ import (
 // Runner is something that can produce NTPCheckResult
 type Runner interface {
 	Run() (*NTPCheckResult, error)
+	ServerStats() (*ServerStats, error)
 }
 
 type flavour int
@@ -42,28 +43,21 @@ const (
 
 const netFile = "/proc/net/udp6"
 
-func getDefaultServer(f flavour) string {
+func getPublicServer(f flavour) string {
 	if f == flavourChrony {
-		_, err := os.Stat(chrony.ChronySocketPath)
-		if err == nil {
-			return chrony.ChronySocketPath
-		}
-		log.Debug("Unable to use chrony socket for communication, operating in degraded mode")
 		return "[::1]:323"
 	}
 	return "[::1]:123"
 }
 
-func getFlavour() flavour {
-	// chronyd can be listening to udp6 intermittently,
-	// it is safe to talk to chronyd over unix socket
-	_, err := os.Stat(chrony.ChronySocketPath)
-	if err == nil {
-		log.Debug("Will use chrony protocol (socket file found)")
-		return flavourChrony
+func getPrivateServer(f flavour) string {
+	if f == flavourChrony {
+		return chrony.ChronySocketPath
 	}
+	return "[::1]:123"
+}
 
-	// fallback to udp detetcion, such as when running from tupperware
+func getFlavour() flavour {
 	f, err := os.Open(netFile)
 	if err != nil {
 		return flavourNTPD
@@ -91,13 +85,34 @@ func getChecker(f flavour, conn net.Conn) Runner {
 
 // RunCheck is a simple wrapper to connect to address and run NTPCheck.Run()
 func RunCheck(address string) (*NTPCheckResult, error) {
+	timeout := 5 * time.Second
+	deadline := time.Now().Add(timeout)
+	flavour := getFlavour()
+	if address == "" {
+		address = getPublicServer(flavour)
+	}
+	conn, err := net.DialTimeout("udp", address, timeout)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	if err := conn.SetReadDeadline(deadline); err != nil {
+		return nil, err
+	}
+	checker := getChecker(flavour, conn)
+	log.Debugf("connected to %s", address)
+	return checker.Run()
+}
+
+// RunServerStats is a simple wrapper to connect to address and run NTPCheck.ServerStats()
+func RunServerStats(address string) (*ServerStats, error) {
 	var err error
 	var conn net.Conn
 	timeout := 5 * time.Second
 	deadline := time.Now().Add(timeout)
 	flavour := getFlavour()
 	if address == "" {
-		address = getDefaultServer(flavour)
+		address = getPrivateServer(flavour)
 	}
 	if strings.HasPrefix(address, "/") {
 		conn, err = DialUnix(address)
@@ -113,5 +128,5 @@ func RunCheck(address string) (*NTPCheckResult, error) {
 	}
 	checker := getChecker(flavour, conn)
 	log.Debugf("connected to %s", address)
-	return checker.Run()
+	return checker.ServerStats()
 }

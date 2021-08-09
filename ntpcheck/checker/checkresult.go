@@ -34,7 +34,6 @@ type NTPCheckResult struct {
 	SysVars *SystemVariables
 	// map of peers with data from PeerStatusWord and Peer Variables
 	Peers       map[uint16]*Peer
-	ServerStats *ServerStats
 	Incomplete  bool
 }
 
