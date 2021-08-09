@@ -172,7 +172,7 @@ var chronyToPeerSelection = map[chrony.SourceStateType]uint8{
 }
 
 // NewPeerFromChrony constructs Peer from two chrony packets
-func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.ReplyNTPData) (*Peer, error) {
+func NewPeerFromChrony(s *chrony.ReplySourceData) (*Peer, error) {
 	if s == nil {
 		return nil, fmt.Errorf("no ReplySourceData to create Peer")
 	}
@@ -199,31 +199,6 @@ func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.ReplyNTPData) (*Peer
 		Stratum:      int(s.Stratum),
 		SRCAdr:       s.IPAddr.String(),
 		Reach:        uint8(s.Reachability),
-	}
-	// populate data from ntpdata struct
-	if p != nil {
-		refID := chrony.RefidAsHEX(p.RefID)
-		// Only stratum 1 servers can have GPS or something else as string refID
-		if p.Stratum == 1 {
-			refIDStr := chrony.RefidToString(p.RefID)
-			if len(refIDStr) > 0 {
-				refID = refIDStr
-			}
-		}
-		peer.Leap = int(p.Leap)
-		peer.HPoll = int(p.Poll)
-		peer.DSTAdr = p.LocalAddr.String()
-		peer.RefTime = p.RefTime.String()
-		peer.Offset = secToMS(p.Offset)
-		peer.Dispersion = secToMS(p.PeerDispersion)
-		peer.DSTPort = int(p.RemotePort)
-		peer.RefID = refID
-		peer.PPoll = int(p.Poll)
-		peer.Jitter = secToMS(p.PeerDispersion) // best approx we have
-		peer.RootDelay = secToMS(p.RootDelay)
-		peer.Precision = int(p.Precision)
-		peer.Delay = secToMS(p.PeerDelay)
-		peer.RootDisp = secToMS(p.RootDispersion)
 	}
 	// no need for sanity check as we are not parsing k=v pairs in case of chrony proto
 	return &peer, nil

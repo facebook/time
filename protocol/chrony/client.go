@@ -52,9 +52,6 @@ func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 		return nil, err
 	}
 	log.Debugf("response head: %+v", head)
-	if head.Status == sttUnauth {
-		return nil, ErrNotAuthorized
-	}
 	if head.Status != sttSuccess {
 		return nil, fmt.Errorf("got status %s", StatusDesc[head.Status])
 	}
@@ -98,16 +95,6 @@ func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 		return &ReplyServerStats{
 			ReplyHead:   *head,
 			ServerStats: *data,
-		}, nil
-	case rpyNTPData:
-		data := new(replyNTPDataContent)
-		if err = binary.Read(r, binary.BigEndian, data); err != nil {
-			return nil, err
-		}
-		log.Debugf("response data: %+v", data)
-		return &ReplyNTPData{
-			ReplyHead: *head,
-			NTPData:   *newNTPData(data),
 		}, nil
 	case rpyServerStats2:
 		data := new(ServerStats2)

@@ -18,7 +18,6 @@ package checker
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -106,47 +105,21 @@ func TestNewPeerFromChrony(t *testing.T) {
 	sourceData.State = chrony.SourceStateCandidate
 	sourceData.Flags = chrony.NTPFlagsTests
 
-	ntpData := &chrony.ReplyNTPData{}
-	ntpData.Poll = 10
-	ntpData.RefID = 123456
-	ntpData.RefTime = time.Unix(1587738257, 0)
 	tests := []struct {
 		name    string
 		s       *chrony.ReplySourceData
-		p       *chrony.ReplyNTPData
 		want    *Peer
 		wantErr bool
 	}{
 		{
 			name:    "no data",
 			s:       nil,
-			p:       nil,
 			want:    nil,
 			wantErr: true,
 		},
 		{
-			name: "fallback, no ReplyNTPData",
-			s:    sourceData,
-			p:    nil,
-			want: &Peer{
-				Stratum:    3,
-				Offset:     -0,
-				HPoll:      10,
-				PPoll:      10,
-				Flashers:   []string{},
-				Configured: true,
-				Reachable:  true,
-				Selection:  control.SelCandidate,
-				Condition:  control.PeerSelect[control.SelCandidate],
-				Reach:      255,
-				SRCAdr:     "<nil>",
-			},
-			wantErr: false,
-		},
-		{
 			name: "full data",
 			s:    sourceData,
-			p:    ntpData,
 			want: &Peer{
 				Stratum:    3,
 				Offset:     -0,
@@ -159,16 +132,13 @@ func TestNewPeerFromChrony(t *testing.T) {
 				Condition:  control.PeerSelect[control.SelCandidate],
 				Reach:      255,
 				SRCAdr:     "<nil>",
-				DSTAdr:     "<nil>",
-				RefID:      "0001E240",
-				RefTime:    ntpData.RefTime.String(),
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewPeerFromChrony(tt.s, tt.p)
+			got, err := NewPeerFromChrony(tt.s)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewPeerFromChrony() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -17,17 +17,12 @@ limitations under the License.
 package chrony
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"net"
 	"time"
 	"unicode"
 )
-
-// ErrNotAuthorized identifies failure to get data from Chronyd when we are not authorized to do so
-// (like asking for NTP data over UDP instead of unix socket)
-var ErrNotAuthorized = errors.New("Not authorized")
 
 // ChronySocketPath is the default path to chronyd socket
 const ChronySocketPath = "/var/run/chrony/chronyd.sock"

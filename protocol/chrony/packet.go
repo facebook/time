@@ -58,7 +58,6 @@ const (
 	reqSourceData  CommandType = 15
 	reqTracking    CommandType = 33
 	reqServerStats CommandType = 54
-	reqNTPData     CommandType = 57
 )
 
 // reply types
@@ -67,7 +66,6 @@ const (
 	rpySourceData   ReplyType = 3
 	rpyTracking     ReplyType = 5
 	rpyServerStats  ReplyType = 14
-	rpyNTPData      ReplyType = 16
 	rpyServerStats2 ReplyType = 22
 )
 
@@ -396,98 +394,6 @@ type ReplyTracking struct {
 	Tracking
 }
 
-type replyNTPDataContent struct {
-	RemoteAddr      ipAddr
-	LocalAddr       ipAddr
-	RemotePort      uint16
-	Leap            uint8
-	Version         uint8
-	Mode            uint8
-	Stratum         uint8
-	Poll            int8
-	Precision       int8
-	RootDelay       chronyFloat
-	RootDispersion  chronyFloat
-	RefID           uint32
-	RefTime         timeSpec
-	Offset          chronyFloat
-	PeerDelay       chronyFloat
-	PeerDispersion  chronyFloat
-	ResponseTime    chronyFloat
-	JitterAsymmetry chronyFloat
-	Flags           uint16
-	TXTssChar       uint8
-	RXTssChar       uint8
-	TotalTXCount    uint32
-	TotalRXCount    uint32
-	TotalValidCount uint32
-	Reserved        [4]uint32
-	EOR             int32
-}
-
-// NTPData contains parsed version of 'ntpdata' reply
-type NTPData struct {
-	RemoteAddr      net.IP
-	LocalAddr       net.IP
-	RemotePort      uint16
-	Leap            uint8
-	Version         uint8
-	Mode            uint8
-	Stratum         uint8
-	Poll            int8
-	Precision       int8
-	RootDelay       float64
-	RootDispersion  float64
-	RefID           uint32
-	RefTime         time.Time
-	Offset          float64
-	PeerDelay       float64
-	PeerDispersion  float64
-	ResponseTime    float64
-	JitterAsymmetry float64
-	Flags           uint16
-	TXTssChar       uint8
-	RXTssChar       uint8
-	TotalTXCount    uint32
-	TotalRXCount    uint32
-	TotalValidCount uint32
-}
-
-func newNTPData(r *replyNTPDataContent) *NTPData {
-	return &NTPData{
-		RemoteAddr:      r.RemoteAddr.ToNetIP(),
-		LocalAddr:       r.LocalAddr.ToNetIP(),
-		RemotePort:      r.RemotePort,
-		Leap:            r.Leap,
-		Version:         r.Version,
-		Mode:            r.Mode,
-		Stratum:         r.Stratum,
-		Poll:            r.Poll,
-		Precision:       r.Precision,
-		RootDelay:       r.RootDelay.ToFloat(),
-		RootDispersion:  r.RootDispersion.ToFloat(),
-		RefID:           r.RefID,
-		RefTime:         r.RefTime.ToTime(),
-		Offset:          r.Offset.ToFloat(),
-		PeerDelay:       r.PeerDelay.ToFloat(),
-		PeerDispersion:  r.PeerDispersion.ToFloat(),
-		ResponseTime:    r.ResponseTime.ToFloat(),
-		JitterAsymmetry: r.JitterAsymmetry.ToFloat(),
-		Flags:           r.Flags,
-		TXTssChar:       r.TXTssChar,
-		RXTssChar:       r.RXTssChar,
-		TotalTXCount:    r.TotalTXCount,
-		TotalRXCount:    r.TotalRXCount,
-		TotalValidCount: r.TotalValidCount,
-	}
-}
-
-// ReplyNTPData is a what end user will get for of 'ntp data' response
-type ReplyNTPData struct {
-	ReplyHead
-	NTPData
-}
-
 // ServerStats contains parsed version of 'serverstats' reply
 type ServerStats struct {
 	NTPHits  uint32
@@ -554,18 +460,6 @@ func NewSourceDataPacket(sourceID int32) *RequestSourceData {
 			Command: reqSourceData,
 		},
 		Index: sourceID,
-	}
-}
-
-// NewNTPDataPacket creates new packet to request 'ntp data' information for given peer IP
-func NewNTPDataPacket(ip net.IP) *RequestNTPData {
-	return &RequestNTPData{
-		RequestHead: RequestHead{
-			Version: protoVersionNumber,
-			PKTType: pktTypeCmdRequest,
-			Command: reqNTPData,
-		},
-		IPAddr: *newIPAddr(ip),
 	}
 }
 
