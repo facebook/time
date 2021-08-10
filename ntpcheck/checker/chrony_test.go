@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/facebookincubator/ntp/protocol/chrony"
-	"github.com/facebookincubator/ntp/protocol/control"
 )
 
 type fakeChronyClient struct {
@@ -68,103 +67,28 @@ var replySources = &chrony.ReplySources{
 
 var replySD0 = &chrony.ReplySourceData{
 	SourceData: chrony.SourceData{
-		IPAddr:       net.ParseIP("192.168.0.2"),
-		Flags:        chrony.NTPFlagsTests,
-		Poll:         10,
-		Stratum:      2,
-		State:        chrony.SourceStateSync,
-		Mode:         chrony.SourceModePeer,
-		Reachability: 255,
+		IPAddr:         net.ParseIP("192.168.0.2"),
+		Flags:          chrony.NTPFlagsTests,
+		Poll:           10,
+		Stratum:        2,
+		State:          chrony.SourceStateSync,
+		Mode:           chrony.SourceModePeer,
+		Reachability:   255,
+		OrigLatestMeas: -0.03,
 	},
 }
 
-var replyND0 = &chrony.ReplyNTPData{
-	NTPData: chrony.NTPData{
-		Poll:   10,
-		Offset: 0.03,
-	},
-}
 var replySD1 = &chrony.ReplySourceData{
 	SourceData: chrony.SourceData{
-		IPAddr:       net.ParseIP("192.168.0.4"),
-		Flags:        chrony.NTPFlagsTests,
-		Poll:         11,
-		Stratum:      2,
-		State:        chrony.SourceStateCandidate,
-		Mode:         chrony.SourceModePeer,
-		Reachability: 200,
+		IPAddr:         net.ParseIP("192.168.0.4"),
+		Flags:          chrony.NTPFlagsTests,
+		Poll:           11,
+		Stratum:        2,
+		State:          chrony.SourceStateCandidate,
+		Mode:           chrony.SourceModePeer,
+		Reachability:   200,
+		OrigLatestMeas: -0.02,
 	},
-}
-var replyND1 = &chrony.ReplyNTPData{
-	NTPData: chrony.NTPData{
-		Poll:   11,
-		Offset: 0.02,
-	},
-}
-
-// run over TCP/IP, no ReplySourceData availabe
-func TestChronyCheckRunDegraded(t *testing.T) {
-	prepdOutputs := []chrony.ResponsePacket{
-		// tracking
-		replyTracking,
-		// get list of sources
-		replySources,
-		// first source
-		replySD0,
-		&chrony.ReplyNTPData{},
-		// second source
-		replySD1,
-		&chrony.ReplyNTPData{},
-	}
-
-	want := &NTPCheckResult{
-		LI:          0,
-		LIDesc:      "none",
-		ClockSource: "ntp",
-		Event:       "clock_sync",
-		SysVars: &SystemVariables{
-			Stratum: 3,
-			Offset:  1,
-			RefID:   "0001E240",
-			RefTime: refTime.String(),
-		},
-		Peers: map[uint16]*Peer{
-			0: &Peer{
-				Configured: true,
-				Reachable:  true,
-				Selection:  control.SelSYSPeer,
-				Condition:  "sync",
-				SRCAdr:     "192.168.0.2",
-				DSTAdr:     "<nil>",
-				Stratum:    2,
-				RefID:      "00000000",
-				RefTime:    "0001-01-01 00:00:00 +0000 UTC",
-				Reach:      255,
-				Flashers:   []string{},
-			},
-			1: &Peer{
-				Configured: true,
-				Reachable:  false,
-				Selection:  control.SelCandidate,
-				Condition:  "candidate",
-				SRCAdr:     "192.168.0.4",
-				DSTAdr:     "<nil>",
-				Stratum:    2,
-				RefID:      "00000000",
-				RefTime:    "0001-01-01 00:00:00 +0000 UTC",
-				Reach:      200,
-				Flashers:   []string{},
-			},
-		},
-	}
-
-	check := &ChronyCheck{
-		Client: &fakeChronyClient{readCount: 0, outputs: prepdOutputs},
-	}
-
-	got, err := check.Run()
-	require.NoError(t, err)
-	require.Equal(t, want, got)
 }
 
 func TestChronyCheckRun(t *testing.T) {
@@ -175,10 +99,8 @@ func TestChronyCheckRun(t *testing.T) {
 		replySources,
 		// first source
 		replySD0,
-		replyND0,
 		// second source
 		replySD1,
-		replyND1,
 	}
 
 	want := &NTPCheckResult{
@@ -199,10 +121,7 @@ func TestChronyCheckRun(t *testing.T) {
 				Selection:  6,
 				Condition:  "sync",
 				SRCAdr:     "192.168.0.2",
-				DSTAdr:     "<nil>",
 				Stratum:    2,
-				RefID:      "00000000",
-				RefTime:    "0001-01-01 00:00:00 +0000 UTC",
 				Reach:      255,
 				PPoll:      10,
 				HPoll:      10,
@@ -215,10 +134,7 @@ func TestChronyCheckRun(t *testing.T) {
 				Selection:  4,
 				Condition:  "candidate",
 				SRCAdr:     "192.168.0.4",
-				DSTAdr:     "<nil>",
 				Stratum:    2,
-				RefID:      "00000000",
-				RefTime:    "0001-01-01 00:00:00 +0000 UTC",
 				Reach:      200,
 				PPoll:      11,
 				HPoll:      11,

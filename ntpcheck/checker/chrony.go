@@ -125,22 +125,17 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 		if !ok {
 			return nil, errors.Errorf("Got wrong 'sourcedata' response %+v", packet)
 		}
-		// try to get ntpdata, which is available only through socket
+		// get ntpdata when using a unix socket
 		var ntpData *chrony.ReplyNTPData
-		if sourceData.Mode != chrony.SourceModeRef {
+		if sourceData.Mode != chrony.SourceModeRef && n.Unix() {
 			ntpDataReq := chrony.NewNTPDataPacket(sourceData.IPAddr)
 			packet, err = n.Client.Communicate(ntpDataReq)
-			if err == nil {
-				ntpData, ok = packet.(*chrony.ReplyNTPData)
-				if !ok {
-					return nil, errors.Errorf("Got wrong 'ntpdata' response %+v", packet)
-				}
-			} else if err != chrony.ErrNotAuthorized {
+			if err != nil {
 				return nil, errors.Wrapf(err, "failed to get 'ntpdata' response for source #%d", i)
 			}
-			// unauthorized when asked for ntp data
-			if ntpData == nil {
-				result.Incomplete = true
+			ntpData, ok = packet.(*chrony.ReplyNTPData)
+			if !ok {
+				return nil, errors.Errorf("Got wrong 'ntpdata' response %+v", packet)
 			}
 		}
 		peer, err := NewPeerFromChrony(sourceData, ntpData)
@@ -179,6 +174,17 @@ func (n *ChronyCheck) ServerStats() (*ServerStats, error) {
 	}
 	log.Debugf("ServerStats: %v", serverStats)
 	return serverStats, nil
+}
+
+// Unix returns true if connected via a unix socket
+func (n *ChronyCheck) Unix() bool {
+	// it could be a mock, so verify type assertion
+	if client, ok := n.Client.(*chrony.Client); ok {
+		if _, ok := client.Connection.(*chronyConn); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // NewChronyCheck is a constructor for ChronyCheck
