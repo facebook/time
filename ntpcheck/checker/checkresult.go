@@ -33,8 +33,7 @@ type NTPCheckResult struct {
 	// data parsed from System Variables
 	SysVars *SystemVariables
 	// map of peers with data from PeerStatusWord and Peer Variables
-	Peers       map[uint16]*Peer
-	Incomplete  bool
+	Peers map[uint16]*Peer
 }
 
 // FindSysPeer returns sys.peer (main source of NTP information for server)

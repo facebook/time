@@ -21,7 +21,6 @@ import (
 	"net"
 	"os"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/facebookincubator/ntp/protocol/chrony"
@@ -104,6 +103,34 @@ func RunCheck(address string) (*NTPCheckResult, error) {
 	return checker.Run()
 }
 
+// RunNTPData is a simple wrapper to connect to address and run NTPCheck.Run()
+// If using chrony it gathers extra info about the peers using the unix socket
+func RunNTPData(address string) (*NTPCheckResult, error) {
+	timeout := 5 * time.Second
+	deadline := time.Now().Add(timeout)
+	flavour := getFlavour()
+	if flavour != flavourChrony {
+		// NTPD does not have a separation between public and private
+		// protocol. It does not use a unix socket.
+		// RunCheck will gather the same information
+		return RunCheck(address)
+	}
+	if address == "" {
+		address = getPrivateServer(flavour)
+	}
+	conn, err := DialUnix(address)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	if err := conn.SetReadDeadline(deadline); err != nil {
+		return nil, err
+	}
+	checker := getChecker(flavour, conn)
+	log.Debugf("connected to %s", address)
+	return checker.Run()
+}
+
 // RunServerStats is a simple wrapper to connect to address and run NTPCheck.ServerStats()
 func RunServerStats(address string) (*ServerStats, error) {
 	var err error
@@ -114,7 +141,7 @@ func RunServerStats(address string) (*ServerStats, error) {
 	if address == "" {
 		address = getPrivateServer(flavour)
 	}
-	if strings.HasPrefix(address, "/") {
+	if flavour == flavourChrony {
 		conn, err = DialUnix(address)
 	} else {
 		conn, err = net.DialTimeout("udp", address, timeout)

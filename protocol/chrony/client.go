@@ -52,9 +52,6 @@ func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 		return nil, err
 	}
 	log.Debugf("response head: %+v", head)
-	if head.Status == sttUnauth {
-		return nil, ErrNotAuthorized
-	}
 	if head.Status != sttSuccess {
 		return nil, fmt.Errorf("got status %s", StatusDesc[head.Status])
 	}
