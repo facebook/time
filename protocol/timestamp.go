@@ -165,7 +165,8 @@ func socketControlMessageTimestamp(b []byte) (time.Time, error) {
 		h := (*unix.Cmsghdr)(unsafe.Pointer(&b[i]))
 		mlen = int(h.Len)
 
-		if h.Level == unix.SOL_SOCKET && int(h.Type) == timestamping {
+		// depending on the kernel version, when we ask for SO_TIMESTAMPING_NEW we still might get messages with type SO_TIMESTAMPING
+		if h.Level == unix.SOL_SOCKET && int(h.Type) == unix.SO_TIMESTAMPING_NEW || int(h.Type) == unix.SO_TIMESTAMPING {
 			return scmDataToTime(b[i+SocketControlMessageHeaderOffset : i+mlen])
 		}
 	}

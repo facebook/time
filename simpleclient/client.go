@@ -25,8 +25,17 @@ import (
 	"github.com/fatih/color"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sys/unix"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
+)
+
+// re-export timestamping
+const (
+	// HWTIMESTAMP is a hardware timestamp
+	HWTIMESTAMP = ptp.HWTIMESTAMP
+	// SWTIMESTAMP is a software timestmap
+	SWTIMESTAMP = ptp.SWTIMESTAMP
 )
 
 type state int
@@ -97,6 +106,8 @@ type Config struct {
 	Timeout time.Duration
 	// for how long we'll request unicast transmission from server
 	Duration time.Duration
+	// what type of typestamping to use
+	Timestamping string
 }
 
 // Client is a very simplified PTPv2 unicast client.
@@ -218,13 +229,30 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 	}
 
 	// we need to enable HW or SW timestamps on event port
-	if err := ptp.EnableHWTimestampsSocket(connFd, c.cfg.Iface); err != nil {
-		if err := ptp.EnableSWTimestampsSocket(connFd); err != nil {
-			return fmt.Errorf("failed to enable timestamps on port %d: %v", ptp.PortEvent, err)
+	switch c.cfg.Timestamping {
+	case "": // auto-detection
+		if err := ptp.EnableHWTimestampsSocket(connFd, c.cfg.Iface); err != nil {
+			if err := ptp.EnableSWTimestampsSocket(connFd); err != nil {
+				return fmt.Errorf("failed to enable timestamps on port %d: %v", ptp.PortEvent, err)
+			}
+			log.Warningf("Failed to enable hardware timestamps on port %d, falling back to software timestamps", ptp.PortEvent)
+		} else {
+			log.Infof("Using hardware timestamps")
 		}
-		log.Warningf("Failed to enable hardware timestamps on port %d, falling back to software timestamps", ptp.PortEvent)
-	} else {
-		log.Infof("Using hardware timestamps")
+	case HWTIMESTAMP:
+		if err := ptp.EnableHWTimestampsSocket(connFd, c.cfg.Iface); err != nil {
+			return fmt.Errorf("failed to enable hardware timestamps on port %d: %v", ptp.PortEvent, err)
+		}
+	case SWTIMESTAMP:
+		if err := ptp.EnableSWTimestampsSocket(connFd); err != nil {
+			return fmt.Errorf("failed to enable software timestamps on port %d: %v", ptp.PortEvent, err)
+		}
+	default:
+		return fmt.Errorf("unknown type of typestamping: %q", c.cfg.Timestamping)
+	}
+	// set it to blocking mode, otherwise recvmsg will just return with nothing most of the time
+	if err := unix.SetNonblock(connFd, false); err != nil {
+		return fmt.Errorf("failed to set event socket to blocking: %w", err)
 	}
 	c.eventConn = &udpConnTS{eventConn}
 	c.eventAddr = eventAddr

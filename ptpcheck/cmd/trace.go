@@ -34,11 +34,13 @@ var traceRemoteServerFlag string
 var traceDurationFlag time.Duration
 var traceTimeoutFlag time.Duration
 var traceIfaceFlag string
+var traceTimestampingFlag string
 
 func init() {
 	RootCmd.AddCommand(traceCmd)
 	traceCmd.Flags().StringVarP(&traceRemoteServerFlag, "server", "S", "", "server to connect to")
 	traceCmd.Flags().StringVarP(&traceIfaceFlag, "iface", "i", "eth0", "network interface to use")
+	traceCmd.Flags().StringVarP(&traceTimestampingFlag, "timestamping", "T", "", fmt.Sprintf("timestamping to use, either %q or %q. empty means auto-detection", client.HWTIMESTAMP, client.SWTIMESTAMP))
 	traceCmd.Flags().DurationVarP(&traceTimeoutFlag, "timeout", "t", 15*time.Second, "global timeout")
 	traceCmd.Flags().DurationVarP(&traceDurationFlag, "duration", "d", 10*time.Second, "duration of the exchange")
 }
@@ -141,10 +143,11 @@ to notify about this event. Clients responds with ACKNOWLEDGE_CANCEL_UNICAST_TRA
 		}
 
 		cfg := &client.Config{
-			Address:  traceRemoteServerFlag,
-			Iface:    traceIfaceFlag,
-			Timeout:  traceTimeoutFlag,
-			Duration: traceDurationFlag,
+			Address:      traceRemoteServerFlag,
+			Iface:        traceIfaceFlag,
+			Timeout:      traceTimeoutFlag,
+			Duration:     traceDurationFlag,
+			Timestamping: traceTimestampingFlag,
 		}
 		if err := runTrace(cfg); err != nil {
 			log.Fatal(err)
