@@ -73,6 +73,7 @@ func IfaceInfo(iface string) (*EthtoolTSinfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create socket for ioctl: %w", err)
 	}
+	defer unix.Close(fd)
 	// this is what we want to be populated, but we need to provide Cmd first
 	data := &EthtoolTSinfo{
 		Cmd: unix.ETHTOOL_GET_TS_INFO,
