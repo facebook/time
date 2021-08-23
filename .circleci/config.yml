@@ -14,6 +14,7 @@ jobs:
       tag: '1.16'
     steps:
       - checkout
+      - run: sudo apt-get install libpcap-dev
       - run: go get -v -t ./...
       - run: .circleci/linters.sh
   build:
@@ -23,6 +24,7 @@ jobs:
       tag: '1.16'
     steps:
       - checkout
+      - run: sudo apt-get install libpcap-dev
       - run: go get -v -t ./...
       - run: .circleci/build.sh
   tests:
@@ -32,6 +34,7 @@ jobs:
       tag: '1.16'
     steps:
       - checkout
+      - run: sudo apt-get install libpcap-dev
       - run: go get -v -t ./...
       - run: .circleci/tests.sh
 
