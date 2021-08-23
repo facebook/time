@@ -18,6 +18,9 @@ Simple tool to read pcap/pcapng captures and parse and print PTP packets from th
 Allows to test our protocol parser implementation against arbitrary tcpdump capture.
 Also the code shows integration with *GoPacket* library.
 
+## ziffy
+CLI tool to triangulate datacenter switches that are not operating correctly as PTP Transparent Clocks.
+
 ## ptpcheck
 CLI and library to perform various PTP-related tasks, including:
 * reporting stats taken from local PTP instance in JSON format
