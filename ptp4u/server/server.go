@@ -23,6 +23,8 @@ package server
 
 import (
 	"fmt"
+	"hash"
+	"hash/fnv"
 	"net"
 	"sync"
 	"time"
@@ -38,8 +40,6 @@ type Server struct {
 	Config *Config
 	Stats  stats.Stats
 	sw     []*sendWorker
-
-	clients syncMapCli
 
 	// server source fds
 	eFd int
@@ -58,8 +58,6 @@ func (s *Server) Start() error {
 		return fmt.Errorf("unable to get the Clock Identity (EUI-64 address) of the interface: %v", err)
 	}
 
-	s.clients.init()
-
 	// Call wg.Add(1) ONLY once
 	// If ANY goroutine finishes no matter how many of them we run
 	// wg.Done will unblock
@@ -69,16 +67,8 @@ func (s *Server) Start() error {
 	// start X workers
 	s.sw = make([]*sendWorker, s.Config.Workers)
 	for i := 0; i < s.Config.Workers; i++ {
-		// Create subscription channels for every worker.
-		// Here we will put the tasks needed to be processed
-		queue := make(chan *SubscriptionClient, s.Config.QueueSize)
 		// Each worker to monitor own queue
-		s.sw[i] = &sendWorker{
-			id:     i,
-			queue:  queue,
-			config: s.Config,
-			stats:  s.Stats,
-		}
+		s.sw[i] = NewSendWorker(i, s.Config, s.Stats)
 		go func(i int) {
 			defer wg.Done()
 			s.sw[i].Start()
@@ -99,7 +89,9 @@ func (s *Server) Start() error {
 		defer wg.Done()
 		for {
 			<-time.After(s.Config.MetricInterval)
-			s.inventoryClients()
+			for _, w := range s.sw {
+				w.inventoryClients()
+			}
 			s.Stats.SetUTCOffset(int64(s.Config.UTCOffset.Seconds()))
 
 			s.Stats.Snapshot()
@@ -124,25 +116,6 @@ func (s *Server) Start() error {
 	// Wait for ANY gorouine to finish
 	wg.Wait()
 	return fmt.Errorf("one of server routines finished")
-}
-
-// findLeastBusyWorkerID searches for the worker with the least load.
-// Because HW timestamping is a very slow operation it's extremely
-// important to balance load between workers not just by number of
-// clients, but by number of packets per interval.
-func (s *Server) findLeastBusyWorkerID() int {
-	// Determine which worker is the least busy
-	var leastBusyWorkerLoad int64
-	leastBusyWorkerID := 0
-
-	for id, worker := range s.sw {
-		if id == 0 || worker.load < leastBusyWorkerLoad {
-			leastBusyWorkerID = id
-			leastBusyWorkerLoad = worker.load
-		}
-	}
-	log.Debugf("leastBusyWorkerID: %d with load: %d", leastBusyWorkerID, leastBusyWorkerLoad)
-	return leastBusyWorkerID
 }
 
 // startEventListener launches the listener which listens to subscription requests
@@ -191,8 +164,11 @@ func (s *Server) startEventListener() {
 			defer wg.Done()
 			buf := make([]byte, ptp.PayloadSizeBytes)
 			oob := make([]byte, ptp.ControlSizeBytes)
+			h := fnv.New32a()
 
 			for {
+				// reset hash
+				h.Reset()
 				bbuf, clisa, rxTS, err := ptp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
 				if err != nil {
 					log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
@@ -201,7 +177,7 @@ func (s *Server) startEventListener() {
 				if s.Config.TimestampType != ptp.HWTIMESTAMP {
 					rxTS = rxTS.Add(s.Config.UTCOffset)
 				}
-				s.handleEventMessage(buf[:bbuf], clisa, rxTS)
+				s.handleEventMessage(buf[:bbuf], clisa, rxTS, h)
 			}
 		}()
 	}
@@ -239,14 +215,17 @@ func (s *Server) startGeneralListener() {
 		go func() {
 			defer wg.Done()
 			buf := make([]byte, ptp.PayloadSizeBytes)
+			h := fnv.New32a()
 
 			for {
+				// reset hash
+				h.Reset()
 				bbuf, clisa, err := readPacketBuf(s.gFd, buf)
 				if err != nil {
 					log.Errorf("Failed to read packet on %s: %v", generalConn.LocalAddr(), err)
 					continue
 				}
-				s.handleGeneralMessage(buf[:bbuf], clisa)
+				s.handleGeneralMessage(buf[:bbuf], clisa, h)
 			}
 		}()
 	}
@@ -262,36 +241,8 @@ func readPacketBuf(connFd int, buf []byte) (int, unix.Sockaddr, error) {
 	return n, saddr, err
 }
 
-// client retrieves an existing client
-func (s *Server) findSubscription(clientID ptp.PortIdentity, st ptp.MessageType) *SubscriptionClient {
-	subs, ok := s.clients.load(clientID)
-	if !ok {
-		return nil
-	}
-
-	sc, ok := subs.load(st)
-	if !ok {
-		return nil
-	}
-	return sc
-}
-
-// registerSubscription will overwrite an existing subscription.
-// Make sure you call findSubscription before this
-func (s *Server) registerSubscription(clientID ptp.PortIdentity, st ptp.MessageType, sc *SubscriptionClient) {
-	// Check if client is already there
-	subs, ok := s.clients.load(clientID)
-	if !ok {
-		subs = &syncMapSub{}
-		subs.init()
-		log.Debugf("Registering a new client %+v", sc)
-	}
-	subs.store(st, sc)
-	s.clients.store(clientID, subs)
-}
-
 // handleEventMessage is a handler which gets called every time Event Message arrives
-func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS time.Time) {
+func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS time.Time, h hash.Hash32) {
 	msgType, err := ptp.ProbeMsgType(request)
 	if err != nil {
 		log.Errorf("Failed to probe the ptp message type: %v", err)
@@ -309,7 +260,8 @@ func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS ti
 		}
 
 		log.Debugf("Got delay request")
-		sc := s.findSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
+		worker := s.findWorker(dReq.Header.SourcePortIdentity, h)
+		sc := worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
 		if sc == nil {
 			log.Warningf("Delay request from %s is not in the subscription list", ptp.SockaddrToIP(clisa))
 			return
@@ -323,7 +275,7 @@ func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS ti
 }
 
 // handleGeneralMessage is a handler which gets called every time General Message arrives
-func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
+func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr, h hash.Hash32) {
 	msgType, err := ptp.ProbeMsgType(request)
 	if err != nil {
 		log.Errorf("Failed to probe the ptp message type: %v", err)
@@ -350,12 +302,13 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 					intervalt := v.LogInterMessagePeriod.Duration()
 					expire := time.Now().Add(durationt)
 
-					sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
+					worker := s.findWorker(signaling.SourcePortIdentity, h)
+					sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 					if sc == nil {
 						ip := ptp.SockaddrToIP(gclisa)
 						eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
-						sc = NewSubscriptionClient(s.sw[s.findLeastBusyWorkerID()], eclisa, gclisa, grantType, s.Config, intervalt, expire)
-						s.registerSubscription(signaling.SourcePortIdentity, grantType, sc)
+						sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
+						worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
 					} else {
 						// Update existing subscription data
 						sc.expire = expire
@@ -378,12 +331,13 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 					s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
 
 				case ptp.MessageDelayResp:
-					sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
+					worker := s.findWorker(signaling.SourcePortIdentity, h)
+					sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 					if sc == nil {
 						ip := ptp.SockaddrToIP(gclisa)
 						eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
-						sc = NewSubscriptionClient(s.sw[s.findLeastBusyWorkerID()], eclisa, gclisa, grantType, s.Config, time.Second, time.Time{})
-						s.registerSubscription(signaling.SourcePortIdentity, grantType, sc)
+						sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, time.Second, time.Time{})
+						worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
 					}
 					sc.SetRunning(true)
 
@@ -397,8 +351,8 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 			case *ptp.CancelUnicastTransmissionTLV:
 				grantType := v.MsgTypeAndFlags.MsgType()
 				log.Debugf("Got %s cancel request", grantType)
-
-				sc := s.findSubscription(signaling.SourcePortIdentity, grantType)
+				worker := s.findWorker(signaling.SourcePortIdentity, h)
+				sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 				if sc != nil {
 					sc.Stop()
 				}
@@ -410,24 +364,23 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr) {
 	}
 }
 
-// inventoryClients goes over list of clients, deletes inactive and updates stats
-func (s *Server) inventoryClients() {
-	for _, clientID := range s.clients.keys() {
-		active := false
-		if subs, ok := s.clients.load(clientID); ok {
-			for _, st := range subs.keys() {
-				if sc, ok := subs.load(st); ok {
-					if sc.running {
-						active = true
-						s.Stats.IncSubscription(st)
-					}
-				}
-			}
-		}
-		if !active {
-			s.clients.delete(clientID)
-		}
-	}
+func (s *Server) findWorker(clientID ptp.PortIdentity, h hash.Hash32) *sendWorker {
+	// that's how we do binary.Write(h, binary.BigEndian, clientID) without allocations
+	_, _ = h.Write([]byte{
+		byte(0xff & clientID.ClockIdentity),
+		byte(0xff & (clientID.ClockIdentity >> 8)),
+		byte(0xff & (clientID.ClockIdentity >> 16)),
+		byte(0xff & (clientID.ClockIdentity >> 24)),
+		byte(0xff & (clientID.ClockIdentity >> 32)),
+		byte(0xff & (clientID.ClockIdentity >> 40)),
+		byte(0xff & (clientID.ClockIdentity >> 48)),
+		byte(0xff & (clientID.ClockIdentity >> 56)),
+	})
+	_, _ = h.Write([]byte{
+		byte(0xff & clientID.PortNumber),
+		byte(0xff & (clientID.PortNumber >> 8)),
+	})
+	return s.sw[h.Sum32()%uint32(s.Config.Workers)]
 }
 
 // sendGrant sends a Unicast Grant message

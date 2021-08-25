@@ -71,9 +71,6 @@ type Stats interface {
 	// DecTXSignaling atomically removes 1 from the counter
 	DecTXSignaling(t ptp.MessageType)
 
-	// SetMaxWorkerLoad atomically sets worker load
-	SetMaxWorkerLoad(workerid int, load int64)
-
 	// SetMaxWorkerQueue atomically sets worker queue len
 	SetMaxWorkerQueue(workerid int, queue int64)
 
@@ -158,7 +155,6 @@ type counters struct {
 	tx            syncMapInt64
 	txSignaling   syncMapInt64
 	txtsattempts  syncMapInt64
-	workerLoad    syncMapInt64
 	workerQueue   syncMapInt64
 	utcoffset     int64
 }
@@ -169,7 +165,6 @@ func (c *counters) init() {
 	c.tx.init()
 	c.rxSignaling.init()
 	c.txSignaling.init()
-	c.workerLoad.init()
 	c.workerQueue.init()
 	c.txtsattempts.init()
 }
@@ -180,7 +175,6 @@ func (c *counters) reset() {
 	c.tx.reset()
 	c.rxSignaling.reset()
 	c.txSignaling.reset()
-	c.workerLoad.reset()
 	c.workerQueue.reset()
 	c.txtsattempts.reset()
 	c.utcoffset = 0
@@ -218,11 +212,6 @@ func (c *counters) toMap() (export map[string]int64) {
 		c := c.txSignaling.load(t)
 		mt := strings.ToLower(ptp.MessageType(t).String())
 		res[fmt.Sprintf("tx.signaling.%s", mt)] = c
-	}
-
-	for _, t := range c.workerLoad.keys() {
-		c := c.workerLoad.load(t)
-		res[fmt.Sprintf("worker.%d.load", t)] = c
 	}
 
 	for _, t := range c.workerQueue.keys() {
