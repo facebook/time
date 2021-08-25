@@ -19,7 +19,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
@@ -31,7 +30,7 @@ import (
 type SubscriptionClient struct {
 	sync.Mutex
 
-	worker           *sendWorker
+	queue            chan *SubscriptionClient
 	subscriptionType ptp.MessageType
 	serverConfig     *Config
 
@@ -53,14 +52,14 @@ type SubscriptionClient struct {
 }
 
 // NewSubscriptionClient gets minimal required arguments to create a subscription
-func NewSubscriptionClient(w *sendWorker, eclisa, gclisa unix.Sockaddr, st ptp.MessageType, sc *Config, i time.Duration, e time.Time) *SubscriptionClient {
+func NewSubscriptionClient(q chan *SubscriptionClient, eclisa, gclisa unix.Sockaddr, st ptp.MessageType, sc *Config, i time.Duration, e time.Time) *SubscriptionClient {
 	s := &SubscriptionClient{
 		eclisa:           eclisa,
 		gclisa:           gclisa,
 		subscriptionType: st,
 		interval:         i,
 		expire:           e,
-		worker:           w,
+		queue:            q,
 		serverConfig:     sc,
 	}
 
@@ -77,20 +76,8 @@ func NewSubscriptionClient(w *sendWorker, eclisa, gclisa unix.Sockaddr, st ptp.M
 func (sc *SubscriptionClient) Start() {
 	sc.SetRunning(true)
 	defer sc.Stop()
-	/*
-		Calculate the load we add to the worker. Ex:
-		sc.interval = 10000ms. l = 1
-		sc.interval = 2000ms.  l = 5
-		sc.interval = 500ms.   l = 20
-		sc.interval = 7ms.     l = 1428
-		https://play.golang.org/p/XKnACWjKd24
-	*/
-	l := 10 * time.Second.Microseconds() / sc.interval.Microseconds()
-	atomic.AddInt64(&sc.worker.load, l)
-	defer atomic.AddInt64(&sc.worker.load, -l)
 	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
 	over := fmt.Sprintf("Subscription %s is over for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
-
 	// Send first message right away
 	sc.Once()
 
@@ -119,7 +106,7 @@ func (sc *SubscriptionClient) Start() {
 
 // Once adds itself to the worker queue once
 func (sc *SubscriptionClient) Once() {
-	sc.worker.queue <- sc
+	sc.queue <- sc
 }
 
 // setRunning sets running with the lock
@@ -329,88 +316,4 @@ func (sc *SubscriptionClient) UpdateGrant(sg *ptp.Signaling, mt ptp.UnicastMsgTy
 // Grant returns ptp Signaling packet granting the requested subscription
 func (sc *SubscriptionClient) Grant() *ptp.Signaling {
 	return sc.grant
-}
-
-type syncMapCli struct {
-	sync.Mutex
-	m map[ptp.PortIdentity]*syncMapSub
-}
-
-// init initializes the underlying map
-func (s *syncMapCli) init() {
-	s.m = make(map[ptp.PortIdentity]*syncMapSub)
-}
-
-// load gets the value by the key
-func (s *syncMapCli) load(key ptp.PortIdentity) (*syncMapSub, bool) {
-	s.Lock()
-	defer s.Unlock()
-	subs, found := s.m[key]
-	return subs, found
-}
-
-// store saves the value with the key
-func (s *syncMapCli) store(key ptp.PortIdentity, val *syncMapSub) {
-	s.Lock()
-	if _, ok := s.m[key]; !ok {
-		subs := &syncMapSub{}
-		subs.init()
-		s.m[key] = subs
-	}
-	s.m[key] = val
-	s.Unlock()
-}
-
-// delete deletes the value by the key
-func (s *syncMapCli) delete(key ptp.PortIdentity) {
-	s.Lock()
-	delete(s.m, key)
-	s.Unlock()
-}
-
-// keys returns slice of keys of the underlying map
-func (s *syncMapCli) keys() []ptp.PortIdentity {
-	keys := make([]ptp.PortIdentity, 0, len(s.m))
-	s.Lock()
-	for k := range s.m {
-		keys = append(keys, k)
-	}
-	s.Unlock()
-	return keys
-}
-
-type syncMapSub struct {
-	sync.Mutex
-	m map[ptp.MessageType]*SubscriptionClient
-}
-
-// init initializes the underlying map
-func (s *syncMapSub) init() {
-	s.m = make(map[ptp.MessageType]*SubscriptionClient)
-}
-
-// load gets the value by the key
-func (s *syncMapSub) load(key ptp.MessageType) (*SubscriptionClient, bool) {
-	s.Lock()
-	defer s.Unlock()
-	sc, found := s.m[key]
-	return sc, found
-}
-
-// store saves the value with the key
-func (s *syncMapSub) store(key ptp.MessageType, val *SubscriptionClient) {
-	s.Lock()
-	s.m[key] = val
-	s.Unlock()
-}
-
-// keys returns slice of keys of the underlying map
-func (s *syncMapSub) keys() []ptp.MessageType {
-	keys := make([]ptp.MessageType, 0, len(s.m))
-	s.Lock()
-	for k := range s.m {
-		keys = append(keys, k)
-	}
-	s.Unlock()
-	return keys
 }

@@ -18,6 +18,7 @@ package server
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
@@ -28,11 +29,24 @@ import (
 
 // sendWorker monitors the queue of jobs
 type sendWorker struct {
+	mux    sync.Mutex
 	id     int
 	queue  chan *SubscriptionClient
-	load   int64
 	config *Config
 	stats  stats.Stats
+
+	clients map[ptp.MessageType]map[ptp.PortIdentity]*SubscriptionClient
+}
+
+func NewSendWorker(i int, c *Config, st stats.Stats) *sendWorker {
+	s := &sendWorker{
+		id:     i,
+		config: c,
+		stats:  st,
+	}
+	s.clients = make(map[ptp.MessageType]map[ptp.PortIdentity]*SubscriptionClient)
+	s.queue = make(chan *SubscriptionClient, c.QueueSize)
+	return s
 }
 
 // Start a SendWorker which will pull data from the queue and send Sync and Followup packets
@@ -86,7 +100,6 @@ func (s *sendWorker) Start() {
 	toob := make([]byte, ptp.ControlSizeBytes)
 
 	// TODO: Enable dscp accordingly
-
 	var (
 		n        int
 		attempts int
@@ -176,7 +189,48 @@ func (s *sendWorker) Start() {
 		}
 
 		c.IncSequenceID()
-		s.stats.SetMaxWorkerLoad(s.id, s.load)
 		s.stats.SetMaxWorkerQueue(s.id, int64(len(s.queue)))
+	}
+}
+
+// FindSubscription retrieves an existing client
+func (s *sendWorker) FindSubscription(clientID ptp.PortIdentity, st ptp.MessageType) *SubscriptionClient {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	m, ok := s.clients[st]
+	if !ok {
+		return nil
+	}
+	sub, ok := m[clientID]
+	if !ok {
+		return nil
+	}
+	return sub
+}
+
+// RegisterSubscription will overwrite an existing subscription.
+// Make sure you call findSubscription before this
+func (s *sendWorker) RegisterSubscription(clientID ptp.PortIdentity, st ptp.MessageType, sc *SubscriptionClient) {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	m, ok := s.clients[st]
+	if !ok {
+		s.clients[st] = map[ptp.PortIdentity]*SubscriptionClient{}
+		m = s.clients[st]
+	}
+	m[clientID] = sc
+}
+
+func (s *sendWorker) inventoryClients() {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	for st, subs := range s.clients {
+		for k, sc := range subs {
+			if !sc.Running() {
+				delete(subs, k)
+				continue
+			}
+		}
+		s.stats.IncSubscription(st)
 	}
 }

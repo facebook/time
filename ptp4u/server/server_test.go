@@ -26,83 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Testing conversion so if Packet structure changes we notice
-func TestServerFindLeastBusyWorkerID(t *testing.T) {
-	s := Server{
-		Config: &Config{Workers: 3},
-	}
-
-	s.sw = make([]*sendWorker, s.Config.Workers)
-	for i := 0; i < s.Config.Workers; i++ {
-		s.sw[i] = &sendWorker{}
-	}
-
-	require.Equal(t, 0, s.findLeastBusyWorkerID())
-
-	s.sw[0].load = 1234
-	require.Equal(t, 1, s.findLeastBusyWorkerID())
-
-	s.sw[1].load = 8
-	require.Equal(t, 2, s.findLeastBusyWorkerID())
-
-	s.sw[2].load = 100500
-	require.Equal(t, 1, s.findLeastBusyWorkerID())
-
-	s.sw[1].load = 1000000
-	require.Equal(t, 0, s.findLeastBusyWorkerID())
-}
-
-func TestServerRegisterSubscription(t *testing.T) {
-	var (
-		scE *SubscriptionClient
-		scS *SubscriptionClient
-		scA *SubscriptionClient
-		scT *SubscriptionClient
-	)
-
-	ci := ptp.ClockIdentity(1234)
-	pi := ptp.PortIdentity{
-		PortNumber:    1,
-		ClockIdentity: ptp.ClockIdentity(1234),
-	}
-
-	c := &Config{clockIdentity: ci}
-	s := Server{Config: c}
-	s.clients.init()
-
-	// Nothing should be there
-	scE = s.findSubscription(pi, ptp.MessageSync)
-	require.Nil(t, scE)
-
-	scE = s.findSubscription(pi, ptp.MessageAnnounce)
-	require.Nil(t, scE)
-
-	// Add Sync. Check we got
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	scS = NewSubscriptionClient(&sendWorker{}, sa, sa, ptp.MessageSync, c, time.Second, time.Now())
-	s.registerSubscription(pi, ptp.MessageSync, scS)
-	// Check Sync is saved
-	scT = s.findSubscription(pi, ptp.MessageSync)
-	require.Equal(t, scS, scT)
-
-	// Add announce. Check we have now both
-	scA = NewSubscriptionClient(&sendWorker{}, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Now())
-	s.registerSubscription(pi, ptp.MessageAnnounce, scA)
-	// First check Sync
-	scT = s.findSubscription(pi, ptp.MessageSync)
-	require.Equal(t, scS, scT)
-	// Then check Announce
-	scT = s.findSubscription(pi, ptp.MessageAnnounce)
-	require.Equal(t, scA, scT)
-
-	// Override announce
-	scA = NewSubscriptionClient(&sendWorker{}, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Now())
-	s.registerSubscription(pi, ptp.MessageAnnounce, scA)
-	// Check new Announce is saved
-	scT = s.findSubscription(pi, ptp.MessageAnnounce)
-	require.Equal(t, scA, scT)
-}
-
 func TestServerInventoryClients(t *testing.T) {
 	clipi1 := ptp.PortIdentity{
 		PortNumber:    1,
@@ -118,38 +41,37 @@ func TestServerInventoryClients(t *testing.T) {
 	go st.Start(0)
 	time.Sleep(time.Millisecond)
 
-	s := Server{Config: c, Stats: st}
-	s.clients.init()
+	w := NewSendWorker(0, c, st)
 
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	scS1 := NewSubscriptionClient(&sendWorker{}, sa, sa, ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
-	s.registerSubscription(clipi1, ptp.MessageSync, scS1)
+	scS1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
+	w.RegisterSubscription(clipi1, ptp.MessageSync, scS1)
 	scS1.running = true
-	s.inventoryClients()
-	require.Equal(t, 1, len(s.clients.keys()))
+	w.inventoryClients()
+	require.Equal(t, 1, len(w.clients))
 
-	scA1 := NewSubscriptionClient(&sendWorker{}, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Now().Add(time.Minute))
-	s.registerSubscription(clipi1, ptp.MessageSync, scA1)
+	scA1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Now().Add(time.Minute))
+	w.RegisterSubscription(clipi1, ptp.MessageAnnounce, scA1)
 	scA1.running = true
-	s.inventoryClients()
-	require.Equal(t, 1, len(s.clients.keys()))
+	w.inventoryClients()
+	require.Equal(t, 2, len(w.clients))
 
-	scS2 := NewSubscriptionClient(&sendWorker{}, sa, sa, ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
-	s.registerSubscription(clipi2, ptp.MessageSync, scS2)
+	scS2 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
+	w.RegisterSubscription(clipi2, ptp.MessageSync, scS2)
 	scS2.running = true
-	s.inventoryClients()
-	require.Equal(t, 2, len(s.clients.keys()))
+	w.inventoryClients()
+	require.Equal(t, 2, len(w.clients[ptp.MessageSync]))
 
 	// Shutting down
 	scS1.running = false
-	s.inventoryClients()
-	require.Equal(t, 2, len(s.clients.keys()))
+	w.inventoryClients()
+	require.Equal(t, 1, len(w.clients[ptp.MessageSync]))
 
 	scA1.running = false
-	s.inventoryClients()
-	require.Equal(t, 1, len(s.clients.keys()))
+	w.inventoryClients()
+	require.Equal(t, 0, len(w.clients[ptp.MessageAnnounce]))
 
 	scS2.running = false
-	s.inventoryClients()
-	require.Equal(t, 0, len(s.clients.keys()))
+	w.inventoryClients()
+	require.Equal(t, 0, len(w.clients[ptp.MessageSync]))
 }

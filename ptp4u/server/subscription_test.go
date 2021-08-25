@@ -42,7 +42,7 @@ func TestSubscriptionStart(t *testing.T) {
 	interval := 1 * time.Minute
 	expire := time.Now().Add(1 * time.Second)
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, interval, expire)
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
 	go sc.Start()
 	time.Sleep(100 * time.Millisecond)
@@ -57,7 +57,7 @@ func TestSubscriptionStop(t *testing.T) {
 	interval := 10 * time.Millisecond
 	expire := time.Now().Add(1 * time.Second)
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, interval, expire)
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
 	go sc.Start()
 	time.Sleep(100 * time.Millisecond)
@@ -71,7 +71,7 @@ func TestSubscriptionflags(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
 	sc.UpdateSync()
 	sc.UpdateFollowup(time.Now())
@@ -81,52 +81,13 @@ func TestSubscriptionflags(t *testing.T) {
 	require.Equal(t, ptp.FlagUnicast|ptp.FlagPTPTimescale, sc.Announce().Header.FlagField)
 }
 
-func TestSyncMapSub(t *testing.T) {
-	sm := syncMapSub{}
-	sm.init()
-	require.Equal(t, 0, len(sm.keys()))
-
-	ci := ptp.ClockIdentity(1234)
-	c := &Config{clockIdentity: ci}
-	sc := &SubscriptionClient{serverConfig: c}
-	st := ptp.MessageAnnounce
-	sm.store(st, sc)
-
-	sct, ok := sm.load(st)
-	require.True(t, ok)
-	require.Equal(t, sc, sct)
-	require.Equal(t, 1, len(sm.keys()))
-}
-
-func TestSyncMapCli(t *testing.T) {
-	sm := syncMapCli{}
-	sm.init()
-	require.Equal(t, 0, len(sm.keys()))
-
-	pi := ptp.PortIdentity{
-		PortNumber:    1,
-		ClockIdentity: ptp.ClockIdentity(1234),
-	}
-
-	val := &syncMapSub{}
-	val.init()
-
-	sm.store(pi, val)
-	require.Equal(t, 1, len(sm.keys()))
-
-	valt, ok := sm.load(pi)
-	require.True(t, ok)
-	require.Equal(t, val, valt)
-	require.Equal(t, 1, len(sm.keys()))
-}
-
 func TestSyncPacket(t *testing.T) {
 	sequenceID := uint16(42)
 
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 
 	sc.initSync()
@@ -143,7 +104,7 @@ func TestFollowupPacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 	sc.interval = interval
 
@@ -166,7 +127,7 @@ func TestAnnouncePacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234), UTCOffset: UTCOffset}
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 	sc.interval = interval
 
@@ -194,7 +155,7 @@ func TestDelayRespPacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
 	sp := ptp.PortIdentity{
 		PortNumber:    1,
@@ -221,7 +182,7 @@ func TestGrantPacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sg := &ptp.Signaling{}
 
 	mt := ptp.NewUnicastMsgTypeAndFlags(ptp.MessageAnnounce, 0)

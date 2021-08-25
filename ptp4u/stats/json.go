@@ -62,7 +62,6 @@ func (s *JSONStats) Snapshot() {
 	s.tx.copy(&s.report.tx)
 	s.rxSignaling.copy(&s.report.rxSignaling)
 	s.txSignaling.copy(&s.report.txSignaling)
-	s.workerLoad.copy(&s.report.workerLoad)
 	s.workerQueue.copy(&s.report.workerQueue)
 	s.txtsattempts.copy(&s.report.txtsattempts)
 	s.report.utcoffset = s.utcoffset
@@ -134,13 +133,6 @@ func (s *JSONStats) DecRXSignaling(t ptp.MessageType) {
 // DecTXSignaling atomically removes 1 from the counter
 func (s *JSONStats) DecTXSignaling(t ptp.MessageType) {
 	s.txSignaling.dec(int(t))
-}
-
-// SetMaxWorkerLoad atomically sets worker load
-func (s *JSONStats) SetMaxWorkerLoad(workerid int, load int64) {
-	if load > s.workerLoad.load(workerid) {
-		s.workerLoad.store(workerid, load)
-	}
 }
 
 // SetMaxWorkerQueue atomically sets worker queue len

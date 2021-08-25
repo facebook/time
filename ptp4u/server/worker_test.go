@@ -49,7 +49,7 @@ func TestWorkerQueue(t *testing.T) {
 	interval := time.Millisecond
 	expire := time.Now().Add(time.Millisecond)
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w, sa, sa, ptp.MessageAnnounce, c, interval, expire)
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
 	for i := 0; i < 10; i++ {
 		w.queue <- sc
