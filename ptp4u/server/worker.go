@@ -230,7 +230,7 @@ func (s *sendWorker) inventoryClients() {
 				delete(subs, k)
 				continue
 			}
+			s.stats.IncSubscription(st)
 		}
-		s.stats.IncSubscription(st)
 	}
 }
