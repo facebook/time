@@ -162,23 +162,7 @@ func (s *Server) startEventListener() {
 	for i := 0; i < s.Config.Workers; i++ {
 		go func() {
 			defer wg.Done()
-			buf := make([]byte, ptp.PayloadSizeBytes)
-			oob := make([]byte, ptp.ControlSizeBytes)
-			h := fnv.New32a()
-
-			for {
-				// reset hash
-				h.Reset()
-				bbuf, clisa, rxTS, err := ptp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
-				if err != nil {
-					log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
-					continue
-				}
-				if s.Config.TimestampType != ptp.HWTIMESTAMP {
-					rxTS = rxTS.Add(s.Config.UTCOffset)
-				}
-				s.handleEventMessage(buf[:bbuf], clisa, rxTS, h)
-			}
+			s.handleEventMessages(eventConn)
 		}()
 	}
 	wg.Wait()
@@ -214,19 +198,7 @@ func (s *Server) startGeneralListener() {
 	for i := 0; i < s.Config.Workers; i++ {
 		go func() {
 			defer wg.Done()
-			buf := make([]byte, ptp.PayloadSizeBytes)
-			h := fnv.New32a()
-
-			for {
-				// reset hash
-				h.Reset()
-				bbuf, clisa, err := readPacketBuf(s.gFd, buf)
-				if err != nil {
-					log.Errorf("Failed to read packet on %s: %v", generalConn.LocalAddr(), err)
-					continue
-				}
-				s.handleGeneralMessage(buf[:bbuf], clisa, h)
-			}
+			s.handleGeneralMessages(generalConn)
 		}()
 	}
 	wg.Wait()
@@ -242,125 +214,162 @@ func readPacketBuf(connFd int, buf []byte) (int, unix.Sockaddr, error) {
 }
 
 // handleEventMessage is a handler which gets called every time Event Message arrives
-func (s *Server) handleEventMessage(request []byte, clisa unix.Sockaddr, rxTS time.Time, h hash.Hash32) {
-	msgType, err := ptp.ProbeMsgType(request)
-	if err != nil {
-		log.Errorf("Failed to probe the ptp message type: %v", err)
-		return
-	}
+func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
+	buf := make([]byte, ptp.PayloadSizeBytes)
+	oob := make([]byte, ptp.ControlSizeBytes)
+	h := fnv.New32a()
+	dReq := &ptp.SyncDelayReq{}
 
-	s.Stats.IncRX(msgType)
+	var msgType ptp.MessageType
 
-	switch msgType {
-	case ptp.MessageDelayReq:
-		dReq := &ptp.SyncDelayReq{}
-		if err := ptp.FromBytes(request, dReq); err != nil {
-			log.Errorf("Failed to read the ptp SyncDelayReq: %v", err)
-			return
+	for {
+		// reset hash
+		h.Reset()
+		bbuf, clisa, rxTS, err := ptp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
+		if err != nil {
+			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
+			continue
+		}
+		if s.Config.TimestampType != ptp.HWTIMESTAMP {
+			rxTS = rxTS.Add(s.Config.UTCOffset)
 		}
 
-		log.Debugf("Got delay request")
-		worker := s.findWorker(dReq.Header.SourcePortIdentity, h)
-		sc := worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
-		if sc == nil {
-			log.Warningf("Delay request from %s is not in the subscription list", ptp.SockaddrToIP(clisa))
-			return
+		msgType, err = ptp.ProbeMsgType(buf[:bbuf])
+		if err != nil {
+			log.Errorf("Failed to probe the ptp message type: %v", err)
+			continue
 		}
-		sc.UpdateDelayResp(&dReq.Header, rxTS)
-		sc.Once()
-	default:
-		log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)
-	}
 
+		s.Stats.IncRX(msgType)
+
+		switch msgType {
+		case ptp.MessageDelayReq:
+			if err := ptp.FromBytes(buf[:bbuf], dReq); err != nil {
+				log.Errorf("Failed to read the ptp SyncDelayReq: %v", err)
+				continue
+			}
+
+			log.Debugf("Got delay request")
+			worker := s.findWorker(dReq.Header.SourcePortIdentity, h)
+			sc := worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
+			if sc == nil {
+				log.Warningf("Delay request from %s is not in the subscription list", ptp.SockaddrToIP(clisa))
+				continue
+			}
+			sc.UpdateDelayResp(&dReq.Header, rxTS)
+			sc.Once()
+		default:
+			log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)
+		}
+	}
 }
 
 // handleGeneralMessage is a handler which gets called every time General Message arrives
-func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr, h hash.Hash32) {
-	msgType, err := ptp.ProbeMsgType(request)
-	if err != nil {
-		log.Errorf("Failed to probe the ptp message type: %v", err)
-		return
-	}
+func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
+	buf := make([]byte, ptp.PayloadSizeBytes)
+	h := fnv.New32a()
+	signaling := &ptp.Signaling{}
+	zerotlv := []ptp.TLV{}
 
-	switch msgType {
-	case ptp.MessageSignaling:
-		signaling := &ptp.Signaling{}
-		if err := ptp.FromBytes(request, signaling); err != nil {
-			log.Error(err)
-			return
+	var grantType ptp.MessageType
+	var durationt time.Duration
+	var intervalt time.Duration
+	var expire time.Time
+
+	for {
+		// reset hash
+		h.Reset()
+		bbuf, gclisa, err := readPacketBuf(s.gFd, buf)
+		if err != nil {
+			log.Errorf("Failed to read packet on %s: %v", generalConn.LocalAddr(), err)
+			continue
 		}
 
-		for _, tlv := range signaling.TLVs {
-			// make sure we have fresh hash if multi TLV comes in
-			h.Reset()
-			switch v := tlv.(type) {
-			case *ptp.RequestUnicastTransmissionTLV:
-				grantType := v.MsgTypeAndReserved.MsgType()
-				log.Debugf("Got %s grant request", grantType)
+		msgType, err := ptp.ProbeMsgType(buf[:bbuf])
+		if err != nil {
+			log.Errorf("Failed to probe the ptp message type: %v", err)
+			continue
+		}
 
-				switch grantType {
-				case ptp.MessageAnnounce, ptp.MessageSync:
-					durationt := time.Duration(v.DurationField) * time.Second
-					intervalt := v.LogInterMessagePeriod.Duration()
-					expire := time.Now().Add(durationt)
+		switch msgType {
+		case ptp.MessageSignaling:
+			signaling.TLVs = zerotlv
+			if err := ptp.FromBytes(buf[:bbuf], signaling); err != nil {
+				log.Error(err)
+				continue
+			}
 
+			for _, tlv := range signaling.TLVs {
+				// make sure we have fresh hash if multi TLV comes in
+				h.Reset()
+				switch v := tlv.(type) {
+				case *ptp.RequestUnicastTransmissionTLV:
+					grantType = v.MsgTypeAndReserved.MsgType()
+					log.Debugf("Got %s grant request", grantType)
+					durationt = time.Duration(v.DurationField) * time.Second
+					expire = time.Now().Add(durationt)
+
+					switch grantType {
+					case ptp.MessageAnnounce, ptp.MessageSync:
+						intervalt = v.LogInterMessagePeriod.Duration()
+
+						worker := s.findWorker(signaling.SourcePortIdentity, h)
+						sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
+						if sc == nil {
+							ip := ptp.SockaddrToIP(gclisa)
+							eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
+							sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
+							worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
+						} else {
+							// Update existing subscription data
+							sc.expire = expire
+							sc.interval = intervalt
+						}
+
+						// Reject queries out of limit
+						if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
+							s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0, gclisa)
+							continue
+						}
+
+						// The subscription is over or a new cli. Starting
+						if !sc.running {
+							go sc.Start()
+						}
+
+						// Send confirmation grant
+						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
+
+					case ptp.MessageDelayResp:
+						worker := s.findWorker(signaling.SourcePortIdentity, h)
+						sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
+						if sc == nil {
+							ip := ptp.SockaddrToIP(gclisa)
+							eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
+							sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, time.Second, expire)
+							worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
+						}
+						sc.SetRunning(true)
+
+						// Send confirmation grant
+						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, 0, v.DurationField, gclisa)
+
+					default:
+						log.Errorf("Got unsupported grant type %s", grantType)
+					}
+					s.Stats.IncRXSignaling(grantType)
+				case *ptp.CancelUnicastTransmissionTLV:
+					grantType = v.MsgTypeAndFlags.MsgType()
+					log.Debugf("Got %s cancel request", grantType)
 					worker := s.findWorker(signaling.SourcePortIdentity, h)
 					sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
-					if sc == nil {
-						ip := ptp.SockaddrToIP(gclisa)
-						eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
-						sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
-						worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
-					} else {
-						// Update existing subscription data
-						sc.expire = expire
-						sc.interval = intervalt
+					if sc != nil {
+						sc.Stop()
 					}
-
-					// Reject queries out of limit
-					if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
-						log.Warningf("Got too demanding %s request. Duration: %s, Interval: %s. Rejecting. Consider changing -maxsubduration and -minsubinterval", grantType, durationt, intervalt)
-						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0, gclisa)
-						return
-					}
-
-					// The subscription is over or a new cli. Starting
-					if !sc.running {
-						go sc.Start()
-					}
-
-					// Send confirmation grant
-					s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
-
-				case ptp.MessageDelayResp:
-					worker := s.findWorker(signaling.SourcePortIdentity, h)
-					sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
-					if sc == nil {
-						ip := ptp.SockaddrToIP(gclisa)
-						eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
-						sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, time.Second, time.Time{})
-						worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
-					}
-					sc.SetRunning(true)
-
-					// Send confirmation grant
-					s.sendGrant(sc, signaling, v.MsgTypeAndReserved, 0, v.DurationField, gclisa)
 
 				default:
-					log.Errorf("Got unsupported grant type %s", grantType)
+					log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)
 				}
-				s.Stats.IncRXSignaling(grantType)
-			case *ptp.CancelUnicastTransmissionTLV:
-				grantType := v.MsgTypeAndFlags.MsgType()
-				log.Debugf("Got %s cancel request", grantType)
-				worker := s.findWorker(signaling.SourcePortIdentity, h)
-				sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
-				if sc != nil {
-					sc.Stop()
-				}
-
-			default:
-				log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)
 			}
 		}
 	}
