@@ -53,10 +53,20 @@ var failString = color.RedString("[FAIL]")
 var statusToColor = []string{okString, warnString, failString}
 
 // generic function to check value against some thresholds
-func checkAgainstThreshold(name string, value, warnThreshold, failThreshold float64, explanation string) (status, string) {
+func checkAgainstThreshold(name string, value, warnThreshold, failThreshold float64, explanation string, failOnZero bool) (status, string) {
 	msgTemplate := "%s is %s, we expect it to be within %s%s"
 	absValue := math.Abs(value)
 	thresholdStr := color.BlueString("%v", time.Duration(warnThreshold))
+
+	if failOnZero && absValue == 0 {
+		return FAIL, fmt.Sprintf(
+			"%s is %s, we expect it to be non-zero and within %s%s",
+			name,
+			color.RedString("%v", time.Duration(value)),
+			thresholdStr,
+			". "+explanation,
+		)
+	}
 	if absValue > failThreshold {
 		return FAIL, fmt.Sprintf(
 			msgTemplate,
@@ -111,6 +121,7 @@ func checkSyncActive(r *checker.PTPCheckResult) (status, string) {
 		warnThreshold,
 		failThreshold,
 		"We expect to receive SYNC messages from GM very often",
+		false,
 	)
 }
 
@@ -125,6 +136,7 @@ func checkOffset(r *checker.PTPCheckResult) (status, string) {
 		warnThreshold,
 		failThreshold,
 		"Offset is the difference between our clock and remote server (time error).",
+		true,
 	)
 }
 func checkPathDelay(r *checker.PTPCheckResult) (status, string) {
@@ -138,6 +150,7 @@ func checkPathDelay(r *checker.PTPCheckResult) (status, string) {
 		warnThreshold,
 		failThreshold,
 		"Mean path delay is measured network delay between us and GM",
+		true,
 	)
 }
 
