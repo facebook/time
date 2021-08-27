@@ -291,6 +291,8 @@ func (s *Server) handleGeneralMessage(request []byte, gclisa unix.Sockaddr, h ha
 		}
 
 		for _, tlv := range signaling.TLVs {
+			// make sure we have fresh hash if multi TLV comes in
+			h.Reset()
 			switch v := tlv.(type) {
 			case *ptp.RequestUnicastTransmissionTLV:
 				grantType := v.MsgTypeAndReserved.MsgType()
