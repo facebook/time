@@ -70,6 +70,7 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	c.rxSignaling.store(1, 1)
 	c.txSignaling.store(1, 1)
 	c.workerQueue.store(1, 1)
+	c.workerSubs.store(1, 1)
 	c.txtsattempts.store(1, 1)
 	c.utcoffset = 1
 
@@ -79,6 +80,7 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	require.Equal(t, int64(1), c.rxSignaling.load(1))
 	require.Equal(t, int64(1), c.txSignaling.load(1))
 	require.Equal(t, int64(1), c.workerQueue.load(1))
+	require.Equal(t, int64(1), c.workerSubs.load(1))
 	require.Equal(t, int64(1), c.txtsattempts.load(1))
 	require.Equal(t, int64(1), c.utcoffset)
 
@@ -90,6 +92,7 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	require.Equal(t, int64(0), c.rxSignaling.load(1))
 	require.Equal(t, int64(0), c.txSignaling.load(1))
 	require.Equal(t, int64(0), c.workerQueue.load(1))
+	require.Equal(t, int64(0), c.workerSubs.load(1))
 	require.Equal(t, int64(0), c.txtsattempts.load(1))
 	require.Equal(t, int64(0), c.utcoffset)
 }

@@ -110,6 +110,16 @@ func TestJSONStatsSetMaxWorkerQueue(t *testing.T) {
 	require.Equal(t, int64(42), stats.workerQueue.load(10))
 }
 
+func TestJSONStatsWorkerSubs(t *testing.T) {
+	stats := NewJSONStats()
+
+	stats.IncWorkerSubs(10)
+	require.Equal(t, int64(1), stats.workerSubs.load(10))
+
+	stats.DecWorkerSubs(10)
+	require.Equal(t, int64(0), stats.tx.load(10))
+}
+
 func TestJSONStatsSetMaxTXTSAttempts(t *testing.T) {
 	stats := NewJSONStats()
 

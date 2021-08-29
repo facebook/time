@@ -23,8 +23,7 @@ package server
 
 import (
 	"fmt"
-	"hash"
-	"hash/fnv"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -217,14 +216,12 @@ func readPacketBuf(connFd int, buf []byte) (int, unix.Sockaddr, error) {
 func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 	buf := make([]byte, ptp.PayloadSizeBytes)
 	oob := make([]byte, ptp.ControlSizeBytes)
-	h := fnv.New32a()
 	dReq := &ptp.SyncDelayReq{}
-
+	// Initialize the new random. We will re-seed it every time in findWorker
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	var msgType ptp.MessageType
 
 	for {
-		// reset hash
-		h.Reset()
 		bbuf, clisa, rxTS, err := ptp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
 		if err != nil {
 			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
@@ -250,7 +247,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 			}
 
 			log.Debugf("Got delay request")
-			worker := s.findWorker(dReq.Header.SourcePortIdentity, h)
+			worker := s.findWorker(dReq.Header.SourcePortIdentity, r)
 			sc := worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
 			if sc == nil {
 				log.Warningf("Delay request from %s is not in the subscription list", ptp.SockaddrToIP(clisa))
@@ -267,9 +264,10 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 // handleGeneralMessage is a handler which gets called every time General Message arrives
 func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 	buf := make([]byte, ptp.PayloadSizeBytes)
-	h := fnv.New32a()
 	signaling := &ptp.Signaling{}
 	zerotlv := []ptp.TLV{}
+	// Initialize the new random. We will re-seed it every time in findWorker
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	var grantType ptp.MessageType
 	var durationt time.Duration
@@ -277,8 +275,6 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 	var expire time.Time
 
 	for {
-		// reset hash
-		h.Reset()
 		bbuf, gclisa, err := readPacketBuf(s.gFd, buf)
 		if err != nil {
 			log.Errorf("Failed to read packet on %s: %v", generalConn.LocalAddr(), err)
@@ -300,8 +296,6 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 			}
 
 			for _, tlv := range signaling.TLVs {
-				// make sure we have fresh hash if multi TLV comes in
-				h.Reset()
 				switch v := tlv.(type) {
 				case *ptp.RequestUnicastTransmissionTLV:
 					grantType = v.MsgTypeAndReserved.MsgType()
@@ -313,7 +307,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 					case ptp.MessageAnnounce, ptp.MessageSync:
 						intervalt = v.LogInterMessagePeriod.Duration()
 
-						worker := s.findWorker(signaling.SourcePortIdentity, h)
+						worker := s.findWorker(signaling.SourcePortIdentity, r)
 						sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 						if sc == nil {
 							ip := ptp.SockaddrToIP(gclisa)
@@ -341,7 +335,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
 
 					case ptp.MessageDelayResp:
-						worker := s.findWorker(signaling.SourcePortIdentity, h)
+						worker := s.findWorker(signaling.SourcePortIdentity, r)
 						sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 						if sc == nil {
 							ip := ptp.SockaddrToIP(gclisa)
@@ -361,7 +355,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 				case *ptp.CancelUnicastTransmissionTLV:
 					grantType = v.MsgTypeAndFlags.MsgType()
 					log.Debugf("Got %s cancel request", grantType)
-					worker := s.findWorker(signaling.SourcePortIdentity, h)
+					worker := s.findWorker(signaling.SourcePortIdentity, r)
 					sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 					if sc != nil {
 						sc.Stop()
@@ -375,23 +369,10 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 	}
 }
 
-func (s *Server) findWorker(clientID ptp.PortIdentity, h hash.Hash32) *sendWorker {
-	// that's how we do binary.Write(h, binary.BigEndian, clientID) without allocations
-	_, _ = h.Write([]byte{
-		byte(0xff & clientID.ClockIdentity),
-		byte(0xff & (clientID.ClockIdentity >> 8)),
-		byte(0xff & (clientID.ClockIdentity >> 16)),
-		byte(0xff & (clientID.ClockIdentity >> 24)),
-		byte(0xff & (clientID.ClockIdentity >> 32)),
-		byte(0xff & (clientID.ClockIdentity >> 40)),
-		byte(0xff & (clientID.ClockIdentity >> 48)),
-		byte(0xff & (clientID.ClockIdentity >> 56)),
-	})
-	_, _ = h.Write([]byte{
-		byte(0xff & clientID.PortNumber),
-		byte(0xff & (clientID.PortNumber >> 8)),
-	})
-	return s.sw[h.Sum32()%uint32(s.Config.Workers)]
+func (s *Server) findWorker(clientID ptp.PortIdentity, r *rand.Rand) *sendWorker {
+	// Seeding random with the same value will produce the same number
+	r.Seed(int64(clientID.ClockIdentity) + int64(clientID.PortNumber))
+	return s.sw[r.Intn(s.Config.Workers)]
 }
 
 // sendGrant sends a Unicast Grant message

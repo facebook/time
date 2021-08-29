@@ -56,6 +56,9 @@ type Stats interface {
 	// IncTXSignaling atomically add 1 to the counter
 	IncTXSignaling(t ptp.MessageType)
 
+	// IncWorkerSubs atomically add 1 to the counter
+	IncWorkerSubs(workerid int)
+
 	// DecSubscription atomically removes 1 from the counter
 	DecSubscription(t ptp.MessageType)
 
@@ -70,6 +73,9 @@ type Stats interface {
 
 	// DecTXSignaling atomically removes 1 from the counter
 	DecTXSignaling(t ptp.MessageType)
+
+	// DecWorkerSubs atomically removes 1 from the counter
+	DecWorkerSubs(workerid int)
 
 	// SetMaxWorkerQueue atomically sets worker queue len
 	SetMaxWorkerQueue(workerid int, queue int64)
@@ -156,6 +162,7 @@ type counters struct {
 	txSignaling   syncMapInt64
 	txtsattempts  syncMapInt64
 	workerQueue   syncMapInt64
+	workerSubs    syncMapInt64
 	utcoffset     int64
 }
 
@@ -166,6 +173,7 @@ func (c *counters) init() {
 	c.rxSignaling.init()
 	c.txSignaling.init()
 	c.workerQueue.init()
+	c.workerSubs.init()
 	c.txtsattempts.init()
 }
 
@@ -176,6 +184,7 @@ func (c *counters) reset() {
 	c.rxSignaling.reset()
 	c.txSignaling.reset()
 	c.workerQueue.reset()
+	c.workerSubs.reset()
 	c.txtsattempts.reset()
 	c.utcoffset = 0
 }
@@ -217,6 +226,11 @@ func (c *counters) toMap() (export map[string]int64) {
 	for _, t := range c.workerQueue.keys() {
 		c := c.workerQueue.load(t)
 		res[fmt.Sprintf("worker.%d.queue", t)] = c
+	}
+
+	for _, t := range c.workerSubs.keys() {
+		c := c.workerSubs.load(t)
+		res[fmt.Sprintf("worker.%d.subscriptions", t)] = c
 	}
 
 	for _, t := range c.txtsattempts.keys() {
