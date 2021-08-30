@@ -231,6 +231,7 @@ func (s *sendWorker) inventoryClients() {
 				continue
 			}
 			s.stats.IncSubscription(st)
+			s.stats.IncWorkerSubs(s.id)
 		}
 	}
 }

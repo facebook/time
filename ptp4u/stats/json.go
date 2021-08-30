@@ -63,6 +63,7 @@ func (s *JSONStats) Snapshot() {
 	s.rxSignaling.copy(&s.report.rxSignaling)
 	s.txSignaling.copy(&s.report.txSignaling)
 	s.workerQueue.copy(&s.report.workerQueue)
+	s.workerSubs.copy(&s.report.workerSubs)
 	s.txtsattempts.copy(&s.report.txtsattempts)
 	s.report.utcoffset = s.utcoffset
 }
@@ -110,6 +111,11 @@ func (s *JSONStats) IncTXSignaling(t ptp.MessageType) {
 	s.txSignaling.inc(int(t))
 }
 
+// IncWorkerSubs atomically add 1 to the counter
+func (s *JSONStats) IncWorkerSubs(workerid int) {
+	s.workerSubs.inc(workerid)
+}
+
 // DecSubscription atomically removes 1 from the counter
 func (s *JSONStats) DecSubscription(t ptp.MessageType) {
 	s.subscriptions.dec(int(t))
@@ -133,6 +139,11 @@ func (s *JSONStats) DecRXSignaling(t ptp.MessageType) {
 // DecTXSignaling atomically removes 1 from the counter
 func (s *JSONStats) DecTXSignaling(t ptp.MessageType) {
 	s.txSignaling.dec(int(t))
+}
+
+// DecWorkerSubs atomically removes 1 from the counter
+func (s *JSONStats) DecWorkerSubs(workerid int) {
+	s.workerSubs.dec(workerid)
 }
 
 // SetMaxWorkerQueue atomically sets worker queue len
