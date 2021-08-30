@@ -212,8 +212,23 @@ func waitForHWTS(connFd int) error {
 	return nil
 }
 
-// ReadTXtimestampBuf returns HW TX timestamp, needs to be provided 4 buffers which all can be re-used after ReadTXtimestampBuf finishes.
-func ReadTXtimestampBuf(connFd int, buf, oob, tbuf, toob []byte) (time.Time, int, error) {
+// recvoob receives only OOB message from the socket
+// This is used for TX timestamp read of MSG_ERRQUEUE where we couldn't care less about other data.
+// This is partially based on Recvmsg
+// https://github.com/golang/go/blob/2ebe77a2fda1ee9ff6fd9a3e08933ad1ebaea039/src/syscall/syscall_linux.go#L647
+func recvoob(connFd int, oob []byte) (oobn int, err error) {
+	var msg unix.Msghdr
+	msg.Control = &oob[0]
+	msg.SetControllen(len(oob))
+	_, _, e1 := unix.Syscall(unix.SYS_RECVMSG, uintptr(connFd), uintptr(unsafe.Pointer(&msg)), uintptr(unix.MSG_ERRQUEUE))
+	if e1 != 0 {
+		return 0, e1
+	}
+	return int(msg.Controllen), nil
+}
+
+// ReadTXtimestampBuf returns HW TX timestamp, needs to be provided 2 buffers which all can be re-used after ReadTXtimestampBuf finishes.
+func ReadTXtimestampBuf(connFd int, oob, toob []byte) (time.Time, int, error) {
 	// Accessing hw timestamp
 	var boob int
 
@@ -230,7 +245,7 @@ func ReadTXtimestampBuf(connFd int, buf, oob, tbuf, toob []byte) (time.Time, int
 			_ = waitForHWTS(connFd)
 		}
 
-		_, tboob, _, _, err := unix.Recvmsg(connFd, tbuf, toob, unix.MSG_ERRQUEUE)
+		tboob, err := recvoob(connFd, toob)
 		if err != nil {
 			// We've already seen the valid TX TS and now we have an empty queue.
 			// All good
@@ -243,7 +258,6 @@ func ReadTXtimestampBuf(connFd int, buf, oob, tbuf, toob []byte) (time.Time, int
 		// We found a valid TX TS. Still check more if there is a newer one
 		txfound = true
 		boob = tboob
-		copy(buf, tbuf)
 		copy(oob, toob)
 	}
 
@@ -257,13 +271,11 @@ func ReadTXtimestampBuf(connFd int, buf, oob, tbuf, toob []byte) (time.Time, int
 // ReadTXtimestamp returns HW TX timestamp
 func ReadTXtimestamp(connFd int) (time.Time, int, error) {
 	// Accessing hw timestamp
-	buf := make([]byte, PayloadSizeBytes)
 	oob := make([]byte, ControlSizeBytes)
 	// TMP buffers
-	tbuf := make([]byte, PayloadSizeBytes)
 	toob := make([]byte, ControlSizeBytes)
 
-	return ReadTXtimestampBuf(connFd, buf, oob, tbuf, toob)
+	return ReadTXtimestampBuf(connFd, oob, toob)
 }
 
 // ReadPacketWithRXTimestamp returns byte packet and HW RX timestamp
