@@ -281,36 +281,45 @@ func (sc *SubscriptionClient) DelayResp() *ptp.DelayResp {
 
 func (sc *SubscriptionClient) initGrant() {
 	sc.grant = &ptp.Signaling{
-		Header:             ptp.Header{},
+		Header: ptp.Header{
+			Version:       ptp.Version,
+			MessageLength: uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{})),
+			FlagField:     ptp.FlagUnicast,
+			SourcePortIdentity: ptp.PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: sc.serverConfig.clockIdentity,
+			},
+		},
 		TargetPortIdentity: ptp.PortIdentity{},
 		TLVs: []ptp.TLV{
-			&ptp.GrantUnicastTransmissionTLV{},
+			&ptp.GrantUnicastTransmissionTLV{
+				TLVHead:  ptp.TLVHead{TLVType: ptp.TLVGrantUnicastTransmission, LengthField: uint16(binary.Size(ptp.GrantUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{}))},
+				Reserved: 0,
+				Renewal:  1,
+			},
 		},
 	}
 }
 
 // UpdateGrant updates ptp Signaling packet granting the requested subscription
 func (sc *SubscriptionClient) UpdateGrant(sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32) {
-	sc.grant.Header = sg.Header
-	sc.grant.TargetPortIdentity = sg.SourcePortIdentity
-	sc.grant.Header.FlagField = ptp.FlagUnicast
-	sc.grant.Header.SourcePortIdentity = ptp.PortIdentity{
-		PortNumber:    1,
-		ClockIdentity: sc.serverConfig.clockIdentity,
-	}
-	sc.grant.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{}))
+	sc.grant.Header.SdoIDAndMsgType = sg.Header.SdoIDAndMsgType
+	sc.grant.Header.DomainNumber = sg.Header.DomainNumber
+	sc.grant.Header.MinorSdoID = sg.Header.MinorSdoID
+	sc.grant.Header.CorrectionField = sg.Header.CorrectionField
+	sc.grant.Header.MessageTypeSpecific = sg.Header.MessageTypeSpecific
+	sc.grant.Header.SequenceID = sg.Header.SequenceID
+	sc.grant.Header.ControlField = sg.Header.ControlField
+	sc.grant.Header.LogMessageInterval = sg.Header.LogMessageInterval
 
-	sc.grant.TLVs[0] = &ptp.GrantUnicastTransmissionTLV{
-		TLVHead: ptp.TLVHead{
-			TLVType:     ptp.TLVGrantUnicastTransmission,
-			LengthField: uint16(binary.Size(ptp.GrantUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{})),
-		},
-		MsgTypeAndReserved:    mt,
-		LogInterMessagePeriod: interval,
-		DurationField:         duration,
-		Reserved:              0,
-		Renewal:               1,
-	}
+	sc.grant.TargetPortIdentity = sg.SourcePortIdentity
+	tlv := sc.grant.TLVs[0].(*ptp.GrantUnicastTransmissionTLV)
+
+	tlv.MsgTypeAndReserved = mt
+	tlv.LogInterMessagePeriod = interval
+	tlv.DurationField = duration
+
+	sc.grant.TLVs[0] = tlv
 }
 
 // Grant returns ptp Signaling packet granting the requested subscription
