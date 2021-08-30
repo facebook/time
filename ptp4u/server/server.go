@@ -220,6 +220,8 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 	// Initialize the new random. We will re-seed it every time in findWorker
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	var msgType ptp.MessageType
+	var worker *sendWorker
+	var sc *SubscriptionClient
 
 	for {
 		bbuf, clisa, rxTS, err := ptp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
@@ -247,8 +249,8 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 			}
 
 			log.Debugf("Got delay request")
-			worker := s.findWorker(dReq.Header.SourcePortIdentity, r)
-			sc := worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
+			worker = s.findWorker(dReq.Header.SourcePortIdentity, r)
+			sc = worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
 			if sc == nil {
 				log.Warningf("Delay request from %s is not in the subscription list", ptp.SockaddrToIP(clisa))
 				continue
@@ -273,6 +275,8 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 	var durationt time.Duration
 	var intervalt time.Duration
 	var expire time.Time
+	var worker *sendWorker
+	var sc *SubscriptionClient
 
 	for {
 		bbuf, gclisa, err := readPacketBuf(s.gFd, buf)
@@ -306,9 +310,8 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 					switch grantType {
 					case ptp.MessageAnnounce, ptp.MessageSync:
 						intervalt = v.LogInterMessagePeriod.Duration()
-
-						worker := s.findWorker(signaling.SourcePortIdentity, r)
-						sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
+						worker = s.findWorker(signaling.SourcePortIdentity, r)
+						sc = worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 						if sc == nil {
 							ip := ptp.SockaddrToIP(gclisa)
 							eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
@@ -335,8 +338,8 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
 
 					case ptp.MessageDelayResp:
-						worker := s.findWorker(signaling.SourcePortIdentity, r)
-						sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
+						worker = s.findWorker(signaling.SourcePortIdentity, r)
+						sc = worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 						if sc == nil {
 							ip := ptp.SockaddrToIP(gclisa)
 							eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
@@ -355,8 +358,8 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 				case *ptp.CancelUnicastTransmissionTLV:
 					grantType = v.MsgTypeAndFlags.MsgType()
 					log.Debugf("Got %s cancel request", grantType)
-					worker := s.findWorker(signaling.SourcePortIdentity, r)
-					sc := worker.FindSubscription(signaling.SourcePortIdentity, grantType)
+					worker = s.findWorker(signaling.SourcePortIdentity, r)
+					sc = worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 					if sc != nil {
 						sc.Stop()
 					}

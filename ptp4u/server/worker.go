@@ -104,9 +104,10 @@ func (s *sendWorker) Start() {
 		n        int
 		attempts int
 		txTS     time.Time
+		c        *SubscriptionClient
 	)
 
-	for c := range s.queue {
+	for c = range s.queue {
 		switch c.subscriptionType {
 		case ptp.MessageSync:
 			// send sync
