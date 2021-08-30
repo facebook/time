@@ -92,11 +92,9 @@ func (s *sendWorker) Start() {
 	buf := make([]byte, ptp.PayloadSizeBytes)
 
 	// reusable buffers for ReadTXtimestampBuf
-	bbuf := make([]byte, ptp.PayloadSizeBytes)
 	oob := make([]byte, ptp.ControlSizeBytes)
 
 	// TMP buffers
-	tbuf := make([]byte, ptp.PayloadSizeBytes)
 	toob := make([]byte, ptp.ControlSizeBytes)
 
 	// TODO: Enable dscp accordingly
@@ -126,7 +124,7 @@ func (s *sendWorker) Start() {
 			}
 			s.stats.IncTX(c.subscriptionType)
 
-			txTS, attempts, err = ptp.ReadTXtimestampBuf(eFd, bbuf, oob, tbuf, toob)
+			txTS, attempts, err = ptp.ReadTXtimestampBuf(eFd, oob, toob)
 			s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
 			if err != nil {
 				log.Warningf("Failed to read TX timestamp: %v", err)
