@@ -306,10 +306,16 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 					log.Debugf("Got %s grant request", grantType)
 					durationt = time.Duration(v.DurationField) * time.Second
 					expire = time.Now().Add(durationt)
+					intervalt = v.LogInterMessagePeriod.Duration()
+
+					// Reject queries out of limit
+					if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
+						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0, gclisa)
+						continue
+					}
 
 					switch grantType {
 					case ptp.MessageAnnounce, ptp.MessageSync:
-						intervalt = v.LogInterMessagePeriod.Duration()
 						worker = s.findWorker(signaling.SourcePortIdentity, r)
 						sc = worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 						if sc == nil {
@@ -321,12 +327,6 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 							// Update existing subscription data
 							sc.expire = expire
 							sc.interval = intervalt
-						}
-
-						// Reject queries out of limit
-						if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
-							s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0, gclisa)
-							continue
 						}
 
 						// The subscription is over or a new cli. Starting
@@ -343,7 +343,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 						if sc == nil {
 							ip := ptp.SockaddrToIP(gclisa)
 							eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
-							sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, time.Second, expire)
+							sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
 							worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
 						}
 						sc.SetRunning(true)
