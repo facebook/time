@@ -64,8 +64,8 @@ func (s *Server) Start() error {
 	wg.Add(1)
 
 	// start X workers
-	s.sw = make([]*sendWorker, s.Config.Workers)
-	for i := 0; i < s.Config.Workers; i++ {
+	s.sw = make([]*sendWorker, s.Config.SendWorkers)
+	for i := 0; i < s.Config.SendWorkers; i++ {
 		// Each worker to monitor own queue
 		s.sw[i] = NewSendWorker(i, s.Config, s.Stats)
 		go func(i int) {
@@ -158,7 +158,7 @@ func (s *Server) startEventListener() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	for i := 0; i < s.Config.Workers; i++ {
+	for i := 0; i < s.Config.RecvWorkers; i++ {
 		go func() {
 			defer wg.Done()
 			s.handleEventMessages(eventConn)
@@ -194,7 +194,7 @@ func (s *Server) startGeneralListener() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	for i := 0; i < s.Config.Workers; i++ {
+	for i := 0; i < s.Config.RecvWorkers; i++ {
 		go func() {
 			defer wg.Done()
 			s.handleGeneralMessages(generalConn)
@@ -375,7 +375,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 func (s *Server) findWorker(clientID ptp.PortIdentity, r *rand.Rand) *sendWorker {
 	// Seeding random with the same value will produce the same number
 	r.Seed(int64(clientID.ClockIdentity) + int64(clientID.PortNumber))
-	return s.sw[r.Intn(s.Config.Workers)]
+	return s.sw[r.Intn(s.Config.SendWorkers)]
 }
 
 // sendGrant sends a Unicast Grant message

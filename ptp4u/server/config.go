@@ -38,7 +38,8 @@ type Config struct {
 	SHM            bool
 	TimestampType  string
 	UTCOffset      time.Duration
-	Workers        int
+	SendWorkers    int
+	RecvWorkers    int
 	QueueSize      int
 
 	clockIdentity ptp.ClockIdentity
