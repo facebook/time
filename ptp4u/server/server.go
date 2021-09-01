@@ -349,7 +349,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 						sc.SetRunning(true)
 
 						// Send confirmation grant
-						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, 0, v.DurationField, gclisa)
+						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
 
 					default:
 						log.Errorf("Got unsupported grant type %s", grantType)
