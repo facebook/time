@@ -41,7 +41,7 @@ func main() {
 	flag.StringVar(&c.Interface, "iface", "eth0", "Set the interface")
 	flag.StringVar(&c.LogLevel, "loglevel", "warning", "Set a log level. Can be: debug, info, warning, error")
 	flag.DurationVar(&c.MinSubInterval, "minsubinterval", 1*time.Second, "Minimum interval of the sync/announce subscription messages")
-	flag.DurationVar(&c.MaxSubDuration, "maxsubduration", 10*time.Minute, "Maximum sync/announce subscription duration")
+	flag.DurationVar(&c.MaxSubDuration, "maxsubduration", 1*time.Hour, "Maximum sync/announce/delay_resp subscription duration")
 	flag.StringVar(&c.TimestampType, "timestamptype", ptp.HWTIMESTAMP, fmt.Sprintf("Timestamp type. Can be: %s, %s", ptp.HWTIMESTAMP, ptp.SWTIMESTAMP))
 	flag.DurationVar(&c.UTCOffset, "utcoffset", 37*time.Second, "Set the number of workers. Ignored if shm is set")
 	flag.BoolVar(&c.SHM, "shm", false, "Use Share Memory Segment to determine UTC offset periodically")
