@@ -28,6 +28,7 @@ import (
 
 // Config is a server config structure
 type Config struct {
+	DSCP           int
 	Interface      string
 	IP             net.IP
 	LogLevel       string

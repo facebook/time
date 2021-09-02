@@ -63,6 +63,10 @@ func (s *sendWorker) Start() {
 		log.Fatalf("Getting event connection FD: %s", err)
 	}
 
+	if err = s.enableDSCP(econn); err != nil {
+		log.Fatalf("Failed to set DSCP on event socket: %s", err)
+	}
+
 	// Syncs sent from event port
 	switch s.config.TimestampType {
 	case ptp.HWTIMESTAMP:
@@ -89,6 +93,10 @@ func (s *sendWorker) Start() {
 		log.Fatalf("Getting general connection FD: %s", err)
 	}
 
+	if err = s.enableDSCP(gconn); err != nil {
+		log.Fatalf("Failed to set DSCP on event socket: %s", err)
+	}
+
 	buf := make([]byte, ptp.PayloadSizeBytes)
 
 	// reusable buffers for ReadTXtimestampBuf
@@ -97,7 +105,6 @@ func (s *sendWorker) Start() {
 	// TMP buffers
 	toob := make([]byte, ptp.ControlSizeBytes)
 
-	// TODO: Enable dscp accordingly
 	var (
 		n        int
 		attempts int
@@ -233,4 +240,23 @@ func (s *sendWorker) inventoryClients() {
 			s.stats.IncWorkerSubs(s.id)
 		}
 	}
+}
+
+func (s *sendWorker) enableDSCP(conn *net.UDPConn) error {
+	// get connection file descriptor
+	fd, err := ptp.ConnFd(conn)
+	if err != nil {
+		return err
+	}
+
+	if conn.LocalAddr().(*net.UDPAddr).IP.To4() == nil {
+		if err := unix.SetsockoptInt(fd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, s.config.DSCP<<2); err != nil {
+			return err
+		}
+	} else {
+		if err := unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_TOS, s.config.DSCP<<2); err != nil {
+			return err
+		}
+	}
+	return nil
 }
