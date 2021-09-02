@@ -178,7 +178,7 @@ func (s *sendWorker) Start() {
 			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 			if err != nil {
 				log.Errorf("Failed to send the delay response: %v", err)
-				return
+				continue
 			}
 			s.stats.IncTX(c.subscriptionType)
 
