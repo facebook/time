@@ -36,6 +36,7 @@ func main() {
 	var ipaddr string
 	var pprofaddr string
 
+	flag.IntVar(&c.DSCP, "dscp", 0, "DSCP for PTP packets, valid values are between 0-63 (used by send workers)")
 	flag.StringVar(&ipaddr, "ip", "::", "IP to bind on")
 	flag.StringVar(&pprofaddr, "pprofaddr", "", "host:port for the pprof to bind")
 	flag.StringVar(&c.Interface, "iface", "eth0", "Set the interface")
@@ -64,6 +65,10 @@ func main() {
 		log.SetLevel(log.ErrorLevel)
 	default:
 		log.Fatalf("Unrecognized log level: %v", c.LogLevel)
+	}
+
+	if c.DSCP < 0 || c.DSCP > 63 {
+		log.Fatalf("Unsupported DSCP value %v", c.DSCP)
 	}
 
 	switch c.TimestampType {
