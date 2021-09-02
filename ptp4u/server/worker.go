@@ -94,12 +94,11 @@ func (s *sendWorker) Start() {
 	}
 
 	if err = s.enableDSCP(gconn); err != nil {
-		log.Fatalf("Failed to set DSCP on event socket: %s", err)
+		log.Fatalf("Failed to set DSCP on general socket: %s", err)
 	}
 
+	// reusable buffers
 	buf := make([]byte, ptp.PayloadSizeBytes)
-
-	// reusable buffers for ReadTXtimestampBuf
 	oob := make([]byte, ptp.ControlSizeBytes)
 
 	// TMP buffers
