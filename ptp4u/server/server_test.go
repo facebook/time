@@ -46,32 +46,29 @@ func TestServerInventoryClients(t *testing.T) {
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	scS1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi1, ptp.MessageSync, scS1)
-	scS1.running = true
 	w.inventoryClients()
 	require.Equal(t, 1, len(w.clients))
 
 	scA1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi1, ptp.MessageAnnounce, scA1)
-	scA1.running = true
 	w.inventoryClients()
 	require.Equal(t, 2, len(w.clients))
 
 	scS2 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi2, ptp.MessageSync, scS2)
-	scS2.running = true
 	w.inventoryClients()
 	require.Equal(t, 2, len(w.clients[ptp.MessageSync]))
 
 	// Shutting down
-	scS1.running = false
+	scS1.expire = time.Now()
 	w.inventoryClients()
 	require.Equal(t, 1, len(w.clients[ptp.MessageSync]))
 
-	scA1.running = false
+	scA1.expire = time.Now()
 	w.inventoryClients()
 	require.Equal(t, 0, len(w.clients[ptp.MessageAnnounce]))
 
-	scS2.running = false
+	scS2.expire = time.Now()
 	w.inventoryClients()
 	require.Equal(t, 0, len(w.clients[ptp.MessageSync]))
 }
