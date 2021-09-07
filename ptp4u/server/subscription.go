@@ -37,7 +37,6 @@ type SubscriptionClient struct {
 	interval   time.Duration
 	expire     time.Time
 	sequenceID uint16
-	running    bool
 
 	// socket addresses
 	eclisa unix.Sockaddr
@@ -74,8 +73,6 @@ func NewSubscriptionClient(q chan *SubscriptionClient, eclisa, gclisa unix.Socka
 
 // Start launches the subscription timers and exit on expire
 func (sc *SubscriptionClient) Start() {
-	sc.SetRunning(true)
-	defer sc.Stop()
 	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
 	over := fmt.Sprintf("Subscription %s is over for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
 	// Send first message right away
@@ -86,10 +83,7 @@ func (sc *SubscriptionClient) Start() {
 
 	defer intervalTicker.Stop()
 	for range intervalTicker.C {
-		if !sc.Running() {
-			return
-		}
-		if time.Now().After(sc.expire) {
+		if sc.Expired() {
 			log.Infof(over)
 			// TODO send cancellation
 			return
@@ -109,26 +103,22 @@ func (sc *SubscriptionClient) Once() {
 	sc.queue <- sc
 }
 
-// setRunning sets running with the lock
-func (sc *SubscriptionClient) SetRunning(running bool) {
+// Expired checks if the subscription expired or not
+func (sc *SubscriptionClient) Expired() bool {
 	sc.Lock()
 	defer sc.Unlock()
-	sc.running = running
-}
-
-// Running returns the status of the Subscription
-func (sc *SubscriptionClient) Running() bool {
-	sc.Lock()
-	defer sc.Unlock()
-	return sc.running
+	return time.Now().After(sc.expire)
 }
 
 // Stop stops the subscription
 func (sc *SubscriptionClient) Stop() {
-	sc.SetRunning(false)
+	sc.Lock()
+	defer sc.Unlock()
+	// Simply set the expiration time and subscription will be stopped
+	sc.expire = time.Now()
 }
 
-// Stop stops the subscription
+// IncSequenceID adds 1 to a sequence id
 func (sc *SubscriptionClient) IncSequenceID() {
 	sc.sequenceID++
 }

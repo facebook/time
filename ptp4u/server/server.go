@@ -315,7 +315,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 					}
 
 					switch grantType {
-					case ptp.MessageAnnounce, ptp.MessageSync:
+					case ptp.MessageAnnounce, ptp.MessageSync, ptp.MessageDelayResp:
 						worker = s.findWorker(signaling.SourcePortIdentity, r)
 						sc = worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 						if sc == nil {
@@ -323,34 +323,17 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 							eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
 							sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
 							worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
+							if grantType != ptp.MessageDelayResp {
+								go sc.Start()
+							}
 						} else {
 							// Update existing subscription data
 							sc.expire = expire
 							sc.interval = intervalt
 						}
 
-						// The subscription is over or a new cli. Starting
-						if !sc.running {
-							go sc.Start()
-						}
-
 						// Send confirmation grant
 						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
-
-					case ptp.MessageDelayResp:
-						worker = s.findWorker(signaling.SourcePortIdentity, r)
-						sc = worker.FindSubscription(signaling.SourcePortIdentity, grantType)
-						if sc == nil {
-							ip := ptp.SockaddrToIP(gclisa)
-							eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
-							sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
-							worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
-						}
-						sc.SetRunning(true)
-
-						// Send confirmation grant
-						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
-
 					default:
 						log.Errorf("Got unsupported grant type %s", grantType)
 					}

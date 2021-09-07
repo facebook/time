@@ -29,24 +29,25 @@ import (
 
 func TestRunning(t *testing.T) {
 	sc := SubscriptionClient{}
-	sc.SetRunning(true)
-	require.True(t, sc.Running())
+	// Initially subscription is not running (expire time is in the past)
+	require.True(t, sc.Expired())
 
-	sc.SetRunning(false)
-	require.False(t, sc.Running())
+	// Add proper actual expiration time subscription
+	sc.expire = time.Now().Add(1 * time.Second)
+	require.False(t, sc.Expired())
 }
 
 func TestSubscriptionStart(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 1 * time.Minute
-	expire := time.Now().Add(1 * time.Second)
+	expire := time.Now().Add(1 * time.Minute)
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
 	go sc.Start()
 	time.Sleep(100 * time.Millisecond)
-	require.True(t, sc.Running())
+	require.False(t, sc.Expired())
 }
 
 func TestSubscriptionStop(t *testing.T) {
@@ -61,10 +62,9 @@ func TestSubscriptionStop(t *testing.T) {
 
 	go sc.Start()
 	time.Sleep(100 * time.Millisecond)
-	require.True(t, sc.Running())
+	require.False(t, sc.Expired())
 	sc.Stop()
-	time.Sleep(100 * time.Millisecond)
-	require.False(t, sc.Running())
+	require.True(t, sc.Expired())
 }
 
 func TestSubscriptionflags(t *testing.T) {
