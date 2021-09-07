@@ -57,6 +57,7 @@ const (
 	reqNSources    CommandType = 14
 	reqSourceData  CommandType = 15
 	reqTracking    CommandType = 33
+	reqSourceStats CommandType = 34
 	reqServerStats CommandType = 54
 	reqNTPData     CommandType = 57
 )
@@ -66,6 +67,7 @@ const (
 	rpyNSources     ReplyType = 2
 	rpySourceData   ReplyType = 3
 	rpyTracking     ReplyType = 5
+	rpySourceStats  ReplyType = 6
 	rpyServerStats  ReplyType = 14
 	rpyNTPData      ReplyType = 16
 	rpyServerStats2 ReplyType = 22
@@ -239,6 +241,15 @@ type RequestTracking struct {
 	data [maxDataLen]uint8 //nolint:unused,structcheck
 }
 
+// RequestSourceStats - packet to request 'sourcestats' data for source id
+type RequestSourceStats struct {
+	RequestHead
+	Index int32
+	EOR   int32
+	// we pass i32 - 4 bytes
+	data [maxDataLen - 4]uint8 //nolint:unused,structcheck
+}
+
 // ReplyHead is the first (common) part of the reply packet,
 // in a format that can be directly passed to binary.Read
 type ReplyHead struct {
@@ -396,6 +407,54 @@ type ReplyTracking struct {
 	Tracking
 }
 
+type replySourceStatsContent struct {
+	RefID              uint32
+	IPAddr             ipAddr
+	NSamples           uint32
+	NRuns              uint32
+	SpanSeconds        uint32
+	StandardDeviation  chronyFloat
+	ResidFreqPPM       chronyFloat
+	SkewPPM            chronyFloat
+	EstimatedOffset    chronyFloat
+	EstimatedOffsetErr chronyFloat
+	EOR                int32
+}
+
+type SourceStats struct {
+	RefID              uint32
+	IPAddr             net.IP
+	NSamples           uint32
+	NRuns              uint32
+	SpanSeconds        uint32
+	StandardDeviation  float64
+	ResidFreqPPM       float64
+	SkewPPM            float64
+	EstimatedOffset    float64
+	EstimatedOffsetErr float64
+}
+
+func newSourceStats(r *replySourceStatsContent) *SourceStats {
+	return &SourceStats{
+		RefID:              r.RefID,
+		IPAddr:             r.IPAddr.ToNetIP(),
+		NSamples:           r.NSamples,
+		NRuns:              r.NRuns,
+		SpanSeconds:        r.SpanSeconds,
+		StandardDeviation:  r.StandardDeviation.ToFloat(),
+		ResidFreqPPM:       r.ResidFreqPPM.ToFloat(),
+		SkewPPM:            r.SkewPPM.ToFloat(),
+		EstimatedOffset:    r.EstimatedOffset.ToFloat(),
+		EstimatedOffsetErr: r.EstimatedOffsetErr.ToFloat(),
+	}
+}
+
+// ReplySourceStats has usable 'sourcestats' response
+type ReplySourceStats struct {
+	ReplyHead
+	SourceStats
+}
+
 type replyNTPDataContent struct {
 	RemoteAddr      ipAddr
 	LocalAddr       ipAddr
@@ -542,6 +601,18 @@ func NewTrackingPacket() *RequestTracking {
 			PKTType: pktTypeCmdRequest,
 			Command: reqTracking,
 		},
+	}
+}
+
+// NewSourceStatsPacket creates a new packet to request 'sourcestats' information
+func NewSourceStatsPacket(sourceID int32) *RequestSourceStats {
+	return &RequestSourceStats{
+		RequestHead: RequestHead{
+			Version: protoVersionNumber,
+			PKTType: pktTypeCmdRequest,
+			Command: reqSourceStats,
+		},
+		Index: sourceID,
 	}
 }
 

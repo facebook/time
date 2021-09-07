@@ -86,6 +86,16 @@ func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 			ReplyHead: *head,
 			Tracking:  *newTracking(data),
 		}, nil
+	case rpySourceStats:
+		data := new(replySourceStatsContent)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplySourceStats{
+			ReplyHead:   *head,
+			SourceStats: *newSourceStats(data),
+		}, nil
 	case rpyServerStats:
 		data := new(ServerStats)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
