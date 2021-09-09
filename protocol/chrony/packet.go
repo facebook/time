@@ -17,8 +17,13 @@ limitations under the License.
 package chrony
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
 	"net"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // original C++ versions of those consts/structs
@@ -51,6 +56,17 @@ const (
 	pktTypeCmdRequest PacketType = 1
 	pktTypeCmdReply   PacketType = 2
 )
+
+func (t PacketType) String() string {
+	switch t {
+	case pktTypeCmdRequest:
+		return "request"
+	case pktTypeCmdReply:
+		return "reply"
+	default:
+		return fmt.Sprintf("unknown (%d)", t)
+	}
+}
 
 // request types. Only those we suppor, there are more
 const (
@@ -154,6 +170,13 @@ var StatusDesc = [20]string{
 	"BADPKTLENGTH",
 }
 
+func (r ResponseStatusType) String() string {
+	if int(r) >= len(StatusDesc) {
+		return fmt.Sprintf("UNKNOWN (%d)", r)
+	}
+	return StatusDesc[r]
+}
+
 // SourceStateDesc provides mapping from SourceStateType to string
 var SourceStateDesc = [6]string{
 	"sync",
@@ -162,6 +185,13 @@ var SourceStateDesc = [6]string{
 	"jittery",
 	"candidate",
 	"outlier",
+}
+
+func (s SourceStateType) String() string {
+	if int(s) >= len(SourceStateDesc) {
+		return fmt.Sprintf("unknown (%d)", s)
+	}
+	return SourceStateDesc[s]
 }
 
 // RequestHead is the first (common) part of the request,
@@ -285,7 +315,6 @@ func (r *ReplyHead) GetStatus() ResponseStatusType {
 
 type replySourcesContent struct {
 	NSources uint32
-	EOR      int32
 }
 
 // ReplySources is a usable version of a reply to 'sources' command
@@ -306,7 +335,6 @@ type replySourceDataContent struct {
 	OrigLatestMeas chronyFloat
 	LatestMeas     chronyFloat
 	LatestMeasErr  chronyFloat
-	EOR            int32
 }
 
 // SourceData contains parsed version of 'source data' reply
@@ -361,7 +389,6 @@ type replyTrackingContent struct {
 	RootDelay          chronyFloat
 	RootDispersion     chronyFloat
 	LastUpdateInterval chronyFloat
-	EOR                int32
 }
 
 // Tracking contains parsed version of 'tracking' reply
@@ -418,7 +445,6 @@ type replySourceStatsContent struct {
 	SkewPPM            chronyFloat
 	EstimatedOffset    chronyFloat
 	EstimatedOffsetErr chronyFloat
-	EOR                int32
 }
 
 type SourceStats struct {
@@ -481,7 +507,6 @@ type replyNTPDataContent struct {
 	TotalRXCount    uint32
 	TotalValidCount uint32
 	Reserved        [4]uint32
-	EOR             int32
 }
 
 // NTPData contains parsed version of 'ntpdata' reply
@@ -648,5 +673,93 @@ func NewServerStatsPacket() *RequestServerStats {
 			PKTType: pktTypeCmdRequest,
 			Command: reqServerStats,
 		},
+	}
+}
+
+// decodePacket decodes bytes to valid response packet
+func decodePacket(response []byte) (ResponsePacket, error) {
+	var err error
+	r := bytes.NewReader(response)
+	head := new(ReplyHead)
+	if err = binary.Read(r, binary.BigEndian, head); err != nil {
+		return nil, err
+	}
+	log.Debugf("response head: %+v", head)
+	if head.Status != sttSuccess {
+		return nil, fmt.Errorf("got status %s (%d)", head.Status, head.Status)
+	}
+	switch head.Reply {
+	case rpyNSources:
+		data := new(replySourcesContent)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplySources{
+			ReplyHead: *head,
+			NSources:  int(data.NSources),
+		}, nil
+	case rpySourceData:
+		data := new(replySourceDataContent)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplySourceData{
+			ReplyHead:  *head,
+			SourceData: *newSourceData(data),
+		}, nil
+	case rpyTracking:
+		data := new(replyTrackingContent)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplyTracking{
+			ReplyHead: *head,
+			Tracking:  *newTracking(data),
+		}, nil
+	case rpySourceStats:
+		data := new(replySourceStatsContent)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplySourceStats{
+			ReplyHead:   *head,
+			SourceStats: *newSourceStats(data),
+		}, nil
+	case rpyServerStats:
+		data := new(ServerStats)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplyServerStats{
+			ReplyHead:   *head,
+			ServerStats: *data,
+		}, nil
+	case rpyNTPData:
+		data := new(replyNTPDataContent)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplyNTPData{
+			ReplyHead: *head,
+			NTPData:   *newNTPData(data),
+		}, nil
+	case rpyServerStats2:
+		data := new(ServerStats2)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplyServerStats2{
+			ReplyHead:    *head,
+			ServerStats2: *data,
+		}, nil
+	default:
+		return nil, fmt.Errorf("not implemented reply type %d from %+v", head.Reply, head)
 	}
 }

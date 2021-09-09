@@ -17,9 +17,7 @@ limitations under the License.
 package chrony
 
 import (
-	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 
 	log "github.com/sirupsen/logrus"
@@ -46,87 +44,5 @@ func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 		return nil, err
 	}
 	log.Debugf("Read %d bytes", read)
-	r := bytes.NewReader(response)
-	head := new(ReplyHead)
-	if err = binary.Read(r, binary.BigEndian, head); err != nil {
-		return nil, err
-	}
-	log.Debugf("response head: %+v", head)
-	if head.Status != sttSuccess {
-		return nil, fmt.Errorf("got status %s", StatusDesc[head.Status])
-	}
-	switch head.Reply {
-	case rpyNSources:
-		data := new(replySourcesContent)
-		if err = binary.Read(r, binary.BigEndian, data); err != nil {
-			return nil, err
-		}
-		log.Debugf("response data: %+v", data)
-		return &ReplySources{
-			ReplyHead: *head,
-			NSources:  int(data.NSources),
-		}, nil
-	case rpySourceData:
-		data := new(replySourceDataContent)
-		if err = binary.Read(r, binary.BigEndian, data); err != nil {
-			return nil, err
-		}
-		log.Debugf("response data: %+v", data)
-		return &ReplySourceData{
-			ReplyHead:  *head,
-			SourceData: *newSourceData(data),
-		}, nil
-	case rpyTracking:
-		data := new(replyTrackingContent)
-		if err = binary.Read(r, binary.BigEndian, data); err != nil {
-			return nil, err
-		}
-		log.Debugf("response data: %+v", data)
-		return &ReplyTracking{
-			ReplyHead: *head,
-			Tracking:  *newTracking(data),
-		}, nil
-	case rpySourceStats:
-		data := new(replySourceStatsContent)
-		if err = binary.Read(r, binary.BigEndian, data); err != nil {
-			return nil, err
-		}
-		log.Debugf("response data: %+v", data)
-		return &ReplySourceStats{
-			ReplyHead:   *head,
-			SourceStats: *newSourceStats(data),
-		}, nil
-	case rpyServerStats:
-		data := new(ServerStats)
-		if err = binary.Read(r, binary.BigEndian, data); err != nil {
-			return nil, err
-		}
-		log.Debugf("response data: %+v", data)
-		return &ReplyServerStats{
-			ReplyHead:   *head,
-			ServerStats: *data,
-		}, nil
-	case rpyNTPData:
-		data := new(replyNTPDataContent)
-		if err = binary.Read(r, binary.BigEndian, data); err != nil {
-			return nil, err
-		}
-		log.Debugf("response data: %+v", data)
-		return &ReplyNTPData{
-			ReplyHead: *head,
-			NTPData:   *newNTPData(data),
-		}, nil
-	case rpyServerStats2:
-		data := new(ServerStats2)
-		if err = binary.Read(r, binary.BigEndian, data); err != nil {
-			return nil, err
-		}
-		log.Debugf("response data: %+v", data)
-		return &ReplyServerStats2{
-			ReplyHead:    *head,
-			ServerStats2: *data,
-		}, nil
-	default:
-		return nil, fmt.Errorf("not implemented reply type %d from %+v", head.Reply, head)
-	}
+	return decodePacket(response[:read])
 }
