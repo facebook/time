@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"sort"
-	"syscall"
 	"time"
 
 	ptp "github.com/facebookincubator/ptp/protocol"
@@ -30,6 +29,7 @@ import (
 	"github.com/google/gopacket/pcap"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/ipv6"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -172,21 +172,28 @@ func (s *Sender) sweepRackPrefix() {
 
 func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) ([]SwitchTrafficInfo, error) {
 	var route []SwitchTrafficInfo
-	ptpAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(destinationIP, fmt.Sprint(s.Config.DestinationPort)))
+	ptpUDPAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(destinationIP, fmt.Sprint(s.Config.DestinationPort)))
 	if err != nil {
 		return nil, fmt.Errorf("traceRoute unable to resolve UDPAddr: %w", err)
 	}
-	ptpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP(""), Port: sendingPort})
-	if err != nil {
-		return nil, fmt.Errorf("traceRoute unable to establish connection: %w", err)
+	ptpAddr := ptp.IPToSockaddr(ptpUDPAddr.IP, s.Config.DestinationPort)
+	domain := unix.AF_INET6
+	if ptpUDPAddr.IP.To4() != nil {
+		domain = unix.AF_INET
 	}
-	defer ptpConn.Close()
-
-	file, err := ptpConn.File()
+	connFd, err := unix.Socket(domain, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
 	if err != nil {
-		return nil, fmt.Errorf("traceRoute unable to open ptpConn file: %w", err)
+		return nil, fmt.Errorf("traceRoute unable to create connection: %w", err)
 	}
-	defer file.Close()
+	defer unix.Close(connFd)
+	// set SO_REUSEPORT so we can trace network path from same source port that ptp4u uses
+	if err = unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
+		return nil, fmt.Errorf("setting SO_REUSEPORT on sender socket: %s", err)
+	}
+	localAddr := ptp.IPToSockaddr(net.IPv6zero, sendingPort)
+	if err := unix.Bind(connFd, localAddr); err != nil {
+		return nil, fmt.Errorf("traceRoute unable to bind %v connection: %w", localAddr, err)
+	}
 
 	destReached := false
 	hopMax := s.Config.HopMax
@@ -198,21 +205,21 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) (
 	// Stop incrementing hops when either the max hop count is reached or
 	// the destination has responded unless continue is specified
 	for hop := s.Config.HopMin; hop <= hopMax && (!destReached || s.Config.ContReached); hop++ {
-		if err := syscall.SetsockoptInt(int(file.Fd()), syscall.IPPROTO_IPV6, syscall.IPV6_UNICAST_HOPS, hop); err != nil {
+		if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_UNICAST_HOPS, hop); err != nil {
 			return route, err
 		}
 		// First 2 bits from Traffic Class are unused, so we shift the value 2 bits
-		if err := syscall.SetsockoptInt(int(file.Fd()), syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, s.Config.DSCP<<2); err != nil {
+		if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, s.Config.DSCP<<2); err != nil {
 			return route, err
 		}
-		if err := s.sendEventMsg(s.formSyncPacket(hop, s.currentRoute), ptpConn, ptpAddr); err != nil {
+		if err := s.sendEventMsg(s.formSyncPacket(hop, s.currentRoute), connFd, ptpAddr); err != nil {
 			return route, err
 		}
 
 		select {
 		case sw := <-s.inputQueue:
 			s.routes[sw.routeIdx].switches = append(s.routes[sw.routeIdx].switches, *sw)
-			if sw.ip == ptpAddr.IP.String() {
+			if net.ParseIP(sw.ip).Equal(ptpUDPAddr.IP) {
 				destReached = true
 				s.destHop = hop
 			}
@@ -223,13 +230,12 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) (
 	return route, nil
 }
 
-func (s *Sender) sendEventMsg(p ptp.Packet, ptpConn *net.UDPConn, ptpAddr *net.UDPAddr) error {
+func (s *Sender) sendEventMsg(p ptp.Packet, ptpConn int, ptpAddr unix.Sockaddr) error {
 	b, err := ptp.Bytes(p)
 	if err != nil {
 		return err
 	}
-	_, err = ptpConn.WriteTo(b, ptpAddr)
-	if err != nil {
+	if err := unix.Sendto(ptpConn, b, 0, ptpAddr); err != nil {
 		return err
 	}
 	return nil
