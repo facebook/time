@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -26,6 +27,19 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
+
+func enableDSCP(fd int, localAddr net.IP, dscp int) error {
+	if localAddr.To4() == nil {
+		if err := unix.SetsockoptInt(fd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, dscp<<2); err != nil {
+			return err
+		}
+	} else {
+		if err := unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_TOS, dscp<<2); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // sendWorker monitors the queue of jobs
 type sendWorker struct {
@@ -49,53 +63,90 @@ func NewSendWorker(i int, c *Config, st stats.Stats) *sendWorker {
 	return s
 }
 
-// Start a SendWorker which will pull data from the queue and send Sync and Followup packets
-func (s *sendWorker) Start() {
-	econn, err := net.ListenUDP("udp", &net.UDPAddr{IP: s.config.IP, Port: 0})
+func (s *sendWorker) listen() (eventFD, generalFD int, err error) {
+	// socket domain differs depending whether we are listening on ipv4 or ipv6
+	domain := unix.AF_INET6
+	if s.config.IP.To4() != nil {
+		domain = unix.AF_INET
+	}
+	// set up event connection
+	eventFD, err = unix.Socket(domain, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
 	if err != nil {
-		log.Fatalf("Binding to event socket error: %s", err)
+		return -1, -1, fmt.Errorf("creating event socket error: %w", err)
 	}
-	defer econn.Close()
+	sockAddrAnyPort := ptp.IPToSockaddr(s.config.IP, 0)
 
-	// get connection file descriptor
-	eFd, err := ptp.ConnFd(econn)
+	// set SO_REUSEPORT so we can potentially trace network path from same source port.
+	// needs to be set before we bind to a port.
+	if err = unix.SetsockoptInt(eventFD, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
+		return -1, -1, fmt.Errorf("failed to set SO_REUSEPORT on event socket: %w", err)
+	}
+	// bind to any ephemeral port
+	if err := unix.Bind(eventFD, sockAddrAnyPort); err != nil {
+		return -1, -1, fmt.Errorf("unable to bind event socket connection: %w", err)
+	}
+
+	// get local port we'll send packets from
+	localSockAddr, err := unix.Getsockname(eventFD)
 	if err != nil {
-		log.Fatalf("Getting event connection FD: %s", err)
+		return -1, -1, fmt.Errorf("unable to find local ip: %w", err)
+	}
+	switch v := localSockAddr.(type) {
+	case *unix.SockaddrInet4:
+		log.Infof("Started worker#%d event on [%v]:%d", s.id, net.IP(v.Addr[:]), v.Port)
+	case *unix.SockaddrInet6:
+		log.Infof("Started worker#%d event on [%v]:%d", s.id, net.IP(v.Addr[:]), v.Port)
+	default:
+		log.Errorf("Unexpected local addr type %T", v)
 	}
 
-	if err = s.enableDSCP(econn); err != nil {
-		log.Fatalf("Failed to set DSCP on event socket: %s", err)
+	if err = enableDSCP(eventFD, s.config.IP, s.config.DSCP); err != nil {
+		return -1, -1, fmt.Errorf("setting DSCP on event socket: %w", err)
 	}
 
-	// Syncs sent from event port
+	// Syncs sent from event port, so need to turn on timestamping here
 	switch s.config.TimestampType {
 	case ptp.HWTIMESTAMP:
-		if err := ptp.EnableHWTimestampsSocket(eFd, s.config.Interface); err != nil {
-			log.Fatalf("Failed to enable RX hardware timestamps: %v", err)
+		if err := ptp.EnableHWTimestampsSocket(eventFD, s.config.Interface); err != nil {
+			return -1, -1, fmt.Errorf("failed to enable RX hardware timestamps: %w", err)
 		}
 	case ptp.SWTIMESTAMP:
-		if err := ptp.EnableSWTimestampsSocket(eFd); err != nil {
-			log.Fatalf("Unable to enable RX software timestamps")
+		if err := ptp.EnableSWTimestampsSocket(eventFD); err != nil {
+			return -1, -1, fmt.Errorf("unable to enable RX software timestamps: %w", err)
 		}
 	default:
-		log.Fatalf("Unrecognized timestamp type: %s", s.config.TimestampType)
+		return -1, -1, fmt.Errorf("unrecognized timestamp type: %s", s.config.TimestampType)
 	}
 
-	gconn, err := net.ListenUDP("udp", &net.UDPAddr{IP: s.config.IP, Port: 0})
+	// set up general connection
+	generalFD, err = unix.Socket(domain, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
 	if err != nil {
-		log.Fatalf("Binding to general socket error: %s", err)
+		return -1, -1, fmt.Errorf("creating general socket error: %w", err)
 	}
-	defer gconn.Close()
+	// set SO_REUSEPORT so we can potentially trace network path from same source port.
+	// needs to be set before we bind to a port.
+	if err = unix.SetsockoptInt(generalFD, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
+		return -1, -1, fmt.Errorf("failed to set SO_REUSEPORT on general socket: %w", err)
+	}
+	// bind to any ephemeral port
+	if err := unix.Bind(generalFD, sockAddrAnyPort); err != nil {
+		return -1, -1, fmt.Errorf("binding event socket connection: %w", err)
+	}
+	// enable DSCP
+	if err = enableDSCP(generalFD, s.config.IP, s.config.DSCP); err != nil {
+		return -1, -1, fmt.Errorf("setting DSCP on general socket: %w", err)
+	}
+	return
+}
 
-	// get connection file descriptor
-	gFd, err := ptp.ConnFd(gconn)
+// Start a SendWorker which will pull data from the queue and send Sync and Followup packets
+func (s *sendWorker) Start() {
+	eFd, gFd, err := s.listen()
 	if err != nil {
-		log.Fatalf("Getting general connection FD: %s", err)
+		log.Fatal(err)
 	}
-
-	if err = s.enableDSCP(gconn); err != nil {
-		log.Fatalf("Failed to set DSCP on general socket: %s", err)
-	}
+	defer unix.Close(eFd)
+	defer unix.Close(gFd)
 
 	// reusable buffers
 	buf := make([]byte, ptp.PayloadSizeBytes)
@@ -239,23 +290,4 @@ func (s *sendWorker) inventoryClients() {
 			s.stats.IncWorkerSubs(s.id)
 		}
 	}
-}
-
-func (s *sendWorker) enableDSCP(conn *net.UDPConn) error {
-	// get connection file descriptor
-	fd, err := ptp.ConnFd(conn)
-	if err != nil {
-		return err
-	}
-
-	if conn.LocalAddr().(*net.UDPAddr).IP.To4() == nil {
-		if err := unix.SetsockoptInt(fd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, s.config.DSCP<<2); err != nil {
-			return err
-		}
-	} else {
-		if err := unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_TOS, s.config.DSCP<<2); err != nil {
-			return err
-		}
-	}
-	return nil
 }
