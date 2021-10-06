@@ -70,7 +70,7 @@ func main() {
 	flag.IntVar(&c.DestinationPort, "dp", ptp.PortEvent, "destination port to send packets to")
 	flag.IntVar(&c.SourcePort, "sp", 32768, "the base source port to start probing (used by sender)")
 	flag.IntVar(&c.PortCount, "portcount", 1, "port count to be used for probing each target ip (used by sender)")
-	flag.StringVar(&messageType, "type", "sync", "set the message type. Can be sync (default) or delay_req (used by sender)")
+	flag.StringVar(&messageType, "type", "sync", "set the message type. Can be 'sync' (default), 'delay_req' or 'signaling' (used by sender)")
 	flag.StringVar(&c.CsvFile, "csv", "", "csv output file path (used by sender)")
 	flag.BoolVar(&c.ContReached, "continue", false, "continue incrementing hop count after destination host responds (used by sender)")
 	flag.IntVar(&c.IPCount, "ipcount", 0, "number of additional IPs targeted in the same /64 prefix as destination to increase hashing entropy (used by sender)")
@@ -99,6 +99,8 @@ func main() {
 		c.MessageType = ptp.MessageDelayReq
 	case "sync":
 		c.MessageType = ptp.MessageSync
+	case "signaling":
+		c.MessageType = ptp.MessageSignaling
 	default:
 		log.Fatalf("unsupported message type %q", messageType)
 	}
