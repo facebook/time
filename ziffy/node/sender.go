@@ -17,7 +17,6 @@ limitations under the License.
 package node
 
 import (
-	"encoding/binary"
 	"fmt"
 	"net"
 	"sort"
@@ -212,7 +211,17 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) (
 		if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, s.Config.DSCP<<2); err != nil {
 			return route, err
 		}
-		if err := s.sendEventMsg(s.formSyncPacket(hop, s.currentRoute), connFd, ptpAddr); err != nil {
+		var p ptp.Packet
+		switch s.Config.MessageType {
+		case ptp.MessageSync, ptp.MessageDelayReq:
+			p = formSyncPacket(s.Config.MessageType, hop, s.currentRoute)
+		case ptp.MessageSignaling:
+			p = formSignalingPacket(hop, s.currentRoute)
+		default:
+			return route, fmt.Errorf("unsupported packet type %v", s.Config.MessageType)
+		}
+
+		if err := s.sendEventMsg(p, connFd, ptpAddr); err != nil {
 			return route, err
 		}
 
@@ -239,26 +248,6 @@ func (s *Sender) sendEventMsg(p ptp.Packet, ptpConn int, ptpAddr unix.Sockaddr) 
 		return err
 	}
 	return nil
-}
-
-// formSyncPacket creates PTP SYNC header
-// SequenceId contains origin hop; PortNumber contains origin port;
-// ControlField contains the Zi(0xff)y identifier
-func (s *Sender) formSyncPacket(hop int, routeIndex int) *ptp.SyncDelayReq {
-	return &ptp.SyncDelayReq{
-		Header: ptp.Header{
-			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(s.Config.MessageType, 0),
-			Version:         ptp.Version,
-			MessageLength:   uint16(binary.Size(ptp.SyncDelayReq{})),
-			FlagField:       ptp.FlagUnicast,
-			SequenceID:      uint16(hop),
-			SourcePortIdentity: ptp.PortIdentity{
-				PortNumber: uint16(routeIndex),
-			},
-			ControlField:       ZiffyHexa, //identifier for zi(0xff)y
-			LogMessageInterval: 0x7f,
-		},
-	}
 }
 
 func (s *Sender) monitorIcmp(conn net.PacketConn) {
@@ -296,13 +285,31 @@ func (s *Sender) handleIcmpPacket(rawPacket []byte, len int, rAddr net.Addr) {
 		return
 	}
 
+	var (
+		corrField  ptp.Correction
+		sequenceID uint16
+		portNum    uint16
+	)
+	switch v := ptpPacket.(type) {
+	case *ptp.SyncDelayReq:
+		corrField = v.Header.CorrectionField
+		sequenceID = v.Header.SequenceID
+		portNum = v.Header.SourcePortIdentity.PortNumber
+	case *ptp.Signaling:
+		corrField = v.Header.CorrectionField
+		sequenceID = v.Header.SequenceID
+		portNum = v.Header.SourcePortIdentity.PortNumber
+	default:
+		log.Errorf("Received unexpected packet %T, ignoring", v)
+	}
+
 	s.inputQueue <- &SwitchTrafficInfo{
 		ip:        rAddr.String(),
-		corrField: ptpPacket.(*ptp.SyncDelayReq).Header.CorrectionField,
-		hop:       int(ptpPacket.(*ptp.SyncDelayReq).Header.SequenceID),
-		routeIdx:  int(ptpPacket.(*ptp.SyncDelayReq).Header.SourcePortIdentity.PortNumber),
+		corrField: corrField,
+		hop:       int(sequenceID),
+		routeIdx:  int(portNum),
 	}
-	log.Debugf("%v cf: %v hop: %v", getLookUpName(rAddr.String()), ptpPacket.(*ptp.SyncDelayReq).Header.CorrectionField, int(ptpPacket.(*ptp.SyncDelayReq).Header.SequenceID))
+	log.Debugf("%v cf: %v hop: %v", getLookUpName(rAddr.String()), corrField, sequenceID)
 }
 
 // formNewDest generates new ip address using the

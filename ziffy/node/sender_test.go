@@ -21,8 +21,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	ptp "github.com/facebookincubator/ptp/protocol"
 )
 
 func TestPopAllQueue(t *testing.T) {
@@ -141,32 +139,6 @@ func TestSweepRackPrefix(t *testing.T) {
 	s.routes = append(s.routes, PathInfo{switches: []SwitchTrafficInfo{}})
 	s.sweepRackPrefix()
 	require.Equal(t, 33, len(s.routes))
-}
-
-func TestFormSyncPacket(t *testing.T) {
-	s := Sender{
-		Config: &Config{
-			DestinationAddress: "2401:db00:251c:2608:1:2:c:d",
-			IPCount:            3,
-			PortCount:          5,
-			HopMax:             3,
-			HopMin:             1,
-			MessageType:        ptp.MessageSync,
-		},
-	}
-
-	pkt := s.formSyncPacket(4, 33000)
-	require.Equal(t, uint8(ZiffyHexa), pkt.ControlField)
-	require.Equal(t, uint16(4), pkt.SequenceID)
-	require.Equal(t, uint16(33000), pkt.SourcePortIdentity.PortNumber)
-	require.Equal(t, ptp.NewSdoIDAndMsgType(ptp.MessageSync, 0), pkt.SdoIDAndMsgType)
-
-	s.Config.MessageType = ptp.MessageDelayReq
-	pkt = s.formSyncPacket(7, 12345)
-	require.Equal(t, uint8(ZiffyHexa), pkt.ControlField)
-	require.Equal(t, uint16(7), pkt.SequenceID)
-	require.Equal(t, uint16(12345), pkt.SourcePortIdentity.PortNumber)
-	require.Equal(t, ptp.NewSdoIDAndMsgType(ptp.MessageDelayReq, 0), pkt.SdoIDAndMsgType)
 }
 
 func TestRackSwHostnameMonitor(t *testing.T) {
