@@ -42,11 +42,8 @@ type PTPCheckResult struct {
 }
 
 // Run will talk over conn and return PTPCheckResult
-func Run(conn net.Conn) (*PTPCheckResult, error) {
+func Run(c *ptp.MgmtClient) (*PTPCheckResult, error) {
 	var err error
-	c := ptp.MgmtClient{
-		Connection: conn,
-	}
 	currentDataSet, err := c.CurrentDataSet()
 	if err != nil {
 		return nil, err
@@ -108,37 +105,53 @@ func Run(conn net.Conn) (*PTPCheckResult, error) {
 	return result, nil
 }
 
-// RunCheck is a simple wrapper to connect to address and run Run()
-func RunCheck(address string) (*PTPCheckResult, error) {
+// PrepareClient creates a ptp.MgmtClient with connection to ptp4l over unix socket
+func PrepareClient(address string) (c *ptp.MgmtClient, cleanup func(), err error) {
 	timeout := 5 * time.Second
-	deadline := time.Now().Add(timeout)
-
-	addr, err := net.ResolveUnixAddr("unixgram", address)
-	if err != nil {
-		return nil, err
-	}
 	base, _ := path.Split(address)
+	var conn *net.UnixConn
 	local := path.Join(base, fmt.Sprintf("ptpcheck.%d.sock", os.Getpid()))
-	localAddr, _ := net.ResolveUnixAddr("unixgram", local)
-	conn, err := net.DialUnix("unixgram", localAddr, addr)
-	if err != nil {
-		return nil, err
-	}
 	// cleanup
-	defer func() {
-		if err := conn.Close(); err != nil {
-			log.Warningf("closing connection: %v", err)
+	cleanup = func() {
+		if conn != nil {
+			if err := conn.Close(); err != nil {
+				log.Warningf("closing connection: %v", err)
+			}
 		}
 		if err := os.RemoveAll(local); err != nil {
 			log.Warningf("removing socket: %v", err)
 		}
-	}()
+	}
+	deadline := time.Now().Add(timeout)
+
+	addr, err := net.ResolveUnixAddr("unixgram", address)
+	if err != nil {
+		return nil, cleanup, err
+	}
+	localAddr, _ := net.ResolveUnixAddr("unixgram", local)
+	conn, err = net.DialUnix("unixgram", localAddr, addr)
+	if err != nil {
+		return nil, cleanup, err
+	}
+
 	if err := os.Chmod(local, 0666); err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
 	if err := conn.SetReadDeadline(deadline); err != nil {
+		return nil, cleanup, err
+	}
+	return &ptp.MgmtClient{
+		Connection: conn,
+	}, cleanup, err
+}
+
+// RunCheck is a simple wrapper to connect to address and run Run()
+func RunCheck(address string) (*PTPCheckResult, error) {
+	c, cleanup, err := PrepareClient(address)
+	defer cleanup()
+	if err != nil {
 		return nil, err
 	}
 	log.Debugf("connected to %s", address)
-	return Run(conn)
+	return Run(c)
 }
