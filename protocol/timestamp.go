@@ -28,11 +28,17 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// from include/uapi/linux/net_tstamp.h
 const (
 	// HWTSTAMP_TX_ON int 1
-	hwtstampTXON = 0x00000001
+	hwtstampTXON int32 = 0x00000001
 	// HWTSTAMP_FILTER_ALL int 1
-	hwtstampFilterAll = 0x00000001
+	hwtstampFilterAll int32 = 0x00000001
+	// HWTSTAMP_FILTER_PTP_V2_EVENT int 12
+	hwtstampFilterPTPv2Event int32 = 0x0000000c
+)
+
+const (
 	// Control is a socket control message containing TX/RX timestamp
 	// If the read fails we may endup with multiple timestamps in the buffer
 	// which is best to read right away
@@ -71,10 +77,11 @@ type ifreq struct {
 	data uintptr
 }
 
+// from include/uapi/linux/net_tstamp.h
 type hwtstampСonfig struct {
-	flags    int
-	txType   int
-	rxFilter int
+	flags    int32
+	txType   int32
+	rxFilter int32
 }
 
 // ConnFd returns file descriptor of a connection
@@ -93,25 +100,28 @@ func ConnFd(conn *net.UDPConn) (int, error) {
 	return intfd, nil
 }
 
-func ioctlTimestamp(fd int, ifname string) error {
+func ioctlTimestamp(fd int, ifname string, filter int32) error {
 	hw := &hwtstampСonfig{
 		flags:    0,
 		txType:   hwtstampTXON,
-		rxFilter: hwtstampFilterAll,
+		rxFilter: filter,
 	}
+
 	i := &ifreq{data: uintptr(unsafe.Pointer(hw))}
 	copy(i.name[:unix.IFNAMSIZ-1], ifname)
 
 	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SIOCSHWTSTAMP, uintptr(unsafe.Pointer(i))); errno != 0 {
-		return fmt.Errorf("failed to run ioctl SIOCSHWTSTAMP: %d", errno)
+		return fmt.Errorf("failed to run ioctl SIOCSHWTSTAMP: %s (%d)", unix.ErrnoName(errno), errno)
 	}
 	return nil
 }
 
 // EnableHWTimestampsSocket enables HW timestamps on the socket
 func EnableHWTimestampsSocket(connFd int, iface string) error {
-	if err := ioctlTimestamp(connFd, iface); err != nil {
-		return err
+	if err := ioctlTimestamp(connFd, iface, hwtstampFilterAll); err != nil {
+		if err := ioctlTimestamp(connFd, iface, hwtstampFilterPTPv2Event); err != nil {
+			return err
+		}
 	}
 
 	// Enable hardware timestamp capabilities on socket

@@ -137,11 +137,11 @@ func (s *Server) startEventListener() {
 	switch s.Config.TimestampType {
 	case ptp.HWTIMESTAMP:
 		if err := ptp.EnableHWTimestampsSocket(s.eFd, s.Config.Interface); err != nil {
-			log.Fatalf("Cannot enable hardware RX timestamps")
+			log.Fatalf("Cannot enable hardware RX timestamps: %v", err)
 		}
 	case ptp.SWTIMESTAMP:
 		if err := ptp.EnableSWTimestampsSocket(s.eFd); err != nil {
-			log.Fatalf("Cannot enable software RX timestamps")
+			log.Fatalf("Cannot enable software RX timestamps: %v", err)
 		}
 	default:
 		log.Fatalf("Unrecognized timestamp type: %s", s.Config.TimestampType)
