@@ -37,6 +37,7 @@ type SubscriptionClient struct {
 	interval   time.Duration
 	expire     time.Time
 	sequenceID uint16
+	running    bool
 
 	// socket addresses
 	eclisa unix.Sockaddr
@@ -74,14 +75,20 @@ func NewSubscriptionClient(q chan *SubscriptionClient, eclisa, gclisa unix.Socka
 // Start launches the subscription timers and exit on expire
 func (sc *SubscriptionClient) Start() {
 	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
+	sc.setRunning(true)
+
 	over := fmt.Sprintf("Subscription %s is over for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
 	// Send first message right away
-	sc.Once()
+	if sc.subscriptionType != ptp.MessageDelayResp {
+		sc.Once()
+	}
 
 	intervalTicker := time.NewTicker(sc.interval)
 	oldInterval := sc.interval
 
 	defer intervalTicker.Stop()
+	defer sc.setRunning(false)
+
 	for range intervalTicker.C {
 		if sc.Expired() {
 			log.Infof(over)
@@ -93,8 +100,10 @@ func (sc *SubscriptionClient) Start() {
 			intervalTicker.Reset(sc.interval)
 			oldInterval = sc.interval
 		}
-		// Add myself to the worker queue
-		sc.Once()
+		if sc.subscriptionType != ptp.MessageDelayResp {
+			// Add myself to the worker queue
+			sc.Once()
+		}
 	}
 }
 
@@ -116,6 +125,34 @@ func (sc *SubscriptionClient) Stop() {
 	defer sc.Unlock()
 	// Simply set the expiration time and subscription will be stopped
 	sc.expire = time.Now()
+}
+
+// setRunning atomically sets running
+func (sc *SubscriptionClient) setRunning(running bool) {
+	sc.Lock()
+	defer sc.Unlock()
+	sc.running = running
+}
+
+// setExpire atomically sets expire
+func (sc *SubscriptionClient) setExpire(expire time.Time) {
+	sc.Lock()
+	defer sc.Unlock()
+	sc.expire = expire
+}
+
+// setInterval atomically sets interval
+func (sc *SubscriptionClient) setInterval(interval time.Duration) {
+	sc.Lock()
+	defer sc.Unlock()
+	sc.interval = interval
+}
+
+// Running returns the running bool
+func (sc *SubscriptionClient) Running() bool {
+	sc.Lock()
+	defer sc.Unlock()
+	return sc.running
 }
 
 // IncSequenceID adds 1 to a sequence id

@@ -33,8 +33,13 @@ func TestRunning(t *testing.T) {
 	require.True(t, sc.Expired())
 
 	// Add proper actual expiration time subscription
-	sc.expire = time.Now().Add(1 * time.Second)
+	sc.setExpire(time.Now().Add(1 * time.Second))
 	require.False(t, sc.Expired())
+
+	// Check running status
+	require.False(t, sc.Running())
+	sc.setRunning(true)
+	require.True(t, sc.Running())
 }
 
 func TestSubscriptionStart(t *testing.T) {
@@ -48,6 +53,27 @@ func TestSubscriptionStart(t *testing.T) {
 	go sc.Start()
 	time.Sleep(100 * time.Millisecond)
 	require.False(t, sc.Expired())
+	require.True(t, sc.Running())
+}
+
+func TestSubscriptionExpire(t *testing.T) {
+	w := &sendWorker{}
+	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
+	interval := 10 * time.Millisecond
+	expire := time.Now().Add(200 * time.Millisecond)
+	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
+
+	go sc.Start()
+	time.Sleep(100 * time.Millisecond)
+
+	require.False(t, sc.Expired())
+	require.True(t, sc.Running())
+
+	// Wait to expire
+	time.Sleep(110 * time.Millisecond)
+	require.True(t, sc.Expired())
+	require.False(t, sc.Running())
 }
 
 func TestSubscriptionStop(t *testing.T) {
@@ -106,7 +132,7 @@ func TestFollowupPacket(t *testing.T) {
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
-	sc.interval = interval
+	sc.setInterval(interval)
 
 	i, err := ptp.NewLogInterval(interval)
 	require.NoError(t, err)
@@ -129,7 +155,7 @@ func TestAnnouncePacket(t *testing.T) {
 	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
-	sc.interval = interval
+	sc.setInterval(interval)
 
 	i, err := ptp.NewLogInterval(interval)
 	require.NoError(t, err)

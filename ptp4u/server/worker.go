@@ -282,7 +282,7 @@ func (s *sendWorker) inventoryClients() {
 	defer s.mux.Unlock()
 	for st, subs := range s.clients {
 		for k, sc := range subs {
-			if sc.Expired() {
+			if !sc.Running() {
 				delete(subs, k)
 				continue
 			}
