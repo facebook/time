@@ -308,12 +308,6 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 					expire = time.Now().Add(durationt)
 					intervalt = v.LogInterMessagePeriod.Duration()
 
-					// Reject queries out of limit
-					if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
-						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0, gclisa)
-						continue
-					}
-
 					switch grantType {
 					case ptp.MessageAnnounce, ptp.MessageSync, ptp.MessageDelayResp:
 						worker = s.findWorker(signaling.SourcePortIdentity, r)
@@ -323,13 +317,20 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 							eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
 							sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
 							worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
-							if grantType != ptp.MessageDelayResp {
-								go sc.Start()
-							}
 						} else {
 							// Update existing subscription data
 							sc.expire = expire
 							sc.interval = intervalt
+						}
+
+						// Reject queries out of limit
+						if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
+							s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0, gclisa)
+							continue
+						}
+
+						if !sc.Running() {
+							go sc.Start()
 						}
 
 						// Send confirmation grant
@@ -346,7 +347,6 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 					if sc != nil {
 						sc.Stop()
 					}
-
 				default:
 					log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)
 				}

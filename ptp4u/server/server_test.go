@@ -17,7 +17,7 @@ limitations under the License.
 package server
 
 import (
-	"net"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -26,49 +26,43 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestServerInventoryClients(t *testing.T) {
+func TestFindWorker(t *testing.T) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		TimestampType: ptp.SWTIMESTAMP,
+		SendWorkers:   10,
+	}
+	s := Server{
+		Config: c,
+		Stats:  stats.NewJSONStats(),
+		sw:     make([]*sendWorker, c.SendWorkers),
+	}
+
+	for i := 0; i < s.Config.SendWorkers; i++ {
+		s.sw[i] = NewSendWorker(i, c, s.Stats)
+	}
+
 	clipi1 := ptp.PortIdentity{
 		PortNumber:    1,
 		ClockIdentity: ptp.ClockIdentity(1234),
 	}
+
 	clipi2 := ptp.PortIdentity{
+		PortNumber:    2,
+		ClockIdentity: ptp.ClockIdentity(1234),
+	}
+
+	clipi3 := ptp.PortIdentity{
 		PortNumber:    1,
 		ClockIdentity: ptp.ClockIdentity(5678),
 	}
-	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 
-	st := stats.NewJSONStats()
-	go st.Start(0)
-	time.Sleep(time.Millisecond)
+	// Consistent across multiple calls
+	require.Equal(t, 0, s.findWorker(clipi1, r).id)
+	require.Equal(t, 0, s.findWorker(clipi1, r).id)
+	require.Equal(t, 0, s.findWorker(clipi1, r).id)
 
-	w := NewSendWorker(0, c, st)
-
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	scS1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
-	w.RegisterSubscription(clipi1, ptp.MessageSync, scS1)
-	w.inventoryClients()
-	require.Equal(t, 1, len(w.clients))
-
-	scA1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Now().Add(time.Minute))
-	w.RegisterSubscription(clipi1, ptp.MessageAnnounce, scA1)
-	w.inventoryClients()
-	require.Equal(t, 2, len(w.clients))
-
-	scS2 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
-	w.RegisterSubscription(clipi2, ptp.MessageSync, scS2)
-	w.inventoryClients()
-	require.Equal(t, 2, len(w.clients[ptp.MessageSync]))
-
-	// Shutting down
-	scS1.expire = time.Now()
-	w.inventoryClients()
-	require.Equal(t, 1, len(w.clients[ptp.MessageSync]))
-
-	scA1.expire = time.Now()
-	w.inventoryClients()
-	require.Equal(t, 0, len(w.clients[ptp.MessageAnnounce]))
-
-	scS2.expire = time.Now()
-	w.inventoryClients()
-	require.Equal(t, 0, len(w.clients[ptp.MessageSync]))
+	require.Equal(t, 3, s.findWorker(clipi2, r).id)
+	require.Equal(t, 1, s.findWorker(clipi3, r).id)
 }
