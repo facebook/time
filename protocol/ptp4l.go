@@ -75,7 +75,7 @@ func PortStatsNPRequest() *Management {
 			Header: Header{
 				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
 				Version:            Version,
-				MessageLength:      headerSize + tlvHeadSize,
+				MessageLength:      headerSize + tlvHeadSize + 2,
 				SourcePortIdentity: identity,
 				LogMessageInterval: MgmtLogMessageInterval,
 			},
@@ -118,7 +118,7 @@ func TimeStatusNPRequest() *Management {
 			Header: Header{
 				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
 				Version:            Version,
-				MessageLength:      headerSize + tlvHeadSize,
+				MessageLength:      headerSize + tlvHeadSize + 2,
 				SourcePortIdentity: identity,
 				LogMessageInterval: MgmtLogMessageInterval,
 			},
