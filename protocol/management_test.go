@@ -39,7 +39,7 @@ func Test_parseMsgErrorStatus(t *testing.T) {
 		ManagementMsgHead: ManagementMsgHead{
 			Header: Header{
 				SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageManagement, 0),
-				Version:             2,
+				Version:             MajorVersion,
 				MessageLength:       uint16(len(raw) - 2),
 				DomainNumber:        0,
 				MinorSdoID:          0,

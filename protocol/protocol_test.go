@@ -39,7 +39,7 @@ func Test_parseSync(t *testing.T) {
 	want := SyncDelayReq{
 		Header: Header{
 			SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageSync, 1),
-			Version:             2,
+			Version:             MajorVersion,
 			MessageLength:       44,
 			DomainNumber:        0,
 			MinorSdoID:          0,
@@ -86,7 +86,7 @@ func Test_parseFollowup(t *testing.T) {
 	want := FollowUp{
 		Header: Header{
 			SdoIDAndMsgType: NewSdoIDAndMsgType(MessageFollowUp, 0),
-			Version:         Version,
+			Version:         MajorVersion,
 			MessageLength:   uint16(binary.Size(FollowUp{})),
 			DomainNumber:    0,
 			FlagField:       FlagUnicast,
@@ -132,7 +132,7 @@ func Test_parsePDelayReq(t *testing.T) {
 	want := PDelayReq{
 		Header: Header{
 			SdoIDAndMsgType:     NewSdoIDAndMsgType(MessagePDelayReq, 1),
-			Version:             2,
+			Version:             MajorVersion,
 			MessageLength:       54,
 			DomainNumber:        0,
 			MinorSdoID:          0,
@@ -182,7 +182,7 @@ func Test_parseAnnounce(t *testing.T) {
 	want := Announce{
 		Header: Header{
 			SdoIDAndMsgType: NewSdoIDAndMsgType(MessageAnnounce, 0),
-			Version:         Version,
+			Version:         MajorVersion,
 			MessageLength:   uint16(binary.Size(Announce{})),
 			DomainNumber:    0,
 			FlagField:       FlagUnicast | FlagPTPTimescale,
@@ -236,7 +236,7 @@ func Test_parseDelayResp(t *testing.T) {
 	want := DelayResp{
 		Header: Header{
 			SdoIDAndMsgType: NewSdoIDAndMsgType(MessageDelayResp, 0),
-			Version:         Version,
+			Version:         MajorVersion,
 			MessageLength:   uint16(binary.Size(DelayResp{})),
 			DomainNumber:    0,
 			FlagField:       FlagUnicast,
@@ -291,7 +291,7 @@ func BenchmarkWriteSync(b *testing.B) {
 	p := &SyncDelayReq{
 		Header: Header{
 			SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageSync, 1),
-			Version:             2,
+			Version:             MajorVersion,
 			MessageLength:       44,
 			DomainNumber:        0,
 			MinorSdoID:          0,
@@ -323,7 +323,7 @@ func BenchmarkWriteFollowup(b *testing.B) {
 	p := &FollowUp{
 		Header: Header{
 			SdoIDAndMsgType: NewSdoIDAndMsgType(MessageFollowUp, 0),
-			Version:         Version,
+			Version:         MajorVersion,
 			MessageLength:   uint16(binary.Size(FollowUp{})),
 			DomainNumber:    0,
 			FlagField:       FlagUnicast,

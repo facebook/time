@@ -25,8 +25,13 @@ import (
 	"fmt"
 )
 
-// Version is what version of PTP protocol we implement
-const Version uint8 = 2
+// what version of PTP protocol we implement
+const (
+	MajorVersion     uint8 = 2
+	MinorVersion     uint8 = 1
+	Version          uint8 = MinorVersion<<4 | MajorVersion
+	MajorVersionMask uint8 = 0x0f
+)
 
 /* UDP port numbers
 The UDP destination port of a PTP event message shall be 319.
