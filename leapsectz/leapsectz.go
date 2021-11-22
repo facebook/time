@@ -20,6 +20,7 @@ limitations under the License.
 package leapsectz
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -37,6 +38,22 @@ var errBadVersion = errors.New("version in file is not supported")
 type LeapSecond struct {
 	Tleap uint64
 	Nleap int32
+}
+
+// Header represents file header structure. Fields names are copied from doc
+type Header struct {
+	// A four-octet unsigned integer specifying the number of UTC/local indicators contained in the body.
+	IsUtcCnt uint32
+	// A four-octet unsigned integer specifying the number of standard/wall indicators contained in the body.
+	IsStdCnt uint32
+	// A four-octet unsigned integer specifying the number of leap second records contained in the body.
+	LeapCnt uint32
+	// A four-octet unsigned integer specifying the number of transition times contained in the body.
+	TimeCnt uint32
+	// A four-octet unsigned integer specifying the number of local time type Records contained in the body - MUST NOT be zero.
+	TypeCnt uint32
+	// A four-octet unsigned integer specifying the total number of octets used by the set of time zone designations contained in the body.
+	CharCnt uint32
 }
 
 // Time returns when the leap second event occurs
@@ -162,4 +179,127 @@ func parseVx(r io.Reader) ([]LeapSecond, error) {
 		break
 	}
 	return ret, nil
+}
+
+func prepareHeader(ver byte, lsCnt int, name string) []byte {
+	const magicHeader = "TZif"
+
+	h := new(bytes.Buffer)
+
+	hdr := Header{
+		IsUtcCnt: 1,
+		IsStdCnt: 1,
+		LeapCnt:  uint32(lsCnt),
+		TimeCnt:  0,
+		TypeCnt:  1, //mandatory >0
+		CharCnt:  uint32(len(name)),
+	}
+
+	h.WriteString(magicHeader)
+	h.WriteByte(ver)
+	padding := make([]byte, 15)
+	h.Write(padding)
+	_ = binary.Write(h, binary.BigEndian, hdr)
+	return h.Bytes()
+}
+
+func writePreData(f io.Writer, name string) error {
+	// we have zero-sized transition times array - skip it
+
+	// one mandatory "local time type Record"
+	var sixZeros = []byte{0, 0, 0, 0, 0, 0}
+	if _, err := f.Write(sixZeros); err != nil {
+		return err
+	}
+
+	// null terminated string of time zone
+	if _, err := io.WriteString(f, name); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writePostData(f io.Writer) error {
+	var twoZeros = []byte{0, 0}
+	if _, err := f.Write(twoZeros); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Write dumps arrays of leap seconds into file with newly created header
+func Write(f io.Writer, ver byte, ls []LeapSecond, name string) error {
+	if ver != 0 && ver != '2' {
+		return errors.New("Unsupported version")
+	}
+
+	var nameFormatted string
+	if name == "" {
+		nameFormatted = "UTC\x00"
+	} else {
+		nameFormatted = name + "\x00"
+	}
+
+	// prepare header which will be reused in case of version 2
+	hdr := prepareHeader(ver, len(ls), nameFormatted)
+
+	// Write prepared header
+	if _, err := f.Write(hdr); err != nil {
+		return err
+	}
+
+	// data before array of leap seconds
+	if err := writePreData(f, nameFormatted); err != nil {
+		return err
+	}
+
+	// array of leap seconds
+	for i := 0; i < len(ls); i++ {
+		l := []uint32{uint32(ls[i].Tleap), uint32(ls[i].Nleap)}
+		if err := binary.Write(f, binary.BigEndian, &l); err != nil {
+			return err
+		}
+	}
+
+	// write data after leap seconds array
+	if err := writePostData(f); err != nil {
+		return err
+	}
+
+	if ver != '2' {
+		return nil
+	}
+
+	// now we have to write version 2 part of file
+	// prepared header could be reused
+	if _, err := f.Write(hdr); err != nil {
+		return err
+	}
+
+	// data before array of leap seconds
+	if err := writePreData(f, nameFormatted); err != nil {
+		return err
+	}
+
+	// array of leap seconds version 2
+	for i := 0; i < len(ls); i++ {
+		l := ls[i]
+		if err := binary.Write(f, binary.BigEndian, &l); err != nil {
+			return err
+		}
+	}
+
+	// write data after leap seconds array
+	if err := writePostData(f); err != nil {
+		return err
+	}
+
+	// and now we have to write POSIZ TZ string along with new line separators
+	// usually it's the same string as in the header
+	posixTz := "\n" + name + "\n"
+	if _, err := io.WriteString(f, posixTz); err != nil {
+		return err
+	}
+
+	return nil
 }
