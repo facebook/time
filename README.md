@@ -45,5 +45,8 @@ go get github.com/facebookincubator/ptp/ptp4u
 ## Simpleclient
 Basic PTPv2.1 two-step unicast client implementation.
 
+## oscillatord
+Implementation of monitoring protocol used by Orolia [oscillatord](https://github.com/Orolia2s/oscillatord).
+
 # License
 PTP is licensed under Apache 2.0 as found in the [LICENSE file](LICENSE).
