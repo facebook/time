@@ -62,8 +62,11 @@ func (l LeapSecond) Time() time.Time {
 }
 
 // Parse returns the list of leap seconds
-func Parse() ([]LeapSecond, error) {
-	f, err := os.Open(file)
+func Parse(srcfile string) ([]LeapSecond, error) {
+	if srcfile == "" {
+		srcfile = file
+	}
+	f, err := os.Open(srcfile)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +134,6 @@ func parseVx(r io.Reader) ([]LeapSecond, error) {
 		}
 
 		if v == 0 && version > 0 {
-			v++
 			continue
 		}
 
@@ -212,7 +214,7 @@ func writePostData(f io.Writer) error {
 // Write dumps arrays of leap seconds into file with newly created header
 func Write(f io.Writer, ver byte, ls []LeapSecond, name string) error {
 	if ver != 0 && ver != '2' {
-		return errors.New("Unsupported version")
+		return errors.New("unsupported version")
 	}
 
 	var nameFormatted string
