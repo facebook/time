@@ -48,8 +48,10 @@ const (
 	// look only for X sequential TS
 	maxTXTS = 100
 	// Socket Control Message Header Offset on Linux
-	SocketControlMessageHeaderOffset = 16
 )
+
+// unix.Cmsghdr size differs depending on platform
+var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
 
 const (
 	// HWTIMESTAMP is a hardware timestamp
@@ -177,7 +179,7 @@ func socketControlMessageTimestamp(b []byte) (time.Time, error) {
 
 		// depending on the kernel version, when we ask for SO_TIMESTAMPING_NEW we still might get messages with type SO_TIMESTAMPING
 		if h.Level == unix.SOL_SOCKET && int(h.Type) == unix.SO_TIMESTAMPING_NEW || int(h.Type) == unix.SO_TIMESTAMPING {
-			return scmDataToTime(b[i+SocketControlMessageHeaderOffset : i+mlen])
+			return scmDataToTime(b[i+socketControlMessageHeaderOffset : i+mlen])
 		}
 	}
 	return time.Time{}, fmt.Errorf("failed to find timestamp in socket control message")
