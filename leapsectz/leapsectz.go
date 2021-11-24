@@ -98,29 +98,11 @@ func parseVx(r io.Reader) ([]LeapSecond, error) {
 		if v > version {
 			return nil, errBadData
 		}
-		// six big-endian 32-bit integers:
-		//	number of UTC/local indicators
-		//	number of standard/wall indicators
-		//	number of leap seconds
-		//	number of transition times
-		//	number of local time zones
-		//	number of characters of time zone abbrev strings
-		const (
-			NUTCLocal = iota
-			NStdWall
-			NLeap
-			NTime
-			NZone
-			NChar
-		)
-		var n [6]int
-		for i := 0; i < 6; i++ {
-			var nn uint32
-			err := binary.Read(r, binary.BigEndian, &nn)
-			if err != nil {
-				return nil, err
-			}
-			n[i] = int(nn)
+
+		var hdr Header
+		err := binary.Read(r, binary.BigEndian, &hdr)
+		if err != nil {
+			return nil, err
 		}
 
 		// skip uninteresting data:
@@ -133,15 +115,15 @@ func parseVx(r io.Reader) ([]LeapSecond, error) {
 		//  tzh_charcnt (char)s  '\0'-terminated zone abbreviations
 		var skip int
 		if v == 0 {
-			skip = n[NTime]*5 + n[NZone]*6 + n[NChar]
+			skip = int(hdr.TimeCnt)*5 + int(hdr.TypeCnt)*6 + int(hdr.CharCnt)
 		} else {
-			skip = n[NTime]*9 + n[NZone]*6 + n[NChar]
+			skip = int(hdr.TimeCnt)*9 + int(hdr.TypeCnt)*6 + int(hdr.CharCnt)
 		}
 
 		// if it's first part of two parts file (version 2 or 3)
 		// then skip it completely
 		if v == 0 && version > 0 {
-			skip += n[NLeap]*8 + n[NUTCLocal] + n[NStdWall]
+			skip += int(hdr.LeapCnt)*8 + int(hdr.IsUtcCnt) + int(hdr.IsStdCnt)
 		}
 
 		if n, _ := io.CopyN(ioutil.Discard, r, int64(skip)); n != int64(skip) {
@@ -154,9 +136,9 @@ func parseVx(r io.Reader) ([]LeapSecond, error) {
 		}
 
 		// calculate the amount of bytes to skip after reading leap seconds array
-		skip = n[NUTCLocal] + n[NStdWall]
+		skip = int(hdr.IsUtcCnt) + int(hdr.IsStdCnt)
 
-		for i := 0; i < int(n[NLeap]); i++ {
+		for i := 0; i < int(hdr.LeapCnt); i++ {
 			var l LeapSecond
 			if version == 0 {
 				lsv0 := []uint32{0, 0}
