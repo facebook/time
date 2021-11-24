@@ -18,7 +18,9 @@ package leapsectz
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
+	"time"
 )
 
 func TestParse(t *testing.T) {
@@ -172,4 +174,165 @@ func TestWritePostData(t *testing.T) {
 	if !bytes.Equal(b.Bytes(), byteData) {
 		t.Errorf("wrong post-leapseconds data")
 	}
+}
+
+func TestLeapSecondStructure(t *testing.T) {
+	l := LeapSecond{78796800, 1}
+
+	lt := l.Time()
+	tt := time.Date(1972, time.July, 1, 0, 0, 0, 0, time.UTC)
+	if lt.UTC() != tt {
+		t.Error("wrong time parser")
+	}
+}
+
+func TestParserWrongHeaderMagicString(t *testing.T) {
+	byteData := []byte{
+		'T', 'Z', 'v', '2', // magic
+		0x00, 0x00, 0x00, 0x00, // version
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // UTC/local
+		0x00, 0x00, 0x00, 0x00, // standard/wall
+		0x00, 0x00, 0x00, 0x01, // leap
+		0x00, 0x00, 0x00, 0x00, // transition
+		0x00, 0x00, 0x00, 0x00, // local tz
+		0x00, 0x00, 0x00, 0x00, // characters
+		0x04, 0xb2, 0x58, 0x00, // leap time
+		0x00, 0x00, 0x00, 0x01, // leap count
+	}
+
+	r := bytes.NewReader(byteData)
+
+	_, err := parseVx(r)
+	if err == nil {
+		t.Error("wrong parser of magic string")
+	}
+}
+
+func TestParserWrongHeaderPadding(t *testing.T) {
+	byteData := []byte{
+		'T', 'Z', 'i', 'f', // magic
+		0x00, 0x00, 0x00, 0x00, // version
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+	}
+
+	r := bytes.NewReader(byteData)
+
+	_, err := parseVx(r)
+	if err == nil {
+		t.Error("wrong parser of padding")
+	}
+}
+
+func TestParserWrongHeaderVersion(t *testing.T) {
+	byteData := []byte{
+		'T', 'Z', 'i', 'f', // magic
+		0x02, 0x00, 0x00, 0x00, // version
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+	}
+
+	r := bytes.NewReader(byteData)
+
+	_, err := parseVx(r)
+	if err == nil {
+		t.Error("wrong parser of file version")
+	}
+}
+
+func TestReadHeaderStruct(t *testing.T) {
+	byteData := []byte{
+		0x00, 0x00, 0x00, 0x01, // UTC/local
+		0x00, 0x00, 0x00, 0x02, // standard/wall
+		0x00, 0x00, 0x00, 0x03, // leap
+		0x00, 0x00, 0x00, 0x04, // transition
+		0x00, 0x00, 0x00, 0x05, // local tz
+		0x00, 0x00, 0x00, 0x06, // characters
+		0x04, 0xb2, 0x58, 0x00, // leap time
+		0x00, 0x00, 0x00, 0x01, // leap count
+	}
+
+	r := bytes.NewReader(byteData)
+
+	var hdr Header
+
+	if err := binary.Read(r, binary.BigEndian, &hdr); err != nil {
+		t.Error(err)
+	}
+
+	if hdr.CharCnt != 6 {
+		t.Error("wrong header - CharCnt")
+	}
+	if hdr.TypeCnt != 5 {
+		t.Error("wrong header - TypeCnt")
+	}
+	if hdr.TimeCnt != 4 {
+		t.Error("wrong header - TimeCnt")
+	}
+	if hdr.LeapCnt != 3 {
+		t.Error("wrong header - LeapCnt")
+	}
+	if hdr.IsStdCnt != 2 {
+		t.Error("wrong header - IsSTDCnt")
+	}
+	if hdr.IsUtcCnt != 1 {
+		t.Error("wrong header - IsUTCCnt")
+	}
+}
+
+func TestWriteV2(t *testing.T) {
+	byteData := []byte{
+		'T', 'Z', 'i', 'f', // magic
+		'2', 0x00, 0x00, 0x00, // version
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x01, // UTC/local
+		0x00, 0x00, 0x00, 0x01, // standard/wall
+		0x00, 0x00, 0x00, 0x01, // leap
+		0x00, 0x00, 0x00, 0x00, // transition
+		0x00, 0x00, 0x00, 0x01, // local tz
+		0x00, 0x00, 0x00, 0x04, // characters
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 6 bytes local tz
+		'U', 'T', 'C', 0x00, // timezone chars
+		0x04, 0xb2, 0x58, 0x00, // leap time
+		0x00, 0x00, 0x00, 0x01, // leap count
+		0x00, 0x00, // 2 bytes of UTC/STD
+		'T', 'Z', 'i', 'f', // magic
+		'2', 0x00, 0x00, 0x00, // version
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x01, // UTC/local
+		0x00, 0x00, 0x00, 0x01, // standard/wall
+		0x00, 0x00, 0x00, 0x01, // leap
+		0x00, 0x00, 0x00, 0x00, // transition
+		0x00, 0x00, 0x00, 0x01, // local tz
+		0x00, 0x00, 0x00, 0x04, // characters
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 6 bytes local tz
+		'U', 'T', 'C', 0x00, // timezone chars
+		0x00, 0x00, 0x00, 0x00, // leap time (first 32 bits)
+		0x04, 0xb2, 0x58, 0x00, // leap time (last 32 bits)
+		0x00, 0x00, 0x00, 0x01, // leap count
+		0x00, 0x00, 0x0a, 'U',
+		'T', 'C', 0x0a, // 2 bytes of UTC/STD
+	}
+
+	ls := []LeapSecond{
+		{78796800, 1},
+	}
+
+	var b bytes.Buffer
+	if err := Write(&b, '2', ls, "UTC"); err != nil {
+		t.Error(err)
+	}
+
+	if !bytes.Equal(b.Bytes(), byteData) {
+		t.Errorf("wrong post-leapseconds data")
+	}
+
 }
