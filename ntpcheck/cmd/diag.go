@@ -21,6 +21,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/facebookincubator/ntp/ntpcheck/checker"
 	"github.com/fatih/color"
@@ -122,6 +123,19 @@ func checkJitter(r *checker.NTPCheckResult) (status, string) {
 	)
 }
 
+func checkCorrectionMetric(r *checker.NTPCheckResult) (status, string) {
+	const warnThreshold time.Duration = time.Minute
+	const failThreshold time.Duration = 10 * time.Minute
+	var correctionInMilliseconds = r.Correction * 1000.0
+	return checkAgainstThreshold(
+		"Current correction",
+		correctionInMilliseconds,
+		float64(warnThreshold.Milliseconds()),
+		float64(failThreshold.Milliseconds()),
+		"Correction is the difference between system time and chronyd’s estimate of the current true time.",
+	)
+}
+
 func checkOffset(r *checker.NTPCheckResult) (status, string) {
 	syspeer, err := r.FindSysPeer()
 	if err != nil {
@@ -192,6 +206,7 @@ var diagnosers = []diagnoser{
 	checkLeap,
 	checkOffset,
 	checkJitter,
+	checkCorrectionMetric,
 	checkPeersFlash,
 	checkPeersReach,
 }
