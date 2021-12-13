@@ -8,30 +8,33 @@ environment:
 
 jobs:
   linters:
-    working_directory: /go/src/github.com/facebookincubator/ntp
+    working_directory: /go/src/github.com/facebookincubator/time
     executor:
       name: go/default
-      tag: '1.14'
+      tag: '1.16'
     steps:
       - checkout
+      - run: sudo apt-get install libpcap-dev
       - run: go get -v -t ./...
       - run: .circleci/linters.sh
   build:
-    working_directory: /go/src/github.com/facebookincubator/ntp
+    working_directory: /go/src/github.com/facebookincubator/time
     executor:
       name: go/default
-      tag: '1.14'
+      tag: '1.16'
     steps:
       - checkout
+      - run: sudo apt-get install libpcap-dev
       - run: go get -v -t ./...
       - run: .circleci/build.sh
   tests:
-    working_directory: /go/src/github.com/facebookincubator/ntp
+    working_directory: /go/src/github.com/facebookincubator/time
     executor:
       name: go/default
-      tag: '1.14'
+      tag: '1.16'
     steps:
       - checkout
+      - run: sudo apt-get install libpcap-dev
       - run: go get -v -t ./...
       - run: .circleci/tests.sh
 
