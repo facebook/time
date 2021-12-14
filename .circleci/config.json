@@ -1,5 +1,5 @@
 {
-    "gopkg": "github.com/facebookincubator/ntp",
+    "gopkg": "github.com/facebook/time",
     "licenses": [
         [
             "^(// \\+build.+\n\n)?/\\*",

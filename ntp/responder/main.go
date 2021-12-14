@@ -27,10 +27,10 @@ import (
 	"os/signal"
 	"runtime"
 
-	"github.com/facebookincubator/time/ntp/responder/announce"
-	"github.com/facebookincubator/time/ntp/responder/checker"
-	"github.com/facebookincubator/time/ntp/responder/server"
-	"github.com/facebookincubator/time/ntp/responder/stats"
+	"github.com/facebook/time/ntp/responder/announce"
+	"github.com/facebook/time/ntp/responder/checker"
+	"github.com/facebook/time/ntp/responder/server"
+	"github.com/facebook/time/ntp/responder/stats"
 	log "github.com/sirupsen/logrus"
 )
 

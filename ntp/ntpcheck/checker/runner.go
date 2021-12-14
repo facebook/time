@@ -23,7 +23,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/facebookincubator/time/ntp/protocol/chrony"
+	"github.com/facebook/time/ntp/protocol/chrony"
 	log "github.com/sirupsen/logrus"
 )
 

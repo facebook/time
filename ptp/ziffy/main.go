@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"time"
 
-	ptp "github.com/facebookincubator/time/ptp/protocol"
-	"github.com/facebookincubator/time/ptp/ziffy/node"
+	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/ptp/ziffy/node"
 	log "github.com/sirupsen/logrus"
 )
 

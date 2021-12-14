@@ -24,7 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/facebookincubator/time/ptp/ptpcheck/checker"
+	"github.com/facebook/time/ptp/ptpcheck/checker"
 )
 
 func printPortStats(r *checker.PTPCheckResult) error {

@@ -24,7 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/facebookincubator/time/ntp/ntpcheck/checker"
+	"github.com/facebook/time/ntp/ntpcheck/checker"
 )
 
 func printStats(r *checker.NTPCheckResult, legacy bool) error {

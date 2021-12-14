@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/facebookincubator/time/ntp/protocol/chrony"
-	"github.com/facebookincubator/time/ntp/protocol/control"
+	"github.com/facebook/time/ntp/protocol/chrony"
+	"github.com/facebook/time/ntp/protocol/control"
 	"github.com/pkg/errors"
 )
 

@@ -26,7 +26,7 @@ CLI and library to perform various NTP-related tasks, including:
 
 ### Quick Installation
 ```console
-go get github.com/facebookincubator/time/ntp/ntpcheck
+go get github.com/facebook/time/ntp/ntpcheck
 ```
 
 ## Responder
@@ -34,7 +34,7 @@ Simple NTP server implementation with kernel timestamps support
 
 ### Quick Installation
 ```console
-go get github.com/facebookincubator/time/ntp/responder
+go get github.com/facebook/time/ntp/responder
 ```
 
 

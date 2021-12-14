@@ -19,7 +19,7 @@ package node
 import (
 	"encoding/binary"
 
-	ptp "github.com/facebookincubator/time/ptp/protocol"
+	ptp "github.com/facebook/time/ptp/protocol"
 )
 
 // formSignalingPacket creates PTP SIGNALING packet

@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/facebookincubator/time/ntp/ntpcheck/checker"
+	"github.com/facebook/time/ntp/ntpcheck/checker"
 	"github.com/fatih/color"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"

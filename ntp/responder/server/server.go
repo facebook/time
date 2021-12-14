@@ -27,7 +27,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/facebookincubator/time/ntp/protocol/ntp"
+	"github.com/facebook/time/ntp/protocol/ntp"
 	log "github.com/sirupsen/logrus"
 )
 

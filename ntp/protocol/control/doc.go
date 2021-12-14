@@ -23,6 +23,6 @@ described in NTPD docs http://doc.ntp.org/current-stable/decode.html.
 Library allows communicating with any NTP server that implements Control Protocol (such as ntpd),
 and get various information, for example: current server status; server variables like offset; peers with their statuses and variables; server counters.
 
-Example usage can be found in ntpcheck project - https://github.com/facebookincubator/time/ntp/ntpcheck
+Example usage can be found in ntpcheck project - https://github.com/facebook/time/ntp/ntpcheck
 */
 package control

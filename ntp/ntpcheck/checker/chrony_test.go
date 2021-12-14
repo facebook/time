@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/facebookincubator/time/ntp/protocol/chrony"
+	"github.com/facebook/time/ntp/protocol/chrony"
 )
 
 type fakeChronyClient struct {

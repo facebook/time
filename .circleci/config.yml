@@ -8,7 +8,7 @@ environment:
 
 jobs:
   linters:
-    working_directory: /go/src/github.com/facebookincubator/time
+    working_directory: /go/src/github.com/facebook/time
     executor:
       name: go/default
       tag: '1.16'
@@ -18,7 +18,7 @@ jobs:
       - run: go get -v -t ./...
       - run: .circleci/linters.sh
   build:
-    working_directory: /go/src/github.com/facebookincubator/time
+    working_directory: /go/src/github.com/facebook/time
     executor:
       name: go/default
       tag: '1.16'
@@ -28,7 +28,7 @@ jobs:
       - run: go get -v -t ./...
       - run: .circleci/build.sh
   tests:
-    working_directory: /go/src/github.com/facebookincubator/time
+    working_directory: /go/src/github.com/facebook/time
     executor:
       name: go/default
       tag: '1.16'

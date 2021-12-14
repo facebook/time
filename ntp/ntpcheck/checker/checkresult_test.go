@@ -19,7 +19,7 @@ package checker
 import (
 	"testing"
 
-	"github.com/facebookincubator/time/ntp/protocol/control"
+	"github.com/facebook/time/ntp/protocol/control"
 	"github.com/stretchr/testify/require"
 )
 

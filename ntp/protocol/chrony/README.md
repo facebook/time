@@ -1,6 +1,6 @@
 # Chrony network protocol used for command and monitoring of the timeserver
 
-[![GoDoc](https://godoc.org/github.com/facebookincubator/time/ntp/protocol/chrony?status.svg)](https://godoc.org/github.com/facebookincubator/time/ntp/protocol/chrony)
+[![GoDoc](https://godoc.org/github.com/facebook/time/ntp/protocol/chrony?status.svg)](https://godoc.org/github.com/facebook/time/ntp/protocol/chrony)
 
 Native Go implementation of Chrony communication protocol v6.
 
