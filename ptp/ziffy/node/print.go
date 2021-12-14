@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	ptp "github.com/facebookincubator/time/ptp/protocol"
+	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
 )

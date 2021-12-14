@@ -22,7 +22,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/facebookincubator/time/ntp/protocol/control"
+	"github.com/facebook/time/ntp/protocol/control"
 )
 
 type fakeNTPClient struct {

@@ -19,8 +19,8 @@ package checker
 import (
 	"strconv"
 
-	"github.com/facebookincubator/time/ntp/protocol/chrony"
-	"github.com/facebookincubator/time/ntp/protocol/control"
+	"github.com/facebook/time/ntp/protocol/chrony"
+	"github.com/facebook/time/ntp/protocol/control"
 )
 
 // various counters for dropped packets

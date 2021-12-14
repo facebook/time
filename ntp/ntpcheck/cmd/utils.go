@@ -26,9 +26,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/facebookincubator/time/ntp/leaphash"
-	"github.com/facebookincubator/time/ntp/leapsectz"
-	"github.com/facebookincubator/time/ntp/protocol/ntp"
+	"github.com/facebook/time/ntp/leaphash"
+	"github.com/facebook/time/ntp/leapsectz"
+	"github.com/facebook/time/ntp/protocol/ntp"
 	"github.com/spf13/cobra"
 )
 

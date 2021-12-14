@@ -31,7 +31,7 @@ CLI and library to perform various PTP-related tasks, including:
 
 ### Quick Installation
 ```console
-go get github.com/facebookincubator/time/ptp/ptpcheck
+go get github.com/facebook/time/ptp/ptpcheck
 ```
 
 ## ptp4u
@@ -39,7 +39,7 @@ Scalable unicast PTP server.
 
 ### Quick Installation
 ```console
-go get github.com/facebookincubator/time/ptp/ptp4u
+go get github.com/facebook/time/ptp/ptp4u
 ```
 
 ## Simpleclient

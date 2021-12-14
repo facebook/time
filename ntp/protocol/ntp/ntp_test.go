@@ -291,13 +291,13 @@ Benchmark_ServerWithoutKernelTimestamps is a benchmark to determine speed of
 reading NTP packets without kernel timestamps
 Usually numbers look like:
 
-~/go/src/github.com/facebookincubator/time/ntp/protocol/ntp go test -bench=ServerWithoutKernelTimestamps
+~/go/src/github.com/facebook/time/ntp/protocol/ntp go test -bench=ServerWithoutKernelTimestamps
 goos: linux
 goarch: amd64
-pkg: github.com/facebookincubator/time/ntp/protocol/ntp
+pkg: github.com/facebook/time/ntp/protocol/ntp
 Benchmark_ServerWithoutKernelTimestamps-24    	  204441	      4997 ns/op
 PASS
-ok  	github.com/facebookincubator/time/ntp/protocol/ntp	1.094s
+ok  	github.com/facebook/time/ntp/protocol/ntp	1.094s
 */
 func Benchmark_ServerWithoutKernelTimestamps(b *testing.B) {
 	// Server
@@ -346,13 +346,13 @@ Benchmark_ServerWithKernelTimestampsRead is a benchmark to determine speed of
 reading NTP packets with kernel timestamps
 Usually numbers look like:
 
-~/go/src/github.com/facebookincubator/time/ntp/protocol/ntp go test -bench=ServerWithKernelTimestampsRead
+~/go/src/github.com/facebook/time/ntp/protocol/ntp go test -bench=ServerWithKernelTimestampsRead
 goos: linux
 goarch: amd64
-pkg: github.com/facebookincubator/time/ntp/protocol/ntp
+pkg: github.com/facebook/time/ntp/protocol/ntp
 Benchmark_ServerWithKernelTimestampsRead-24    	  143074	      8084 ns/op
 PASS
-ok  	github.com/facebookincubator/time/ntp/protocol/ntp	1.778s
+ok  	github.com/facebook/time/ntp/protocol/ntp	1.778s
 */
 func Benchmark_ServerWithKernelTimestampsRead(b *testing.B) {
 	// Server

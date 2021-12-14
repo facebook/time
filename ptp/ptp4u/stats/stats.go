@@ -26,7 +26,7 @@ import (
 	"strings"
 	"sync"
 
-	ptp "github.com/facebookincubator/time/ptp/protocol"
+	ptp "github.com/facebook/time/ptp/protocol"
 )
 
 // Stats is a metric collection interface

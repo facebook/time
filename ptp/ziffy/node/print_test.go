@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"testing"
 
-	ptp "github.com/facebookincubator/time/ptp/protocol"
+	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/stretchr/testify/require"
 )
 

@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/facebookincubator/time/ntp/protocol/ntp"
+	"github.com/facebook/time/ntp/protocol/ntp"
 	"github.com/stretchr/testify/require"
 )
 

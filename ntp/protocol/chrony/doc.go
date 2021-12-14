@@ -23,6 +23,6 @@ Chronyc/chronyd protocol is not documented (https://chrony.tuxfamily.org/faq.htm
 Library allows communicating with Chrony NTP server,
 and get various information, for example: current server status; server variables like offset; peers with their statuses and variables; server counters.
 
-Example usage can be found in ntpcheck project - https://github.com/facebookincubator/time/ntp/ntpcheck
+Example usage can be found in ntpcheck project - https://github.com/facebook/time/ntp/ntpcheck
 */
 package chrony

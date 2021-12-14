@@ -26,7 +26,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/facebookincubator/time/ptp/phc"
+	"github.com/facebook/time/ptp/phc"
 )
 
 func ptpDeviceNum(ptpPath string) (int, error) {

@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	ptp "github.com/facebookincubator/time/ptp/protocol"
-	"github.com/facebookincubator/time/ptp/ptp4u/stats"
+	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/ptp/ptp4u/stats"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )

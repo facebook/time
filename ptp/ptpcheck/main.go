@@ -17,7 +17,7 @@ limitations under the License.
 package main
 
 import (
-	"github.com/facebookincubator/time/ptp/ptpcheck/cmd"
+	"github.com/facebook/time/ptp/ptpcheck/cmd"
 )
 
 func main() {

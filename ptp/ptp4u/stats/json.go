@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	ptp "github.com/facebookincubator/time/ptp/protocol"
+	ptp "github.com/facebook/time/ptp/protocol"
 	log "github.com/sirupsen/logrus"
 )
 

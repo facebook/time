@@ -17,7 +17,7 @@ limitations under the License.
 package checker
 
 import (
-	"github.com/facebookincubator/time/ntp/protocol/control"
+	"github.com/facebook/time/ntp/protocol/control"
 	"github.com/pkg/errors"
 )
 

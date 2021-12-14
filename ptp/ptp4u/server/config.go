@@ -21,9 +21,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/facebookincubator/time/ntp/protocol/ntpshm"
-	"github.com/facebookincubator/time/ptp/phc"
-	ptp "github.com/facebookincubator/time/ptp/protocol"
+	"github.com/facebook/time/ntp/protocol/ntpshm"
+	"github.com/facebook/time/ptp/phc"
+	ptp "github.com/facebook/time/ptp/protocol"
 )
 
 // Config is a server config structure

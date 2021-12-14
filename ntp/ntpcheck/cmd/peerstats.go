@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/facebookincubator/time/ntp/ntpcheck/checker"
+	"github.com/facebook/time/ntp/ntpcheck/checker"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

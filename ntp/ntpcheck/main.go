@@ -18,7 +18,7 @@ limitations under the License.
 package main
 
 import (
-	"github.com/facebookincubator/time/ntp/ntpcheck/cmd"
+	"github.com/facebook/time/ntp/ntpcheck/cmd"
 )
 
 func main() {

@@ -27,7 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	client "github.com/facebookincubator/time/ptp/simpleclient"
+	client "github.com/facebook/time/ptp/simpleclient"
 )
 
 var traceRemoteServerFlag string

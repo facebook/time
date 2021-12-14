@@ -22,8 +22,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/facebookincubator/time/ntp/protocol/chrony"
-	"github.com/facebookincubator/time/ntp/protocol/control"
+	"github.com/facebook/time/ntp/protocol/chrony"
+	"github.com/facebook/time/ntp/protocol/control"
 )
 
 func TestNewPeerFromNTP(t *testing.T) {
