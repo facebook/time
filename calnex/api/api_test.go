@@ -44,12 +44,22 @@ func TestChannel(t *testing.T) {
 		c, err := ChannelFromString(channelS)
 		require.NoError(t, err)
 		require.Equal(t, channel, *c)
+
+		c = new(Channel)
+		err = c.UnmarshalText([]byte(channelS))
+		require.NoError(t, err)
+		require.Equal(t, channel, *c)
+
 	}
 
 	wrongChannelNames := []string{"", "?", "z", "foo"}
 	for _, channelS := range wrongChannelNames {
 		c, err := ChannelFromString(channelS)
 		require.Nil(t, c)
+		require.ErrorIs(t, errBadChannel, err)
+
+		c = new(Channel)
+		err = c.UnmarshalText([]byte(channelS))
 		require.ErrorIs(t, errBadChannel, err)
 	}
 }
@@ -63,11 +73,20 @@ func TestProbe(t *testing.T) {
 		p, err := ProbeFromString(probeS)
 		require.NoError(t, err)
 		require.Equal(t, probe, *p)
+
+		p = new(Probe)
+		err = p.UnmarshalText([]byte(probeS))
+		require.NoError(t, err)
+		require.Equal(t, probe, *p)
 	}
 	wrongProbeNames := []string{"", "?", "z", "dns"}
 	for _, probeS := range wrongProbeNames {
 		p, err := ProbeFromString(probeS)
 		require.Nil(t, p)
+		require.ErrorIs(t, errBadProbe, err)
+
+		p = new(Probe)
+		err = p.UnmarshalText([]byte(probeS))
 		require.ErrorIs(t, errBadProbe, err)
 	}
 }

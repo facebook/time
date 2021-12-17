@@ -113,8 +113,8 @@ var ChannelCalnexToString = map[Channel]string{
 }
 
 // ChannelFromString returns Channel object from String version
-func ChannelFromString(String string) (*Channel, error) {
-	c, ok := channelStringToCalnex[String]
+func ChannelFromString(value string) (*Channel, error) {
+	c, ok := channelStringToCalnex[value]
 	if !ok {
 		return nil, errBadChannel
 	}
@@ -125,6 +125,16 @@ func ChannelFromString(String string) (*Channel, error) {
 // String returns String friendly channel name like "a" or "2"
 func (c Channel) String() string {
 	return ChannelCalnexToString[c]
+}
+
+// UnmarshalText channel from string version
+func (c *Channel) UnmarshalText(value []byte) error {
+	cr, err := ChannelFromString(string(value))
+	if err != nil {
+		return err
+	}
+	*c = *cr
+	return nil
 }
 
 // Calnex returns calnex friendly channel name like 1 or 7
@@ -177,8 +187,8 @@ var probeToServerType = map[Probe]string{
 }
 
 // ProbeFromString returns Channel object from String version
-func ProbeFromString(String string) (*Probe, error) {
-	p, ok := probeStringToProbe[String]
+func ProbeFromString(value string) (*Probe, error) {
+	p, ok := probeStringToProbe[value]
 	if !ok {
 		return nil, errBadProbe
 	}
@@ -197,6 +207,16 @@ func ProbeFromCalnex(calnex string) (*Probe, error) {
 // String returns String friendly probe name like "ntp" or "ptp"
 func (p Probe) String() string {
 	return probeToString[p]
+}
+
+// UnmarshalText probe from string version
+func (p *Probe) UnmarshalText(value []byte) error {
+	pr, err := ProbeFromString(string(value))
+	if err != nil {
+		return err
+	}
+	*p = *pr
+	return nil
 }
 
 // ServerType returns server type like "server_ip" or "master_ip"
