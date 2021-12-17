@@ -1,0 +1,20 @@
+{
+    "calnex01.example.com": {
+        "network" :{
+            "eth1": "fd00::11",
+            "gw1": "fd00::a",
+            "eth2": "fd00::12",
+            "gw2": "fd00::a"
+        },
+        "measure": {
+            "1": {
+                "target": "fd00::d",
+                "probe": "ntp"
+            },
+            "2": {
+                "target": "fd00::d",
+                "probe": "ptp"
+            }
+        }
+    }
+}

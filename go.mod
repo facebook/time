@@ -5,8 +5,10 @@ go 1.16
 require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/fatih/color v1.13.0
+	github.com/go-ini/ini v1.66.2
 	github.com/golang/mock v1.6.0
 	github.com/google/gopacket v1.1.19
+	github.com/hashicorp/go-version v1.3.0
 	github.com/jsimonetti/rtnetlink v0.0.0-20211213041634-9dff439f7e79
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pkg/errors v0.9.1
