@@ -90,3 +90,39 @@ func TestOscillatordReadGarbage(t *testing.T) {
 	_, err := ReadStatus(client)
 	require.Error(t, err)
 }
+
+func TestAntennaStatus(t *testing.T) {
+	var a AntennaStatus
+	require.Equal(t, AntStatusInit, a)
+	require.Equal(t, antennaStatusToString[AntStatusInit], AntStatusInit.String())
+
+	a = 42
+	require.Equal(t, "UNSUPPORTED VALUE", a.String())
+}
+
+func TestAntennaPower(t *testing.T) {
+	var a AntennaPower
+	require.Equal(t, AntPowerOff, a)
+	require.Equal(t, antennaPowerToString[AntPowerOff], AntPowerOff.String())
+
+	a = 42
+	require.Equal(t, "UNSUPPORTED VALUE", a.String())
+}
+
+func TestGNSSFix(t *testing.T) {
+	var g GNSSFix
+	require.Equal(t, FixUnknown, g)
+	require.Equal(t, gnssFixToString[FixUnknown], FixUnknown.String())
+
+	g = 42
+	require.Equal(t, "UNSUPPORTED VALUE", g.String())
+}
+
+func TestLeapSecondChange(t *testing.T) {
+	var l LeapSecondChange
+	require.Equal(t, LeapNoWarning, l)
+	require.Equal(t, leapSecondChangeToString[LeapNoWarning], LeapNoWarning.String())
+
+	l = 42
+	require.Equal(t, "UNSUPPORTED VALUE", l.String())
+}
