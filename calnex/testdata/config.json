@@ -6,7 +6,7 @@
             "eth2": "fd00::12",
             "gw2": "fd00::a"
         },
-        "measure": {
+        "calnex": {
             "1": {
                 "target": "fd00::d",
                 "probe": "ntp"

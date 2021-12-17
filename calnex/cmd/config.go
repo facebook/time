@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/facebook/time/calnex/api"
 	"github.com/facebook/time/calnex/config"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -41,14 +40,9 @@ func init() {
 	}
 }
 
-type measureConfig struct {
-	Target string
-	Probe  string
-}
-
 type deviceConfig struct {
+	Calnex  config.CalnexConfig
 	Network *config.NetworkConfig
-	Measure map[string]measureConfig
 }
 
 type devices map[string]deviceConfig
@@ -78,33 +72,8 @@ var configCmd = &cobra.Command{
 			log.Fatalf("Failed to find config for %s in %s", target, source)
 		}
 
-		cc, err := calnexConfig(dc.Measure)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if err := config.Config(aproto, target, dc.Network, cc, apply); err != nil {
+		if err := config.Config(aproto, target, dc.Network, dc.Calnex, apply); err != nil {
 			log.Fatal(err)
 		}
 	},
-}
-
-func calnexConfig(mc map[string]measureConfig) (config.CalnexConfig, error) {
-	c := config.CalnexConfig{}
-	for ch, m := range mc {
-		channel, err := api.ChannelFromString(ch)
-		if err != nil {
-			return nil, err
-		}
-
-		probe, err := api.ProbeFromString(m.Probe)
-		if err != nil {
-			return nil, err
-		}
-		c[*channel] = config.MeasureConfig{
-			Target: m.Target,
-			Probe:  *probe,
-		}
-	}
-	return c, nil
 }
