@@ -24,7 +24,7 @@ import (
 
 func init() {
 	RootCmd.AddCommand(reportCmd)
-	reportCmd.Flags().Var(&aproto, "proto", "API protocol to communicate with Calnex device")
+	reportCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
 	reportCmd.Flags().StringVar(&target, "target", "", "device to configure")
 	reportCmd.Flags().StringVar(&dir, "dir", "/tmp", "dir to save report")
 	if err := reportCmd.MarkFlagRequired("target"); err != nil {
@@ -33,7 +33,7 @@ func init() {
 }
 
 func report() error {
-	api := api.NewAPI(aproto, target)
+	api := api.NewAPI(target, insecureTLS)
 
 	reportFileName, err := api.FetchProblemReport(dir)
 	if err != nil {

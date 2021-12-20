@@ -17,7 +17,6 @@ limitations under the License.
 package cmd
 
 import (
-	"github.com/facebook/time/calnex/api"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -28,12 +27,12 @@ var RootCmd = &cobra.Command{
 }
 
 var (
-	apply    bool
-	aproto   api.APIProto
-	channels []string
-	dir      string
-	source   string
-	target   string
+	apply       bool
+	insecureTLS bool
+	channels    []string
+	dir         string
+	source      string
+	target      string
 )
 
 // Execute is the main entry point for CLI interface

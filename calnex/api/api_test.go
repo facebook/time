@@ -115,18 +115,23 @@ func TestCalnexName(t *testing.T) {
 }
 
 func TestTLSSetting(t *testing.T) {
-	calnexAPI := NewAPI(HTTPS, "localhost")
+	calnexAPI := NewAPI("localhost", false)
 	// Never ever ever allow insucure over https
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
 	}
+	require.Equal(t, transport, calnexAPI.Client.Transport)
 
+	calnexAPI = NewAPI("localhost", true)
+	transport = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	require.Equal(t, transport, calnexAPI.Client.Transport)
 }
 
 func TestFetchCsv(t *testing.T) {
 	sampleResp := "1607961193.773740,-000.000000250501"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
@@ -135,7 +140,7 @@ func TestFetchCsv(t *testing.T) {
 	legitChannelNames := []Channel{ChannelONE, ChannelTWO, ChannelC, ChannelD}
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 	for _, channel := range legitChannelNames {
 		lines, err := calnexAPI.FetchCsv(channel)
@@ -147,14 +152,14 @@ func TestFetchCsv(t *testing.T) {
 
 func TestFetchChannelProtocol_NTP(t *testing.T) {
 	sampleResp := "measure/ch6/ptp_synce/mode/probe_type=2"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	probe, err := calnexAPI.FetchChannelProbe(ChannelONE)
@@ -164,14 +169,14 @@ func TestFetchChannelProtocol_NTP(t *testing.T) {
 
 func TestFetchChannelProtocol_PTP(t *testing.T) {
 	sampleResp := "measure/ch7/ptp_synce/mode/probe_type=0"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	probe, err := calnexAPI.FetchChannelProbe(ChannelTWO)
@@ -181,14 +186,14 @@ func TestFetchChannelProtocol_PTP(t *testing.T) {
 
 func TestFetchChannelTargetIP_NTP(t *testing.T) {
 	sampleResp := "measure/ch6/ptp_synce/ntp/server_ip=fd00:3116:301a::3e"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	ip, err := calnexAPI.FetchChannelTargetIP(ChannelONE, ProbeNTP)
@@ -198,14 +203,14 @@ func TestFetchChannelTargetIP_NTP(t *testing.T) {
 
 func TestFetchChannelTargetIP_PTP(t *testing.T) {
 	sampleResp := "measure/ch7/ptp_synce/ptp/master_ip=fd00:3116:301a::3e"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	ip, err := calnexAPI.FetchChannelTargetIP(ChannelTWO, ProbePTP)
@@ -215,14 +220,14 @@ func TestFetchChannelTargetIP_PTP(t *testing.T) {
 
 func TestFetchUsedChannels(t *testing.T) {
 	sampleResp := "[measure]\nch0\\used=Yes\nch6\\used=No\nch7\\used=Yes\n"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	expected := []Channel{ChannelA, ChannelTWO}
@@ -233,14 +238,14 @@ func TestFetchUsedChannels(t *testing.T) {
 
 func TestFetchChannelTargetName(t *testing.T) {
 	sampleResp := "measure/ch7/ptp_synce/ptp/master_ip=127.0.0.1"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	ip, err := calnexAPI.FetchChannelTargetName(ChannelTWO, ProbePTP)
@@ -250,14 +255,14 @@ func TestFetchChannelTargetName(t *testing.T) {
 
 func TestFetchSettings(t *testing.T) {
 	sampleResp := "[measure]\nch0\\synce_enabled=Off\n"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchSettings()
@@ -273,14 +278,14 @@ func TestFetchStatus(t *testing.T) {
 		MeasurementActive: false,
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchStatus()
@@ -290,14 +295,14 @@ func TestFetchStatus(t *testing.T) {
 
 func TestPushSettings(t *testing.T) {
 	sampleResp := "{\n\"result\": true\n}"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	sampleConfig := "[measure]\nch0\\synce_enabled=Off\n"
@@ -314,14 +319,14 @@ func TestFetchVersion(t *testing.T) {
 		Firmware: "2.13.1.0.5583D-20210924",
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchVersion()
@@ -348,7 +353,7 @@ func TestPushVersion(t *testing.T) {
 	require.NoError(t, err)
 	defer os.Remove(fwres.Name())
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		defer r.Body.Close()
 		defer fwres.Close()
@@ -360,7 +365,7 @@ func TestPushVersion(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	r, err := calnexAPI.PushVersion(fw.Name())
@@ -385,7 +390,7 @@ func TestPost(t *testing.T) {
 	postData := []byte("Whatever")
 	serverReceived := &bytes.Buffer{}
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		defer r.Body.Close()
 		_, err := serverReceived.ReadFrom(r.Body)
@@ -395,7 +400,7 @@ func TestPost(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	buf := bytes.NewBuffer(postData)
@@ -407,14 +412,14 @@ func TestPost(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	sampleResp := "{\n\"result\": true\n}"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	err := calnexAPI.StartMeasure()
@@ -431,14 +436,14 @@ func TestGet(t *testing.T) {
 }
 
 func TestHTTPError(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	f := ini.Empty()
@@ -448,14 +453,14 @@ func TestHTTPError(t *testing.T) {
 
 func TestFetchProblemReport(t *testing.T) {
 	expectedReportContent := "I am a problem report"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprint(w, expectedReportContent)
 	}))
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(HTTP, parsed.Host)
+	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	dir, err := ioutil.TempDir("/tmp", "calnex")

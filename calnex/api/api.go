@@ -37,9 +37,8 @@ import (
 
 // API is struct for accessing calnex API
 type API struct {
-	Client   *http.Client
-	Protocol APIProto
-	Source   string
+	Client *http.Client
+	source string
 }
 
 // Status is a struct representing Calnex status JSON response
@@ -231,22 +230,22 @@ func (p Probe) CalnexName() string {
 
 const (
 	// measureURL is a base URL for to the measurement API
-	measureURL = "%s://%s/api/get/measure/%s/ptp_synce/%s/%s"
-	dataURL    = "%s://%s/api/getdata?channel=%s&datatype=%s&reset=true"
+	measureURL = "https://%s/api/get/measure/%s/ptp_synce/%s/%s"
+	dataURL    = "https://%s/api/getdata?channel=%s&datatype=%s&reset=true"
 
-	startMeasure = "%s://%s/api/startmeasurement"
-	stopMeasure  = "%s://%s/api/stopmeasurement"
+	startMeasure = "https://%s/api/startmeasurement"
+	stopMeasure  = "https://%s/api/stopmeasurement"
 
-	getSettingsURL      = "%s://%s/api/getsettings"
-	setSettingsURL      = "%s://%s/api/setsettings"
-	getStatusURL        = "%s://%s/api/getstatus"
-	getProblemReportURL = "%s://%s/api/getproblemreport"
+	getSettingsURL      = "https://%s/api/getsettings"
+	setSettingsURL      = "https://%s/api/setsettings"
+	getStatusURL        = "https://%s/api/getstatus"
+	getProblemReportURL = "https://%s/api/getproblemreport"
 
-	clearDeviceURL = "%s://%s/api/cleardevice?action=cleardevice"
-	rebootURL      = "%s://%s/api/reboot?action=reboot"
+	clearDeviceURL = "https://%s/api/cleardevice?action=cleardevice"
+	rebootURL      = "https://%s/api/reboot?action=reboot"
 
-	versionURL  = "%s://%s/api/version"
-	firmwareURL = "%s://%s/api/updatefirmware"
+	versionURL  = "https://%s/api/version"
+	firmwareURL = "https://%s/api/updatefirmware"
 )
 
 // Calnex Status contants
@@ -273,28 +272,22 @@ func parseResponse(response string) (string, error) {
 }
 
 // NewAPI returns an pointer of API struct with default values.
-func NewAPI(protocol APIProto, source string) *API {
-	transport := &http.Transport{}
-	if protocol == HTTPS {
-		transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
-		}
-	}
-
+func NewAPI(source string, insecureTLS bool) *API {
 	return &API{
 		Client: &http.Client{
-			Transport: transport,
-			Timeout:   2 * time.Minute,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: insecureTLS},
+			},
+			Timeout: 2 * time.Minute,
 		},
-		Protocol: protocol,
-		Source:   source,
+		source: source,
 	}
 }
 
 // FetchCsv takes channel name (like 1, 2, c, d)
 // it returns list of CSV lines which is []string
 func (a *API) FetchCsv(channel Channel) ([][]string, error) {
-	url := fmt.Sprintf(dataURL, a.Protocol, a.Source, channel, channelDatatypeMap[channel])
+	url := fmt.Sprintf(dataURL, a.source, channel, channelDatatypeMap[channel])
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return nil, err
@@ -324,7 +317,7 @@ func (a *API) FetchCsv(channel Channel) ([][]string, error) {
 
 // FetchChannelProbe returns monitored protocol of the channel
 func (a *API) FetchChannelProbe(channel Channel) (*Probe, error) {
-	url := fmt.Sprintf(measureURL, a.Protocol, a.Source, channel.CalnexAPI(), "mode", "probe_type")
+	url := fmt.Sprintf(measureURL, a.source, channel.CalnexAPI(), "mode", "probe_type")
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return nil, err
@@ -350,7 +343,7 @@ func (a *API) FetchChannelProbe(channel Channel) (*Probe, error) {
 
 // FetchChannelTargetIP returns the IP address of the server monitored on the channel
 func (a *API) FetchChannelTargetIP(channel Channel, probe Probe) (string, error) {
-	url := fmt.Sprintf(measureURL, a.Protocol, a.Source, channel.CalnexAPI(), probe.String(), probe.ServerType())
+	url := fmt.Sprintf(measureURL, a.source, channel.CalnexAPI(), probe.String(), probe.ServerType())
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return "", err
@@ -403,7 +396,7 @@ func (a *API) FetchChannelTargetName(channel Channel, probe Probe) (string, erro
 
 // FetchSettings returns the calnex settings
 func (a *API) FetchSettings() (*ini.File, error) {
-	url := fmt.Sprintf(getSettingsURL, a.Protocol, a.Source)
+	url := fmt.Sprintf(getSettingsURL, a.source)
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return nil, err
@@ -419,7 +412,7 @@ func (a *API) FetchSettings() (*ini.File, error) {
 
 // FetchStatus returns the calnex status
 func (a *API) FetchStatus() (*Status, error) {
-	url := fmt.Sprintf(getStatusURL, a.Protocol, a.Source)
+	url := fmt.Sprintf(getStatusURL, a.source)
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return nil, err
@@ -440,7 +433,7 @@ func (a *API) FetchStatus() (*Status, error) {
 
 // FetchProblemReport saves a problem report
 func (a *API) FetchProblemReport(dir string) (string, error) {
-	url := fmt.Sprintf(getProblemReportURL, a.Protocol, a.Source)
+	url := fmt.Sprintf(getProblemReportURL, a.source)
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return "", err
@@ -469,7 +462,7 @@ func (a *API) FetchProblemReport(dir string) (string, error) {
 
 // FetchVersion returns current Firmware Version
 func (a *API) FetchVersion() (*Version, error) {
-	url := fmt.Sprintf(versionURL, a.Protocol, a.Source)
+	url := fmt.Sprintf(versionURL, a.source)
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return nil, err
@@ -496,7 +489,7 @@ func (a *API) PushVersion(path string) (*Result, error) {
 	}
 	defer fw.Close()
 
-	url := fmt.Sprintf(firmwareURL, a.Protocol, a.Source)
+	url := fmt.Sprintf(firmwareURL, a.source)
 	buf := &bytes.Buffer{}
 	_, err = buf.ReadFrom(fw)
 
@@ -514,7 +507,7 @@ func (a *API) PushSettings(f *ini.File) error {
 	if err != nil {
 		return err
 	}
-	url := fmt.Sprintf(setSettingsURL, a.Protocol, a.Source)
+	url := fmt.Sprintf(setSettingsURL, a.source)
 
 	_, err = a.post(url, buf)
 	return err
@@ -546,7 +539,7 @@ func (a *API) post(url string, content *bytes.Buffer) (*Result, error) {
 }
 
 func (a *API) get(path string) error {
-	url := fmt.Sprintf(path, a.Protocol, a.Source)
+	url := fmt.Sprintf(path, a.source)
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return err

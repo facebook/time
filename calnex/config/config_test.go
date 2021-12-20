@@ -360,7 +360,7 @@ ch7\ptp_synce\mode\probe_type=PTP slave
 ch7\ptp_synce\ptp\master_ip=fd00:3016:3109:face:0:1:0
 ch7\ptp_synce\ptp\master_ip_ipv6=fd00:3016:3109:face:0:1:0
 `
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		if strings.Contains(r.URL.Path, "getsettings") {
 			// FetchSettings
@@ -386,7 +386,7 @@ ch7\ptp_synce\ptp\master_ip_ipv6=fd00:3016:3109:face:0:1:0
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(api.HTTP, parsed.Host)
+	calnexAPI := api.NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	n := &NetworkConfig{
@@ -407,7 +407,7 @@ ch7\ptp_synce\ptp\master_ip_ipv6=fd00:3016:3109:face:0:1:0
 		},
 	}
 
-	err := Config(api.HTTP, parsed.Host, n, CalnexConfig(mc), true)
+	err := Config(parsed.Host, true, n, CalnexConfig(mc), true)
 	require.NoError(t, err)
 }
 
@@ -415,6 +415,6 @@ func TestConfigFail(t *testing.T) {
 	n := &NetworkConfig{}
 	mc := map[api.Channel]MeasureConfig{}
 
-	err := Config(api.HTTP, "localhost", n, CalnexConfig(mc), true)
+	err := Config("localhost", true, n, CalnexConfig(mc), true)
 	require.Error(t, err)
 }
