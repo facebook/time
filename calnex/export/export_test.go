@@ -43,7 +43,7 @@ func (w *writer) Write(p []byte) (int, error) {
 
 func TestExport(t *testing.T) {
 	w := &writer{}
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		if strings.Contains(r.URL.Path, "getsettings") {
 			// FetchUsedChannels
@@ -62,20 +62,20 @@ func TestExport(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(api.HTTP, parsed.Host)
+	calnexAPI := api.NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
 	expected := fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"1\",\"target\":\"localhost\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host)
-	err := Export(api.HTTP, parsed.Host, []api.Channel{}, w)
+	err := Export(parsed.Host, true, []api.Channel{}, w)
 	require.NoError(t, err)
 	require.Equal(t, expected, w.data)
 }
 
 func TestExportFail(t *testing.T) {
 	w := &writer{}
-	err := Export(api.HTTP, "localhost", []api.Channel{}, w)
+	err := Export("localhost", true, []api.Channel{}, w)
 	require.ErrorIs(t, errNoUsedChannels, err)
 
-	err = Export(api.HTTP, "localhost", []api.Channel{api.ChannelONE}, w)
+	err = Export("localhost", true, []api.Channel{api.ChannelONE}, w)
 	require.ErrorIs(t, errNoTarget, err)
 }

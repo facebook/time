@@ -29,7 +29,7 @@ import (
 func init() {
 	RootCmd.AddCommand(configCmd)
 	configCmd.Flags().BoolVar(&apply, "apply", false, "apply the config changes")
-	configCmd.Flags().Var(&aproto, "proto", "API protocol to communicate with Calnex device")
+	configCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
 	configCmd.Flags().StringVar(&target, "target", "", "device to configure")
 	configCmd.Flags().StringVar(&source, "file", "", "configuration file")
 	if err := configCmd.MarkFlagRequired("target"); err != nil {
@@ -72,7 +72,7 @@ var configCmd = &cobra.Command{
 			log.Fatalf("Failed to find config for %s in %s", target, source)
 		}
 
-		if err := config.Config(aproto, target, dc.Network, dc.Calnex, apply); err != nil {
+		if err := config.Config(target, insecureTLS, dc.Network, dc.Calnex, apply); err != nil {
 			log.Fatal(err)
 		}
 	},

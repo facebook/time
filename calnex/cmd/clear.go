@@ -24,7 +24,7 @@ import (
 
 func init() {
 	RootCmd.AddCommand(clearCmd)
-	clearCmd.Flags().Var(&aproto, "proto", "API protocol to communicate with Calnex device")
+	clearCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
 	clearCmd.Flags().StringVar(&target, "target", "", "device to configure")
 	if err := clearCmd.MarkFlagRequired("target"); err != nil {
 		log.Fatal(err)
@@ -32,7 +32,7 @@ func init() {
 }
 
 func clear() error {
-	api := api.NewAPI(aproto, target)
+	api := api.NewAPI(target, insecureTLS)
 
 	if err := api.ClearDevice(); err != nil {
 		return err

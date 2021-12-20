@@ -158,9 +158,9 @@ func (c *config) baseConfig(s *ini.Section) {
 }
 
 // Config configures target Calnex via protocol with Network/Calnex configs if apply is specified
-func Config(aproto api.APIProto, target string, n *NetworkConfig, cc CalnexConfig, apply bool) error {
+func Config(target string, insecureTLS bool, n *NetworkConfig, cc CalnexConfig, apply bool) error {
 	var c config
-	api := api.NewAPI(aproto, target)
+	api := api.NewAPI(target, insecureTLS)
 
 	f, err := api.FetchSettings()
 	if err != nil {

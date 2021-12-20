@@ -46,7 +46,7 @@ func TestFirmware(t *testing.T) {
 		Filepath: filepath,
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		if strings.Contains(r.URL.Path, "version") {
 			// FetchVersion
@@ -65,9 +65,9 @@ func TestFirmware(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(api.HTTP, parsed.Host)
+	calnexAPI := api.NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
-	err = Firmware(api.HTTP, parsed.Host, fw, true)
+	err = Firmware(parsed.Host, true, fw, true)
 	require.NoError(t, err)
 }

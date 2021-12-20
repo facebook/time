@@ -33,8 +33,8 @@ type FW interface {
 }
 
 // Firmware checks target Calnex firmware version via protocol and upgrades if apply is specified
-func Firmware(aproto api.APIProto, target string, fw FW, apply bool) error {
-	api := api.NewAPI(aproto, target)
+func Firmware(target string, insecureTLS bool, fw FW, apply bool) error {
+	api := api.NewAPI(target, insecureTLS)
 	cv, err := api.FetchVersion()
 	if err != nil {
 		return err

@@ -30,9 +30,9 @@ var errNoUsedChannels = errors.New("no used channels")
 var errNoTarget = errors.New("no target succeeds")
 
 // Export data from the device about specified channels via protocol to the output
-func Export(aproto api.APIProto, source string, channels []api.Channel, output io.WriteCloser) (err error) {
+func Export(source string, insecureTLS bool, channels []api.Channel, output io.WriteCloser) (err error) {
 	var success bool
-	calnexAPI := api.NewAPI(aproto, source)
+	calnexAPI := api.NewAPI(source, insecureTLS)
 
 	if len(channels) == 0 {
 		channels, err = calnexAPI.FetchUsedChannels()
