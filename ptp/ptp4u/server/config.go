@@ -21,8 +21,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/facebook/time/ntp/protocol/ntpshm"
-	"github.com/facebook/time/ptp/phc"
+	"github.com/facebook/time/ntp/shm"
+	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
 )
 
@@ -53,7 +53,7 @@ func (c *Config) SetUTCOffsetFromSHM() error {
 		return err
 	}
 
-	shmTime, err := ntpshm.Time()
+	shmTime, err := shm.Time()
 	if err != nil {
 		return err
 	}

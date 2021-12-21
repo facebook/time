@@ -24,6 +24,7 @@ import (
 
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/ptp4u/stats"
+	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
@@ -74,7 +75,7 @@ func (s *sendWorker) listen() (eventFD, generalFD int, err error) {
 	if err != nil {
 		return -1, -1, fmt.Errorf("creating event socket error: %w", err)
 	}
-	sockAddrAnyPort := ptp.IPToSockaddr(s.config.IP, 0)
+	sockAddrAnyPort := timestamp.IPToSockaddr(s.config.IP, 0)
 
 	// set SO_REUSEPORT so we can potentially trace network path from same source port.
 	// needs to be set before we bind to a port.
@@ -106,12 +107,12 @@ func (s *sendWorker) listen() (eventFD, generalFD int, err error) {
 
 	// Syncs sent from event port, so need to turn on timestamping here
 	switch s.config.TimestampType {
-	case ptp.HWTIMESTAMP:
-		if err := ptp.EnableHWTimestampsSocket(eventFD, s.config.Interface); err != nil {
+	case timestamp.HWTIMESTAMP:
+		if err := timestamp.EnableHWTimestampsSocket(eventFD, s.config.Interface); err != nil {
 			return -1, -1, fmt.Errorf("failed to enable RX hardware timestamps: %w", err)
 		}
-	case ptp.SWTIMESTAMP:
-		if err := ptp.EnableSWTimestampsSocket(eventFD); err != nil {
+	case timestamp.SWTIMESTAMP:
+		if err := timestamp.EnableSWTimestampsSocket(eventFD); err != nil {
 			return -1, -1, fmt.Errorf("unable to enable RX software timestamps: %w", err)
 		}
 	default:
@@ -149,11 +150,11 @@ func (s *sendWorker) Start() {
 	defer unix.Close(gFd)
 
 	// reusable buffers
-	buf := make([]byte, ptp.PayloadSizeBytes)
-	oob := make([]byte, ptp.ControlSizeBytes)
+	buf := make([]byte, timestamp.PayloadSizeBytes)
+	oob := make([]byte, timestamp.ControlSizeBytes)
 
 	// TMP buffers
-	toob := make([]byte, ptp.ControlSizeBytes)
+	toob := make([]byte, timestamp.ControlSizeBytes)
 
 	var (
 		n        int
@@ -181,13 +182,13 @@ func (s *sendWorker) Start() {
 			}
 			s.stats.IncTX(c.subscriptionType)
 
-			txTS, attempts, err = ptp.ReadTXtimestampBuf(eFd, oob, toob)
+			txTS, attempts, err = timestamp.ReadTXtimestampBuf(eFd, oob, toob)
 			s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
 			if err != nil {
 				log.Warningf("Failed to read TX timestamp: %v", err)
 				continue
 			}
-			if s.config.TimestampType != ptp.HWTIMESTAMP {
+			if s.config.TimestampType != timestamp.HWTIMESTAMP {
 				txTS = txTS.Add(s.config.UTCOffset)
 			}
 

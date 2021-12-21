@@ -23,6 +23,7 @@ import (
 
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/ptp4u/stats"
+	"github.com/facebook/time/timestamp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,7 +31,7 @@ func TestFindWorker(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
-		TimestampType: ptp.SWTIMESTAMP,
+		TimestampType: timestamp.SWTIMESTAMP,
 		SendWorkers:   10,
 	}
 	s := Server{

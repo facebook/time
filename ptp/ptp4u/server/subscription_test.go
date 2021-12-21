@@ -23,6 +23,7 @@ import (
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/timestamp"
 
 	"github.com/stretchr/testify/require"
 )
@@ -47,7 +48,7 @@ func TestSubscriptionStart(t *testing.T) {
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 1 * time.Minute
 	expire := time.Now().Add(1 * time.Minute)
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
 	go sc.Start()
@@ -61,7 +62,7 @@ func TestSubscriptionExpire(t *testing.T) {
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 10 * time.Millisecond
 	expire := time.Now().Add(200 * time.Millisecond)
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
 
 	go sc.Start()
@@ -83,7 +84,7 @@ func TestSubscriptionStop(t *testing.T) {
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 10 * time.Millisecond
 	expire := time.Now().Add(1 * time.Second)
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
 	go sc.Start()
@@ -96,7 +97,7 @@ func TestSubscriptionStop(t *testing.T) {
 func TestSubscriptionflags(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
 	sc.UpdateSync()
@@ -112,7 +113,7 @@ func TestSyncPacket(t *testing.T) {
 
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 
@@ -129,7 +130,7 @@ func TestFollowupPacket(t *testing.T) {
 
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 	sc.setInterval(interval)
@@ -152,7 +153,7 @@ func TestAnnouncePacket(t *testing.T) {
 
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234), UTCOffset: UTCOffset}
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 	sc.setInterval(interval)
@@ -180,7 +181,7 @@ func TestDelayRespPacket(t *testing.T) {
 
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
 	sp := ptp.PortIdentity{
@@ -207,7 +208,7 @@ func TestGrantPacket(t *testing.T) {
 
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sg := &ptp.Signaling{}
 
