@@ -22,6 +22,7 @@ import (
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
@@ -74,10 +75,10 @@ func NewSubscriptionClient(q chan *SubscriptionClient, eclisa, gclisa unix.Socka
 
 // Start launches the subscription timers and exit on expire
 func (sc *SubscriptionClient) Start() {
-	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
+	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa))
 	sc.setRunning(true)
 
-	over := fmt.Sprintf("Subscription %s is over for %s", sc.subscriptionType, ptp.SockaddrToIP(sc.eclisa))
+	over := fmt.Sprintf("Subscription %s is over for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa))
 	// Send first message right away
 	if sc.subscriptionType != ptp.MessageDelayResp {
 		sc.Once()

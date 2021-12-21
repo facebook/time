@@ -30,6 +30,7 @@ import (
 
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/ptp4u/stats"
+	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
@@ -128,19 +129,19 @@ func (s *Server) startEventListener() {
 	defer eventConn.Close()
 
 	// get connection file descriptor
-	s.eFd, err = ptp.ConnFd(eventConn)
+	s.eFd, err = timestamp.ConnFd(eventConn)
 	if err != nil {
 		log.Fatalf("Getting event connection FD: %s", err)
 	}
 
 	// Enable RX timestamps. Delay requests need to be timestamped by ptp4u on receipt
 	switch s.Config.TimestampType {
-	case ptp.HWTIMESTAMP:
-		if err := ptp.EnableHWTimestampsSocket(s.eFd, s.Config.Interface); err != nil {
+	case timestamp.HWTIMESTAMP:
+		if err := timestamp.EnableHWTimestampsSocket(s.eFd, s.Config.Interface); err != nil {
 			log.Fatalf("Cannot enable hardware RX timestamps: %v", err)
 		}
-	case ptp.SWTIMESTAMP:
-		if err := ptp.EnableSWTimestampsSocket(s.eFd); err != nil {
+	case timestamp.SWTIMESTAMP:
+		if err := timestamp.EnableSWTimestampsSocket(s.eFd); err != nil {
 			log.Fatalf("Cannot enable software RX timestamps: %v", err)
 		}
 	default:
@@ -178,7 +179,7 @@ func (s *Server) startGeneralListener() {
 	defer generalConn.Close()
 
 	// get connection file descriptor
-	s.gFd, err = ptp.ConnFd(generalConn)
+	s.gFd, err = timestamp.ConnFd(generalConn)
 	if err != nil {
 		log.Fatalf("Getting general connection FD: %s", err)
 	}
@@ -214,8 +215,8 @@ func readPacketBuf(connFd int, buf []byte) (int, unix.Sockaddr, error) {
 
 // handleEventMessage is a handler which gets called every time Event Message arrives
 func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
-	buf := make([]byte, ptp.PayloadSizeBytes)
-	oob := make([]byte, ptp.ControlSizeBytes)
+	buf := make([]byte, timestamp.PayloadSizeBytes)
+	oob := make([]byte, timestamp.ControlSizeBytes)
 	dReq := &ptp.SyncDelayReq{}
 	// Initialize the new random. We will re-seed it every time in findWorker
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -224,12 +225,12 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 	var sc *SubscriptionClient
 
 	for {
-		bbuf, clisa, rxTS, err := ptp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
+		bbuf, clisa, rxTS, err := timestamp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
 		if err != nil {
 			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
 			continue
 		}
-		if s.Config.TimestampType != ptp.HWTIMESTAMP {
+		if s.Config.TimestampType != timestamp.HWTIMESTAMP {
 			rxTS = rxTS.Add(s.Config.UTCOffset)
 		}
 
@@ -252,7 +253,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 			worker = s.findWorker(dReq.Header.SourcePortIdentity, r)
 			sc = worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
 			if sc == nil {
-				log.Warningf("Delay request from %s is not in the subscription list", ptp.SockaddrToIP(clisa))
+				log.Warningf("Delay request from %s is not in the subscription list", timestamp.SockaddrToIP(clisa))
 				continue
 			}
 			sc.UpdateDelayResp(&dReq.Header, rxTS)
@@ -265,7 +266,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 
 // handleGeneralMessage is a handler which gets called every time General Message arrives
 func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
-	buf := make([]byte, ptp.PayloadSizeBytes)
+	buf := make([]byte, timestamp.PayloadSizeBytes)
 	signaling := &ptp.Signaling{}
 	zerotlv := []ptp.TLV{}
 	// Initialize the new random. We will re-seed it every time in findWorker
@@ -313,8 +314,8 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 						worker = s.findWorker(signaling.SourcePortIdentity, r)
 						sc = worker.FindSubscription(signaling.SourcePortIdentity, grantType)
 						if sc == nil {
-							ip := ptp.SockaddrToIP(gclisa)
-							eclisa := ptp.IPToSockaddr(ip, ptp.PortEvent)
+							ip := timestamp.SockaddrToIP(gclisa)
+							eclisa := timestamp.IPToSockaddr(ip, ptp.PortEvent)
 							sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
 							worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
 						} else {

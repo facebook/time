@@ -28,14 +28,15 @@ import (
 	"golang.org/x/sys/unix"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/timestamp"
 )
 
 // re-export timestamping
 const (
 	// HWTIMESTAMP is a hardware timestamp
-	HWTIMESTAMP = ptp.HWTIMESTAMP
+	HWTIMESTAMP = timestamp.HWTIMESTAMP
 	// SWTIMESTAMP is a software timestmap
-	SWTIMESTAMP = ptp.SWTIMESTAMP
+	SWTIMESTAMP = timestamp.SWTIMESTAMP
 )
 
 type state int
@@ -85,11 +86,11 @@ func (c *udpConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, erro
 		return 0, time.Time{}, err
 	}
 	// get FD of the connection. Can be optimized by doing this when connection is created
-	connFd, err := ptp.ConnFd(c.UDPConn)
+	connFd, err := timestamp.ConnFd(c.UDPConn)
 	if err != nil {
 		return 0, time.Time{}, fmt.Errorf("failed to get conn fd udp connection: %v", err)
 	}
-	hwts, _, err := ptp.ReadTXtimestamp(connFd)
+	hwts, _, err := timestamp.ReadTXtimestamp(connFd)
 	if err != nil {
 		return 0, time.Time{}, fmt.Errorf("failed to get timestamp of last packet: %v", err)
 	}
@@ -223,7 +224,7 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 	}
 
 	// get FD of the connection. Can be optimized by doing this when connection is created
-	connFd, err := ptp.ConnFd(eventConn)
+	connFd, err := timestamp.ConnFd(eventConn)
 	if err != nil {
 		return err
 	}
@@ -231,8 +232,8 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 	// we need to enable HW or SW timestamps on event port
 	switch c.cfg.Timestamping {
 	case "": // auto-detection
-		if err := ptp.EnableHWTimestampsSocket(connFd, c.cfg.Iface); err != nil {
-			if err := ptp.EnableSWTimestampsSocket(connFd); err != nil {
+		if err := timestamp.EnableHWTimestampsSocket(connFd, c.cfg.Iface); err != nil {
+			if err := timestamp.EnableSWTimestampsSocket(connFd); err != nil {
 				return fmt.Errorf("failed to enable timestamps on port %d: %v", ptp.PortEvent, err)
 			}
 			log.Warningf("Failed to enable hardware timestamps on port %d, falling back to software timestamps", ptp.PortEvent)
@@ -240,11 +241,11 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 			log.Infof("Using hardware timestamps")
 		}
 	case HWTIMESTAMP:
-		if err := ptp.EnableHWTimestampsSocket(connFd, c.cfg.Iface); err != nil {
+		if err := timestamp.EnableHWTimestampsSocket(connFd, c.cfg.Iface); err != nil {
 			return fmt.Errorf("failed to enable hardware timestamps on port %d: %v", ptp.PortEvent, err)
 		}
 	case SWTIMESTAMP:
-		if err := ptp.EnableSWTimestampsSocket(connFd); err != nil {
+		if err := timestamp.EnableSWTimestampsSocket(connFd); err != nil {
 			return fmt.Errorf("failed to enable software timestamps on port %d: %v", ptp.PortEvent, err)
 		}
 	default:
@@ -290,13 +291,13 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 		doneChan := make(chan error, 1)
 		go func() {
 			for {
-				response, addr, rxtx, err := ptp.ReadPacketWithRXTimestamp(connFd)
+				response, addr, rxtx, err := timestamp.ReadPacketWithRXTimestamp(connFd)
 				if err != nil {
 					doneChan <- err
 					return
 				}
 				log.Debugf("got packet on port 319, addr = %v", addr)
-				if !ptp.SockaddrToIP(addr).Equal(eventAddr.IP) {
+				if !timestamp.SockaddrToIP(addr).Equal(eventAddr.IP) {
 					log.Warningf("ignoring packets from server %v", addr)
 				}
 				c.inChan <- &inPacket{data: response, ts: rxtx}

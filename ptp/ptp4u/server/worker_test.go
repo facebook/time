@@ -23,13 +23,14 @@ import (
 
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/ptp4u/stats"
+	"github.com/facebook/time/timestamp"
 	"github.com/stretchr/testify/require"
 )
 
 func TestWorkerQueue(t *testing.T) {
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
-		TimestampType: ptp.SWTIMESTAMP,
+		TimestampType: timestamp.SWTIMESTAMP,
 	}
 
 	st := stats.NewJSONStats()
@@ -48,7 +49,7 @@ func TestWorkerQueue(t *testing.T) {
 
 	interval := time.Millisecond
 	expire := time.Now().Add(time.Millisecond)
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
 	for i := 0; i < 10; i++ {
@@ -60,7 +61,7 @@ func TestWorkerQueue(t *testing.T) {
 func TestFindSubscription(t *testing.T) {
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
-		TimestampType: ptp.SWTIMESTAMP,
+		TimestampType: timestamp.SWTIMESTAMP,
 	}
 
 	w := &sendWorker{
@@ -69,7 +70,7 @@ func TestFindSubscription(t *testing.T) {
 		clients: make(map[ptp.MessageType]map[ptp.PortIdentity]*SubscriptionClient),
 	}
 
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Millisecond, time.Now().Add(time.Second))
 
 	sp := ptp.PortIdentity{
@@ -104,7 +105,7 @@ func TestInventoryClients(t *testing.T) {
 
 	w := NewSendWorker(0, c, st)
 
-	sa := ptp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	scS1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, 10*time.Millisecond, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi1, ptp.MessageSync, scS1)
 	go scS1.Start()

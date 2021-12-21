@@ -9,7 +9,7 @@ Cli Supports several basic commands such as:
 * Device problem report export
 
 ```
-$ calnex firmware --target calnex01.example.com --file ~/go/github.com/facebook/time/calnex/testdata/sentinel_fw_v3.0.tar --proto http
+$ calnex firmware --target calnex01.example.com --file ~/go/github.com/facebook/time/calnex/testdata/sentinel_fw_v3.0.tar
 INFO[0000] calnex01.example.com is running 2.1, latest is 3.0.0. Needs an update
 INFO[0000] dry run. Exiting
 ```
