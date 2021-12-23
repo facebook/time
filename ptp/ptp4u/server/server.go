@@ -137,11 +137,11 @@ func (s *Server) startEventListener() {
 	// Enable RX timestamps. Delay requests need to be timestamped by ptp4u on receipt
 	switch s.Config.TimestampType {
 	case timestamp.HWTIMESTAMP:
-		if err := timestamp.EnableHWTimestampsSocket(s.eFd, s.Config.Interface); err != nil {
+		if err := timestamp.EnableHWTimestamps(s.eFd, s.Config.Interface); err != nil {
 			log.Fatalf("Cannot enable hardware RX timestamps: %v", err)
 		}
 	case timestamp.SWTIMESTAMP:
-		if err := timestamp.EnableSWTimestampsSocket(s.eFd); err != nil {
+		if err := timestamp.EnableSWTimestamps(s.eFd); err != nil {
 			log.Fatalf("Cannot enable software RX timestamps: %v", err)
 		}
 	default:
