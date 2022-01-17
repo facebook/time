@@ -29,7 +29,9 @@ import (
 	"github.com/facebook/time/leaphash"
 	"github.com/facebook/time/leapsectz"
 	ntp "github.com/facebook/time/ntp/protocol"
+	"github.com/facebook/time/timestamp"
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/unix"
 )
 
 // refID converts ip into ReFID format and prints it on stdout
@@ -90,8 +92,18 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 	}
 	defer conn.Close()
 
+	// get connection file descriptor
+	connFd, err := timestamp.ConnFd(conn.(*net.UDPConn))
+	if err != nil {
+		return err
+	}
+
 	// Allow reading of kernel timestamps via socket
-	if err := ntp.EnableKernelTimestampsSocket(conn.(*net.UDPConn)); err != nil {
+	if err := timestamp.EnableSWTimestampsRx(connFd); err != nil {
+		return err
+	}
+	err = unix.SetNonblock(connFd, false)
+	if err != nil {
 		return err
 	}
 
@@ -115,11 +127,18 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 
 		var response *ntp.Packet
 		var clientReceiveTime time.Time
+		var buf []byte
 
 		blockingRead := make(chan bool, 1)
 		go func() {
-			// This calls syscall.Recvmsg which has no timeout
-			response, clientReceiveTime, _, err = ntp.ReadPacketWithKernelTimestamp(conn.(*net.UDPConn))
+			// This calls unix.Recvmsg which has no timeout
+			buf, _, clientReceiveTime, err = timestamp.ReadPacketWithRXTimestamp(connFd)
+			if err != nil {
+				blockingRead <- true
+				return
+			}
+
+			response, err = ntp.BytesToPacket(buf)
 			blockingRead <- true
 		}()
 

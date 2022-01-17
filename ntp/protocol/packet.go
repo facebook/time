@@ -20,10 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"net"
-	"time"
-	"unsafe"
-
-	syscall "golang.org/x/sys/unix"
 )
 
 // PacketSizeBytes sets the size of NTP packet
@@ -129,12 +125,16 @@ func (p *Packet) Bytes() ([]byte, error) {
 	return bytes.Bytes(), err
 }
 
+// UnmarshalBinary fills the Packet from []bytes
+func (p *Packet) UnmarshalBinary(b []byte) error {
+	reader := bytes.NewReader(b)
+	return binary.Read(reader, binary.BigEndian, p)
+}
+
 // BytesToPacket converts []bytes to Packet
 func BytesToPacket(ntpPacketBytes []byte) (*Packet, error) {
 	packet := &Packet{}
-	reader := bytes.NewReader(ntpPacketBytes)
-	err := binary.Read(reader, binary.BigEndian, packet)
-	return packet, err
+	return packet, packet.UnmarshalBinary(ntpPacketBytes)
 }
 
 // ReadNTPPacket reads incoming NTP packet
@@ -147,25 +147,4 @@ func ReadNTPPacket(conn *net.UDPConn) (ntp *Packet, remAddr net.Addr, err error)
 	ntp, err = BytesToPacket(buf)
 
 	return ntp, remAddr, err
-}
-
-// ReadPacketWithKernelTimestamp reads kernel timestamp from incoming packet
-func ReadPacketWithKernelTimestamp(conn *net.UDPConn) (ntp *Packet, kernelRxTime time.Time, remAddr net.Addr, err error) {
-	buf := make([]byte, PacketSizeBytes)
-	oob := make([]byte, ControlHeaderSizeBytes)
-
-	// Receive message + control struct from the socket
-	// https://linux.die.net/man/2/recvmsg
-	// This is a low-level way of getting the message (NTP packet content)
-	// Additionally we receive control headers, one of which is kernel timestamp
-	_, _, _, sa, err := conn.ReadMsgUDP(buf, oob)
-	if err != nil {
-		return nil, time.Time{}, nil, err
-	}
-	// Extract kernel timestamp from control fields
-	ts := (*syscall.Timespec)(unsafe.Pointer(&oob[syscall.CmsgSpace(0)]))
-	kernelRxTime = time.Unix(ts.Unix())
-
-	packet, err := BytesToPacket(buf)
-	return packet, kernelRxTime, sa, err
 }

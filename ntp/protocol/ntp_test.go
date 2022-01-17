@@ -21,6 +21,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebook/time/timestamp"
+	"golang.org/x/sys/unix"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -219,16 +222,6 @@ func TestCalculateOffset(t *testing.T) {
 	require.Equal(t, offset.Nanoseconds(), actualOffset)
 }
 
-func TestConnFd(t *testing.T) {
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
-	require.NoError(t, err)
-	defer conn.Close()
-
-	connfd, err := connFd(conn)
-	require.NoError(t, err)
-	require.Greater(t, connfd, 0, "connection fd must be > 0")
-}
-
 func TestReadNTPPacket(t *testing.T) {
 	// listen to incoming udp packets
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
@@ -244,32 +237,6 @@ func TestReadNTPPacket(t *testing.T) {
 
 	request, returnaddr, err := ReadNTPPacket(conn)
 	require.Equal(t, ntpRequest, request, "We should have the same request arriving on the server")
-	require.Equal(t, cconn.LocalAddr().String(), returnaddr.String())
-	require.NoError(t, err)
-}
-
-func TestReadPacketWithKernelTimestamp(t *testing.T) {
-	// listen to incoming udp packets
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
-	require.NoError(t, err)
-	defer conn.Close()
-
-	// Allow reading of kernel timestamps via socket
-	err = EnableKernelTimestampsSocket(conn)
-	require.NoError(t, err)
-
-	// Send a client request
-	timeout := 1 * time.Second
-	cconn, err := net.DialTimeout("udp", conn.LocalAddr().String(), timeout)
-	require.NoError(t, err)
-	defer cconn.Close()
-	_, err = cconn.Write(ntpRequestBytes)
-	require.NoError(t, err)
-
-	// read kernel timestamp from incoming packet
-	request, nowKernelTimestamp, returnaddr, err := ReadPacketWithKernelTimestamp(conn)
-	require.Equal(t, ntpRequest, request, "We should have the same request arriving on the server")
-	require.Equal(t, time.Now().Unix()/10, nowKernelTimestamp.Unix()/10, "kernel timestamps should be within 10s")
 	require.Equal(t, cconn.LocalAddr().String(), returnaddr.String())
 	require.NoError(t, err)
 }
@@ -324,9 +291,16 @@ func Benchmark_ServerWithKernelTimestamps(b *testing.B) {
 	require.Nil(b, err)
 	defer conn.Close()
 
+	// get connection file descriptor
+	connFd, err := timestamp.ConnFd(conn)
+	require.NoError(b, err)
+
 	// Allow reading of kernel timestamps via socket
-	err = EnableKernelTimestampsSocket(conn)
-	require.Nil(b, err)
+	err = timestamp.EnableSWTimestampsRx(connFd)
+	require.NoError(b, err)
+
+	err = unix.SetNonblock(connFd, false)
+	require.NoError(b, err)
 
 	// Client
 	addr, err := net.ResolveUDPAddr("udp", conn.LocalAddr().String())
@@ -355,14 +329,22 @@ PASS
 ok  	github.com/facebook/time/ntp/protocol/ntp	1.778s
 */
 func Benchmark_ServerWithKernelTimestampsRead(b *testing.B) {
+	request := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 42}
 	// Server
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
 	require.Nil(b, err)
 	defer conn.Close()
 
+	// get connection file descriptor
+	connFd, err := timestamp.ConnFd(conn)
+	require.NoError(b, err)
+
 	// Allow reading of kernel timestamps via socket
-	err = EnableKernelTimestampsSocket(conn)
-	require.Nil(b, err)
+	err = timestamp.EnableSWTimestampsRx(connFd)
+	require.NoError(b, err)
+
+	err = unix.SetNonblock(connFd, false)
+	require.NoError(b, err)
 
 	// Client
 	addr, err := net.ResolveUDPAddr("udp", conn.LocalAddr().String())
@@ -372,7 +354,7 @@ func Benchmark_ServerWithKernelTimestampsRead(b *testing.B) {
 	defer cconn.Close()
 
 	for i := 0; i < b.N; i++ {
-		_, _ = cconn.Write(ntpRequestBytes)
-		_, _, _, _ = ReadPacketWithKernelTimestamp(conn)
+		_, _ = cconn.Write(request)
+		_, _, _, _ = timestamp.ReadPacketWithRXTimestamp(connFd)
 	}
 }

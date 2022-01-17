@@ -22,7 +22,6 @@ simply accessible struct in the most efficient way.
 package protocol
 
 import (
-	"net"
 	"time"
 )
 
@@ -67,20 +66,4 @@ func CurrentRealTime(serverTransmitTime time.Time, avgNetworkDelay int64) time.T
 // CalculateOffset returns offset between local time and "real" time
 func CalculateOffset(currentRealTime, curentLocaTime time.Time) int64 {
 	return currentRealTime.UnixNano() - curentLocaTime.UnixNano()
-}
-
-// connFd returns file descriptor of a connection
-func connFd(conn *net.UDPConn) (int, error) {
-	sc, err := conn.SyscallConn()
-	if err != nil {
-		return -1, err
-	}
-	var intfd int
-	err = sc.Control(func(fd uintptr) {
-		intfd = int(fd)
-	})
-	if err != nil {
-		return -1, err
-	}
-	return intfd, nil
 }

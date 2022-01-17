@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var timestamp = time.Unix(1585231321, 148166539)
+var ts = time.Unix(1585231321, 148166539)
 
 func TestFillStaticHeadersStratum(t *testing.T) {
 	stratum := 1
@@ -62,32 +62,32 @@ func TestFillStaticHeadersRootDispersion(t *testing.T) {
 func TestGenerateResponsePoll(t *testing.T) {
 	request := &ntp.Packet{Poll: 8}
 	response := &ntp.Packet{}
-	generateResponse(timestamp, timestamp, request, response)
+	generateResponse(ts, ts, request, response)
 	require.Equal(t, request.Poll, response.Poll)
 }
 
-func TestGenerateResponseTimestamps(t *testing.T) {
+func TestGenerateResponsetss(t *testing.T) {
 	request := &ntp.Packet{TxTimeSec: 3794210679, TxTimeFrac: 2718216404}
 	response := &ntp.Packet{}
-	nowSec, nowFrac := ntp.Time(timestamp)
+	nowSec, nowFrac := ntp.Time(ts)
 
-	generateResponse(timestamp, timestamp, request, response)
+	generateResponse(ts, ts, request, response)
 
-	// Reference Timestamp must to the closest /1000s
-	lastSync := time.Unix(timestamp.Unix()/1000*1000, 0)
+	// Reference ts must to the closest /1000s
+	lastSync := time.Unix(ts.Unix()/1000*1000, 0)
 	lastSyncSec, lastSyncFrac := ntp.Time(lastSync)
 	require.Equal(t, lastSyncSec, response.RefTimeSec)
 	require.Equal(t, lastSyncFrac, response.RefTimeFrac)
 
-	// Originate Timestamp must be the same
+	// Originate ts must be the same
 	require.Equal(t, request.TxTimeSec, response.OrigTimeSec)
 	require.Equal(t, request.TxTimeFrac, response.OrigTimeFrac)
 
-	// Receive Timestamp must be current timestamp
+	// Receive ts must be current ts
 	require.Equal(t, nowSec, response.RxTimeSec)
 	require.Equal(t, nowFrac, response.RxTimeFrac)
 
-	// Transmit Timestamp must be current timestamp
+	// Transmit ts must be current ts
 	require.Equal(t, nowSec, response.TxTimeSec)
 	require.Equal(t, nowFrac, response.TxTimeFrac)
 }
@@ -96,7 +96,7 @@ func Benchmark_generateResponse(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		request := &ntp.Packet{}
 		response := &ntp.Packet{}
-		generateResponse(timestamp, timestamp, request, response)
+		generateResponse(ts, ts, request, response)
 	}
 }
 

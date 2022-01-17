@@ -28,13 +28,15 @@ import (
 	"time"
 
 	ntp "github.com/facebook/time/ntp/protocol"
+	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 // task is a data structure with everything needed to work independently on NTP packet.
 type task struct {
-	conn     net.PacketConn
-	addr     net.Addr
+	connFd   int
+	addr     unix.Sockaddr
 	received time.Time
 	request  *ntp.Packet
 	stats    Stats
@@ -134,21 +136,42 @@ func (s *Server) startListener(ip net.IP, port int) {
 	}
 	defer conn.Close()
 
+	// get connection file descriptor
+	connFd, err := timestamp.ConnFd(conn)
+	if err != nil {
+		log.Fatalf("Getting event connection FD: %s", err)
+	}
+
 	// Allow reading of kernel timestamps via socket
-	if err := ntp.EnableKernelTimestampsSocket(conn); err != nil {
+	if err := timestamp.EnableSWTimestampsRx(connFd); err != nil {
 		log.Fatalf("enabling timestamp error: %s", err)
+	}
+
+	buf := make([]byte, timestamp.PayloadSizeBytes)
+	oob := make([]byte, timestamp.ControlSizeBytes)
+	request := new(ntp.Packet)
+
+	err = unix.SetNonblock(connFd, false)
+	if err != nil {
+		log.Fatalf("Failed to set socket to blocking: %s", err)
 	}
 
 	for {
 		// read kernel timestamp from incoming packet
-		request, nowKernelTimestamp, returnaddr, err := ntp.ReadPacketWithKernelTimestamp(conn)
+		bbuf, clisa, rxTS, err := timestamp.ReadPacketWithRXTimestampBuf(connFd, buf, oob)
 		if err != nil {
-			log.Errorf("read packet with timestamp error: %s", err)
+			log.Errorf("Failed to read packet on %s: %v", conn.LocalAddr(), err)
+			s.Stats.IncReadError()
+			continue
+		}
+
+		if err := request.UnmarshalBinary(buf[:bbuf]); err != nil {
+			log.Errorf("failed to parse ntp packet: %s", err)
 			s.Stats.IncReadError()
 			continue
 		}
 		s.Stats.IncRequests()
-		s.tasks <- task{conn: conn, addr: returnaddr, received: nowKernelTimestamp, request: request, stats: s.Stats}
+		s.tasks <- task{connFd: connFd, addr: clisa, received: rxTS, request: request, stats: s.Stats}
 	}
 }
 
@@ -179,10 +202,8 @@ func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 			return
 		}
 
-		log.Debugf("Writing from: %v", t.conn.LocalAddr())
 		log.Debugf("Writing response: %+v", response)
-		_, err = t.conn.WriteTo(responseBytes, t.addr)
-		if err != nil {
+		if err := unix.Sendto(t.connFd, responseBytes, 0, t.addr); err != nil {
 			log.Debugf("Failed to respond to the request: %v", err)
 		}
 		t.stats.IncResponses()

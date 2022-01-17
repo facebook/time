@@ -232,8 +232,8 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 	// we need to enable HW or SW timestamps on event port
 	switch c.cfg.Timestamping {
 	case "": // auto-detection
-		if err := timestamp.EnableHWTimestampsSocket(connFd, c.cfg.Iface); err != nil {
-			if err := timestamp.EnableSWTimestampsSocket(connFd); err != nil {
+		if err := timestamp.EnableHWTimestamps(connFd, c.cfg.Iface); err != nil {
+			if err := timestamp.EnableSWTimestamps(connFd); err != nil {
 				return fmt.Errorf("failed to enable timestamps on port %d: %v", ptp.PortEvent, err)
 			}
 			log.Warningf("Failed to enable hardware timestamps on port %d, falling back to software timestamps", ptp.PortEvent)
@@ -241,11 +241,11 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 			log.Infof("Using hardware timestamps")
 		}
 	case HWTIMESTAMP:
-		if err := timestamp.EnableHWTimestampsSocket(connFd, c.cfg.Iface); err != nil {
+		if err := timestamp.EnableHWTimestamps(connFd, c.cfg.Iface); err != nil {
 			return fmt.Errorf("failed to enable hardware timestamps on port %d: %v", ptp.PortEvent, err)
 		}
 	case SWTIMESTAMP:
-		if err := timestamp.EnableSWTimestampsSocket(connFd); err != nil {
+		if err := timestamp.EnableSWTimestamps(connFd); err != nil {
 			return fmt.Errorf("failed to enable software timestamps on port %d: %v", ptp.PortEvent, err)
 		}
 	default:
