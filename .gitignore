@@ -1,2 +1,6 @@
 # Excluded files
 .idea/
+
+# Test output
+profile.out
+couverage.out
