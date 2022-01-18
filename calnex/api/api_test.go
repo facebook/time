@@ -480,3 +480,30 @@ func TestFetchProblemReport(t *testing.T) {
 
 	require.Equal(t, expectedReportContent, string(reportContent))
 }
+
+func TestPushCert(t *testing.T) {
+	sampleResp := "{\n\"result\" : true,\n\"message\" : \"The API Interface will now be restarted\"\n}"
+	expected := &Result{
+		Result:  true,
+		Message: "The API Interface will now be restarted",
+	}
+	cert := []byte("-----BEGIN CERTIFICATE-----\nI am a certificate\n-----END CERTIFICATE-----\n-----BEGIN RSA PRIVATE KEY-----I am a key-----END RSA PRIVATE KEY-----")
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		defer r.Body.Close()
+		body, err := ioutil.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.Equal(t, cert, body)
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI.Client = ts.Client()
+
+	r, err := calnexAPI.PushCert(cert)
+	require.NoError(t, err)
+	require.Equal(t, expected, r)
+}
