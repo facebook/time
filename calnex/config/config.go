@@ -157,7 +157,7 @@ func (c *config) baseConfig(s *ini.Section) {
 	c.set(s, "tie_mode", "TIE + 1 PPS TE")
 }
 
-// Config configures target Calnex via protocol with Network/Calnex configs if apply is specified
+// Config configures target Calnex with Network/Calnex configs if apply is specified
 func Config(target string, insecureTLS bool, n *NetworkConfig, cc CalnexConfig, apply bool) error {
 	var c config
 	api := api.NewAPI(target, insecureTLS)

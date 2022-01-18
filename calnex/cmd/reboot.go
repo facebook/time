@@ -24,6 +24,7 @@ import (
 
 func init() {
 	RootCmd.AddCommand(rebootCmd)
+	rebootCmd.Flags().BoolVar(&apply, "apply", false, "apply the config changes")
 	rebootCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
 	rebootCmd.Flags().StringVar(&target, "target", "", "device to configure")
 	if err := rebootCmd.MarkFlagRequired("target"); err != nil {
@@ -32,8 +33,12 @@ func init() {
 }
 
 func reboot() error {
-	api := api.NewAPI(target, insecureTLS)
+	if !apply {
+		log.Infof("dry run. Exiting")
+		return nil
+	}
 
+	api := api.NewAPI(target, insecureTLS)
 	if err := api.Reboot(); err != nil {
 		return err
 	}

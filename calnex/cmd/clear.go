@@ -24,6 +24,7 @@ import (
 
 func init() {
 	RootCmd.AddCommand(clearCmd)
+	clearCmd.Flags().BoolVar(&apply, "apply", false, "apply the config changes")
 	clearCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
 	clearCmd.Flags().StringVar(&target, "target", "", "device to configure")
 	if err := clearCmd.MarkFlagRequired("target"); err != nil {
@@ -32,8 +33,12 @@ func init() {
 }
 
 func clear() error {
-	api := api.NewAPI(target, insecureTLS)
+	if !apply {
+		log.Infof("dry run. Exiting")
+		return nil
+	}
 
+	api := api.NewAPI(target, insecureTLS)
 	if err := api.ClearDevice(); err != nil {
 		return err
 	}

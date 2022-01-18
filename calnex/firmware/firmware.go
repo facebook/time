@@ -32,7 +32,7 @@ type FW interface {
 	Path() (string, error)
 }
 
-// Firmware checks target Calnex firmware version via protocol and upgrades if apply is specified
+// Firmware checks target Calnex firmware version and upgrades if apply is specified
 func Firmware(target string, insecureTLS bool, fw FW, apply bool) error {
 	api := api.NewAPI(target, insecureTLS)
 	cv, err := api.FetchVersion()

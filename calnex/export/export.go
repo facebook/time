@@ -29,7 +29,7 @@ import (
 var errNoUsedChannels = errors.New("no used channels")
 var errNoTarget = errors.New("no target succeeds")
 
-// Export data from the device about specified channels via protocol to the output
+// Export data from the device about specified channels to the specified output
 func Export(source string, insecureTLS bool, channels []api.Channel, output io.WriteCloser) (err error) {
 	var success bool
 	calnexAPI := api.NewAPI(source, insecureTLS)
