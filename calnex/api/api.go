@@ -244,8 +244,9 @@ const (
 	clearDeviceURL = "https://%s/api/cleardevice?action=cleardevice"
 	rebootURL      = "https://%s/api/reboot?action=reboot"
 
-	versionURL  = "https://%s/api/version"
-	firmwareURL = "https://%s/api/updatefirmware"
+	versionURL     = "https://%s/api/version"
+	firmwareURL    = "https://%s/api/updatefirmware"
+	certificateURL = "https://%s/api/installcertificate"
 )
 
 // Calnex Status contants
@@ -496,6 +497,15 @@ func (a *API) PushVersion(path string) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	r, err := a.post(url, buf)
+	return r, err
+}
+
+// PushCert uploads a new Certificate to the device
+func (a *API) PushCert(cert []byte) (*Result, error) {
+	url := fmt.Sprintf(certificateURL, a.source)
+	buf := bytes.NewBuffer(cert)
 
 	r, err := a.post(url, buf)
 	return r, err
