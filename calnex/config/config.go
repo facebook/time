@@ -30,8 +30,8 @@ type CalnexConfig map[api.Channel]MeasureConfig
 
 // MeasureConfig is a Calnex channel config
 type MeasureConfig struct {
-	Target string
-	Probe  api.Probe
+	Target string    `json:"target"`
+	Probe  api.Probe `json:"probe"`
 }
 
 // NetworkConfig represents network config of a Calnex device
