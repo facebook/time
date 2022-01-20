@@ -17,6 +17,7 @@ limitations under the License.
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -417,4 +418,22 @@ func TestConfigFail(t *testing.T) {
 
 	err := Config("localhost", true, n, CalnexConfig(mc), true)
 	require.Error(t, err)
+}
+
+func TestJSONExport(t *testing.T) {
+	expected := `{"6":{"target":"fd00:3226:301b::3f","probe":2},"7":{"target":"fd00:3016:3109:face:0:1:0","probe":0}}`
+	mc := map[api.Channel]MeasureConfig{
+		api.ChannelONE: {
+			Target: "fd00:3226:301b::3f",
+			Probe:  api.ProbeNTP,
+		},
+		api.ChannelTWO: {
+			Target: "fd00:3016:3109:face:0:1:0",
+			Probe:  api.ProbePTP,
+		},
+	}
+
+	jsonData, err := json.Marshal(mc)
+	require.NoError(t, err)
+	require.Equal(t, expected, string(jsonData))
 }
