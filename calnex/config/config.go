@@ -131,12 +131,12 @@ func (c *config) baseConfig(s *ini.Section) {
 	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\protocol_level", "UDP/IPv6")
 
 	// ntp 1 packet per 64 second
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ntp\\poll_log_interval", "1 packet/64 s")
+	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ntp\\poll_log_interval", "1 packet/16 s")
 
 	// ptp 1 packet per 1 second
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\log_announce_int", "1 packet/s")
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\log_delay_req_int", "1 packet/s")
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\log_sync_int", "1 packet/s")
+	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\log_announce_int", "1 packet/16 s")
+	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\log_delay_req_int", "1 packet/16 s")
+	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\log_sync_int", "1 packet/16 s")
 
 	// ptp unicast mode
 	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\stack_mode", "Unicast")
