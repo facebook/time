@@ -140,7 +140,7 @@ func checkOffset(r *checker.PTPCheckResult) (status, string) {
 	)
 }
 func checkPathDelay(r *checker.PTPCheckResult) (status, string) {
-	// We expect GM to be withing same region, so path delay should be relatively small
+	// We expect GM to be within same region, so path delay should be relatively small
 	const warnThreshold = float64(100 * time.Millisecond)
 	// If path delay is > 250ms it's really weird
 	const failThreshold = float64(250 * time.Millisecond)

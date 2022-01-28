@@ -26,7 +26,7 @@ import (
 
 // Compute returns the sha1 sum of all non whitespace characters in data
 // excluding comments. Since it includes logic for special lines specific
-// to the leap-second.list format its not a general purpose funtion and
+// to the leap-second.list format its not a general purpose function and
 // should be only used to verify the integrity of an official leap-second.list
 // document.
 func Compute(data string) string {

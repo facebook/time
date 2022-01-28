@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeConn gives us fake io.ReadWriter interace implementation for which we can provide fake outputs
+// fakeConn gives us fake io.ReadWriter interacted implementation for which we can provide fake outputs
 type fakeConn struct {
 	readCount int
 	outputs   []*bytes.Buffer

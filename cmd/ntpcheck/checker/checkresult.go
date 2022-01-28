@@ -49,7 +49,7 @@ func (r *NTPCheckResult) FindSysPeer() (*Peer, error) {
 	return nil, errors.New("no sys.peer present")
 }
 
-// FindGoodPeers returns list of peers suitable for syncronization
+// FindGoodPeers returns list of peers suitable for synchronization
 func (r *NTPCheckResult) FindGoodPeers() ([]*Peer, error) {
 	results := []*Peer{}
 	// see http://doc.ntp.org/current-stable/decode.html#peer for reference

@@ -195,7 +195,7 @@ func (t Correction) TooBig() bool {
 	return t == 0x7fffffffffffffff // one in all bits, except the most significant
 }
 
-// NewCorrection returns Correctin built from Nanoseconds
+// NewCorrection returns Correction built from Nanoseconds
 func NewCorrection(ns float64) Correction {
 	return Correction(ns * twoPow16)
 }

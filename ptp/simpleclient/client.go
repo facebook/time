@@ -35,7 +35,7 @@ import (
 const (
 	// HWTIMESTAMP is a hardware timestamp
 	HWTIMESTAMP = timestamp.HWTIMESTAMP
-	// SWTIMESTAMP is a software timestmap
+	// SWTIMESTAMP is a software timestamp
 	SWTIMESTAMP = timestamp.SWTIMESTAMP
 )
 

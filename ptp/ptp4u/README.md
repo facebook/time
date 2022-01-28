@@ -31,10 +31,10 @@ $ curl localhost:8888 | jq
   "worker.0.txtsattempts": 1
 }
 ```
-This returns manu usefull metrics such as number of active subscriptions, tx/rx stats etc.
+This returns manu useful metrics such as number of active subscriptions, tx/rx stats etc.
 
-## Performace
-We were able to generate and consistently support over 1M clients with syncronization frequency of 1Hz.
+## Performance
+We were able to generate and consistently support over 1M clients with synchronization frequency of 1Hz.
 
 We used a follwing setup:
 * HPE DL380 G10 single CPU system.

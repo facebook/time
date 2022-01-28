@@ -25,7 +25,7 @@ import (
 // DefaultServerIPs is a default list of IPs server will bind to if nothing else is specified
 var DefaultServerIPs = MultiIPs{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}
 
-// ListenConfig is a wrapper around mutliple IPs and Port to bind to
+// ListenConfig is a wrapper around multiple IPs and Port to bind to
 type ListenConfig struct {
 	IPs            MultiIPs
 	Port           int

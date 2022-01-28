@@ -51,7 +51,7 @@ const (
 const (
 	// HWTIMESTAMP is a hardware timestamp
 	HWTIMESTAMP = "hardware"
-	// SWTIMESTAMP is a software timestmap
+	// SWTIMESTAMP is a software timestamp
 	SWTIMESTAMP = "software"
 )
 
