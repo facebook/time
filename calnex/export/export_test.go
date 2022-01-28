@@ -65,7 +65,7 @@ func TestExport(t *testing.T) {
 	calnexAPI := api.NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
-	expected := fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"1\",\"target\":\"localhost\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host)
+	expected := fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"1\",\"target\":\"127.0.0.1\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host)
 	err := Export(parsed.Host, true, []api.Channel{}, w)
 	require.NoError(t, err)
 	require.Equal(t, expected, w.data)

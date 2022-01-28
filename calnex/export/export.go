@@ -50,7 +50,7 @@ func Export(source string, insecureTLS bool, channels []api.Channel, output io.W
 			continue
 		}
 
-		target, err := calnexAPI.FetchChannelTargetName(channel, *probe)
+		target, err := calnexAPI.FetchChannelTargetIP(channel, *probe)
 		if err != nil {
 			log.Errorf("Failed to fetch target from the channel %s: %v", channel, err)
 			success = success || false
