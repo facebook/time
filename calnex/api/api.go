@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"os"
 	"path"
@@ -378,21 +377,6 @@ func (a *API) FetchUsedChannels() ([]Channel, error) {
 		}
 	}
 	return channels, err
-}
-
-// FetchChannelTargetName returns the hostname of the server monitored on the channel
-func (a *API) FetchChannelTargetName(channel Channel, probe Probe) (string, error) {
-	ip, err := a.FetchChannelTargetIP(channel, probe)
-	if err != nil {
-		return ip, err
-	}
-
-	hostnames, err := net.LookupAddr(ip)
-	if err != nil {
-		return "", err
-	}
-
-	return hostnames[0], nil
 }
 
 // FetchSettings returns the calnex settings

@@ -236,23 +236,6 @@ func TestFetchUsedChannels(t *testing.T) {
 	require.ElementsMatch(t, expected, used)
 }
 
-func TestFetchChannelTargetName(t *testing.T) {
-	sampleResp := "measure/ch7/ptp_synce/ptp/master_ip=127.0.0.1"
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
-		r *http.Request) {
-		fmt.Fprintln(w, sampleResp)
-	}))
-	defer ts.Close()
-
-	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
-	calnexAPI.Client = ts.Client()
-
-	ip, err := calnexAPI.FetchChannelTargetName(ChannelTWO, ProbePTP)
-	require.NoError(t, err)
-	require.Equal(t, "localhost", ip)
-}
-
 func TestFetchSettings(t *testing.T) {
 	sampleResp := "[measure]\nch0\\synce_enabled=Off\n"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
