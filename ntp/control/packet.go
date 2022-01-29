@@ -219,7 +219,7 @@ const (
 	SelCandidate uint8 = 4
 	// SelBackup means peer is a backup (more than tos maxclock sources)
 	SelBackup uint8 = 5
-	// SelSYSPeer means peer is a system peer (main syncronization source)
+	// SelSYSPeer means peer is a system peer (main synchronization source)
 	SelSYSPeer uint8 = 6
 	// SelPPSPeer means peer is a PPS peer (when the prefer peer is valid)
 	SelPPSPeer uint8 = 7

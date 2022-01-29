@@ -61,7 +61,7 @@ type Version struct {
 // Channel is a Calnex channel object
 type Channel int
 
-// Avalable Calnex channels
+// Available Calnex channels
 const (
 	ChannelA Channel = iota
 	ChannelB
