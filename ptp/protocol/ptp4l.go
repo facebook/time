@@ -20,14 +20,16 @@ package protocol
 // Implemented as present in linuxptp master d95f4cd6e4a7c6c51a220c58903110a2326885e7
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 )
 
 // ptp4l-specific management TLV ids
 const (
-	IDPortStatsNP  ManagementID = 0xC005
-	IDTimeStatusNP ManagementID = 0xC000
+	IDPortStatsNP        ManagementID = 0xC005
+	IDTimeStatusNP       ManagementID = 0xC000
+	IDPortServiceStatsNP ManagementID = 0xC007
 )
 
 // PortStats is a ptp4l struct containing port statistics
@@ -42,6 +44,21 @@ type PortStatsNPTLV struct {
 
 	PortIdentity PortIdentity
 	PortStats    PortStats
+}
+
+// MarshalBinary converts packet to []bytes
+func (p *PortStatsNPTLV) MarshalBinary() ([]byte, error) {
+	var bytes bytes.Buffer
+	if err := binary.Write(&bytes, binary.BigEndian, p.ManagementTLVHead); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, p.PortIdentity); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.LittleEndian, p.PortStats); err != nil {
+		return nil, err
+	}
+	return bytes.Bytes(), nil
 }
 
 // ScaledNS is some struct used by ptp4l to report phase change
@@ -63,6 +80,43 @@ type TimeStatusNPTLV struct {
 	LastGmPhaseChange          ScaledNS
 	GMPresent                  int32
 	GMIdentity                 ClockIdentity
+}
+
+// PortServiceStats is a ptp4l struct containing counters for different port events, which we added in linuxptp cfbb8bdb50f5a38687fcddccbe6a264c6a078bbd
+type PortServiceStats struct {
+	AnnounceTimeout       uint64 `json:"ptp.servicestats.announce_timeout"`
+	SyncTimeout           uint64 `json:"ptp.servicestats.sync_timeout"`
+	DelayTimeout          uint64 `json:"ptp.servicestats.delay_timeout"`
+	UnicastServiceTimeout uint64 `json:"ptp.servicestats.unicast_service_timeout"`
+	UnicastRequestTimeout uint64 `json:"ptp.servicestats.unicast_request_timeout"`
+	MasterAnnounceTimeout uint64 `json:"ptp.servicestats.master_announce_timeout"`
+	MasterSyncTimeout     uint64 `json:"ptp.servicestats.master_sync_timeout"`
+	QualificationTimeout  uint64 `json:"ptp.servicestats.qualification_timeout"`
+	SyncMismatch          uint64 `json:"ptp.servicestats.sync_mismatch"`
+	FollowupMismatch      uint64 `json:"ptp.servicestats.followup_mismatch"`
+}
+
+// PortServiceStatsNPTLV is a management TLV added in linuxptp cfbb8bdb50f5a38687fcddccbe6a264c6a078bbd
+type PortServiceStatsNPTLV struct {
+	ManagementTLVHead
+
+	PortIdentity     PortIdentity
+	PortServiceStats PortServiceStats
+}
+
+// MarshalBinary converts packet to []bytes
+func (p *PortServiceStatsNPTLV) MarshalBinary() ([]byte, error) {
+	var bytes bytes.Buffer
+	if err := binary.Write(&bytes, binary.BigEndian, p.ManagementTLVHead); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, p.PortIdentity); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.LittleEndian, p.PortServiceStats); err != nil {
+		return nil, err
+	}
+	return bytes.Bytes(), nil
 }
 
 // PortStatsNPRequest prepares request packet for PORT_STATS_NP request
@@ -145,6 +199,49 @@ func (c *MgmtClient) TimeStatusNP() (*TimeStatusNPTLV, error) {
 		return nil, err
 	}
 	tlv, ok := p.TLV.(*TimeStatusNPTLV)
+	if !ok {
+		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
+	}
+	return tlv, nil
+}
+
+// PortServiceStatsNPRequest prepares request packet for PORT_SERVICE_STATS_NP request
+func PortServiceStatsNPRequest() *Management {
+	headerSize := uint16(binary.Size(ManagementMsgHead{}))
+	tlvHeadSize := uint16(binary.Size(TLVHead{}))
+	// we send request with no portServiceStats data just like pmc does
+	return &Management{
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + tlvHeadSize + 2,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
+		TLV: &ManagementTLVHead{
+			TLVHead: TLVHead{
+				TLVType:     TLVManagement,
+				LengthField: 2,
+			},
+			ManagementID: IDPortServiceStatsNP,
+		},
+	}
+}
+
+// PortServiceStatsNP sends PORT_SERVICE_STATS_NP request and returns response
+func (c *MgmtClient) PortServiceStatsNP() (*PortServiceStatsNPTLV, error) {
+	req := PortServiceStatsNPRequest()
+	p, err := c.Communicate(req)
+	if err != nil {
+		return nil, err
+	}
+	tlv, ok := p.TLV.(*PortServiceStatsNPTLV)
 	if !ok {
 		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
 	}

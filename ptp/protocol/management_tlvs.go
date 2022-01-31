@@ -101,6 +101,21 @@ var mgmtTLVDecoder = map[ManagementID]MgmtTLVDecoderFunc{
 		}
 		return tlv, nil
 	},
+	IDPortServiceStatsNP: func(data []byte) (ManagementTLV, error) {
+		r := bytes.NewReader(data)
+		tlv := &PortServiceStatsNPTLV{}
+		if err := binary.Read(r, binary.BigEndian, &tlv.ManagementTLVHead); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(r, binary.BigEndian, &tlv.PortIdentity); err != nil {
+			return nil, err
+		}
+		// LittlEndian, just like with PortStatsNP
+		if err := binary.Read(r, binary.LittleEndian, &tlv.PortServiceStats); err != nil {
+			return nil, err
+		}
+		return tlv, nil
+	},
 }
 
 // RegisterMgmtTLVDecoder registers function we'll use to decode particular custom management TLV.
