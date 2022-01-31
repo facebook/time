@@ -18,6 +18,7 @@ package protocol
 
 import (
 	"bytes"
+	"encoding"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -130,6 +131,14 @@ func (p *Management) UnmarshalBinary(rawBytes []byte) error {
 func (p *Management) MarshalBinaryTo(bytes io.Writer) error {
 	if err := binary.Write(bytes, binary.BigEndian, p.ManagementMsgHead); err != nil {
 		return err
+	}
+	// interface smuggling
+	if pp, ok := p.TLV.(encoding.BinaryMarshaler); ok {
+		b, err := pp.MarshalBinary()
+		if err != nil {
+			return err
+		}
+		return binary.Write(bytes, binary.BigEndian, b)
 	}
 	if err := binary.Write(bytes, binary.BigEndian, p.TLV); err != nil {
 		return err
