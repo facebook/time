@@ -37,11 +37,11 @@ const (
 )
 
 const (
-	// Control is a socket control message containing TX/RX timestamp
+	// ControlSizeBytes is a socket control message containing TX/RX timestamp
 	// If the read fails we may endup with multiple timestamps in the buffer
 	// which is best to read right away
 	ControlSizeBytes = 128
-	// ptp packets usually up to 66 bytes
+	// PayloadSizeBytes is a size of maximum ptp packet which is usually up to 66 bytes
 	PayloadSizeBytes = 128
 	// look only for X sequential TS
 	maxTXTS = 100
@@ -113,11 +113,10 @@ func IPToSockaddr(ip net.IP, port int) unix.Sockaddr {
 		sa := &unix.SockaddrInet4{Port: port}
 		copy(sa.Addr[:], ip.To4())
 		return sa
-	} else {
-		sa := &unix.SockaddrInet6{Port: port}
-		copy(sa.Addr[:], ip.To16())
-		return sa
 	}
+	sa := &unix.SockaddrInet6{Port: port}
+	copy(sa.Addr[:], ip.To16())
+	return sa
 }
 
 // SockaddrToIP converts socket address to an IP

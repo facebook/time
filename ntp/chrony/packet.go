@@ -447,6 +447,7 @@ type replySourceStatsContent struct {
 	EstimatedOffsetErr chronyFloat
 }
 
+// SourceStats contains stats about the source
 type SourceStats struct {
 	RefID              uint32
 	IPAddr             net.IP

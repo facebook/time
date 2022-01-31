@@ -16,7 +16,6 @@ limitations under the License.
 
 // Package leapsectz is a utility package for obtaining leap second
 // information from the system timezone database
-
 package leapsectz
 
 import (

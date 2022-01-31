@@ -18,7 +18,6 @@ limitations under the License.
 Package server implements simple UDP server to work with NTP packets.
 In addition, it run checker, announce and stats implementations
 */
-
 package server
 
 import (
@@ -68,7 +67,7 @@ func (s *Server) Start() error {
 	s.sw = make([]*sendWorker, s.Config.SendWorkers)
 	for i := 0; i < s.Config.SendWorkers; i++ {
 		// Each worker to monitor own queue
-		s.sw[i] = NewSendWorker(i, s.Config, s.Stats)
+		s.sw[i] = newSendWorker(i, s.Config, s.Stats)
 		go func(i int) {
 			defer wg.Done()
 			s.sw[i].Start()

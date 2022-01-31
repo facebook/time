@@ -42,6 +42,7 @@ type Signaling struct {
 	TLVs               []TLV
 }
 
+// MarshalBinaryTo marshals bytes to Signaling
 func (p *Signaling) MarshalBinaryTo(b []byte) (int, error) {
 	if len(p.TLVs) == 0 {
 		return 0, fmt.Errorf("no TLVs in Signaling message, at least one required")
@@ -160,6 +161,7 @@ type RequestUnicastTransmissionTLV struct {
 	DurationField         uint32
 }
 
+// MarshalBinaryTo marshals bytes to RequestUnicastTransmissionTLV
 func (t *RequestUnicastTransmissionTLV) MarshalBinaryTo(b []byte) (int, error) {
 	tlvHeadMarshalBinaryTo(&t.TLVHead, b)
 	b[tlvHeadSize] = byte(t.MsgTypeAndReserved)
@@ -189,6 +191,7 @@ type GrantUnicastTransmissionTLV struct {
 	Renewal               uint8
 }
 
+// MarshalBinaryTo marshals bytes to GrantUnicastTransmissionTLV
 func (t *GrantUnicastTransmissionTLV) MarshalBinaryTo(b []byte) (int, error) {
 	tlvHeadMarshalBinaryTo(&t.TLVHead, b)
 	b[tlvHeadSize] = byte(t.MsgTypeAndReserved)
@@ -219,6 +222,7 @@ type CancelUnicastTransmissionTLV struct {
 	Reserved        uint8
 }
 
+// MarshalBinaryTo marshals bytes to CancelUnicastTransmissionTLV
 func (t *CancelUnicastTransmissionTLV) MarshalBinaryTo(b []byte) (int, error) {
 	tlvHeadMarshalBinaryTo(&t.TLVHead, b)
 	b[tlvHeadSize] = byte(t.MsgTypeAndFlags)
@@ -243,6 +247,7 @@ type AcknowledgeCancelUnicastTransmissionTLV struct {
 	Reserved        uint8
 }
 
+// MarshalBinaryTo marshals bytes to AcknowledgeCancelUnicastTransmissionTLV
 func (t *AcknowledgeCancelUnicastTransmissionTLV) MarshalBinaryTo(b []byte) (int, error) {
 	tlvHeadMarshalBinaryTo(&t.TLVHead, b)
 	b[tlvHeadSize] = byte(t.MsgTypeAndFlags)

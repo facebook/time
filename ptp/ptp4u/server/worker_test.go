@@ -103,7 +103,7 @@ func TestInventoryClients(t *testing.T) {
 	go st.Start(0)
 	time.Sleep(time.Millisecond)
 
-	w := NewSendWorker(0, c, st)
+	w := newSendWorker(0, c, st)
 
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	scS1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, 10*time.Millisecond, time.Now().Add(time.Minute))

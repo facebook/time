@@ -53,7 +53,7 @@ type sendWorker struct {
 	clients map[ptp.MessageType]map[ptp.PortIdentity]*SubscriptionClient
 }
 
-func NewSendWorker(i int, c *Config, st stats.Stats) *sendWorker {
+func newSendWorker(i int, c *Config, st stats.Stats) *sendWorker {
 	s := &sendWorker{
 		id:     i,
 		config: c,

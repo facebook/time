@@ -30,14 +30,14 @@ import (
 // http://doc.ntp.org/current-stable/drivers/driver28.html
 const SHMKEY = 0x4e545030
 
-// IPC_CREAT create if key is nonexistent
+// IPCCREAT create if key is nonexistent
 // https://man7.org/linux/man-pages/man0/sys_ipc.h.0p.html
-const IPC_CREAT = 00001000
+const IPCCREAT = 00001000
 
 // NTPSHMSize is a size of NTPSHM struct
 const NTPSHMSize = 96
 
-/* NTPSHM Declaration of the SHM segment from ntp (ntpd/refclock_shm.c) */
+// NTPSHM Declaration of the SHM segment from ntp (ntpd/refclock_shm.c)
 type NTPSHM struct {
 	Mode                 int32
 	Count                int32
@@ -56,7 +56,7 @@ type NTPSHM struct {
 
 // Create a segment in SHM and return the ID
 func Create() (uintptr, error) {
-	shmID, _, errno := unix.Syscall(unix.SYS_SHMGET, uintptr(SHMKEY), 0, uintptr(IPC_CREAT|0600))
+	shmID, _, errno := unix.Syscall(unix.SYS_SHMGET, uintptr(SHMKEY), 0, uintptr(IPCCREAT|0600))
 	if errno != 0 {
 		return 0, fmt.Errorf("failed get shm: %s", unix.ErrnoName(errno))
 	}
