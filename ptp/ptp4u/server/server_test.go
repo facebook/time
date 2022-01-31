@@ -41,7 +41,7 @@ func TestFindWorker(t *testing.T) {
 	}
 
 	for i := 0; i < s.Config.SendWorkers; i++ {
-		s.sw[i] = NewSendWorker(i, c, s.Stats)
+		s.sw[i] = newSendWorker(i, c, s.Stats)
 	}
 
 	clipi1 := ptp.PortIdentity{

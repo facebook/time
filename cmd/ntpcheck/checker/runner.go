@@ -118,7 +118,7 @@ func RunNTPData(address string) (*NTPCheckResult, error) {
 	if address == "" {
 		address = getPrivateServer(flavour)
 	}
-	conn, err := DialUnix(address)
+	conn, err := dialUnix(address)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func RunServerStats(address string) (*ServerStats, error) {
 		address = getPrivateServer(flavour)
 	}
 	if flavour == flavourChrony {
-		conn, err = DialUnix(address)
+		conn, err = dialUnix(address)
 	} else {
 		conn, err = net.DialTimeout("udp", address, timeout)
 	}

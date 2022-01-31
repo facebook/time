@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 /*
-Package ntp implementns ntp packet and basic functions to work with.
+Package protocol implementns ntp packet and basic functions to work with.
 It provides quick and transparent translation between 48 bytes and
 simply accessible struct in the most efficient way.
 */

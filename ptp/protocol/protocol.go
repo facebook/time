@@ -166,6 +166,7 @@ type Announce struct {
 	AnnounceBody
 }
 
+// MarshalBinaryTo marshals bytes to Announce
 func (p *Announce) MarshalBinaryTo(b []byte) (int, error) {
 	if len(b) < headerSize+30 {
 		return 0, fmt.Errorf("not enough buffer to write Announce")
@@ -204,6 +205,7 @@ type SyncDelayReq struct {
 	SyncDelayReqBody
 }
 
+// MarshalBinaryTo marshals bytes to SyncDelayReq
 func (p *SyncDelayReq) MarshalBinaryTo(b []byte) (int, error) {
 	if len(b) < headerSize+10 {
 		return 0, fmt.Errorf("not enough buffer to write SyncDelayReq")
@@ -221,6 +223,7 @@ func (p *SyncDelayReq) MarshalBinary() ([]byte, error) {
 	return buf[:n], err
 }
 
+// UnmarshalBinary unmarshals bytes to SyncDelayReq
 func (p *SyncDelayReq) UnmarshalBinary(b []byte) error {
 	if len(b) < headerSize+10 {
 		return fmt.Errorf("not enough data to decode SyncDelayReq")
@@ -242,6 +245,7 @@ type FollowUp struct {
 	FollowUpBody
 }
 
+// MarshalBinaryTo marshals bytes to FollowUp
 func (p *FollowUp) MarshalBinaryTo(b []byte) (int, error) {
 	if len(b) < headerSize+10 {
 		return 0, fmt.Errorf("not enough buffer to write FollowUp")
@@ -259,6 +263,7 @@ func (p *FollowUp) MarshalBinary() ([]byte, error) {
 	return buf[:n], err
 }
 
+// UnmarshalBinary unmarshals bytes to FollowUp
 func (p *FollowUp) UnmarshalBinary(b []byte) error {
 	if len(b) < headerSize+10 {
 		return fmt.Errorf("not enough data to decode FollowUp")
@@ -281,6 +286,7 @@ type DelayResp struct {
 	DelayRespBody
 }
 
+// MarshalBinaryTo marshals bytes to DelayResp
 func (p *DelayResp) MarshalBinaryTo(b []byte) (int, error) {
 	if len(b) < headerSize+20 {
 		return 0, fmt.Errorf("not enough buffer to write DelayResp")
@@ -300,6 +306,7 @@ func (p *DelayResp) MarshalBinary() ([]byte, error) {
 	return buf[:n], err
 }
 
+// UnmarshalBinary unmarshals bytes to DelayResp
 func (p *DelayResp) UnmarshalBinary(b []byte) error {
 	if len(b) < headerSize+20 {
 		return fmt.Errorf("not enough data to decode DelayResp")

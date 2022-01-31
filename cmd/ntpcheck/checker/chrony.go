@@ -34,8 +34,8 @@ type chronyConn struct {
 	local string
 }
 
-// DialUnix opens a unixgram connection with chrony
-func DialUnix(address string) (*chronyConn, error) {
+// dialUnix opens a unixgram connection with chrony
+func dialUnix(address string) (*chronyConn, error) {
 	base, _ := path.Split(address)
 	local := path.Join(base, fmt.Sprintf("chronyc.%d.sock", os.Getpid()))
 	conn, err := net.DialUnix("unixgram",

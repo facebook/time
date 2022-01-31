@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// RootCmd is a main entry point. It's exported so ntpcheck could be easily extended without touching core functionality.
 var RootCmd = &cobra.Command{
 	Use:   "calnex",
 	Short: "collection of calnex utilities",

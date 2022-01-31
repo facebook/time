@@ -59,6 +59,7 @@ func sanityCheckSysVars(sysVars *SystemVariables) error {
 	return nil
 }
 
+// NewSystemVariablesFromChrony returns initialized instance of SystemVariables
 func NewSystemVariablesFromChrony(p *chrony.ReplyTracking) *SystemVariables {
 	return &SystemVariables{
 		Leap:      int(p.LeapStatus),
