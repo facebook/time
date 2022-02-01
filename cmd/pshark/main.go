@@ -128,8 +128,8 @@ type packetHandle interface {
 
 func run(input string, filter []ptp.MessageType) error {
 	// register mapping betwenn ports and our custom PTP layer
-	layers.RegisterUDPPortLayerType(ptp.PortEvent, LayerTypePTP)
-	layers.RegisterUDPPortLayerType(ptp.PortGeneral, LayerTypePTP)
+	layers.RegisterUDPPortLayerType(layers.UDPPort(ptp.PortEvent), LayerTypePTP)
+	layers.RegisterUDPPortLayerType(layers.UDPPort(ptp.PortGeneral), LayerTypePTP)
 
 	filterMap := map[ptp.MessageType]bool{}
 	for _, v := range filter {

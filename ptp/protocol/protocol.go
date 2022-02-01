@@ -40,7 +40,7 @@ The UDP destination port of a unicast PTP general message that is addressed to a
 The UDP destination port of a unicast PTP general message that is addressed to a manager shall be the UDP source
 port value of the PTP message to which this is a response.
 */
-const (
+var (
 	PortEvent   = 319
 	PortGeneral = 320
 )

@@ -50,11 +50,27 @@ func TestWorkerQueue(t *testing.T) {
 	interval := time.Millisecond
 	expire := time.Now().Add(time.Millisecond)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
+	scA := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 	for i := 0; i < 10; i++ {
-		w.queue <- sc
+		w.queue <- scA
 	}
+
+	scS := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, interval, expire)
+	for i := 0; i < 10; i++ {
+		w.queue <- scS
+	}
+
+	scDR := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
+	for i := 0; i < 10; i++ {
+		w.queue <- scDR
+	}
+
+	scSig := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSignaling, c, interval, expire)
+	for i := 0; i < 10; i++ {
+		w.queue <- scSig
+	}
+
 	require.Equal(t, 0, len(queue))
 }
 
@@ -145,4 +161,24 @@ func TestInventoryClients(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	w.inventoryClients()
 	require.Equal(t, 0, len(w.clients[ptp.MessageSync]))
+}
+
+func TestEnableDSCP(t *testing.T) {
+	conn4, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	require.NoError(t, err)
+	defer conn4.Close()
+	// get connection file descriptor
+	fd4, err := timestamp.ConnFd(conn4)
+	require.NoError(t, err)
+	err = enableDSCP(fd4, net.ParseIP("127.0.0.1"), 42)
+	require.NoError(t, err)
+
+	conn6, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("::"), Port: 0})
+	require.NoError(t, err)
+	defer conn6.Close()
+	// get connection file descriptor
+	fd6, err := timestamp.ConnFd(conn6)
+	require.NoError(t, err)
+	err = enableDSCP(fd6, net.ParseIP("::"), 42)
+	require.NoError(t, err)
 }

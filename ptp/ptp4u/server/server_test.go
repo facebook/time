@@ -18,6 +18,7 @@ package server
 
 import (
 	"math/rand"
+	"net"
 	"testing"
 	"time"
 
@@ -66,4 +67,57 @@ func TestFindWorker(t *testing.T) {
 
 	require.Equal(t, 3, s.findWorker(clipi2, r).id)
 	require.Equal(t, 1, s.findWorker(clipi3, r).id)
+}
+
+func TestStartEventListener(t *testing.T) {
+	ptp.PortEvent = 0
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		TimestampType: timestamp.SWTIMESTAMP,
+		SendWorkers:   10,
+		RecvWorkers:   10,
+		IP:            net.ParseIP("127.0.0.1"),
+	}
+	s := Server{
+		Config: c,
+		Stats:  stats.NewJSONStats(),
+		sw:     make([]*sendWorker, c.SendWorkers),
+	}
+	go s.startEventListener()
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestStartGeneralListener(t *testing.T) {
+	ptp.PortGeneral = 0
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		TimestampType: timestamp.SWTIMESTAMP,
+		SendWorkers:   10,
+		RecvWorkers:   10,
+		IP:            net.ParseIP("127.0.0.1"),
+	}
+	s := Server{
+		Config: c,
+		Stats:  stats.NewJSONStats(),
+		sw:     make([]*sendWorker, c.SendWorkers),
+	}
+	go s.startGeneralListener()
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestSendGrant(t *testing.T) {
+	w := &sendWorker{}
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		SendWorkers:   10,
+	}
+	s := Server{
+		Config: c,
+		Stats:  stats.NewJSONStats(),
+		sw:     make([]*sendWorker, c.SendWorkers),
+	}
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+
+	s.sendGrant(sc, &ptp.Signaling{}, 0, 0, 0, sa)
 }
