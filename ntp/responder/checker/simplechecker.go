@@ -22,7 +22,7 @@ package checker
 
 import (
 	"errors"
-	"sync/atomic"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -42,26 +42,36 @@ type SimpleChecker struct {
 	// ExpectedWorkers is number of workers we expect to run
 	ExpectedWorkers int64
 	realWorkers     int64
+
+	sync.Mutex
 }
 
 // IncListeners thread-safely increases number of workers to monitor
 func (s *SimpleChecker) IncListeners() {
-	atomic.AddInt64(&s.realListeners, 1)
+	s.Lock()
+	s.realListeners++
+	s.Unlock()
 }
 
 // DecListeners thread-safely increases number of workers to monitor
 func (s *SimpleChecker) DecListeners() {
-	atomic.AddInt64(&s.realListeners, -1)
+	s.Lock()
+	s.realListeners--
+	s.Unlock()
 }
 
 // IncWorkers thread-safely increases number of workers to monitor
 func (s *SimpleChecker) IncWorkers() {
-	atomic.AddInt64(&s.realWorkers, 1)
+	s.Lock()
+	s.realWorkers++
+	s.Unlock()
 }
 
 // DecWorkers thread-safely increases number of workers to monitor
 func (s *SimpleChecker) DecWorkers() {
-	atomic.AddInt64(&s.realWorkers, -1)
+	s.Lock()
+	s.realWorkers--
+	s.Unlock()
 }
 
 // Check is a method which performs basic validations that responder is alive
@@ -82,6 +92,8 @@ func (s *SimpleChecker) Check() error {
 
 // CheckListeners if all ExpectedListeners are alive
 func (s *SimpleChecker) checkListeners() error {
+	s.Lock()
+	defer s.Unlock()
 	log.Debug("[Checker] checking listeners")
 	if s.ExpectedListeners != s.realListeners {
 		return errSimpleCheckerWrongAmountListeners
@@ -91,6 +103,8 @@ func (s *SimpleChecker) checkListeners() error {
 
 // CheckWorkers if all ExpectedListeners are alive
 func (s *SimpleChecker) checkWorkers() error {
+	s.Lock()
+	defer s.Unlock()
 	log.Debug("[Checker] checking workers")
 	if s.ExpectedWorkers != s.realWorkers {
 		return errSimpleCheckerWrongAmountWorkers
