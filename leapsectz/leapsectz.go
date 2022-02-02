@@ -28,10 +28,12 @@ import (
 	"time"
 )
 
-const file = "/usr/share/zoneinfo/right/UTC"
+// leapFile is a file containing leap second information
+var leapFile = "/usr/share/zoneinfo/right/UTC"
 
 var errBadData = errors.New("malformed time zone information")
-var errBadVersion = errors.New("version in file is not supported")
+var errUnsupportedVersion = errors.New("unsupported version")
+var errNoLeapSeconds = errors.New("no leap seconds information found")
 
 // LeapSecond represents a leap second
 type LeapSecond struct {
@@ -60,10 +62,10 @@ func (l LeapSecond) Time() time.Time {
 	return time.Unix(int64(l.Tleap-uint64(l.Nleap)+1), 0)
 }
 
-// Parse returns the list of leap seconds
+// Parse returns the list of leap seconds from srcfile. Pass "" to use default file
 func Parse(srcfile string) ([]LeapSecond, error) {
 	if srcfile == "" {
-		srcfile = file
+		srcfile = leapFile
 	}
 	f, err := os.Open(srcfile)
 	if err != nil {
@@ -73,6 +75,23 @@ func Parse(srcfile string) ([]LeapSecond, error) {
 
 	return parseVx(f)
 
+}
+
+// Latest returns the latest leap second from srcfile. Pass "" to use default file
+func Latest(srcfile string) (*LeapSecond, error) {
+	res := &LeapSecond{}
+	leapSeconds, err := Parse(srcfile)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, leapSecond := range leapSeconds {
+		if leapSecond.Time().After(res.Time()) {
+			res = &leapSecond
+		}
+	}
+
+	return res, nil
 }
 
 func parseVx(r io.Reader) ([]LeapSecond, error) {
@@ -94,7 +113,7 @@ func parseVx(r io.Reader) ([]LeapSecond, error) {
 
 		version = p[0]
 		if version != 0 && version != '2' && version != '3' {
-			return nil, errBadVersion
+			return nil, errUnsupportedVersion
 		}
 
 		if v > version {
@@ -161,6 +180,10 @@ func parseVx(r io.Reader) ([]LeapSecond, error) {
 		_, _ = io.CopyN(ioutil.Discard, r, int64(skip))
 		break
 	}
+	if len(ret) == 0 {
+		return nil, errNoLeapSeconds
+	}
+
 	return ret, nil
 }
 
@@ -213,7 +236,7 @@ func writePostData(f io.Writer) error {
 // Write dumps arrays of leap seconds into file with newly created header
 func Write(f io.Writer, ver byte, ls []LeapSecond, name string) error {
 	if ver != 0 && ver != '2' {
-		return errors.New("unsupported version")
+		return errUnsupportedVersion
 	}
 
 	var nameFormatted string
