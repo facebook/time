@@ -69,3 +69,18 @@ func TestConfigSetUTCOffsetFromSHM(t *testing.T) {
 	require.NotNil(t, err)
 	require.Equal(t, utcoffset, c.UTCOffset)
 }
+
+func TestConfigSetUTCOffsetFromLeapsectz(t *testing.T) {
+	utcoffset := 42 * time.Second
+	c := Config{UTCOffset: utcoffset}
+	err := c.SetUTCOffsetFromLeapsectz()
+	require.NoError(t, err)
+	require.Greater(t, 50*time.Second, c.UTCOffset)
+	require.Less(t, 30*time.Second, c.UTCOffset)
+}
+
+func TestLeapSanity(t *testing.T) {
+	require.False(t, leapSanity(10))
+	require.False(t, leapSanity(60))
+	require.True(t, leapSanity(37))
+}

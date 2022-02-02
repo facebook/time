@@ -103,7 +103,11 @@ func (s *Server) Start() error {
 		defer wg.Done()
 		for {
 			<-time.After(1 * time.Minute)
-			if s.Config.SHM {
+			if s.Config.Leapsectz {
+				if err := s.Config.SetUTCOffsetFromLeapsectz(); err != nil {
+					log.Errorf("Failed to update UTC offset: %v. Keeping the last known: %s", err, s.Config.UTCOffset)
+				}
+			} else if s.Config.SHM {
 				if err := s.Config.SetUTCOffsetFromSHM(); err != nil {
 					log.Errorf("Failed to update UTC offset: %v. Keeping the last known: %s", err, s.Config.UTCOffset)
 				}
