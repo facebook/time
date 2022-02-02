@@ -19,3 +19,9 @@ go install github.com/u-root/u-root/tools/checklicenses
 cd "${CIRCLE_WORKING_DIRECTORY}"
 echo "[*] Running checklicenses"
 go run github.com/u-root/u-root/tools/checklicenses -c .circleci/config.json
+
+# Check if there are any spelling errors
+go get -v -u github.com/client9/misspell
+cd "${CIRCLE_WORKING_DIRECTORY}"
+echo "[*] Running misspell"
+go run github.com/client9/misspell/cmd/misspell -error ./
