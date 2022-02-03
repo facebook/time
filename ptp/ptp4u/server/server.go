@@ -325,6 +325,9 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 							// Update existing subscription data
 							sc.expire = expire
 							sc.interval = intervalt
+							// Update gclisa in case of renewal. This is against the standard,
+							// but we want to be able to respond to DelayResps coming from ephemeral ports
+							sc.gclisa = gclisa
 						}
 
 						// Reject queries out of limit
