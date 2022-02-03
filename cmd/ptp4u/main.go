@@ -44,8 +44,9 @@ func main() {
 	flag.DurationVar(&c.MinSubInterval, "minsubinterval", 1*time.Second, "Minimum interval of the sync/announce subscription messages")
 	flag.DurationVar(&c.MaxSubDuration, "maxsubduration", 1*time.Hour, "Maximum sync/announce/delay_resp subscription duration")
 	flag.StringVar(&c.TimestampType, "timestamptype", timestamp.HWTIMESTAMP, fmt.Sprintf("Timestamp type. Can be: %s, %s", timestamp.HWTIMESTAMP, timestamp.SWTIMESTAMP))
-	flag.DurationVar(&c.UTCOffset, "utcoffset", 37*time.Second, "Set the number of workers. Ignored if shm is set")
-	flag.BoolVar(&c.SHM, "shm", false, "Use Share Memory Segment to determine UTC offset periodically")
+	flag.DurationVar(&c.UTCOffset, "utcoffset", 37*time.Second, "Set the UTC offset. Ignored if shm or leapsectz are set")
+	flag.BoolVar(&c.Leapsectz, "leapsectz", false, "Leapsectz to determine UTC offset periodically")
+	flag.BoolVar(&c.SHM, "shm", false, "Use Share Memory Segment to determine UTC offset periodically (leapsectz has a priority)")
 	flag.IntVar(&c.SendWorkers, "workers", 100, "Set the number of send workers")
 	flag.IntVar(&c.RecvWorkers, "recvworkers", 10, "Set the number of receive workers")
 	flag.IntVar(&c.MonitoringPort, "monitoringport", 8888, "Port to run monitoring server on")
@@ -97,7 +98,11 @@ func main() {
 		}()
 	}
 
-	if c.SHM {
+	if c.Leapsectz {
+		if err := c.SetUTCOffsetFromLeapsectz(); err != nil {
+			log.Fatalf("Failed to set UTC offset: %v", err)
+		}
+	} else if c.SHM {
 		if err := c.SetUTCOffsetFromSHM(); err != nil {
 			log.Fatalf("Failed to set UTC offset: %v", err)
 		}

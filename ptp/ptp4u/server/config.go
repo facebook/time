@@ -21,6 +21,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/ntp/shm"
 	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -37,6 +38,7 @@ type Config struct {
 	MinSubInterval time.Duration
 	MonitoringPort int
 	SHM            bool
+	Leapsectz      bool
 	TimestampType  string
 	UTCOffset      time.Duration
 	SendWorkers    int
@@ -44,6 +46,13 @@ type Config struct {
 	QueueSize      int
 
 	clockIdentity ptp.ClockIdentity
+}
+
+func leapSanity(sec int) bool {
+	if sec > 30 && sec < 50 {
+		return true
+	}
+	return false
 }
 
 // SetUTCOffsetFromSHM reads SHM and if valid sets UTC offset
@@ -63,11 +72,26 @@ func (c *Config) SetUTCOffsetFromSHM() error {
 	// PHC (PTP) time is always ahead of the SHM (NTP)
 	// SHM+30 <PHC< SHM+50
 	uo := phcTime.Sub(shmTime).Round(time.Second)
-	if uo.Seconds() < 30 || uo.Seconds() > 50 {
+	if !leapSanity(int(uo.Seconds())) {
 		return fmt.Errorf("shm (%s) and phc (%s) times are too far away: %s", shmTime, phcTime, uo)
 	}
 
 	c.UTCOffset = uo
+	return nil
+}
+
+func (c *Config) SetUTCOffsetFromLeapsectz() error {
+	var uo int32 = 10
+	latestLeap, err := leapsectz.Latest("")
+	if err != nil {
+		return err
+	}
+	uo += latestLeap.Nleap
+
+	if !leapSanity(int(uo)) {
+		return fmt.Errorf("UTC offset is unrealistic: %d seconds", uo)
+	}
+	c.UTCOffset = time.Duration(uo) * time.Second
 	return nil
 }
 
