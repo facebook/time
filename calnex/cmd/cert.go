@@ -17,9 +17,13 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
+	"net"
 	"os"
+	"time"
 
 	"github.com/facebook/time/calnex/api"
+	"github.com/facebook/time/calnex/cert"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -39,11 +43,30 @@ func init() {
 	}
 }
 
-func cert() error {
+func certFunc() error {
 	api := api.NewAPI(target, insecureTLS)
-	cert, err := os.ReadFile(source)
+	certData, err := os.ReadFile(source)
 	if err != nil {
 		return err
+	}
+
+	bundle, err := cert.Parse(certData)
+	if err != nil {
+		return err
+	}
+
+	err = bundle.Verify(target, time.Now())
+	if err != nil {
+		return err
+	}
+
+	remoteBundle, err := cert.Fetch(net.JoinHostPort(target, "443"))
+	if err != nil {
+		return err
+	}
+
+	if bundle.Equals(remoteBundle) {
+		return errors.New("new certificate matches existing certificate")
 	}
 
 	if !apply {
@@ -51,7 +74,7 @@ func cert() error {
 		return nil
 	}
 
-	r, err := api.PushCert(cert)
+	r, err := api.PushCert(certData)
 	log.Infof(r.Message)
 	return err
 }
@@ -60,7 +83,7 @@ var certCmd = &cobra.Command{
 	Use:   "cert",
 	Short: "install device certificate",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := cert(); err != nil {
+		if err := certFunc(); err != nil {
 			log.Fatal(err)
 		}
 	},
