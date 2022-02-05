@@ -30,6 +30,7 @@ import (
 	"github.com/facebook/time/leapsectz"
 	ntp "github.com/facebook/time/ntp/protocol"
 	"github.com/facebook/time/timestamp"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 )
@@ -153,6 +154,12 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 
 		serverReceiveTime := ntp.Unix(response.RxTimeSec, response.RxTimeFrac)
 		serverTransmitTime := ntp.Unix(response.TxTimeSec, response.TxTimeFrac)
+		clientOriginTime := ntp.Unix(response.OrigTimeSec, response.OrigTimeFrac)
+
+		log.Debugf("Client TX timestamp: %v, Origin TX timestamp: %v", clientTransmitTime, clientOriginTime)
+		log.Debugf("Server RX timestamp: %v", serverReceiveTime)
+		log.Debugf("Server TX timestamp: %v", serverTransmitTime)
+		log.Debugf("Client RX timestamp: %v", clientReceiveTime)
 
 		avgNetworkDelay := ntp.AvgNetworkDelay(clientTransmitTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
 		currentRealTime := ntp.CurrentRealTime(serverTransmitTime, avgNetworkDelay)
