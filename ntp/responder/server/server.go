@@ -149,7 +149,6 @@ func (s *Server) startListener(ip net.IP, port int) {
 
 	buf := make([]byte, timestamp.PayloadSizeBytes)
 	oob := make([]byte, timestamp.ControlSizeBytes)
-	request := new(ntp.Packet)
 
 	err = unix.SetNonblock(connFd, false)
 	if err != nil {
@@ -157,6 +156,7 @@ func (s *Server) startListener(ip net.IP, port int) {
 	}
 
 	for {
+		request := new(ntp.Packet)
 		// read kernel timestamp from incoming packet
 		bbuf, clisa, rxTS, err := timestamp.ReadPacketWithRXTimestampBuf(connFd, buf, oob)
 		if err != nil {
