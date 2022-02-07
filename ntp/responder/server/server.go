@@ -76,7 +76,15 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 				log.Errorf("[server]: %v", err)
 			}
 
-			s.startListener(ip, s.ListenConfig.Port)
+			conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: s.ListenConfig.Port})
+			if err != nil {
+				log.Fatalf("listening error: %v", err)
+			}
+			defer conn.Close()
+			if err != nil {
+				log.Fatalf("failed to start listener: %v", err)
+			}
+			s.startListener(conn)
 			s.Stats.DecListeners()
 		}(ip)
 	}
@@ -125,16 +133,9 @@ func (s *Server) Stop() {
 	s.DeleteAllIPs()
 }
 
-func (s *Server) startListener(ip net.IP, port int) {
+func (s *Server) startListener(conn *net.UDPConn) {
 	s.Checker.IncListeners()
 	defer s.Checker.DecListeners()
-
-	// listen to incoming udp ntp.
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: port})
-	if err != nil {
-		log.Fatalf("listening error: %s", err)
-	}
-	defer conn.Close()
 
 	// get connection file descriptor
 	connFd, err := timestamp.ConnFd(conn)
@@ -147,13 +148,13 @@ func (s *Server) startListener(ip net.IP, port int) {
 		log.Fatalf("enabling timestamp error: %s", err)
 	}
 
-	buf := make([]byte, timestamp.PayloadSizeBytes)
-	oob := make([]byte, timestamp.ControlSizeBytes)
-
 	err = unix.SetNonblock(connFd, false)
 	if err != nil {
 		log.Fatalf("Failed to set socket to blocking: %s", err)
 	}
+
+	buf := make([]byte, timestamp.PayloadSizeBytes)
+	oob := make([]byte, timestamp.ControlSizeBytes)
 
 	for {
 		request := new(ntp.Packet)
