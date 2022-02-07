@@ -18,6 +18,7 @@ package server
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -114,10 +115,12 @@ func TestListener(t *testing.T) {
 			ExpectedWorkers:   0,
 		},
 	}
-	go s.startListener(net.ParseIP("127.0.0.1"), 0)
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	require.Nil(t, err)
+	go s.startListener(conn)
 	time.Sleep(100 * time.Millisecond)
 
-	err := s.Checker.Check()
+	err = s.Checker.Check()
 	require.NoError(t, err)
 }
 
@@ -147,6 +150,60 @@ func TestWorker(t *testing.T) {
 	err = s.Checker.Check()
 	require.NoError(t, err)
 	s.tasks <- task{connFd: connFd, addr: sa, received: time.Now(), request: ntpRequest, stats: &stats.JSONStats{}}
+}
+
+func TestServer(t *testing.T) {
+	workers := 5
+	requests := 1000
+	s := &Server{
+		Checker: &checker.SimpleChecker{
+			ExpectedListeners: 1,
+			ExpectedWorkers:   int64(workers),
+		},
+		Stats: &stats.JSONStats{},
+		tasks: make(chan task, workers),
+	}
+	// create workers
+	for i := 0; i < workers; i++ {
+		go s.startWorker()
+	}
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	require.Nil(t, err)
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	go s.startListener(conn)
+
+	time.Sleep(100 * time.Millisecond)
+
+	err = s.Checker.Check()
+	require.NoError(t, err)
+
+	// talk to local server
+	addr := net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", localAddr.Port))
+	sendConn, err := net.DialTimeout("udp", addr, time.Second)
+	require.Nil(t, err)
+	defer sendConn.Close()
+	// send requests to server, check if response makes sense
+	for i := 0; i < requests; i++ {
+		clientTransmitTime := time.Now()
+		sec, frac := ntp.Time(clientTransmitTime)
+
+		request := &ntp.Packet{
+			Settings:   0x1B,
+			TxTimeSec:  sec,
+			TxTimeFrac: frac,
+		}
+		response := &ntp.Packet{}
+
+		err = binary.Write(sendConn, binary.BigEndian, request)
+		require.Nil(t, err, "sending request should not err")
+		err = binary.Read(sendConn, binary.BigEndian, response)
+		require.Nil(t, err, "receiving response should not err")
+		require.Equal(t, sec, response.OrigTimeSec, "response Origin Time seconds should match our TX seconds")
+		require.Equal(t, frac, response.OrigTimeFrac, "response Origin Time fraction should match our TX fraction")
+	}
+	err = s.Checker.Check()
+	require.NoError(t, err)
 }
 
 func Benchmark_generateResponse(b *testing.B) {
