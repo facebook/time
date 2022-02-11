@@ -161,7 +161,12 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 		log.Debugf("Server TX timestamp: %v", serverTransmitTime)
 		log.Debugf("Client RX timestamp: %v", clientReceiveTime)
 
-		avgNetworkDelay := ntp.AvgNetworkDelay(clientTransmitTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
+		// sanity check: origin time must be same as our transmit time
+		if response.OrigTimeSec != sec || response.OrigTimeFrac != frac {
+			log.Errorf("Client TX timestamp %v not equal to Origin TX timestamp %v", clientTransmitTime, clientOriginTime)
+		}
+
+		avgNetworkDelay := ntp.AvgNetworkDelay(clientOriginTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
 		currentRealTime := ntp.CurrentRealTime(serverTransmitTime, avgNetworkDelay)
 		offset := ntp.CalculateOffset(currentRealTime, time.Now())
 
