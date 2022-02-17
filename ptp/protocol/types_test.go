@@ -181,3 +181,80 @@ func TestPTPText(t *testing.T) {
 		})
 	}
 }
+
+func TestPortAddress(t *testing.T) {
+	tests := []struct {
+		name      string
+		in        []byte
+		want      *PortAddress
+		wantIP    net.IP
+		wantErr   bool
+		wantIPErr bool
+	}{
+		{
+			name:    "no data",
+			in:      []byte{},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "empty",
+			in:      []byte{0},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:      "unsupported protocol",
+			in:        []byte{0x00, 0x04, 0x00, 0x04, 192, 168, 0, 1},
+			want:      nil,
+			wantErr:   false,
+			wantIPErr: true,
+		},
+		{
+			name: "ipv4",
+			in:   []byte{0x00, 0x01, 0x00, 0x04, 192, 168, 0, 1},
+			want: &PortAddress{
+				NetworkProtocol: TransportTypeUDPIPV4,
+				AddressLength:   4,
+				AddressField:    []byte{192, 168, 0, 1},
+			},
+			wantIP:  net.ParseIP("192.168.0.1"),
+			wantErr: false,
+		},
+		{
+			name: "ipv6",
+			in:   []byte{0x00, 0x02, 0x00, 0x10, 0x24, 0x01, 0xdb, 0x00, 0xff, 0xfe, 0x01, 0x23, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			want: &PortAddress{
+				NetworkProtocol: TransportTypeUDPIPV6,
+				AddressLength:   16,
+				AddressField:    []byte{0x24, 0x01, 0xdb, 0x00, 0xff, 0xfe, 0x01, 0x23, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			},
+			wantIP:  net.ParseIP("2401:db00:fffe:123::"),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var addr PortAddress
+			err := addr.UnmarshalBinary(tt.in)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.Nil(t, err)
+				ip, err := addr.IP()
+				if tt.wantIPErr {
+					require.Error(t, err)
+					return
+				}
+				require.Nil(t, err)
+
+				assert.Equal(t, *tt.want, addr)
+				assert.True(t, tt.wantIP.Equal(ip), "expect parsed IP %v to be equal to %v", ip, tt.wantIP)
+
+				gotBytes, err := addr.MarshalBinary()
+				require.Nil(t, err)
+				assert.Equal(t, tt.in, gotBytes)
+			}
+		})
+	}
+}

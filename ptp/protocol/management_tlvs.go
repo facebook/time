@@ -19,6 +19,7 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 )
 
 // ManagementID is type for Management IDs
@@ -113,6 +114,29 @@ var mgmtTLVDecoder = map[ManagementID]MgmtTLVDecoderFunc{
 		// LittlEndian, just like with PortStatsNP
 		if err := binary.Read(r, binary.LittleEndian, &tlv.PortServiceStats); err != nil {
 			return nil, err
+		}
+		return tlv, nil
+	},
+	IDPortPropertiesNP: func(data []byte) (ManagementTLV, error) {
+		r := bytes.NewReader(data)
+		tlv := &PortPropertiesNPTLV{}
+		if err := binary.Read(r, binary.BigEndian, &tlv.ManagementTLVHead); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(r, binary.BigEndian, &tlv.PortIdentity); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(r, binary.BigEndian, &tlv.PortState); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(r, binary.BigEndian, &tlv.Timestamping); err != nil {
+			return nil, err
+		}
+		if r.Len() == 0 {
+			return nil, fmt.Errorf("not enough data to read PortPropertiesNP Interface")
+		}
+		if err := tlv.Interface.UnmarshalBinary(data[len(data)-r.Len():]); err != nil {
+			return nil, fmt.Errorf("reading PortPropertiesNP Interface: %w", err)
 		}
 		return tlv, nil
 	},

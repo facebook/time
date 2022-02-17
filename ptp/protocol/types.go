@@ -404,3 +404,111 @@ func (p *PTPText) MarshalBinary() ([]byte, error) {
 	}
 	return bytes.Bytes(), nil
 }
+
+// PortState is a enum describing one of possible states of port state machines
+type PortState uint8
+
+// Table 20 PTP state enumeration
+const (
+	PortStateInitializing PortState = iota + 1
+	PortStateFaulty
+	PortStateDisabled
+	PortStateListening
+	PortStatePreMaster
+	PortStateMaster
+	PortStatePassive
+	PortStateUncalibrated
+	PortStateSlave
+	PortStateGrandMaster /*non-standard extension*/
+)
+
+// PortStateToString is a map from PortState to string
+var PortStateToString = map[PortState]string{
+	PortStateInitializing: "INITIALIZING",
+	PortStateFaulty:       "FAULTY",
+	PortStateDisabled:     "DISABLED",
+	PortStateListening:    "LISTENING",
+	PortStatePreMaster:    "PRE_MASTER",
+	PortStateMaster:       "MASTER",
+	PortStatePassive:      "PASSIVE",
+	PortStateUncalibrated: "UNCALIBRATED",
+	PortStateSlave:        "SLAVE",
+	PortStateGrandMaster:  "GRAND_MASTER",
+}
+
+func (ps PortState) String() string {
+	return PortStateToString[ps]
+}
+
+// TransportType is a enum describing network transport protocol types
+type TransportType uint16
+
+// Table 3 networkProtocol enumeration
+const (
+	/* 0 is Reserved in spec. Use it for UDS */
+	TransportTypeUDS TransportType = iota
+	TransportTypeUDPIPV4
+	TransportTypeUDPIPV6
+	TransportTypeIEEE8023
+	TransportTypeDeviceNet
+	TransportTypeControlNet
+	TransportTypePROFINET
+)
+
+// TransportTypeToString is a map from TransportType to string
+var TransportTypeToString = map[TransportType]string{
+	TransportTypeUDS:        "UDS",
+	TransportTypeUDPIPV4:    "UDP_IPV4",
+	TransportTypeUDPIPV6:    "UDP_IPV6",
+	TransportTypeIEEE8023:   "IEEE_802_3",
+	TransportTypeDeviceNet:  "DEVICENET",
+	TransportTypeControlNet: "CONTROLNET",
+	TransportTypePROFINET:   "PROFINET",
+}
+
+func (t TransportType) String() string {
+	return TransportTypeToString[t]
+}
+
+// 5.3.6 PortAddress
+type PortAddress struct {
+	NetworkProtocol TransportType
+	AddressLength   uint16
+	AddressField    []byte
+}
+
+func (p *PortAddress) UnmarshalBinary(b []byte) error {
+	if len(b) < 8 {
+		return fmt.Errorf("not enough data to decode PortAddress")
+	}
+	p.NetworkProtocol = TransportType(binary.BigEndian.Uint16(b[0:]))
+	p.AddressLength = binary.BigEndian.Uint16(b[2:])
+	if len(b) < 4+int(p.AddressLength) {
+		return fmt.Errorf("not enough data to decode PortAddress address")
+	}
+
+	p.AddressField = net.IP(b[4 : 4+p.AddressLength])
+	return nil
+}
+
+func (p *PortAddress) IP() (net.IP, error) {
+	if p.NetworkProtocol != TransportTypeUDPIPV4 && p.NetworkProtocol != TransportTypeUDPIPV6 {
+		return nil, fmt.Errorf("unsupported network protocol %s (%d)", p.NetworkProtocol, p.NetworkProtocol)
+	}
+	return net.IP(p.AddressField), nil
+}
+
+// MarshalBinary converts ptptext to []bytes
+func (p *PortAddress) MarshalBinary() ([]byte, error) {
+	var bytes bytes.Buffer
+	if err := binary.Write(&bytes, binary.BigEndian, p.NetworkProtocol); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, p.AddressLength); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, p.AddressField); err != nil {
+		return nil, err
+	}
+	return bytes.Bytes(), nil
+}
