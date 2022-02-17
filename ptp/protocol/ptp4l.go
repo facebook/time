@@ -27,9 +27,21 @@ import (
 
 // ptp4l-specific management TLV ids
 const (
-	IDPortStatsNP        ManagementID = 0xC005
 	IDTimeStatusNP       ManagementID = 0xC000
+	IDPortPropertiesNP   ManagementID = 0xC004
+	IDPortStatsNP        ManagementID = 0xC005
 	IDPortServiceStatsNP ManagementID = 0xC007
+)
+
+// Timestamping is a ptp4l-specific enum describing timestamping type
+type Timestamping uint8
+
+const (
+	TimestampingSoftware Timestamping = iota
+	TimestampingHardware
+	TimestampingLegacyHW
+	TimestampingOneStep
+	TimestampingP2P1Step
 )
 
 // PortStats is a ptp4l struct containing port statistics
@@ -80,6 +92,40 @@ type TimeStatusNPTLV struct {
 	LastGmPhaseChange          ScaledNS
 	GMPresent                  int32
 	GMIdentity                 ClockIdentity
+}
+
+type PortPropertiesNPTLV struct {
+	ManagementTLVHead
+
+	PortIdentity PortIdentity
+	PortState    PortState
+	Timestamping Timestamping
+	Interface    PTPText
+}
+
+// MarshalBinary converts packet to []bytes
+func (p *PortPropertiesNPTLV) MarshalBinary() ([]byte, error) {
+	var bytes bytes.Buffer
+	if err := binary.Write(&bytes, binary.BigEndian, p.ManagementTLVHead); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, p.PortIdentity); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.LittleEndian, p.PortState); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.LittleEndian, p.Timestamping); err != nil {
+		return nil, err
+	}
+	interfaceBytes, err := p.Interface.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.LittleEndian, interfaceBytes); err != nil {
+		return nil, err
+	}
+	return bytes.Bytes(), nil
 }
 
 // PortServiceStats is a ptp4l struct containing counters for different port events, which we added in linuxptp cfbb8bdb50f5a38687fcddccbe6a264c6a078bbd
@@ -242,6 +288,49 @@ func (c *MgmtClient) PortServiceStatsNP() (*PortServiceStatsNPTLV, error) {
 		return nil, err
 	}
 	tlv, ok := p.TLV.(*PortServiceStatsNPTLV)
+	if !ok {
+		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
+	}
+	return tlv, nil
+}
+
+// PortPropertiesNPRequest prepares request packet for PORT_STATS_NP request
+func PortPropertiesNPRequest() *Management {
+	headerSize := uint16(binary.Size(ManagementMsgHead{}))
+	tlvHeadSize := uint16(binary.Size(TLVHead{}))
+	// we send request with no portStats data just like pmc does
+	return &Management{
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + tlvHeadSize + 2,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
+		TLV: &ManagementTLVHead{
+			TLVHead: TLVHead{
+				TLVType:     TLVManagement,
+				LengthField: 2,
+			},
+			ManagementID: IDPortPropertiesNP,
+		},
+	}
+}
+
+// PortPropertiesNP sends PORT_PROPERTIES_NP request and returns response
+func (c *MgmtClient) PortPropertiesNP() (*PortPropertiesNPTLV, error) {
+	req := PortPropertiesNPRequest()
+	p, err := c.Communicate(req)
+	if err != nil {
+		return nil, err
+	}
+	tlv, ok := p.TLV.(*PortPropertiesNPTLV)
 	if !ok {
 		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
 	}

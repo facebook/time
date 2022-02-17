@@ -202,3 +202,56 @@ func Test_parsePortServiceStatsNP(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, raw, b)
 }
+
+func Test_parsePortPropertiesNP(t *testing.T) {
+	raw := []uint8("\x0d\x12\x00\x48\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x48\x57\xdd\xff\xfe\x0e\x91\xda\x00\x01\x00\x00\x04\x7f\x00\x00\x00\x00\x00\x00\x00\x00\x1f\xf2\x00\x00\x02\x00\x00\x01\x00\x14\xc0\x04\x48\x57\xdd\xff\xfe\x0e\x91\xda\x00\x01\x09\x00\x04\x65\x74\x68\x30\x00\x00")
+	packet := new(Management)
+	err := FromBytes(raw, packet)
+	require.Nil(t, err)
+	want := Management{
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:             Version,
+				MessageLength:       uint16(len(raw) - 1),
+				DomainNumber:        0,
+				MinorSdoID:          0,
+				FlagField:           0,
+				CorrectionField:     0,
+				MessageTypeSpecific: 0,
+				SourcePortIdentity: PortIdentity{
+					PortNumber:    1,
+					ClockIdentity: 5212879185253405146,
+				},
+				SequenceID:         0,
+				ControlField:       4,
+				LogMessageInterval: 0x7f,
+			},
+			TargetPortIdentity: PortIdentity{
+				PortNumber:    8178,
+				ClockIdentity: 0,
+			},
+			ActionField: RESPONSE,
+		},
+		TLV: &PortPropertiesNPTLV{
+			ManagementTLVHead: ManagementTLVHead{
+				TLVHead: TLVHead{
+					TLVType:     TLVManagement,
+					LengthField: 20,
+				},
+				ManagementID: IDPortPropertiesNP,
+			},
+			PortIdentity: PortIdentity{ // 4857dd.fffe.0e91da-1
+				ClockIdentity: 5212879185253405146,
+				PortNumber:    1,
+			},
+			PortState:    PortStateSlave,
+			Timestamping: TimestampingSoftware,
+			Interface:    "eth0",
+		},
+	}
+	require.Equal(t, want, *packet)
+	b, err := Bytes(packet)
+	require.Nil(t, err)
+	assert.Equal(t, raw, b)
+}
