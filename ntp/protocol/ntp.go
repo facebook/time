@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 /*
-Package protocol implementns ntp packet and basic functions to work with.
+Package protocol implements ntp packet and basic functions to work with.
 It provides quick and transparent translation between 48 bytes and
 simply accessible struct in the most efficient way.
 */
@@ -25,8 +25,10 @@ import (
 	"time"
 )
 
-// NanosecondsToUnix is the difference between NTP and Unix epoch in NS
-const NanosecondsToUnix = int64(2208988800000000000)
+// NanosecondsToUnix is the difference between the start of NTP Era 0 and the Unix epoch in nanoseconds
+// Jan-1 1900 00:00:00 UTC (start of NTP epoch Era 0) and Jan-1 1970 00:00:00 UTC (start of Unix epoch)
+// Formula is 70 * (365 + 17) * 86400 (17 leap days)
+const NanosecondsToUnix = int64(2_208_988_800_000_000_000)
 
 // Time is converting Unix time to sec and frac NTP format
 func Time(t time.Time) (seconds uint32, fracions uint32) {
@@ -42,28 +44,25 @@ func Unix(seconds, fractions uint32) time.Time {
 	return time.Unix(secs, nanos)
 }
 
-// abs returns the absolute value of x
-func abs(x int64) int64 {
-	if x < 0 {
-		return -x
-	}
-	return x
+// Offset uses NTP algorithm for clock offset
+func Offset(originTime, serverReceiveTime, serverTransmitTime, clientReceiveTime time.Time) int64 {
+	outboundClockDelta := serverReceiveTime.Sub(originTime).Nanoseconds()
+	inboundClockDelta := serverTransmitTime.Sub(clientReceiveTime).Nanoseconds()
+
+	return (outboundClockDelta + inboundClockDelta) / 2
 }
 
-// AvgNetworkDelay uses formula from RFC #958 to calculate average network delay
-func AvgNetworkDelay(clientTransmitTime, serverReceiveTime, serverTransmitTime, clientReceiveTime time.Time) int64 {
-	forwardPath := serverReceiveTime.Sub(clientTransmitTime).Nanoseconds()
-	returnPath := clientReceiveTime.Sub(serverTransmitTime).Nanoseconds()
+// RoundTripDelay uses NTP algorithm for roundtrip network delay
+func RoundTripDelay(originTime, serverReceiveTime, serverTransmitTime, clientReceiveTime time.Time) int64 {
+	totalDelay := clientReceiveTime.Sub(originTime).Nanoseconds()
+	serverDelay := serverTransmitTime.Sub(serverReceiveTime).Nanoseconds()
 
-	return abs(forwardPath+returnPath) / 2
+	return (totalDelay - serverDelay)
 }
 
-// CurrentRealTime returns "true" unix time after adjusting to avg network offset
-func CurrentRealTime(serverTransmitTime time.Time, avgNetworkDelay int64) time.Time {
-	return serverTransmitTime.Add(time.Duration(avgNetworkDelay) * time.Nanosecond)
-}
+// CorrectTime returns the correct time based on computed offset
+func CorrectTime(clientReceiveTime time.Time, offset int64) time.Time {
+	correctTime := clientReceiveTime.Add(time.Duration(offset))
 
-// CalculateOffset returns offset between local time and "real" time
-func CalculateOffset(currentRealTime, curentLocaTime time.Time) int64 {
-	return currentRealTime.UnixNano() - curentLocaTime.UnixNano()
+	return correctTime
 }

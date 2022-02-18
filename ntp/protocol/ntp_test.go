@@ -36,14 +36,15 @@ var (
 	nfrac = uint32(2712253714)
 
 	// Network Delays
-	forwardDelay = 10 * time.Millisecond
-	returnDelay  = 20 * time.Millisecond
+	forwardDelay   = 10 * time.Millisecond
+	returnDelay    = 20 * time.Millisecond
+	symmetricDelay = 25 * time.Millisecond
 
-	// avgNetworkDelay nanoseconds
-	avgNetworkDelay = int64(15000000)
+	// roundTripDelay nanoseconds
+	roundTripDelay = int64(30000000)
 
 	// offset between local and remote clock
-	offset = 123 * time.Microsecond
+	offset = int64(-5_000_000)
 
 	// Packet request. From ntpdate run
 	ntpRequest = &Packet{
@@ -99,7 +100,7 @@ func TestRequestConversion(t *testing.T) {
 }
 
 // Testing conversion so if Packet structure changes we notice
-func TestResponseConersion(t *testing.T) {
+func TestResponseConversion(t *testing.T) {
 	bytes, err := ntpResponse.Bytes()
 	require.NoError(t, err)
 	require.Equal(t, ntpResponseBytes, bytes)
@@ -157,69 +158,97 @@ func TestUnix(t *testing.T) {
 	require.Equal(t, unsec, int64(testtime.Nanosecond())+1)
 }
 
-func TestAbs(t *testing.T) {
-	require.Equal(t, abs(1), int64(1))
-	require.Equal(t, abs(-1), int64(1))
-}
-
-func TestAvgNetworkDelay(t *testing.T) {
+func TestRoundTripDelay(t *testing.T) {
 	// Time on server is = of time on client
-	clientTransmitTime := time.Now()
+
+	originTime := time.Now()
 	// Network delay client -> server 10ms
-	serverReceiveTime := clientTransmitTime.Add(forwardDelay)
+	serverReceiveTime := originTime.Add(forwardDelay)
 	// OS delay server 10us
 	serverTransmitTime := serverReceiveTime.Add(10 * time.Microsecond)
 	// Network delay client -> server 20ms
 	clientReceiveTime := serverTransmitTime.Add(returnDelay)
 
-	actualAvgNetworkDelay := AvgNetworkDelay(clientTransmitTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
-	require.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
+	actualRoundTripDelay := RoundTripDelay(originTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
+	require.Equal(t, roundTripDelay, actualRoundTripDelay)
 }
 
-func TestAvgNetworkDelayPositive(t *testing.T) {
+func TestRoundTripDelayPositive(t *testing.T) {
 	// Assuming time on client is > of time on server
-	clientToServer := 50 * time.Millisecond
+	clientServerTsDelta := 50 * time.Millisecond
 
-	clientTransmitTime := time.Now()
+	originTime := time.Now()
 	// Network delay client -> server 10ms
-	serverReceiveTime := clientTransmitTime.Add(forwardDelay)
+	serverReceiveTime := originTime.Add(forwardDelay)
 	// OS delay server 10us
 	serverTransmitTime := serverReceiveTime.Add(10 * time.Microsecond)
 	// Network delay client -> server 20ms
 	clientReceiveTime := serverTransmitTime.Add(returnDelay)
 
-	actualAvgNetworkDelay := AvgNetworkDelay(clientTransmitTime.Add(clientToServer), serverReceiveTime, serverTransmitTime, clientReceiveTime.Add(clientToServer))
-	require.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
+	actualRoundTripDelay := RoundTripDelay(originTime.Add(clientServerTsDelta), serverReceiveTime, serverTransmitTime, clientReceiveTime.Add(clientServerTsDelta))
+	require.Equal(t, roundTripDelay, actualRoundTripDelay)
 }
 
-func TestAvgNetworkDelayNegative(t *testing.T) {
+func TestRoundTripDelayNegative(t *testing.T) {
 	// Assuming time on client is < of time on server
-	clientToServer := -50 * time.Millisecond
+	clientServerTsDelta := -50 * time.Millisecond
 
-	clientTransmitTime := time.Now()
+	originTime := time.Now()
 	// Network delay client -> server 10ms
-	serverReceiveTime := clientTransmitTime.Add(forwardDelay)
+	serverReceiveTime := originTime.Add(forwardDelay)
 	// OS delay server 10us
 	serverTransmitTime := serverReceiveTime.Add(10 * time.Microsecond)
 	// Network delay client -> server 20ms
 	clientReceiveTime := serverTransmitTime.Add(returnDelay)
 
-	actualAvgNetworkDelay := AvgNetworkDelay(clientTransmitTime.Add(clientToServer), serverReceiveTime, serverTransmitTime, clientReceiveTime.Add(clientToServer))
-	require.Equal(t, avgNetworkDelay, actualAvgNetworkDelay)
+	actualRoundTripDelay := RoundTripDelay(originTime.Add(clientServerTsDelta), serverReceiveTime, serverTransmitTime, clientReceiveTime.Add(clientServerTsDelta))
+	require.Equal(t, roundTripDelay, actualRoundTripDelay)
 }
 
-func TestCurrentRealTime(t *testing.T) {
-	serverTransmitTime := time.Now()
-	currentRealTime := CurrentRealTime(serverTransmitTime, avgNetworkDelay)
-	require.Equal(t, serverTransmitTime.Add(time.Duration(avgNetworkDelay)*time.Nanosecond), currentRealTime)
+// NTP on-wire protocol
+// offset = [(T2 - T1) + (T3 - T4)] / 2
+// delay = (T4 - T1) - (T3 - T2).
+// T1 the client timestamp on the request packet (clientTransmitTime)
+// T2 the server timestamp upon arrival (serverReceiveTime)
+// T3 the server timestamp on departure of the reply packet (serverTransmitTime)
+// T4 the client timestamp upon arrival (clientReceiveTime)
+
+func TestOffsetSymmetricNetwork(t *testing.T) {
+	// Assuming time on client is = time on server
+	// Symmetric network delay
+
+	originTime := time.Now()
+	// Network delay client -> server 10ms
+	serverReceiveTime := originTime.Add(symmetricDelay)
+	// OS delay server 10us
+	serverTransmitTime := serverReceiveTime.Add(10 * time.Microsecond)
+	// Network delay client -> server 20ms
+	clientReceiveTime := serverTransmitTime.Add(symmetricDelay)
+
+	actualOffset := Offset(originTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
+	require.Equal(t, int64(0), actualOffset)
 }
 
-func TestCalculateOffset(t *testing.T) {
-	curentLocaTime := time.Now()
-	currentRealTime := curentLocaTime.Add(offset)
+func TestOffsetAsymmetricNetwork(t *testing.T) {
+	// Assuming time on client is = time on server
+	// Asymetric network latency (one way delay in not the same in both directions)
 
-	actualOffset := CalculateOffset(currentRealTime, curentLocaTime)
-	require.Equal(t, offset.Nanoseconds(), actualOffset)
+	originTime := time.Now()
+	// Network delay client -> server 10ms
+	serverReceiveTime := originTime.Add(forwardDelay)
+	// OS delay server 10us
+	serverTransmitTime := serverReceiveTime.Add(10 * time.Microsecond)
+	// Network delay client -> server 20ms
+	clientReceiveTime := serverTransmitTime.Add(returnDelay)
+
+	actualOffset := Offset(originTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
+	require.Equal(t, offset, actualOffset)
+}
+
+func TestCorrectTime(t *testing.T) {
+	clientReceiveTime := time.Now()
+	currentRealTime := CorrectTime(clientReceiveTime, offset)
+	require.Equal(t, clientReceiveTime.Add(time.Duration(offset)), currentRealTime)
 }
 
 func TestReadNTPPacket(t *testing.T) {
