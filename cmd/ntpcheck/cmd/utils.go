@@ -21,9 +21,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/facebook/time/leaphash"
@@ -83,8 +85,14 @@ func signFile(fileName string) {
 	fmt.Printf("#h %s\n", leaphash.Compute(string(data)))
 }
 
+func stripZeroes(num float64) string {
+	s := fmt.Sprintf("%.2f", num)
+	return strings.TrimRight(strings.TrimRight(s, "0"), ".")
+}
+
 // ntpDate prints data similar to 'ntptime' command output
 func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) error {
+
 	timeout := 5 * time.Second
 	addr := net.JoinHostPort(remoteServerAddr, remoteServerPort)
 	conn, err := net.DialTimeout("udp", addr, timeout)
@@ -108,13 +116,14 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 		return err
 	}
 
-	fmt.Printf("Server: %s, Requests: %d\n", addr, requests)
-	var sumAvgNetworkDelay int64
+	var sumDelay int64
 	var sumOffset int64
 
 	for i := 0; i < requests; i++ {
 		clientTransmitTime := time.Now()
 		sec, frac := ntp.Time(clientTransmitTime)
+		clientWireTransmitTime := ntp.Unix(sec, frac)
+		log.Debugf("Client TX timestamp (ntp): %v\n", clientWireTransmitTime)
 
 		request := &ntp.Packet{
 			Settings:   0x1B,
@@ -154,38 +163,45 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 
 		serverReceiveTime := ntp.Unix(response.RxTimeSec, response.RxTimeFrac)
 		serverTransmitTime := ntp.Unix(response.TxTimeSec, response.TxTimeFrac)
-		clientOriginTime := ntp.Unix(response.OrigTimeSec, response.OrigTimeFrac)
+		originTime := ntp.Unix(response.OrigTimeSec, response.OrigTimeFrac)
 
-		log.Debugf("Client TX timestamp: %v, Origin TX timestamp: %v", clientTransmitTime, clientOriginTime)
-		log.Debugf("Server RX timestamp: %v", serverReceiveTime)
-		log.Debugf("Server TX timestamp: %v", serverTransmitTime)
-		log.Debugf("Client RX timestamp: %v", clientReceiveTime)
+		log.Debugf("Origin TX timestamp (T1): %v", originTime)
+		log.Debugf("Server RX timestamp (T2): %v", serverReceiveTime)
+		log.Debugf("Server TX timestamp (T3): %v", serverTransmitTime)
+		log.Debugf("Client RX timestamp (T4): %v", clientReceiveTime)
 
-		// sanity check: origin time must be same as our transmit time
+		// sanity check: origin time must be same as client transmit time
 		if response.OrigTimeSec != sec || response.OrigTimeFrac != frac {
-			log.Errorf("Client TX timestamp %v not equal to Origin TX timestamp %v", clientTransmitTime, clientOriginTime)
+			log.Errorf("Client TX timestamp %v not equal to Origin TX timestamp %v", clientTransmitTime, originTime)
 		}
 
-		avgNetworkDelay := ntp.AvgNetworkDelay(clientOriginTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
-		currentRealTime := ntp.CurrentRealTime(serverTransmitTime, avgNetworkDelay)
-		offset := ntp.CalculateOffset(currentRealTime, time.Now())
+		delay := ntp.RoundTripDelay(originTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
+		offset := ntp.Offset(originTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
+		correctTime := ntp.CorrectTime(clientReceiveTime, offset)
 
-		sumAvgNetworkDelay += avgNetworkDelay
+		sumDelay += delay
 		sumOffset += offset
 
-		// On last request calculate everything
 		if i == requests-1 {
-			fmt.Printf("Last:\n")
-			fmt.Printf("Stratum: %d, Current time: %s\n", response.Stratum, currentRealTime)
-			fmt.Printf("Offset: %fs (%fms), Network delay: %fs (%fms)\n", float64(offset)/float64(time.Second.Nanoseconds()), float64(offset)/float64(time.Millisecond.Nanoseconds()), float64(avgNetworkDelay)/float64(time.Second.Nanoseconds()), float64(avgNetworkDelay)/float64(time.Millisecond.Nanoseconds()))
+			fmt.Printf("\nServer: %s, Stratum: %d, Requests %d\n", addr, response.Stratum, requests)
+			fmt.Printf("Last Request:\n")
+			fmt.Printf("Offset: %fs (%sus) | Delay: %fs (%sus)\n",
+				float64(offset)/float64(time.Second.Nanoseconds()),
+				stripZeroes(math.Round(float64(offset)/float64(time.Microsecond.Nanoseconds()))),
+				float64(delay)/float64(time.Second.Nanoseconds()),
+				stripZeroes(math.Round(float64(delay)/float64(time.Microsecond.Nanoseconds()))))
+			fmt.Printf("Correct Time is %s\n\n", correctTime)
 		}
 	}
-
-	avgNetworkDelay := float64(sumAvgNetworkDelay) / float64(requests)
+	avgDelay := float64(sumDelay) / float64(requests)
 	avgOffset := float64(sumOffset) / float64(requests)
+	fmt.Printf("Average (%d requests):\n", requests)
+	fmt.Printf("Offset: %fs (%sus) | Delay: %fs (%sus)\n",
+		avgOffset/float64(time.Second.Nanoseconds()),
+		stripZeroes(math.Round(avgOffset/float64(time.Microsecond.Nanoseconds()))),
+		avgDelay/float64(time.Second.Nanoseconds()),
+		stripZeroes(math.Round(avgDelay/float64(time.Microsecond.Nanoseconds()))))
 
-	fmt.Printf("Average:\n")
-	fmt.Printf("Offset: %fs (%fms), Network delay: %fs (%fms)\n", avgOffset/float64(time.Second.Nanoseconds()), avgOffset/float64(time.Millisecond.Nanoseconds()), avgNetworkDelay/float64(time.Second.Nanoseconds()), avgNetworkDelay/float64(time.Millisecond.Nanoseconds()))
 	return nil
 }
 
@@ -266,7 +282,6 @@ func init() {
 	addFakeSecondZoneInfoCmd.Flags().IntVarP(&offsetMonth, "month", "m", 1, "How many monthes to add to current to insert leap second")
 	addFakeSecondZoneInfoCmd.Flags().StringVarP(&sourceLeapSeconds, "srcfile", "s", "/usr/share/zoneinfo/right/UTC", "Source file of leap seconds")
 	addFakeSecondZoneInfoCmd.Flags().StringVarP(&destLeapSeconds, "dstfile", "d", "/usr/share/zoneinfo/right/Fake", "Destination file for fake leap seconds")
-
 }
 
 var utilsCmd = &cobra.Command{
@@ -290,9 +305,7 @@ var refidCmd = &cobra.Command{
 var fakeSecondsCmd = &cobra.Command{
 	Use:   "fakeseconds",
 	Short: "Prints some fake seconds.",
-	Long: `Prints some fake seconds (potential slots when leap seconds
-might happen in leap-seconds format. For reference:
-https://www.ietf.org/timezones/data/leap-seconds.list`,
+	Long:  `Prints some fake seconds (potential slots when leap seconds might happen in leap-seconds format. For reference: https://www.ietf.org/timezones/data/leap-seconds.list`,
 	Run: func(cmd *cobra.Command, args []string) {
 		ConfigureVerbosity()
 		fakeSeconds(fsCount)
@@ -310,8 +323,8 @@ var signFileCmd = &cobra.Command{
 
 var ntpdateCmd = &cobra.Command{
 	Use:   "ntpdate",
-	Short: "Query remote server. Acts like ntp. Acts like ntpdate -q",
-	Long:  "'ntpdate' will query remote server and compare the time difference.",
+	Short: "Sends NTP request(s) to a remote NTP server. Similar to ntpdate -q",
+	Long:  "'ntpdate' will poll remote NTP server and will report metrics including local clock offset and roundtrip delay based on response from server",
 	Run: func(cmd *cobra.Command, args []string) {
 		ConfigureVerbosity()
 		if remoteServerAddr == "" {
