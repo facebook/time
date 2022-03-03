@@ -42,14 +42,14 @@ type API struct {
 
 // Status is a struct representing Calnex status JSON response
 type Status struct {
-	ReferenceReady    bool
-	ModulesReady      bool
-	MeasurementActive bool
+	ReferenceReady    bool `json:",string"`
+	ModulesReady      bool `json:",string"`
+	MeasurementActive bool `json:",string"`
 }
 
 // Result is a struct representing Calnex result JSON response
 type Result struct {
-	Result  bool
+	Result  bool `json:",string"`
 	Message string
 }
 
@@ -61,6 +61,19 @@ type Version struct {
 // Channel is a Calnex channel object
 type Channel int
 
+// Calnex Status contants
+const (
+	ON       = "On"
+	OFF      = "Off"
+	YES      = "Yes"
+	NO       = "No"
+	ENABLED  = "Enabled"
+	DISABLED = "Disabled"
+	STATIC   = "Static"
+	TIE      = "tie"
+	TWOWAYTE = "2wayte"
+)
+
 // Available Calnex channels
 const (
 	ChannelA Channel = iota
@@ -71,43 +84,162 @@ const (
 	ChannelF
 	ChannelONE
 	ChannelTWO
+	ChannelREF
+	ChannelVP1
+	ChannelVP2
+	ChannelVP3
+	ChannelVP4
+	ChannelVP5
+	ChannelVP6
+	ChannelVP7
+	ChannelVP8
+	ChannelVP9
+	ChannelVP10
+	ChannelVP11
+	ChannelVP12
+	ChannelVP13
+	ChannelVP14
+	ChannelVP15
+	ChannelVP16
+	ChannelVP17
+	ChannelVP18
+	ChannelVP19
+	ChannelVP20
+	ChannelVP21
+	ChannelVP22
+	ChannelVP23
+	ChannelVP24
+	ChannelVP25
+	ChannelVP26
+	ChannelVP27
+	ChannelVP28
+	ChannelVP29
+	ChannelVP30
 )
 
-// See https://fburl.com/rnf8uthd for the source these values
-// channelDatatypeMap is a Map of the channel to the data type
-var channelDatatypeMap = map[Channel]string{
-	ChannelA:   "tie",
-	ChannelB:   "tie",
-	ChannelC:   "tie",
-	ChannelD:   "tie",
-	ChannelE:   "tie",
-	ChannelF:   "tie",
-	ChannelONE: "2wayte",
-	ChannelTWO: "2wayte",
+// MeasureChannelDatatypeMap is a Map of the measurement channels to the data type.
+// Only channels used for measurements defined here
+var MeasureChannelDatatypeMap = map[Channel]string{
+	ChannelA:    TIE,
+	ChannelB:    TIE,
+	ChannelC:    TIE,
+	ChannelD:    TIE,
+	ChannelE:    TIE,
+	ChannelF:    TIE,
+	ChannelVP1:  TWOWAYTE,
+	ChannelVP2:  TWOWAYTE,
+	ChannelVP3:  TWOWAYTE,
+	ChannelVP4:  TWOWAYTE,
+	ChannelVP5:  TWOWAYTE,
+	ChannelVP6:  TWOWAYTE,
+	ChannelVP7:  TWOWAYTE,
+	ChannelVP8:  TWOWAYTE,
+	ChannelVP9:  TWOWAYTE,
+	ChannelVP10: TWOWAYTE,
+	ChannelVP11: TWOWAYTE,
+	ChannelVP12: TWOWAYTE,
+	ChannelVP13: TWOWAYTE,
+	ChannelVP14: TWOWAYTE,
+	ChannelVP15: TWOWAYTE,
+	ChannelVP16: TWOWAYTE,
+	ChannelVP17: TWOWAYTE,
+	ChannelVP18: TWOWAYTE,
+	ChannelVP19: TWOWAYTE,
+	ChannelVP20: TWOWAYTE,
+	ChannelVP21: TWOWAYTE,
+	ChannelVP22: TWOWAYTE,
+	ChannelVP23: TWOWAYTE,
+	ChannelVP24: TWOWAYTE,
+	ChannelVP25: TWOWAYTE,
+	ChannelVP26: TWOWAYTE,
+	ChannelVP27: TWOWAYTE,
+	ChannelVP28: TWOWAYTE,
+	ChannelVP29: TWOWAYTE,
+	ChannelVP30: TWOWAYTE,
 }
 
 // channelStringToCalnex is a map of String channels to a Calnex variant
 var channelStringToCalnex = map[string]Channel{
-	"a": ChannelA,
-	"b": ChannelB,
-	"c": ChannelC,
-	"d": ChannelD,
-	"e": ChannelE,
-	"f": ChannelF,
-	"1": ChannelONE,
-	"2": ChannelTWO,
+	"a":    ChannelA,
+	"b":    ChannelB,
+	"c":    ChannelC,
+	"d":    ChannelD,
+	"e":    ChannelE,
+	"f":    ChannelF,
+	"1":    ChannelONE,
+	"2":    ChannelTWO,
+	"VP1":  ChannelVP1,
+	"VP2":  ChannelVP2,
+	"VP3":  ChannelVP3,
+	"VP4":  ChannelVP4,
+	"VP5":  ChannelVP5,
+	"VP6":  ChannelVP6,
+	"VP7":  ChannelVP7,
+	"VP8":  ChannelVP8,
+	"VP9":  ChannelVP9,
+	"VP10": ChannelVP10,
+	"VP11": ChannelVP11,
+	"VP12": ChannelVP12,
+	"VP13": ChannelVP13,
+	"VP14": ChannelVP14,
+	"VP15": ChannelVP15,
+	"VP16": ChannelVP16,
+	"VP17": ChannelVP17,
+	"VP18": ChannelVP18,
+	"VP19": ChannelVP19,
+	"VP20": ChannelVP20,
+	"VP21": ChannelVP21,
+	"VP22": ChannelVP22,
+	"VP23": ChannelVP23,
+	"VP24": ChannelVP24,
+	"VP25": ChannelVP25,
+	"VP26": ChannelVP26,
+	"VP27": ChannelVP27,
+	"VP28": ChannelVP28,
+	"VP29": ChannelVP29,
+	"VP30": ChannelVP30,
 }
 
-// ChannelCalnexToString is a map of Calnex channels to a String variant
-var ChannelCalnexToString = map[Channel]string{
-	ChannelA:   "a",
-	ChannelB:   "b",
-	ChannelC:   "c",
-	ChannelD:   "d",
-	ChannelE:   "e",
-	ChannelF:   "f",
-	ChannelONE: "1",
-	ChannelTWO: "2",
+// channelCalnexToString is a map of Calnex channels to a String variant
+var channelCalnexToString = map[Channel]string{
+	ChannelA:    "a",
+	ChannelB:    "b",
+	ChannelC:    "c",
+	ChannelD:    "d",
+	ChannelE:    "e",
+	ChannelF:    "f",
+	ChannelONE:  "1",
+	ChannelTWO:  "2",
+	ChannelVP1:  "VP1",
+	ChannelVP2:  "VP2",
+	ChannelVP3:  "VP3",
+	ChannelVP4:  "VP4",
+	ChannelVP5:  "VP5",
+	ChannelVP6:  "VP6",
+	ChannelVP7:  "VP7",
+	ChannelVP8:  "VP8",
+	ChannelVP9:  "VP9",
+	ChannelVP10: "VP10",
+	ChannelVP11: "VP11",
+	ChannelVP12: "VP12",
+	ChannelVP13: "VP13",
+	ChannelVP14: "VP14",
+	ChannelVP15: "VP15",
+	ChannelVP16: "VP16",
+	ChannelVP17: "VP17",
+	ChannelVP18: "VP18",
+	ChannelVP19: "VP19",
+	ChannelVP20: "VP20",
+	ChannelVP21: "VP21",
+	ChannelVP22: "VP22",
+	ChannelVP23: "VP23",
+	ChannelVP24: "VP24",
+	ChannelVP25: "VP25",
+	ChannelVP26: "VP26",
+	ChannelVP27: "VP27",
+	ChannelVP28: "VP28",
+	ChannelVP29: "VP29",
+	ChannelVP30: "VP30",
 }
 
 // ChannelFromString returns Channel object from String version
@@ -122,7 +254,7 @@ func ChannelFromString(value string) (*Channel, error) {
 
 // String returns String friendly channel name like "a" or "2"
 func (c Channel) String() string {
-	return ChannelCalnexToString[c]
+	return channelCalnexToString[c]
 }
 
 // UnmarshalText channel from string version
@@ -174,8 +306,8 @@ var probeToString = map[Probe]string{
 
 // probeToCalnexName is a map of probe to a Calnex specific name
 var probeToCalnexName = map[Probe]string{
-	ProbePTP: "PTP slave",
-	ProbeNTP: "NTP client",
+	ProbePTP: "PTP",
+	ProbeNTP: "NTP",
 }
 
 // probeToServerType is a map of probe to Calnex server name
@@ -248,14 +380,6 @@ const (
 	certificateURL = "https://%s/api/installcertificate"
 )
 
-// Calnex Status contants
-const (
-	ON  = "On"
-	OFF = "Off"
-	YES = "Yes"
-	NO  = "No"
-)
-
 var (
 	errBadChannel = errors.New("channel is not recognized")
 	errBadProbe   = errors.New("probe protocol is not recognized")
@@ -287,7 +411,7 @@ func NewAPI(source string, insecureTLS bool) *API {
 // FetchCsv takes channel name (like 1, 2, c, d)
 // it returns list of CSV lines which is []string
 func (a *API) FetchCsv(channel Channel) ([][]string, error) {
-	url := fmt.Sprintf(dataURL, a.source, channel, channelDatatypeMap[channel])
+	url := fmt.Sprintf(dataURL, a.source, channel, MeasureChannelDatatypeMap[channel])
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return nil, err
@@ -298,8 +422,19 @@ func (a *API) FetchCsv(channel Channel) ([][]string, error) {
 		return nil, errors.New(http.StatusText(resp.StatusCode))
 	}
 
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for empty response
+	r := &Result{}
+	if err = json.Unmarshal(b, r); err == nil {
+		return nil, fmt.Errorf("failed to fetch data from channel %s: %s", channel.String(), r.Message)
+	}
+
 	var res [][]string
-	csvReader := csv.NewReader(resp.Body)
+	csvReader := csv.NewReader(bytes.NewReader(b))
 	csvReader.Comment = '#'
 	for {
 		csvLine, err := csvReader.Read()
@@ -369,8 +504,7 @@ func (a *API) FetchUsedChannels() ([]Channel, error) {
 	if err != nil {
 		return channels, err
 	}
-
-	for ch := range ChannelCalnexToString {
+	for ch := range MeasureChannelDatatypeMap {
 		chStatus := f.Section("measure").Key(fmt.Sprintf("%s\\used", ch.CalnexAPI())).String()
 		if chStatus == "Yes" {
 			channels = append(channels, ch)

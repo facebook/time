@@ -27,7 +27,7 @@ import (
 
 func init() {
 	RootCmd.AddCommand(exportCmd)
-	exportCmd.Flags().StringArrayVar(&channels, "channel", []string{}, "Channel name. Ex: 1, 2, c ,d. Repeat for multiple. Skip for auto-detection")
+	exportCmd.Flags().StringArrayVar(&channels, "channel", []string{}, "Channel name. Ex: 1, 2, c ,d, VP1. Repeat for multiple. Skip for auto-detection")
 	exportCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
 	exportCmd.Flags().StringVar(&source, "source", "localhost", "Source of the data. Ex: calnex01.example.com")
 	if err := exportCmd.MarkFlagRequired("source"); err != nil {

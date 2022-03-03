@@ -25,15 +25,15 @@ import (
 func init() {
 	RootCmd.AddCommand(reportCmd)
 	reportCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
-	reportCmd.Flags().StringVar(&target, "target", "", "device to configure")
+	reportCmd.Flags().StringVar(&source, "source", "", "device to export problem report from")
 	reportCmd.Flags().StringVar(&dir, "dir", "/tmp", "dir to save report")
-	if err := reportCmd.MarkFlagRequired("target"); err != nil {
+	if err := reportCmd.MarkFlagRequired("source"); err != nil {
 		log.Fatal(err)
 	}
 }
 
 func report() error {
-	api := api.NewAPI(target, insecureTLS)
+	api := api.NewAPI(source, insecureTLS)
 
 	reportFileName, err := api.FetchProblemReport(dir)
 	if err != nil {
