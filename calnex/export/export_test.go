@@ -47,13 +47,13 @@ func TestExport(t *testing.T) {
 		r *http.Request) {
 		if strings.Contains(r.URL.Path, "getsettings") {
 			// FetchUsedChannels
-			fmt.Fprintln(w, "[measure]\nch0\\used=No\nch6\\used=Yes\nch7\\used=No")
+			fmt.Fprintln(w, "[measure]\nch0\\used=No\nch9\\used=Yes\nch10\\used=No")
 		} else if strings.Contains(r.URL.Path, "probe_type") {
 			// FetchChannelProtocol
-			fmt.Fprintln(w, "measure/ch6/ptp_synce/mode/probe_type=2")
-		} else if strings.Contains(r.URL.Path, "measure/ch6/ptp_synce/ntp/server_ip") {
+			fmt.Fprintln(w, "measure/ch9/ptp_synce/mode/probe_type=2")
+		} else if strings.Contains(r.URL.Path, "measure/ch9/ptp_synce/ntp/server_ip") {
 			// FetchChannelTargetName
-			fmt.Fprintln(w, "measure/ch6/ptp_synce/ntp/server_ip=127.0.0.1")
+			fmt.Fprintln(w, "measure/ch9/ptp_synce/ntp/server_ip=127.0.0.1")
 		} else if strings.Contains(r.URL.Path, "api/getdata") {
 			// FetchCsv
 			fmt.Fprintln(w, "1607961193.773740,-000.000000250501")
@@ -65,7 +65,7 @@ func TestExport(t *testing.T) {
 	calnexAPI := api.NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
-	expected := fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"1\",\"target\":\"127.0.0.1\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host)
+	expected := fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"VP1\",\"target\":\"127.0.0.1\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host)
 	err := Export(parsed.Host, true, []api.Channel{}, w)
 	require.NoError(t, err)
 	require.Equal(t, expected, w.data)

@@ -53,13 +53,13 @@ func TestFirmware(t *testing.T) {
 			fmt.Fprintln(w, "{ \"firmware\": \"2.11.1.0.5583D-20210924\" }")
 		} else if strings.Contains(r.URL.Path, "getstatus") {
 			// FetchStatus
-			fmt.Fprintln(w, "{\n\"referenceReady\": true,\n\"modulesReady\": true,\n\"measurementActive\": true\n}")
+			fmt.Fprintln(w, "{\n\"referenceReady\": \"true\",\n\"modulesReady\": \"true\",\n\"measurementActive\": \"true\"\n}")
 		} else if strings.Contains(r.URL.Path, "stopmeasurement") {
 			// StopMeasure
-			fmt.Fprintln(w, "{\n\"result\": true\n}")
+			fmt.Fprintln(w, "{\n\"result\": \"true\"\n}")
 		} else if strings.Contains(r.URL.Path, "updatefirmware") {
 			// PushVersion
-			fmt.Fprintln(w, "{\n\"result\": true\n}")
+			fmt.Fprintln(w, "{\n\"result\": \"true\"\n}")
 		}
 	}))
 	defer ts.Close()

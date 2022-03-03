@@ -73,6 +73,9 @@ func (c *config) measureConfig(s *ini.Section, cc CalnexConfig) {
 		probe := fmt.Sprintf("%s\\ptp_synce\\mode\\probe_type", ch.CalnexAPI())
 		c.set(s, probe, m.Probe.CalnexName())
 
+		// Set Virtual Port to use Physical channel 1
+		c.set(s, fmt.Sprintf("%s\\ptp_synce\\physical_packet_channel", ch.CalnexAPI()), "Channel 1")
+
 		switch m.Probe {
 		case api.ProbeNTP:
 			server := fmt.Sprintf("%s\\ptp_synce\\ntp\\server_ip", ch.CalnexAPI())
@@ -80,17 +83,37 @@ func (c *config) measureConfig(s *ini.Section, cc CalnexConfig) {
 
 			serverv6 := fmt.Sprintf("%s\\ptp_synce\\ntp\\server_ip_ipv6", ch.CalnexAPI())
 			c.set(s, serverv6, m.Target)
+			// show raw metrics
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\normalize_delays", ch.CalnexAPI()), api.OFF)
+			// use ipv6
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\protocol_level", ch.CalnexAPI()), "UDP/IPv6")
+			// ntp 1 packet per 64 second
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\poll_log_interval", ch.CalnexAPI()), "1 packet/16 s")
 		case api.ProbePTP:
 			server := fmt.Sprintf("%s\\ptp_synce\\ptp\\master_ip", ch.CalnexAPI())
 			c.set(s, server, m.Target)
 
 			serverv6 := fmt.Sprintf("%s\\ptp_synce\\ptp\\master_ip_ipv6", ch.CalnexAPI())
 			c.set(s, serverv6, m.Target)
+
+			// use ipv6
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\protocol_level", ch.CalnexAPI()), "UDP/IPv6")
+
+			// ptp 1 packet per 1 second
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_announce_int", ch.CalnexAPI()), "1 packet/16 s")
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_delay_req_int", ch.CalnexAPI()), "1 packet/16 s")
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_sync_int", ch.CalnexAPI()), "1 packet/16 s")
+
+			// ptp unicast mode
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\stack_mode", ch.CalnexAPI()), "Unicast")
+
+			// ptp domain
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\domain", ch.CalnexAPI()), "0")
 		}
 	}
 
 	// Disable unused channels and enable used
-	for ch := range api.ChannelCalnexToString {
+	for ch, datatype := range api.MeasureChannelDatatypeMap {
 		used := api.NO
 		enabled := api.OFF
 		if channelEnabled[ch] {
@@ -99,54 +122,47 @@ func (c *config) measureConfig(s *ini.Section, cc CalnexConfig) {
 			enabled = api.ON
 		}
 		c.set(s, fmt.Sprintf("%s\\used", ch.CalnexAPI()), used)
-		c.set(s, fmt.Sprintf("%s\\protocol_enabled", ch.CalnexAPI()), enabled)
+		if datatype == api.TWOWAYTE {
+			c.set(s, fmt.Sprintf("%s\\protocol_enabled", ch.CalnexAPI()), enabled)
+		}
 	}
 }
 
 func (c *config) nicConfig(s *ini.Section, n *NetworkConfig) {
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\gateway", api.ChannelONE.CalnexAPI()), n.Gw1.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\gateway_ipv6", api.ChannelONE.CalnexAPI()), n.Gw1.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\ip_address", api.ChannelONE.CalnexAPI()), n.Eth1.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\ip_address_ipv6", api.ChannelONE.CalnexAPI()), n.Eth1.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\mask", api.ChannelONE.CalnexAPI()), "64")
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\gateway", api.ChannelTWO.CalnexAPI()), n.Gw2.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\gateway_ipv6", api.ChannelTWO.CalnexAPI()), n.Gw2.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\ip_address", api.ChannelTWO.CalnexAPI()), n.Eth2.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\ip_address_ipv6", api.ChannelTWO.CalnexAPI()), n.Eth2.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\mask", api.ChannelTWO.CalnexAPI()), "64")
-}
-
-func (c *config) baseConfig(s *ini.Section) {
 	// disable synce
 	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\synce_enabled", api.OFF)
-
-	// DHCP off (not working properly anyway)
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp", api.OFF)
-
-	// show raw metrics
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ntp\\normalize_delays", api.OFF)
-
-	// use ipv6
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ntp\\protocol_level", "UDP/IPv6")
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\protocol_level", "UDP/IPv6")
-
-	// ntp 1 packet per 64 second
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ntp\\poll_log_interval", "1 packet/16 s")
-
-	// ptp 1 packet per 1 second
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\log_announce_int", "1 packet/16 s")
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\log_delay_req_int", "1 packet/16 s")
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\log_sync_int", "1 packet/16 s")
-
-	// ptp unicast mode
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\stack_mode", "Unicast")
-
-	// ptp domain
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\domain", "0")
 
 	// ptp dscp
 	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\dscp", "0")
 
+	// DHCP off (not working properly anyway)
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\dhcp_v6", api.ChannelONE.CalnexAPI()), api.STATIC)
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\dhcp_v4", api.ChannelONE.CalnexAPI()), api.DISABLED)
+
+	// Enable 1st Physical channel
+	c.set(s, fmt.Sprintf("%s\\used", api.ChannelONE.CalnexAPI()), api.YES)
+	c.set(s, fmt.Sprintf("%s\\protocol_enabled", api.ChannelONE.CalnexAPI()), api.ON)
+	// Have to pick the protocol transport for network to work (yes I know...)
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\protocol_level", api.ChannelONE.CalnexAPI()), "UDP/IPv6")
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\server_ip_ipv6", api.ChannelONE.CalnexAPI()), "::1")
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\mode\\probe_type", api.ChannelONE.CalnexAPI()), "NTP client")
+
+	// Set network config
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\gateway", api.ChannelONE.CalnexAPI()), n.Gw1.String())
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\gateway_v6", api.ChannelONE.CalnexAPI()), n.Gw1.String())
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\ip_address", api.ChannelONE.CalnexAPI()), n.Eth1.String())
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\ipv6_address", api.ChannelONE.CalnexAPI()), n.Eth1.String())
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\mask", api.ChannelONE.CalnexAPI()), "64")
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\mask_v6", api.ChannelONE.CalnexAPI()), "64")
+
+	// Disable 2nd Physical channel
+	c.set(s, fmt.Sprintf("%s\\used", api.ChannelTWO.CalnexAPI()), api.NO)
+	c.set(s, fmt.Sprintf("%s\\protocol_enabled", api.ChannelTWO.CalnexAPI()), api.OFF)
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\dhcp_v6", api.ChannelTWO.CalnexAPI()), api.DISABLED)
+	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\dhcp_v4", api.ChannelTWO.CalnexAPI()), api.DISABLED)
+}
+
+func (c *config) baseConfig(s *ini.Section) {
 	// continuous measurement
 	c.set(s, "continuous", api.ON)
 
@@ -155,6 +171,9 @@ func (c *config) baseConfig(s *ini.Section) {
 
 	// tie_mode=TIE + 1 PPS TE
 	c.set(s, "tie_mode", "TIE + 1 PPS TE")
+
+	// ch8 is a ref channel. Always ON
+	c.set(s, "ch8\\used", api.YES)
 }
 
 // Config configures target Calnex with Network/Calnex configs if apply is specified
