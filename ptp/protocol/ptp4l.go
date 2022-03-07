@@ -23,15 +23,40 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"net"
 )
 
 // ptp4l-specific management TLV ids
 const (
-	IDTimeStatusNP       ManagementID = 0xC000
-	IDPortPropertiesNP   ManagementID = 0xC004
-	IDPortStatsNP        ManagementID = 0xC005
-	IDPortServiceStatsNP ManagementID = 0xC007
+	IDTimeStatusNP         ManagementID = 0xC000
+	IDPortPropertiesNP     ManagementID = 0xC004
+	IDPortStatsNP          ManagementID = 0xC005
+	IDPortServiceStatsNP   ManagementID = 0xC007
+	IDUnicastMasterTableNP ManagementID = 0xC008
 )
+
+// UnicastMasterState is a enum describing the unicast master state in ptp4l unicast master table
+type UnicastMasterState uint8
+
+// possible states of unicast master in ptp4l unicast master table
+const (
+	UnicastMasterStateWait UnicastMasterState = iota
+	UnicastMasterStateHaveAnnounce
+	UnicastMasterStateNeedSYDY
+	UnicastMasterStateHaveSYDY
+)
+
+// UnicastMasterStateToString is a map from UnicastMasterState to string
+var UnicastMasterStateToString = map[UnicastMasterState]string{
+	UnicastMasterStateWait:         "WAIT",
+	UnicastMasterStateHaveAnnounce: "HAVE_ANN",
+	UnicastMasterStateNeedSYDY:     "NEED_SYDY",
+	UnicastMasterStateHaveSYDY:     "HAVE_SYDY",
+}
+
+func (t UnicastMasterState) String() string {
+	return UnicastMasterStateToString[t]
+}
 
 // Timestamping is a ptp4l-specific enum describing timestamping type
 type Timestamping uint8
@@ -161,6 +186,132 @@ func (p *PortServiceStatsNPTLV) MarshalBinary() ([]byte, error) {
 	}
 	if err := binary.Write(&bytes, binary.LittleEndian, p.PortServiceStats); err != nil {
 		return nil, err
+	}
+	return bytes.Bytes(), nil
+}
+
+// UnicastMasterEntry is an entry in UnicastMasterTable that ptp4l exports via management TLV
+type UnicastMasterEntry struct {
+	PortIdentity PortIdentity
+	ClockQuality ClockQuality
+	Selected     bool
+	PortState    UnicastMasterState
+	Priority1    uint8
+	Priority2    uint8
+	Address      net.IP
+}
+
+// UnmarshalBinary implements Unmarshaller interface
+func (e *UnicastMasterEntry) UnmarshalBinary(b []byte) error {
+	var err error
+	if len(b) < 26 { // 22 byte for struct, at least 4 for address)
+		return fmt.Errorf("not enough data to decode UnicastMasterEntry")
+	}
+	e.PortIdentity.ClockIdentity = ClockIdentity(binary.BigEndian.Uint64(b[0:]))
+	e.PortIdentity.PortNumber = binary.BigEndian.Uint16(b[8:])
+	e.ClockQuality.ClockClass = b[10]
+	e.ClockQuality.ClockAccuracy = b[11]
+	e.ClockQuality.OffsetScaledLogVariance = binary.BigEndian.Uint16(b[12:])
+	if b[14] == 0 {
+		e.Selected = false
+	} else {
+		e.Selected = true
+	}
+	e.PortState = UnicastMasterState(b[15])
+	e.Priority1 = b[16]
+	e.Priority2 = b[17]
+
+	pa := &PortAddress{}
+	if err := pa.UnmarshalBinary(b[18:]); err != nil {
+		return err
+	}
+	e.Address, err = pa.IP()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// MarshalBinary converts UnicastMasterEntry to []bytes
+func (e *UnicastMasterEntry) MarshalBinary() ([]byte, error) {
+	var bytes bytes.Buffer
+	if err := binary.Write(&bytes, binary.BigEndian, e.PortIdentity); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, e.ClockQuality); err != nil {
+		return nil, err
+	}
+	var selectedBin uint8 = 0
+	if e.Selected {
+		selectedBin = 1
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, selectedBin); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, e.PortState); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, e.Priority1); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, e.Priority2); err != nil {
+		return nil, err
+	}
+	var pa PortAddress
+	asIPv4 := e.Address.To4()
+	if asIPv4 != nil {
+		pa = PortAddress{
+			NetworkProtocol: TransportTypeUDPIPV4,
+			AddressLength:   4,
+			AddressField:    asIPv4,
+		}
+	} else {
+		pa = PortAddress{
+			NetworkProtocol: TransportTypeUDPIPV6,
+			AddressLength:   16,
+			AddressField:    e.Address,
+		}
+	}
+	portBytes, err := pa.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, portBytes); err != nil {
+		return nil, err
+	}
+	return bytes.Bytes(), nil
+}
+
+// UnicastMasterTable is a table of UnicastMasterEntries
+type UnicastMasterTable struct {
+	ActualTableSize uint16
+	UnicastMasters  []UnicastMasterEntry
+}
+
+// UnicastMasterTableNPTLV is a custom management packet that exports unicast master table state
+type UnicastMasterTableNPTLV struct {
+	ManagementTLVHead
+
+	UnicastMasterTable UnicastMasterTable
+}
+
+// MarshalBinary converts packet to []bytes
+func (p *UnicastMasterTableNPTLV) MarshalBinary() ([]byte, error) {
+	var bytes bytes.Buffer
+	if err := binary.Write(&bytes, binary.BigEndian, p.ManagementTLVHead); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(&bytes, binary.BigEndian, p.UnicastMasterTable.ActualTableSize); err != nil {
+		return nil, err
+	}
+	for _, e := range p.UnicastMasterTable.UnicastMasters {
+		entryBytes, err := e.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		if err := binary.Write(&bytes, binary.BigEndian, entryBytes); err != nil {
+			return nil, err
+		}
 	}
 	return bytes.Bytes(), nil
 }
@@ -331,6 +482,49 @@ func (c *MgmtClient) PortPropertiesNP() (*PortPropertiesNPTLV, error) {
 		return nil, err
 	}
 	tlv, ok := p.TLV.(*PortPropertiesNPTLV)
+	if !ok {
+		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
+	}
+	return tlv, nil
+}
+
+// UnicastMasterTableNPRequest creates new packet with UNICAST_MASTER_TABLE_NP request
+func UnicastMasterTableNPRequest() *Management {
+	headerSize := uint16(binary.Size(ManagementMsgHead{}))
+	tlvHeadSize := uint16(binary.Size(TLVHead{}))
+	// we send request with no data just like pmc does
+	return &Management{
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + tlvHeadSize + 2,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
+		TLV: &ManagementTLVHead{
+			TLVHead: TLVHead{
+				TLVType:     TLVManagement,
+				LengthField: 2,
+			},
+			ManagementID: IDUnicastMasterTableNP,
+		},
+	}
+}
+
+// UnicastMasterTableNP request UNICAST_MASTER_TABLE_NP from ptp4l, and returns the result
+func (c *MgmtClient) UnicastMasterTableNP() (*UnicastMasterTableNPTLV, error) {
+	req := UnicastMasterTableNPRequest()
+	p, err := c.Communicate(req)
+	if err != nil {
+		return nil, err
+	}
+	tlv, ok := p.TLV.(*UnicastMasterTableNPTLV)
 	if !ok {
 		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
 	}
