@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"context"
 	"math/rand"
 	"net"
 	"testing"
@@ -120,4 +121,29 @@ func TestSendGrant(t *testing.T) {
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
 	s.sendGrant(sc, &ptp.Signaling{}, 0, 0, 0, sa)
+}
+
+func TestDrain(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	s := Server{
+		ctx:    ctx,
+		cancel: cancel,
+	}
+
+	require.NoError(t, s.ctx.Err())
+	s.Drain()
+	require.ErrorIs(t, context.Canceled, s.ctx.Err())
+}
+
+func TestUndrain(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	s := Server{
+		ctx:    ctx,
+		cancel: cancel,
+	}
+
+	s.Drain()
+	require.ErrorIs(t, context.Canceled, s.ctx.Err())
+	s.Undrain()
+	require.NoError(t, s.ctx.Err())
 }

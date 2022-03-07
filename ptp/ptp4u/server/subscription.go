@@ -21,6 +21,7 @@ In addition, it run checker, announce and stats implementations
 package server
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"sync"
@@ -79,7 +80,7 @@ func NewSubscriptionClient(q chan *SubscriptionClient, eclisa, gclisa unix.Socka
 }
 
 // Start launches the subscription timers and exit on expire
-func (sc *SubscriptionClient) Start() {
+func (sc *SubscriptionClient) Start(ctx context.Context) {
 	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa))
 	sc.setRunning(true)
 
@@ -95,20 +96,28 @@ func (sc *SubscriptionClient) Start() {
 	defer intervalTicker.Stop()
 	defer sc.setRunning(false)
 
-	for range intervalTicker.C {
-		if sc.Expired() {
+	for {
+		select {
+		case <-ctx.Done():
 			log.Infof(over)
 			// TODO send cancellation
 			return
-		}
-		// check if interval changed, maybe update our ticker
-		if oldInterval != sc.interval {
-			intervalTicker.Reset(sc.interval)
-			oldInterval = sc.interval
-		}
-		if sc.subscriptionType != ptp.MessageDelayResp {
-			// Add myself to the worker queue
-			sc.Once()
+
+		case <-intervalTicker.C:
+			if sc.Expired() {
+				log.Infof(over)
+				// TODO send cancellation
+				return
+			}
+			// check if interval changed, maybe update our ticker
+			if oldInterval != sc.interval {
+				intervalTicker.Reset(sc.interval)
+				oldInterval = sc.interval
+			}
+			if sc.subscriptionType != ptp.MessageDelayResp {
+				// Add myself to the worker queue
+				sc.Once()
+			}
 		}
 	}
 }

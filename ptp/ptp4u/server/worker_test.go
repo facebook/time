@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -124,7 +125,7 @@ func TestInventoryClients(t *testing.T) {
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	scS1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, 10*time.Millisecond, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi1, ptp.MessageSync, scS1)
-	go scS1.Start()
+	go scS1.Start(context.Background())
 	time.Sleep(time.Millisecond)
 
 	w.inventoryClients()
@@ -132,7 +133,7 @@ func TestInventoryClients(t *testing.T) {
 
 	scA1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, 10*time.Millisecond, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi1, ptp.MessageAnnounce, scA1)
-	go scA1.Start()
+	go scA1.Start(context.Background())
 	time.Sleep(time.Millisecond)
 
 	w.inventoryClients()
@@ -140,7 +141,7 @@ func TestInventoryClients(t *testing.T) {
 
 	scS2 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, 10*time.Millisecond, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi2, ptp.MessageSync, scS2)
-	go scS2.Start()
+	go scS2.Start(context.Background())
 	time.Sleep(time.Millisecond)
 
 	w.inventoryClients()
