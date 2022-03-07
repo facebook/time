@@ -140,6 +140,29 @@ var mgmtTLVDecoder = map[ManagementID]MgmtTLVDecoderFunc{
 		}
 		return tlv, nil
 	},
+	IDUnicastMasterTableNP: func(data []byte) (ManagementTLV, error) {
+		r := bytes.NewReader(data)
+		tlv := &UnicastMasterTableNPTLV{}
+
+		if err := binary.Read(r, binary.BigEndian, &tlv.ManagementTLVHead); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(r, binary.BigEndian, &tlv.UnicastMasterTable.ActualTableSize); err != nil {
+			return nil, err
+		}
+		tlv.UnicastMasterTable.UnicastMasters = make([]UnicastMasterEntry, int(tlv.UnicastMasterTable.ActualTableSize))
+		n := binary.Size(tlv.ManagementTLVHead) + binary.Size(tlv.UnicastMasterTable.ActualTableSize)
+		for i := 0; i < int(tlv.UnicastMasterTable.ActualTableSize); i++ {
+			entry := UnicastMasterEntry{}
+			if err := entry.UnmarshalBinary(data[n:]); err != nil {
+				return nil, err
+			}
+			tlv.UnicastMasterTable.UnicastMasters[i] = entry
+			n += 22 + len(entry.Address)
+		}
+
+		return tlv, nil
+	},
 }
 
 // RegisterMgmtTLVDecoder registers function we'll use to decode particular custom management TLV.
