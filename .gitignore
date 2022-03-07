@@ -4,3 +4,8 @@
 # Test output
 profile.out
 couverage.out
+
+# PackIt
+/golang-github-facebook-time*.src.rpm
+/golang-github-facebook-time.spec
+/time-*.tar.gz
