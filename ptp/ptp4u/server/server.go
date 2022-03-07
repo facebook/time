@@ -21,6 +21,7 @@ In addition, it run checker, announce and stats implementations
 package server
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net"
@@ -43,6 +44,10 @@ type Server struct {
 	// server source fds
 	eFd int
 	gFd int
+
+	// drain logic
+	cancel context.CancelFunc
+	ctx    context.Context
 }
 
 // Start the workers send bind to event and general UDP ports
@@ -56,6 +61,9 @@ func (s *Server) Start() error {
 	if err != nil {
 		return fmt.Errorf("unable to get the Clock Identity (EUI-64 address) of the interface: %v", err)
 	}
+
+	// initialize the context for the subscriptions
+	s.ctx, s.cancel = context.WithCancel(context.Background())
 
 	// Call wg.Add(1) ONLY once
 	// If ANY goroutine finishes no matter how many of them we run
@@ -331,13 +339,13 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 						}
 
 						// Reject queries out of limit
-						if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration {
+						if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration || s.ctx.Err() != nil {
 							s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0, gclisa)
 							continue
 						}
 
 						if !sc.Running() {
-							go sc.Start()
+							go sc.Start(s.ctx)
 						}
 
 						// Send confirmation grant
@@ -383,4 +391,18 @@ func (s *Server) sendGrant(sc *SubscriptionClient, sg *ptp.Signaling, mt ptp.Uni
 	}
 	log.Debugf("Sent unicast grant")
 	s.Stats.IncTXSignaling(sc.subscriptionType)
+}
+
+// Drain traffic
+func (s *Server) Drain() {
+	if s.ctx.Err() == nil {
+		s.cancel()
+	}
+}
+
+// Undrain traffic
+func (s *Server) Undrain() {
+	if s.ctx.Err() != nil {
+		s.ctx, s.cancel = context.WithCancel(context.Background())
+	}
 }
