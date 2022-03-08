@@ -37,11 +37,15 @@ func TestUnmarshalConfig(t *testing.T) {
 				"gw2": "fd00::a"
 			},
 			"calnex": {
-				"1": {
+				"a": {
+					"target": "fd00::d",
+					"probe": "pps"
+				},
+				"VP1": {
 					"target": "fd00::d",
 					"probe": "ntp"
 				},
-				"2": {
+				"VP22": {
 					"target": "fd00::d",
 					"probe": "ptp"
 				}
@@ -57,11 +61,15 @@ func TestUnmarshalConfig(t *testing.T) {
 	expected := devices{}
 	expected["calnex01.example.com"] = deviceConfig{
 		Calnex: config.CalnexConfig{
-			api.ChannelONE: config.MeasureConfig{
+			api.ChannelA: config.MeasureConfig{
+				Target: "fd00::d",
+				Probe:  api.ProbePPS,
+			},
+			api.ChannelVP1: config.MeasureConfig{
 				Target: "fd00::d",
 				Probe:  api.ProbeNTP,
 			},
-			api.ChannelTWO: config.MeasureConfig{
+			api.ChannelVP22: config.MeasureConfig{
 				Target: "fd00::d",
 				Probe:  api.ProbePTP,
 			},

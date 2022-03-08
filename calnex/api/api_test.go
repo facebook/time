@@ -69,6 +69,7 @@ func TestProbe(t *testing.T) {
 	legitProbeNamesToProbe := map[string]Probe{
 		"ntp": ProbeNTP,
 		"ptp": ProbePTP,
+		"pps": ProbePPS,
 	}
 	for probeS, probe := range legitProbeNamesToProbe {
 		p, err := ProbeFromString(probeS)
@@ -94,8 +95,9 @@ func TestProbe(t *testing.T) {
 
 func TestProbeFromCalnex(t *testing.T) {
 	legitProbeNamesToProbe := map[string]Probe{
-		"2": ProbeNTP,
-		"0": ProbePTP,
+		"2":     ProbeNTP,
+		"0":     ProbePTP,
+		"1 PPS": ProbePPS,
 	}
 	for probeH, probe := range legitProbeNamesToProbe {
 		p, err := ProbeFromCalnex(probeH)
@@ -113,6 +115,7 @@ func TestProbeFromCalnex(t *testing.T) {
 func TestCalnexName(t *testing.T) {
 	require.Equal(t, "NTP", ProbeNTP.CalnexName())
 	require.Equal(t, "PTP", ProbePTP.CalnexName())
+	require.Equal(t, "1 PPS", ProbePPS.CalnexName())
 }
 
 func TestTLSSetting(t *testing.T) {
@@ -200,7 +203,24 @@ func TestFetchChannelProtocol_PTP(t *testing.T) {
 	require.Equal(t, ProbePTP, *probe)
 }
 
-func TestFetchChannelTargetIP_NTP(t *testing.T) {
+func TestFetchChannelProtocol_PPS(t *testing.T) {
+	sampleResp := "measure/ch0/signal_type=1 PPS"
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI.Client = ts.Client()
+
+	probe, err := calnexAPI.FetchChannelProbe(ChannelA)
+	require.NoError(t, err)
+	require.Equal(t, ProbePPS, *probe)
+}
+
+func TestFetchChannelTarget_NTP(t *testing.T) {
 	sampleResp := "measure/ch9/ptp_synce/ntp/server_ip=fd00:3116:301a::3e"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
@@ -212,12 +232,12 @@ func TestFetchChannelTargetIP_NTP(t *testing.T) {
 	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
-	ip, err := calnexAPI.FetchChannelTargetIP(ChannelVP1, ProbeNTP)
+	target, err := calnexAPI.FetchChannelTarget(ChannelVP1, ProbeNTP)
 	require.NoError(t, err)
-	require.Equal(t, "fd00:3116:301a::3e", ip)
+	require.Equal(t, "fd00:3116:301a::3e", target)
 }
 
-func TestFetchChannelTargetIP_PTP(t *testing.T) {
+func TestFetchChannelTarget_PTP(t *testing.T) {
 	sampleResp := "measure/ch9/ptp_synce/ptp/master_ip=fd00:3116:301a::3e"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
@@ -229,9 +249,26 @@ func TestFetchChannelTargetIP_PTP(t *testing.T) {
 	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
-	ip, err := calnexAPI.FetchChannelTargetIP(ChannelVP1, ProbePTP)
+	target, err := calnexAPI.FetchChannelTarget(ChannelVP1, ProbePTP)
 	require.NoError(t, err)
-	require.Equal(t, "fd00:3116:301a::3e", ip)
+	require.Equal(t, "fd00:3116:301a::3e", target)
+}
+
+func TestFetchChannelTarget_PPS(t *testing.T) {
+	sampleResp := "measure/ch0/signal_type=1 PPS"
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI.Client = ts.Client()
+
+	target, err := calnexAPI.FetchChannelTarget(ChannelA, ProbePPS)
+	require.NoError(t, err)
+	require.Equal(t, "1 PPS", target)
 }
 
 func TestFetchUsedChannels(t *testing.T) {
@@ -505,4 +542,19 @@ func TestPushCert(t *testing.T) {
 	r, err := calnexAPI.PushCert(cert)
 	require.NoError(t, err)
 	require.Equal(t, expected, r)
+}
+
+func TestParseResponse(t *testing.T) {
+	expected := "500 mV"
+	r, err := parseResponse("ch0\\trig_level=500 mV")
+	require.NoError(t, err)
+	require.Equal(t, expected, r)
+
+	r, err = parseResponse("invalid")
+	require.Equal(t, "", r)
+	require.ErrorIs(t, errAPI, err)
+
+	r, err = parseResponse("too=many=parts")
+	require.Equal(t, "", r)
+	require.ErrorIs(t, errAPI, err)
 }

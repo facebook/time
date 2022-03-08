@@ -49,14 +49,12 @@ func Export(source string, insecureTLS bool, channels []api.Channel, output io.W
 			success = success || false
 			continue
 		}
-
-		target, err := calnexAPI.FetchChannelTargetIP(channel, *probe)
+		target, err := calnexAPI.FetchChannelTarget(channel, *probe)
 		if err != nil {
 			log.Errorf("Failed to fetch target from the channel %s: %v", channel, err)
 			success = success || false
 			continue
 		}
-
 		csvLines, err := calnexAPI.FetchCsv(channel)
 		if err != nil {
 			log.Errorf("Failed to fetch data from channel %s: %v", channel, err)

@@ -69,15 +69,16 @@ func (c *config) measureConfig(s *ini.Section, cc CalnexConfig) {
 
 	for ch, m := range cc {
 		channelEnabled[ch] = true
-
-		probe := fmt.Sprintf("%s\\ptp_synce\\mode\\probe_type", ch.CalnexAPI())
-		c.set(s, probe, m.Probe.CalnexName())
-
-		// Set Virtual Port to use Physical channel 1
-		c.set(s, fmt.Sprintf("%s\\ptp_synce\\physical_packet_channel", ch.CalnexAPI()), "Channel 1")
+		probe := ""
 
 		switch m.Probe {
 		case api.ProbeNTP:
+			probe = fmt.Sprintf("%s\\ptp_synce\\mode\\probe_type", ch.CalnexAPI())
+
+			c.set(s, fmt.Sprintf("%s\\protocol_enabled", ch.CalnexAPI()), api.ON)
+			// Set Virtual Port to use Physical channel 1
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\physical_packet_channel", ch.CalnexAPI()), "Channel 1")
+
 			server := fmt.Sprintf("%s\\ptp_synce\\ntp\\server_ip", ch.CalnexAPI())
 			c.set(s, server, m.Target)
 
@@ -90,6 +91,12 @@ func (c *config) measureConfig(s *ini.Section, cc CalnexConfig) {
 			// ntp 1 packet per 64 second
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\poll_log_interval", ch.CalnexAPI()), "1 packet/16 s")
 		case api.ProbePTP:
+			probe = fmt.Sprintf("%s\\ptp_synce\\mode\\probe_type", ch.CalnexAPI())
+
+			c.set(s, fmt.Sprintf("%s\\protocol_enabled", ch.CalnexAPI()), api.ON)
+			// Set Virtual Port to use Physical channel 1
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\physical_packet_channel", ch.CalnexAPI()), "Channel 1")
+
 			server := fmt.Sprintf("%s\\ptp_synce\\ptp\\master_ip", ch.CalnexAPI())
 			c.set(s, server, m.Target)
 
@@ -109,21 +116,27 @@ func (c *config) measureConfig(s *ini.Section, cc CalnexConfig) {
 
 			// ptp domain
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\domain", ch.CalnexAPI()), "0")
+		case api.ProbePPS:
+			probe = fmt.Sprintf("%s\\signal_type", ch.CalnexAPI())
+
+			c.set(s, fmt.Sprintf("%s\\signal_type", ch.CalnexAPI()), api.ProbePPS.CalnexName())
+			c.set(s, fmt.Sprintf("%s\\trig_level", ch.CalnexAPI()), "500 mV")
+			c.set(s, fmt.Sprintf("%s\\freq", ch.CalnexAPI()), "1 Hz")
 		}
+
+		// enable PTP/NTP channels
+		c.set(s, fmt.Sprintf("%s\\used", ch.CalnexAPI()), api.YES)
+		c.set(s, probe, m.Probe.CalnexName())
 	}
 
 	// Disable unused channels and enable used
 	for ch, datatype := range api.MeasureChannelDatatypeMap {
-		used := api.NO
-		enabled := api.OFF
-		if channelEnabled[ch] {
-			// enable PTP/NTP channels
-			used = api.YES
-			enabled = api.ON
-		}
-		c.set(s, fmt.Sprintf("%s\\used", ch.CalnexAPI()), used)
-		if datatype == api.TWOWAYTE {
-			c.set(s, fmt.Sprintf("%s\\protocol_enabled", ch.CalnexAPI()), enabled)
+		if !channelEnabled[ch] {
+			c.set(s, fmt.Sprintf("%s\\used", ch.CalnexAPI()), api.NO)
+			if datatype == api.TWOWAYTE {
+				c.set(s, fmt.Sprintf("%s\\protocol_enabled", ch.CalnexAPI()), api.OFF)
+				c.set(s, fmt.Sprintf("%s\\ptp_synce\\mode\\probe_type", ch.CalnexAPI()), api.DISABLED)
+			}
 		}
 	}
 }
