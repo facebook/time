@@ -66,6 +66,7 @@ func (s *JSONStats) Snapshot() {
 	s.workerSubs.copy(&s.report.workerSubs)
 	s.txtsattempts.copy(&s.report.txtsattempts)
 	s.report.utcoffset = s.utcoffset
+	s.report.drain = s.drain
 }
 
 // handleRequest is a handler used for all http monitoring requests
@@ -163,4 +164,9 @@ func (s *JSONStats) SetMaxTXTSAttempts(workerid int, attempts int64) {
 // SetUTCOffset atomically sets the utcoffset
 func (s *JSONStats) SetUTCOffset(utcoffset int64) {
 	atomic.StoreInt64(&s.utcoffset, utcoffset)
+}
+
+// SetDrain atomically sets the drain status
+func (s *JSONStats) SetDrain(drain int64) {
+	atomic.StoreInt64(&s.drain, drain)
 }

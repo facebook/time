@@ -126,6 +126,7 @@ func TestSendGrant(t *testing.T) {
 func TestDrain(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := Server{
+		Stats:  stats.NewJSONStats(),
 		ctx:    ctx,
 		cancel: cancel,
 	}
@@ -138,6 +139,7 @@ func TestDrain(t *testing.T) {
 func TestUndrain(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := Server{
+		Stats:  stats.NewJSONStats(),
 		ctx:    ctx,
 		cancel: cancel,
 	}

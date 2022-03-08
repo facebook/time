@@ -397,6 +397,7 @@ func (s *Server) sendGrant(sc *SubscriptionClient, sg *ptp.Signaling, mt ptp.Uni
 func (s *Server) Drain() {
 	if s.ctx.Err() == nil {
 		s.cancel()
+		s.Stats.SetDrain(1)
 	}
 }
 
@@ -404,5 +405,6 @@ func (s *Server) Drain() {
 func (s *Server) Undrain() {
 	if s.ctx.Err() != nil {
 		s.ctx, s.cancel = context.WithCancel(context.Background())
+		s.Stats.SetDrain(0)
 	}
 }
