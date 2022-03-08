@@ -7,6 +7,10 @@
             "gw2": "fd00::a"
         },
         "calnex": {
+            "a": {
+                "target": "fd00::d",
+                "probe": "pps"
+            },
             "1": {
                 "target": "fd00::d",
                 "probe": "ntp"

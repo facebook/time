@@ -29,7 +29,7 @@ import (
 )
 
 type writer struct {
-	data string
+	data []string
 }
 
 func (w *writer) Close() error {
@@ -37,7 +37,7 @@ func (w *writer) Close() error {
 }
 
 func (w *writer) Write(p []byte) (int, error) {
-	w.data = string(p)
+	w.data = append(w.data, string(p))
 	return len(p), nil
 }
 
@@ -47,15 +47,24 @@ func TestExport(t *testing.T) {
 		r *http.Request) {
 		if strings.Contains(r.URL.Path, "getsettings") {
 			// FetchUsedChannels
-			fmt.Fprintln(w, "[measure]\nch0\\used=No\nch9\\used=Yes\nch10\\used=No")
-		} else if strings.Contains(r.URL.Path, "probe_type") {
-			// FetchChannelProtocol
+			fmt.Fprintln(w, "[measure]\nch0\\used=Yes\nch1\\used=No\nch9\\used=Yes\nch10\\used=No")
+		} else if strings.Contains(r.URL.Path, "ch9/ptp_synce/mode/probe_type") {
+			// FetchChannelProtocol NTP
 			fmt.Fprintln(w, "measure/ch9/ptp_synce/mode/probe_type=2")
+		} else if strings.Contains(r.URL.Path, "ch0/signal_type") {
+			// FetchChannelProtocol PPS
+			fmt.Fprintln(w, "measure/ch0/signal_type=1 PPS")
 		} else if strings.Contains(r.URL.Path, "measure/ch9/ptp_synce/ntp/server_ip") {
-			// FetchChannelTargetName
+			// FetchChannelTarget NTP
 			fmt.Fprintln(w, "measure/ch9/ptp_synce/ntp/server_ip=127.0.0.1")
-		} else if strings.Contains(r.URL.Path, "api/getdata") {
-			// FetchCsv
+		} else if strings.Contains(r.URL.Path, "measure/ch0/signal_type") {
+			// FetchChannelTarget PPS
+			fmt.Fprintln(w, "measure/ch0/signal_type=1 PPS")
+		} else if r.URL.Query().Get("channel") == "VP1" {
+			// FetchCsv NTP
+			fmt.Fprintln(w, "1607961194.773740,-000.000000250504")
+		} else if r.URL.Query().Get("channel") == "a" {
+			// FetchCsv PPS
 			fmt.Fprintln(w, "1607961193.773740,-000.000000250501")
 		}
 	}))
@@ -65,10 +74,13 @@ func TestExport(t *testing.T) {
 	calnexAPI := api.NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
-	expected := fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"VP1\",\"target\":\"127.0.0.1\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host)
+	expected := []string{
+		fmt.Sprintf("{\"float\":{\"value\":-2.50504e-7},\"int\":{\"time\":1607961194},\"normal\":{\"channel\":\"VP1\",\"target\":\"127.0.0.1\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host),
+		fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"a\",\"target\":\"1 PPS\",\"protocol\":\"pps\",\"source\":\"%s\"}}\n", parsed.Host),
+	}
 	err := Export(parsed.Host, true, []api.Channel{}, w)
 	require.NoError(t, err)
-	require.Equal(t, expected, w.data)
+	require.ElementsMatch(t, expected, w.data)
 }
 
 func TestExportFail(t *testing.T) {
