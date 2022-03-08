@@ -18,7 +18,8 @@ jobs:
   metadata:
     targets:
       - fedora-all-aarch64
-      - fedora-all-armhfp
+      # https://github.com/facebook/time/pull/101#issuecomment-1062295307
+      # - fedora-all-armhfp
       - fedora-all-i386
       - fedora-all-ppc64le
       - fedora-all-s390x
@@ -28,7 +29,8 @@ jobs:
   metadata:
     targets:
       - fedora-all-aarch64
-      - fedora-all-armhfp
+      # https://github.com/facebook/time/pull/101#issuecomment-1062295307
+      # - fedora-all-armhfp
       - fedora-all-i386
       - fedora-all-ppc64le
       - fedora-all-s390x
