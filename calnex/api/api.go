@@ -75,6 +75,7 @@ const (
 )
 
 // Available Calnex channels
+// TODO: 32 VP channels when supported
 const (
 	ChannelA Channel = iota
 	ChannelB
@@ -284,36 +285,42 @@ type Probe int
 const (
 	ProbePTP Probe = 0
 	ProbeNTP Probe = 2
+	ProbePPS Probe = 3
 )
 
 // probeStringToProbe is a map of String probe to a Calnex variant
 var probeStringToProbe = map[string]Probe{
 	"ptp": ProbePTP,
 	"ntp": ProbeNTP,
+	"pps": ProbePPS,
 }
 
 // probeCalnexToProbe is a map of Calnex to a probe variant
 var probeCalnexAPIToProbe = map[string]Probe{
 	fmt.Sprintf("%d", int(ProbePTP)): ProbePTP,
 	fmt.Sprintf("%d", int(ProbeNTP)): ProbeNTP,
+	"1 PPS":                          ProbePPS,
 }
 
 // probeToString is a map of probe to String variant
 var probeToString = map[Probe]string{
 	ProbePTP: "ptp",
 	ProbeNTP: "ntp",
+	ProbePPS: "pps",
 }
 
 // probeToCalnexName is a map of probe to a Calnex specific name
 var probeToCalnexName = map[Probe]string{
 	ProbePTP: "PTP",
 	ProbeNTP: "NTP",
+	ProbePPS: "1 PPS",
 }
 
 // probeToServerType is a map of probe to Calnex server name
 var probeToServerType = map[Probe]string{
 	ProbePTP: "master_ip",
 	ProbeNTP: "server_ip",
+	ProbePPS: "signal_type",
 }
 
 // ProbeFromString returns Channel object from String version
@@ -361,7 +368,7 @@ func (p Probe) CalnexName() string {
 
 const (
 	// measureURL is a base URL for to the measurement API
-	measureURL = "https://%s/api/get/measure/%s/ptp_synce/%s/%s"
+	measureURL = "https://%s/api/get/measure/%s"
 	dataURL    = "https://%s/api/getdata?channel=%s&datatype=%s&reset=true"
 
 	startMeasure = "https://%s/api/startmeasurement"
@@ -430,7 +437,7 @@ func (a *API) FetchCsv(channel Channel) ([][]string, error) {
 	// Check for empty response
 	r := &Result{}
 	if err = json.Unmarshal(b, r); err == nil {
-		return nil, fmt.Errorf("failed to fetch data from channel %s: %s", channel.String(), r.Message)
+		return nil, fmt.Errorf(r.Message)
 	}
 
 	var res [][]string
@@ -452,7 +459,12 @@ func (a *API) FetchCsv(channel Channel) ([][]string, error) {
 
 // FetchChannelProbe returns monitored protocol of the channel
 func (a *API) FetchChannelProbe(channel Channel) (*Probe, error) {
-	url := fmt.Sprintf(measureURL, a.source, channel.CalnexAPI(), "mode", "probe_type")
+	pth := path.Join(channel.CalnexAPI(), "ptp_synce", "mode", "probe_type")
+	if MeasureChannelDatatypeMap[channel] == TIE {
+		pth = path.Join(channel.CalnexAPI(), "signal_type")
+	}
+	url := fmt.Sprintf(measureURL, a.source, pth)
+
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return nil, err
@@ -476,9 +488,13 @@ func (a *API) FetchChannelProbe(channel Channel) (*Probe, error) {
 	return p, err
 }
 
-// FetchChannelTargetIP returns the IP address of the server monitored on the channel
-func (a *API) FetchChannelTargetIP(channel Channel, probe Probe) (string, error) {
-	url := fmt.Sprintf(measureURL, a.source, channel.CalnexAPI(), probe.String(), probe.ServerType())
+// FetchChannelTarget returns the measure target of the server monitored on the channel
+func (a *API) FetchChannelTarget(channel Channel, probe Probe) (string, error) {
+	pth := path.Join(channel.CalnexAPI(), "ptp_synce", probe.String(), probe.ServerType())
+	if MeasureChannelDatatypeMap[channel] == TIE {
+		pth = path.Join(channel.CalnexAPI(), probe.ServerType())
+	}
+	url := fmt.Sprintf(measureURL, a.source, pth)
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return "", err
