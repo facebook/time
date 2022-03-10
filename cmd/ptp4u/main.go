@@ -24,6 +24,7 @@ import (
 	_ "net/http/pprof"
 	"time"
 
+	"github.com/facebook/time/ptp/ptp4u/drain"
 	"github.com/facebook/time/ptp/ptp4u/server"
 	"github.com/facebook/time/ptp/ptp4u/stats"
 	"github.com/facebook/time/timestamp"
@@ -114,10 +115,15 @@ func main() {
 	st := stats.NewJSONStats()
 	go st.Start(c.MonitoringPort)
 
-	s := server.Server{
+	s := &server.Server{
 		Config: c,
 		Stats:  st,
 	}
+
+	// Drain check
+	// Replace with your implementation of Drain
+	d := drain.NewFileDrain()
+	go d.Start(s)
 
 	if err := s.Start(); err != nil {
 		log.Fatalf("Server run failed: %v", err)

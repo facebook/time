@@ -395,7 +395,7 @@ func (s *Server) sendGrant(sc *SubscriptionClient, sg *ptp.Signaling, mt ptp.Uni
 
 // Drain traffic
 func (s *Server) Drain() {
-	if s.ctx.Err() == nil {
+	if s.ctx != nil && s.ctx.Err() == nil {
 		s.cancel()
 		s.Stats.SetDrain(1)
 	}
@@ -403,7 +403,7 @@ func (s *Server) Drain() {
 
 // Undrain traffic
 func (s *Server) Undrain() {
-	if s.ctx.Err() != nil {
+	if s.ctx != nil && s.ctx.Err() != nil {
 		s.ctx, s.cancel = context.WithCancel(context.Background())
 		s.Stats.SetDrain(0)
 	}
