@@ -44,6 +44,7 @@ type Config struct {
 	SendWorkers    int
 	RecvWorkers    int
 	QueueSize      int
+	DrainInterval  time.Duration
 
 	clockIdentity ptp.ClockIdentity
 }

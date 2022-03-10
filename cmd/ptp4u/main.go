@@ -24,6 +24,7 @@ import (
 	_ "net/http/pprof"
 	"time"
 
+	"github.com/facebook/time/ptp/ptp4u/drain"
 	"github.com/facebook/time/ptp/ptp4u/server"
 	"github.com/facebook/time/ptp/ptp4u/stats"
 	"github.com/facebook/time/timestamp"
@@ -52,6 +53,7 @@ func main() {
 	flag.IntVar(&c.MonitoringPort, "monitoringport", 8888, "Port to run monitoring server on")
 	flag.IntVar(&c.QueueSize, "queue", 0, "Size of the queue to send out packets")
 	flag.DurationVar(&c.MetricInterval, "metricinterval", 1*time.Minute, "Interval of resetting metrics")
+	flag.DurationVar(&c.DrainInterval, "draininterval", 30*time.Second, "Interval for drain checks")
 
 	flag.Parse()
 
@@ -114,9 +116,14 @@ func main() {
 	st := stats.NewJSONStats()
 	go st.Start(c.MonitoringPort)
 
+	// drain check
+	check := &drain.FileDrain{FileName: "/var/tmp/kill_ptp4u"}
+	checks := []drain.Drain{check}
+
 	s := server.Server{
 		Config: c,
 		Stats:  st,
+		Checks: checks,
 	}
 
 	if err := s.Start(); err != nil {
