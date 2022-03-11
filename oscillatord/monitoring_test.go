@@ -33,7 +33,7 @@ func TestOscillatordRead(t *testing.T) {
 		_, err := server.Read(b)
 		require.Nil(t, err)
 		// write response
-		data := `{ "oscillator": { "model": "sa3x", "fine_ctrl": 0, "coarse_ctrl": 0, "lock": false, "temperature": 45.944000000000003 }, "gnss": { "fix": 5, "fixOk": true, "antenna_power": 1, "antenna_status": 4, "lsChange": 0, "leap_seconds": 18 } }`
+		data := `{ "oscillator": { "model": "sa3x", "fine_ctrl": 0, "coarse_ctrl": 0, "lock": false, "temperature": 45.944000000000003 }, "gnss": { "fix": 5, "fixOk": true, "antenna_power": 1, "antenna_status": 4, "lsChange": 0, "leap_seconds": 18, "satellites_count": 10 } }`
 		_, err = server.Write([]byte(data))
 		require.Nil(t, err)
 	}()
@@ -48,12 +48,13 @@ func TestOscillatordRead(t *testing.T) {
 			Temperature: 45.944,
 		},
 		GNSS: GNSS{
-			Fix:           Fix3D,
-			FixOK:         true,
-			AntennaPower:  AntPowerOn,
-			AntennaStatus: AntStatusOpen,
-			LSChange:      LeapNoWarning,
-			LeapSeconds:   18,
+			Fix:             Fix3D,
+			FixOK:           true,
+			AntennaPower:    AntPowerOn,
+			AntennaStatus:   AntStatusOpen,
+			LSChange:        LeapNoWarning,
+			LeapSeconds:     18,
+			SatellitesCount: 10,
 		},
 	}
 	require.Equal(t, want, status)

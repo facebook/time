@@ -50,23 +50,25 @@ func bool2int(b bool) int64 {
 
 func printOscillatordJSON(status *oscillatord.Status) error {
 	output := struct {
-		Temperature       int64 `json:"ptp.timecard.temperature"`
-		Lock              int64 `json:"ptp.timecard.lock"`
-		GNSSFixNum        int64 `json:"ptp.timecard.gnss.fix_num"`
-		GNSSFixOk         int64 `json:"ptp.timecard.gnss.fix_ok"`
-		GNSSAntennaPower  int64 `json:"ptp.timecard.gnss.antenna_power"`
-		GNSSAntennaStatus int64 `json:"ptp.timecard.gnss.antenna_status"`
-		GNSSLSChange      int64 `json:"ptp.timecard.gnss.leap_second_change"`
-		GNSSLeapSeconds   int64 `json:"ptp.timecard.gnss.leap_seconds"`
+		Temperature         int64 `json:"ptp.timecard.temperature"`
+		Lock                int64 `json:"ptp.timecard.lock"`
+		GNSSFixNum          int64 `json:"ptp.timecard.gnss.fix_num"`
+		GNSSFixOk           int64 `json:"ptp.timecard.gnss.fix_ok"`
+		GNSSAntennaPower    int64 `json:"ptp.timecard.gnss.antenna_power"`
+		GNSSAntennaStatus   int64 `json:"ptp.timecard.gnss.antenna_status"`
+		GNSSLSChange        int64 `json:"ptp.timecard.gnss.leap_second_change"`
+		GNSSLeapSeconds     int64 `json:"ptp.timecard.gnss.leap_seconds"`
+		GNSSSatellitesCount int64 `json:"ptp.timecard.gnss.satellites_count"`
 	}{
-		Temperature:       int64(status.Oscillator.Temperature),
-		Lock:              bool2int(status.Oscillator.Lock),
-		GNSSFixNum:        int64(status.GNSS.Fix),
-		GNSSFixOk:         bool2int(status.GNSS.FixOK),
-		GNSSAntennaPower:  int64(status.GNSS.AntennaPower),
-		GNSSAntennaStatus: int64(status.GNSS.AntennaStatus),
-		GNSSLSChange:      int64(status.GNSS.LSChange),
-		GNSSLeapSeconds:   int64(status.GNSS.LeapSeconds),
+		Temperature:         int64(status.Oscillator.Temperature),
+		Lock:                bool2int(status.Oscillator.Lock),
+		GNSSFixNum:          int64(status.GNSS.Fix),
+		GNSSFixOk:           bool2int(status.GNSS.FixOK),
+		GNSSAntennaPower:    int64(status.GNSS.AntennaPower),
+		GNSSAntennaStatus:   int64(status.GNSS.AntennaStatus),
+		GNSSLSChange:        int64(status.GNSS.LSChange),
+		GNSSLeapSeconds:     int64(status.GNSS.LeapSeconds),
+		GNSSSatellitesCount: int64(status.GNSS.SatellitesCount),
 	}
 	toPrint, err := json.Marshal(output)
 	if err != nil {
@@ -91,6 +93,7 @@ func printOscillatord(status *oscillatord.Status) {
 	fmt.Printf("\tantenna_status: %s (%d)\n", status.GNSS.AntennaStatus, status.GNSS.AntennaStatus)
 	fmt.Printf("\tleap_second_change: %s (%d)\n", status.GNSS.LSChange, status.GNSS.LSChange)
 	fmt.Printf("\tleap_seconds: %d\n", status.GNSS.LeapSeconds)
+	fmt.Printf("\tsatellites_count: %d\n", status.GNSS.SatellitesCount)
 }
 
 func oscillatordRun(address string, jsonOut bool) error {
