@@ -161,12 +161,13 @@ type Oscillator struct {
 
 // GNSS describes structure that oscillatord returns for gnss
 type GNSS struct {
-	Fix           GNSSFix          `json:"fix"`
-	FixOK         bool             `json:"fixOk"`
-	AntennaPower  AntennaPower     `json:"antenna_power"`
-	AntennaStatus AntennaStatus    `json:"antenna_status"`
-	LSChange      LeapSecondChange `json:"lsChange"`
-	LeapSeconds   int              `json:"leap_seconds"`
+	Fix             GNSSFix          `json:"fix"`
+	FixOK           bool             `json:"fixOk"`
+	AntennaPower    AntennaPower     `json:"antenna_power"`
+	AntennaStatus   AntennaStatus    `json:"antenna_status"`
+	LSChange        LeapSecondChange `json:"lsChange"`
+	LeapSeconds     int              `json:"leap_seconds"`
+	SatellitesCount int              `json:"satellites_count"`
 }
 
 // Status is whole structure that oscillatord returns for monitoring
