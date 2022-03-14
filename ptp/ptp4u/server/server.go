@@ -29,6 +29,7 @@ import (
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/ptp/ptp4u/drain"
 	"github.com/facebook/time/ptp/ptp4u/stats"
 	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
@@ -39,6 +40,7 @@ import (
 type Server struct {
 	Config *Config
 	Stats  stats.Stats
+	Checks []drain.Drain
 	sw     []*sendWorker
 
 	// server source fds
@@ -103,6 +105,31 @@ func (s *Server) Start() error {
 
 			s.Stats.Snapshot()
 			s.Stats.Reset()
+		}
+	}()
+
+	// Drain check
+	go func() {
+		defer wg.Done()
+		for {
+			<-time.After(s.Config.DrainInterval)
+
+			var drain bool
+			for _, check := range s.Checks {
+				if check.Check() {
+					drain = true
+					log.Warningf("%T engaged shifting traffic", check)
+					break
+				}
+			}
+
+			if drain {
+				s.Drain()
+				s.Stats.SetDrain(1)
+			} else {
+				s.Undrain()
+				s.Stats.SetDrain(0)
+			}
 		}
 	}()
 
@@ -395,16 +422,14 @@ func (s *Server) sendGrant(sc *SubscriptionClient, sg *ptp.Signaling, mt ptp.Uni
 
 // Drain traffic
 func (s *Server) Drain() {
-	if s.ctx.Err() == nil {
+	if s.ctx != nil && s.ctx.Err() == nil {
 		s.cancel()
-		s.Stats.SetDrain(1)
 	}
 }
 
 // Undrain traffic
 func (s *Server) Undrain() {
-	if s.ctx.Err() != nil {
+	if s.ctx != nil && s.ctx.Err() != nil {
 		s.ctx, s.cancel = context.WithCancel(context.Background())
-		s.Stats.SetDrain(0)
 	}
 }
