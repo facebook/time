@@ -25,7 +25,7 @@ type FileDrain struct {
 	FileName string
 }
 
-// Check checks the existance of a file
+// Check checks the existence of a file
 func (f *FileDrain) Check() bool {
 	if _, err := os.Stat(f.FileName); err == nil {
 		return true
