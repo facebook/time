@@ -108,9 +108,6 @@ ch6\ptp_synce\ethernet\ip_address=192.168.4.200
 ch6\ptp_synce\ethernet\ipv6_address=2000::000b
 ch6\ptp_synce\ethernet\mask=255.255.255.0
 ch6\ptp_synce\ethernet\mask_v6=32
-ch6\ptp_synce\ntp\protocol_level=UDP/IPv4
-ch6\ptp_synce\ntp\server_ip_ipv6=
-ch6\ptp_synce\mode\probe_type=
 ch7\used=Yes
 ch7\synce_enabled=On
 ch7\protocol_enabled=On
@@ -125,9 +122,9 @@ ch7\ptp_synce\ethernet\mask=255.255.255.0
 `
 
 	expectedConfig := `[measure]
-ch6\used=Yes
+ch6\used=No
 ch6\synce_enabled=Off
-ch6\protocol_enabled=On
+ch6\protocol_enabled=Off
 ch6\ptp_synce\ptp\dscp=0
 ch6\ptp_synce\ethernet\dhcp_v4=Disabled
 ch6\ptp_synce\ethernet\dhcp_v6=Static
@@ -137,15 +134,12 @@ ch6\ptp_synce\ethernet\ip_address=fd00:3226:310a::1
 ch6\ptp_synce\ethernet\ipv6_address=fd00:3226:310a::1
 ch6\ptp_synce\ethernet\mask=64
 ch6\ptp_synce\ethernet\mask_v6=64
-ch6\ptp_synce\ntp\protocol_level=UDP/IPv6
-ch6\ptp_synce\ntp\server_ip_ipv6=::1
-ch6\ptp_synce\mode\probe_type=NTP client
 ch7\used=No
 ch7\synce_enabled=Off
 ch7\protocol_enabled=Off
 ch7\ptp_synce\ptp\dscp=0
 ch7\ptp_synce\ethernet\dhcp_v4=Disabled
-ch7\ptp_synce\ethernet\dhcp_v6=Disabled
+ch7\ptp_synce\ethernet\dhcp_v6=Static
 ch7\ptp_synce\ethernet\gateway=192.168.5.1
 ch7\ptp_synce\ethernet\gateway_v6=2000::000a
 ch7\ptp_synce\ethernet\ip_address=192.168.5.200
@@ -216,6 +210,8 @@ ch35\used=No
 ch36\used=No
 ch37\used=No
 ch38\used=No
+ch39\used=No
+ch40\used=No
 ch6\protocol_enabled=Off
 ch6\ptp_synce\mode\probe_type=Disabled
 ch7\protocol_enabled=Off
@@ -280,6 +276,11 @@ ch37\protocol_enabled=Off
 ch37\ptp_synce\mode\probe_type=Disabled
 ch38\protocol_enabled=Off
 ch38\ptp_synce\mode\probe_type=Disabled
+ch39\protocol_enabled=Off
+ch39\ptp_synce\mode\probe_type=Disabled
+ch40\protocol_enabled=Off
+ch40\ptp_synce\mode\probe_type=Disabled
+ch0\server_ip=10.32.1.168
 ch0\signal_type=1 PPS
 ch0\trig_level=1 V
 ch0\freq=1 Hz
@@ -342,6 +343,8 @@ ch35\used=No
 ch36\used=No
 ch37\used=No
 ch38\used=No
+ch39\used=No
+ch40\used=No
 ch6\protocol_enabled=Off
 ch6\ptp_synce\mode\probe_type=Disabled
 ch7\protocol_enabled=Off
@@ -406,6 +409,11 @@ ch37\protocol_enabled=Off
 ch37\ptp_synce\mode\probe_type=Disabled
 ch38\protocol_enabled=Off
 ch38\ptp_synce\mode\probe_type=Disabled
+ch39\protocol_enabled=Off
+ch39\ptp_synce\mode\probe_type=Disabled
+ch40\protocol_enabled=Off
+ch40\ptp_synce\mode\probe_type=Disabled
+ch0\server_ip=fd00:3226:301b::1f
 ch0\signal_type=1 PPS
 ch0\trig_level=500 mV
 ch0\freq=1 Hz
@@ -435,7 +443,7 @@ ch30\ptp_synce\ptp\domain=0
 
 	mc := map[api.Channel]MeasureConfig{
 		api.ChannelA: {
-			Target: "fd00:3226:301b::3f",
+			Target: "fd00:3226:301b::1f",
 			Probe:  api.ProbePPS,
 		},
 		api.ChannelVP1: {
@@ -467,7 +475,7 @@ ch2\used=No
 ch3\used=No
 ch4\used=No
 ch5\used=No
-ch6\used=Yes
+ch6\used=No
 ch7\used=No
 ch8\used=Yes
 ch9\used=Yes
@@ -500,8 +508,9 @@ ch35\used=No
 ch36\used=No
 ch37\used=No
 ch38\used=No
-ch6\protocol_enabled=On
-ch6\ptp_synce\mode\probe_type=NTP client
+ch39\used=No
+ch40\used=No
+ch6\protocol_enabled=Off
 ch7\protocol_enabled=Off
 ch9\protocol_enabled=On
 ch9\ptp_synce\mode\probe_type=NTP
@@ -563,6 +572,11 @@ ch37\protocol_enabled=Off
 ch37\ptp_synce\mode\probe_type=Disabled
 ch38\protocol_enabled=Off
 ch38\ptp_synce\mode\probe_type=Disabled
+ch39\protocol_enabled=Off
+ch39\ptp_synce\mode\probe_type=Disabled
+ch40\protocol_enabled=Off
+ch40\ptp_synce\mode\probe_type=Disabled
+ch0\server_ip=fd00:3226:301b::1f
 ch0\signal_type=1 PPS
 ch0\trig_level=500 mV
 ch0\freq=1 Hz
@@ -576,12 +590,10 @@ ch6\ptp_synce\ethernet\ip_address=fd00:3226:310a::1
 ch6\ptp_synce\ethernet\ipv6_address=fd00:3226:310a::1
 ch6\ptp_synce\ethernet\mask=64
 ch6\ptp_synce\ethernet\mask_v6=64
-ch6\ptp_synce\ntp\protocol_level=UDP/IPv6
-ch6\ptp_synce\ntp\server_ip_ipv6=::1
 ch7\synce_enabled=Off
 ch7\ptp_synce\ptp\dscp=0
 ch7\ptp_synce\ethernet\dhcp_v4=Disabled
-ch7\ptp_synce\ethernet\dhcp_v6=Disabled
+ch7\ptp_synce\ethernet\dhcp_v6=Static
 ch9\ptp_synce\ntp\server_ip=fd00:3226:301b::3f
 ch9\ptp_synce\ntp\server_ip_ipv6=fd00:3226:301b::3f
 ch9\ptp_synce\physical_packet_channel=Channel 1
@@ -605,20 +617,20 @@ ch30\ptp_synce\ptp\domain=0
 			fmt.Fprintln(w, "[measure]\nch0\\used=No\nch6\\used=Yes\nch9\\used=Yes\nch22\\used=Yes")
 		} else if strings.Contains(r.URL.Path, "getstatus") {
 			// FetchStatus
-			fmt.Fprintln(w, "{\n\"referenceReady\": \"true\",\n\"modulesReady\": \"true\",\n\"measurementActive\": \"true\"\n}")
+			fmt.Fprintln(w, "{\n\"referenceReady\": true,\n\"modulesReady\": true,\n\"measurementActive\": true\n}")
 		} else if strings.Contains(r.URL.Path, "stopmeasurement") {
 			// StopMeasure
-			fmt.Fprintln(w, "{\n\"result\": \"true\"\n}")
+			fmt.Fprintln(w, "{\n\"result\": true\n}")
 		} else if strings.Contains(r.URL.Path, "setsettings") {
 			b, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
 			// Config comes back shuffled every time
 			require.ElementsMatch(t, strings.Split(expectedConfig, "\n"), strings.Split(string(b), "\n"))
 			// PushSettings
-			fmt.Fprintln(w, "{\n\"result\": \"true\"\n}")
+			fmt.Fprintln(w, "{\n\"result\": true\n}")
 		} else if strings.Contains(r.URL.Path, "startmeasurement") {
 			// StartMeasure
-			fmt.Fprintln(w, "{\n\"result\": \"true\"\n}")
+			fmt.Fprintln(w, "{\n\"result\": true\n}")
 		}
 	}))
 	defer ts.Close()
@@ -636,7 +648,7 @@ ch30\ptp_synce\ptp\domain=0
 
 	mc := map[api.Channel]MeasureConfig{
 		api.ChannelA: {
-			Target: "1 PPS",
+			Target: "fd00:3226:301b::1f",
 			Probe:  api.ProbePPS,
 		},
 		api.ChannelVP1: {
