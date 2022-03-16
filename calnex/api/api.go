@@ -730,6 +730,18 @@ func (a *API) StopMeasure() error {
 
 // ClearDevice clears device data
 func (a *API) ClearDevice() error {
+	// check measurement status
+	status, err := a.FetchStatus()
+	if err != nil {
+		return err
+	}
+
+	if status.MeasurementActive {
+		// stop measurement
+		if err = a.StopMeasure(); err != nil {
+			return err
+		}
+	}
 	return a.get(clearDeviceURL)
 }
 
