@@ -291,7 +291,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 			worker = s.findWorker(dReq.Header.SourcePortIdentity, r)
 			sc = worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
 			if sc == nil {
-				log.Warningf("Delay request from %s is not in the subscription list", timestamp.SockaddrToIP(clisa))
+				log.Infof("Delay request from %s is not in the subscription list", timestamp.SockaddrToIP(clisa))
 				continue
 			}
 			sc.UpdateDelayResp(&dReq.Header, rxTS)
