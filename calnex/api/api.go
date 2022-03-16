@@ -42,14 +42,14 @@ type API struct {
 
 // Status is a struct representing Calnex status JSON response
 type Status struct {
-	ReferenceReady    bool `json:",string"`
-	ModulesReady      bool `json:",string"`
-	MeasurementActive bool `json:",string"`
+	ReferenceReady    bool
+	ModulesReady      bool
+	MeasurementActive bool
 }
 
 // Result is a struct representing Calnex result JSON response
 type Result struct {
-	Result  bool `json:",string"`
+	Result  bool
 	Message string
 }
 
@@ -75,7 +75,6 @@ const (
 )
 
 // Available Calnex channels
-// TODO: 32 VP channels when supported
 const (
 	ChannelA Channel = iota
 	ChannelB
@@ -116,6 +115,8 @@ const (
 	ChannelVP28
 	ChannelVP29
 	ChannelVP30
+	ChannelVP31
+	ChannelVP32
 )
 
 // MeasureChannelDatatypeMap is a Map of the measurement channels to the data type.
@@ -157,6 +158,8 @@ var MeasureChannelDatatypeMap = map[Channel]string{
 	ChannelVP28: TWOWAYTE,
 	ChannelVP29: TWOWAYTE,
 	ChannelVP30: TWOWAYTE,
+	ChannelVP31: TWOWAYTE,
+	ChannelVP32: TWOWAYTE,
 }
 
 // channelStringToCalnex is a map of String channels to a Calnex variant
@@ -199,6 +202,8 @@ var channelStringToCalnex = map[string]Channel{
 	"VP28": ChannelVP28,
 	"VP29": ChannelVP29,
 	"VP30": ChannelVP30,
+	"VP31": ChannelVP31,
+	"VP32": ChannelVP32,
 }
 
 // channelCalnexToString is a map of Calnex channels to a String variant
@@ -241,6 +246,8 @@ var channelCalnexToString = map[Channel]string{
 	ChannelVP28: "VP28",
 	ChannelVP29: "VP29",
 	ChannelVP30: "VP30",
+	ChannelVP31: "VP31",
+	ChannelVP32: "VP32",
 }
 
 // ChannelFromString returns Channel object from String version
@@ -320,7 +327,7 @@ var probeToCalnexName = map[Probe]string{
 var probeToServerType = map[Probe]string{
 	ProbePTP: "master_ip",
 	ProbeNTP: "server_ip",
-	ProbePPS: "signal_type",
+	ProbePPS: "server_ip",
 }
 
 // ProbeFromString returns Channel object from String version
@@ -521,6 +528,11 @@ func (a *API) FetchUsedChannels() ([]Channel, error) {
 		return channels, err
 	}
 	for ch := range MeasureChannelDatatypeMap {
+		chInstalled := f.Section("measure").Key(fmt.Sprintf("%s\\installed", ch.CalnexAPI())).String()
+		if chInstalled != "1" {
+			continue
+		}
+
 		chStatus := f.Section("measure").Key(fmt.Sprintf("%s\\used", ch.CalnexAPI())).String()
 		if chStatus == "Yes" {
 			channels = append(channels, ch)
@@ -723,5 +735,17 @@ func (a *API) ClearDevice() error {
 
 // Reboot the device
 func (a *API) Reboot() error {
+	// check measurement status
+	status, err := a.FetchStatus()
+	if err != nil {
+		return err
+	}
+
+	if status.MeasurementActive {
+		// stop measurement
+		if err = a.StopMeasure(); err != nil {
+			return err
+		}
+	}
 	return a.get(rebootURL)
 }

@@ -47,22 +47,25 @@ func TestExport(t *testing.T) {
 		r *http.Request) {
 		if strings.Contains(r.URL.Path, "getsettings") {
 			// FetchUsedChannels
-			fmt.Fprintln(w, "[measure]\nch0\\used=Yes\nch1\\used=No\nch9\\used=Yes\nch10\\used=No")
-		} else if strings.Contains(r.URL.Path, "ch9/ptp_synce/mode/probe_type") {
-			// FetchChannelProtocol NTP
-			fmt.Fprintln(w, "measure/ch9/ptp_synce/mode/probe_type=2")
+			fmt.Fprintln(w, "[measure]\nch0\\used=Yes\nch0\\installed=1\nch1\\used=No\nch1\\installed=0\nch9\\used=Yes\nch9\\installed=1\nch10\\used=No\nch10\\installed=1")
 		} else if strings.Contains(r.URL.Path, "ch0/signal_type") {
-			// FetchChannelProtocol PPS / FetchChannelTarget PPS
+			// FetchChannelProbe PPS
 			fmt.Fprintln(w, "measure/ch0/signal_type=1 PPS")
+		} else if strings.Contains(r.URL.Path, "ch9/ptp_synce/mode/probe_type") {
+			// FetchChannelProbe NTP
+			fmt.Fprintln(w, "measure/ch9/ptp_synce/mode/probe_type=2")
+		} else if strings.Contains(r.URL.Path, "ch0/server_ip") {
+			// FetchChannelTarget PPS
+			fmt.Fprintln(w, "ch0/server_ip=127.0.0.1")
 		} else if strings.Contains(r.URL.Path, "measure/ch9/ptp_synce/ntp/server_ip") {
 			// FetchChannelTarget NTP
 			fmt.Fprintln(w, "measure/ch9/ptp_synce/ntp/server_ip=127.0.0.1")
-		} else if r.URL.Query().Get("channel") == "VP1" {
-			// FetchCsv NTP
-			fmt.Fprintln(w, "1607961194.773740,-000.000000250504")
 		} else if r.URL.Query().Get("channel") == "a" {
 			// FetchCsv PPS
 			fmt.Fprintln(w, "1607961193.773740,-000.000000250501")
+		} else if r.URL.Query().Get("channel") == "VP1" {
+			// FetchCsv NTP
+			fmt.Fprintln(w, "1607961194.773740,-000.000000250504")
 		}
 	}))
 	defer ts.Close()
@@ -73,7 +76,7 @@ func TestExport(t *testing.T) {
 
 	expected := []string{
 		fmt.Sprintf("{\"float\":{\"value\":-2.50504e-7},\"int\":{\"time\":1607961194},\"normal\":{\"channel\":\"VP1\",\"target\":\"127.0.0.1\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host),
-		fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"a\",\"target\":\"1 PPS\",\"protocol\":\"pps\",\"source\":\"%s\"}}\n", parsed.Host),
+		fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"a\",\"target\":\"127.0.0.1\",\"protocol\":\"pps\",\"source\":\"%s\"}}\n", parsed.Host),
 	}
 	err := Export(parsed.Host, true, []api.Channel{}, w)
 	require.NoError(t, err)

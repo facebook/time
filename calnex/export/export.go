@@ -43,6 +43,7 @@ func Export(source string, insecureTLS bool, channels []api.Channel, output io.W
 
 	for _, channel := range channels {
 		printSuccess := true
+
 		probe, err := calnexAPI.FetchChannelProbe(channel)
 		if err != nil {
 			log.Errorf("Failed to fetch protocol from the channel %s: %v", channel, err)

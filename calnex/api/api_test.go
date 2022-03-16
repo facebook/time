@@ -155,7 +155,7 @@ func TestFetchCsv(t *testing.T) {
 }
 
 func TestFetchCsvNoData(t *testing.T) {
-	sampleResp := "{\"message\": \"No data available\", \"result\": \"true\"}"
+	sampleResp := "{\"message\": \"No data available\", \"result\": true}"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
@@ -272,7 +272,7 @@ func TestFetchChannelTarget_PPS(t *testing.T) {
 }
 
 func TestFetchUsedChannels(t *testing.T) {
-	sampleResp := "[measure]\nch0\\used=Yes\nch7\\used=No\nch29\\used=No\nch30\\used=Yes\n"
+	sampleResp := "[measure]\nch0\\used=Yes\nch0\\installed=1\nch7\\used=No\nch7\\installed=1\nch29\\used=Yes\nch29\\installed=0\nch30\\used=Yes\nch30\\installed=1\n"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
@@ -307,7 +307,7 @@ func TestFetchSettings(t *testing.T) {
 }
 
 func TestFetchStatus(t *testing.T) {
-	sampleResp := "{\n\"referenceReady\": \"true\",\n\"modulesReady\": \"true\",\n\"measurementActive\": \"false\"\n}"
+	sampleResp := "{\n\"referenceReady\": true,\n\"modulesReady\": true,\n\"measurementActive\": false\n}"
 	expected := &Status{
 		ModulesReady:      true,
 		ReferenceReady:    true,
@@ -330,7 +330,7 @@ func TestFetchStatus(t *testing.T) {
 }
 
 func TestPushSettings(t *testing.T) {
-	sampleResp := "{\n\"result\": \"true\"\n}"
+	sampleResp := "{\n\"result\": true\n}"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
@@ -371,7 +371,7 @@ func TestFetchVersion(t *testing.T) {
 }
 
 func TestPushVersion(t *testing.T) {
-	sampleResp := "{\n\"result\" : \"true\",\n\"message\" : \"Installing firmware Version: 2.13.1.0.5583D-20210924\"\n}"
+	sampleResp := "{\n\"result\" : true,\n\"message\" : \"Installing firmware Version: 2.13.1.0.5583D-20210924\"\n}"
 	expected := &Result{
 		Result:  true,
 		Message: "Installing firmware Version: 2.13.1.0.5583D-20210924",
@@ -418,7 +418,7 @@ func TestPushVersion(t *testing.T) {
 }
 
 func TestPost(t *testing.T) {
-	sampleResp := "{\n\"result\" : \"true\",\n\"message\" : \"LGTM\"\n}"
+	sampleResp := "{\n\"result\" : true,\n\"message\" : \"LGTM\"\n}"
 	expected := &Result{
 		Result:  true,
 		Message: "LGTM",
@@ -447,10 +447,14 @@ func TestPost(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	sampleResp := "{\n\"result\": \"true\"\n}"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
-		fmt.Fprintln(w, sampleResp)
+		if strings.Contains(r.URL.Path, "getstatus") {
+			// FetchStatus
+			fmt.Fprintln(w, "{\n\"referenceReady\": true,\n\"modulesReady\": true,\n\"measurementActive\": true\n}")
+		} else {
+			fmt.Fprintln(w, "{\n\"result\": true\n}")
+		}
 	}))
 	defer ts.Close()
 
@@ -518,7 +522,7 @@ func TestFetchProblemReport(t *testing.T) {
 }
 
 func TestPushCert(t *testing.T) {
-	sampleResp := "{\n\"result\" : \"true\",\n\"message\" : \"The API Interface will now be restarted\"\n}"
+	sampleResp := "{\n\"result\" : true,\n\"message\" : \"The API Interface will now be restarted\"\n}"
 	expected := &Result{
 		Result:  true,
 		Message: "The API Interface will now be restarted",
@@ -557,4 +561,19 @@ func TestParseResponse(t *testing.T) {
 	r, err = parseResponse("too=many=parts")
 	require.Equal(t, "", r)
 	require.ErrorIs(t, errAPI, err)
+}
+
+func TestMeasureChannelDatatypeMap(t *testing.T) {
+	for i := 0; i <= 5; i++ {
+		require.Equal(t, TIE, MeasureChannelDatatypeMap[Channel(i)])
+	}
+
+	for i := 6; i <= 8; i++ {
+		_, ok := MeasureChannelDatatypeMap[Channel(i)]
+		require.False(t, ok)
+	}
+
+	for i := 9; i <= 40; i++ {
+		require.Equal(t, TWOWAYTE, MeasureChannelDatatypeMap[Channel(i)])
+	}
 }
