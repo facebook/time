@@ -70,7 +70,7 @@ const (
 	ENABLED  = "Enabled"
 	DISABLED = "Disabled"
 	STATIC   = "Static"
-	TIE      = "tie"
+	TE       = "te"
 	TWOWAYTE = "2wayte"
 )
 
@@ -122,12 +122,12 @@ const (
 // MeasureChannelDatatypeMap is a Map of the measurement channels to the data type.
 // Only channels used for measurements defined here
 var MeasureChannelDatatypeMap = map[Channel]string{
-	ChannelA:    TIE,
-	ChannelB:    TIE,
-	ChannelC:    TIE,
-	ChannelD:    TIE,
-	ChannelE:    TIE,
-	ChannelF:    TIE,
+	ChannelA:    TE,
+	ChannelB:    TE,
+	ChannelC:    TE,
+	ChannelD:    TE,
+	ChannelE:    TE,
+	ChannelF:    TE,
 	ChannelVP1:  TWOWAYTE,
 	ChannelVP2:  TWOWAYTE,
 	ChannelVP3:  TWOWAYTE,
@@ -467,7 +467,7 @@ func (a *API) FetchCsv(channel Channel) ([][]string, error) {
 // FetchChannelProbe returns monitored protocol of the channel
 func (a *API) FetchChannelProbe(channel Channel) (*Probe, error) {
 	pth := path.Join(channel.CalnexAPI(), "ptp_synce", "mode", "probe_type")
-	if MeasureChannelDatatypeMap[channel] == TIE {
+	if MeasureChannelDatatypeMap[channel] == TE {
 		pth = path.Join(channel.CalnexAPI(), "signal_type")
 	}
 	url := fmt.Sprintf(measureURL, a.source, pth)
@@ -498,7 +498,7 @@ func (a *API) FetchChannelProbe(channel Channel) (*Probe, error) {
 // FetchChannelTarget returns the measure target of the server monitored on the channel
 func (a *API) FetchChannelTarget(channel Channel, probe Probe) (string, error) {
 	pth := path.Join(channel.CalnexAPI(), "ptp_synce", probe.String(), probe.ServerType())
-	if MeasureChannelDatatypeMap[channel] == TIE {
+	if MeasureChannelDatatypeMap[channel] == TE {
 		pth = path.Join(channel.CalnexAPI(), probe.ServerType())
 	}
 	url := fmt.Sprintf(measureURL, a.source, pth)
