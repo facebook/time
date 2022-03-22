@@ -111,9 +111,9 @@ func (s *Server) Start() error {
 	// Drain check
 	go func() {
 		defer wg.Done()
-		for {
-			<-time.After(s.Config.DrainInterval)
-
+		ticker := time.NewTicker(s.Config.DrainInterval)
+		defer ticker.Stop()
+		for ; true; <-ticker.C {
 			var drain bool
 			for _, check := range s.Checks {
 				if check.Check() {
