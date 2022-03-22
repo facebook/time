@@ -326,3 +326,27 @@ func TestDecodeNTPData(t *testing.T) {
 	}
 	require.Equal(t, want, packet)
 }
+
+func TestSourceStateTypeToString(t *testing.T) {
+	v := SourceStateUnreach
+	got := v.String()
+	want := "unreach"
+	require.Equal(t, want, got)
+
+	v = SourceStateType(10)
+	got = v.String()
+	want = "unknown (10)"
+	require.Equal(t, want, got)
+}
+
+func TestModeTypeToString(t *testing.T) {
+	v := SourceModeRef
+	got := v.String()
+	want := "reference clock"
+	require.Equal(t, want, got)
+
+	v = ModeType(10)
+	got = v.String()
+	want = "unknown (10)"
+	require.Equal(t, want, got)
+}

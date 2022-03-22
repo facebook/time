@@ -194,6 +194,20 @@ func (s SourceStateType) String() string {
 	return SourceStateDesc[s]
 }
 
+// ModeTypeDesc provides mapping from ModeType to string
+var ModeTypeDesc = [3]string{
+	"client",
+	"peer",
+	"reference clock",
+}
+
+func (m ModeType) String() string {
+	if int(m) >= len(ModeTypeDesc) {
+		return fmt.Sprintf("unknown (%d)", m)
+	}
+	return ModeTypeDesc[m]
+}
+
 // RequestHead is the first (common) part of the request,
 // in a format that can be directly passed to binary.Write
 type RequestHead struct {
