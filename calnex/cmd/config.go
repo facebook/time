@@ -40,12 +40,7 @@ func init() {
 	}
 }
 
-type deviceConfig struct {
-	Calnex  config.CalnexConfig
-	Network *config.NetworkConfig
-}
-
-type devices map[string]deviceConfig
+type devices map[string]config.CalnexConfig
 
 var configCmd = &cobra.Command{
 	Use:   "config",
@@ -72,7 +67,7 @@ var configCmd = &cobra.Command{
 			log.Fatalf("Failed to find config for %s in %s", target, source)
 		}
 
-		if err := config.Config(target, insecureTLS, dc.Network, dc.Calnex, apply); err != nil {
+		if err := config.Config(target, insecureTLS, dc, apply); err != nil {
 			log.Fatal(err)
 		}
 	},

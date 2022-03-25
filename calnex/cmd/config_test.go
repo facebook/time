@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"net"
 	"testing"
 
 	"github.com/facebook/time/calnex/api"
@@ -30,25 +29,17 @@ func TestUnmarshalConfig(t *testing.T) {
 	testConfig := `
 	{
 		"calnex01.example.com": {
-			"network" :{
-				"eth1": "fd00::11",
-				"gw1": "fd00::a",
-				"eth2": "fd00::12",
-				"gw2": "fd00::a"
+			"a": {
+				"target": "fd00::d",
+				"probe": "pps"
 			},
-			"calnex": {
-				"a": {
-					"target": "fd00::d",
-					"probe": "pps"
-				},
-				"VP1": {
-					"target": "fd00::d",
-					"probe": "ntp"
-				},
-				"VP22": {
-					"target": "fd00::d",
-					"probe": "ptp"
-				}
+			"VP1": {
+				"target": "fd00::d",
+				"probe": "ntp"
+			},
+			"VP22": {
+				"target": "fd00::d",
+				"probe": "ptp"
 			}
 		}
 	}
@@ -59,26 +50,18 @@ func TestUnmarshalConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	expected := devices{}
-	expected["calnex01.example.com"] = deviceConfig{
-		Calnex: config.CalnexConfig{
-			api.ChannelA: config.MeasureConfig{
-				Target: "fd00::d",
-				Probe:  api.ProbePPS,
-			},
-			api.ChannelVP1: config.MeasureConfig{
-				Target: "fd00::d",
-				Probe:  api.ProbeNTP,
-			},
-			api.ChannelVP22: config.MeasureConfig{
-				Target: "fd00::d",
-				Probe:  api.ProbePTP,
-			},
+	expected["calnex01.example.com"] = config.CalnexConfig{
+		api.ChannelA: config.MeasureConfig{
+			Target: "fd00::d",
+			Probe:  api.ProbePPS,
 		},
-		Network: &config.NetworkConfig{
-			Eth1: net.ParseIP("fd00::11"),
-			Gw1:  net.ParseIP("fd00::a"),
-			Eth2: net.ParseIP("fd00::12"),
-			Gw2:  net.ParseIP("fd00::a"),
+		api.ChannelVP1: config.MeasureConfig{
+			Target: "fd00::d",
+			Probe:  api.ProbeNTP,
+		},
+		api.ChannelVP22: config.MeasureConfig{
+			Target: "fd00::d",
+			Probe:  api.ProbePTP,
 		},
 	}
 	require.Equal(t, expected, d)

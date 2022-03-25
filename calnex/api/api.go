@@ -70,6 +70,7 @@ const (
 	ENABLED  = "Enabled"
 	DISABLED = "Disabled"
 	STATIC   = "Static"
+	DHCP     = "DHCP"
 	TE       = "te"
 	TWOWAYTE = "2wayte"
 )

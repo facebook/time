@@ -1,24 +1,16 @@
 {
     "calnex01.example.com": {
-        "network" :{
-            "eth1": "fd00::11",
-            "gw1": "fd00::a",
-            "eth2": "fd00::12",
-            "gw2": "fd00::a"
+        "a": {
+            "target": "fd00::d",
+            "probe": "pps"
         },
-        "calnex": {
-            "a": {
-                "target": "fd00::d",
-                "probe": "pps"
-            },
-            "VP1": {
-                "target": "fd00::d",
-                "probe": "ntp"
-            },
-            "VP22": {
-                "target": "fd00::d",
-                "probe": "ptp"
-            }
+        "VP1": {
+            "target": "fd00::d",
+            "probe": "ntp"
+        },
+        "VP22": {
+            "target": "fd00::d",
+            "probe": "ptp"
         }
     }
 }
