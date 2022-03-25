@@ -18,7 +18,6 @@ package config
 
 import (
 	"fmt"
-	"net"
 
 	"github.com/facebook/time/calnex/api"
 	"github.com/go-ini/ini"
@@ -32,14 +31,6 @@ type CalnexConfig map[api.Channel]MeasureConfig
 type MeasureConfig struct {
 	Target string    `json:"target"`
 	Probe  api.Probe `json:"probe"`
-}
-
-// NetworkConfig represents network config of a Calnex device
-type NetworkConfig struct {
-	Eth1 net.IP
-	Gw1  net.IP
-	Eth2 net.IP
-	Gw2  net.IP
 }
 
 type config struct {
@@ -138,30 +129,6 @@ func (c *config) measureConfig(s *ini.Section, cc CalnexConfig) {
 	}
 }
 
-func (c *config) nicConfig(s *ini.Section, n *NetworkConfig) {
-	// disable synce
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\synce_enabled", api.OFF)
-
-	// ptp dscp
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\dscp", "0")
-
-	// DHCP off (not working properly anyway)
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v6", api.STATIC)
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v4", api.DISABLED)
-
-	// Set network config
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\gateway", api.ChannelONE.CalnexAPI()), n.Gw1.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\gateway_v6", api.ChannelONE.CalnexAPI()), n.Gw1.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\ip_address", api.ChannelONE.CalnexAPI()), n.Eth1.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\ipv6_address", api.ChannelONE.CalnexAPI()), n.Eth1.String())
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\mask", api.ChannelONE.CalnexAPI()), "64")
-	c.set(s, fmt.Sprintf("%s\\ptp_synce\\ethernet\\mask_v6", api.ChannelONE.CalnexAPI()), "64")
-
-	// Disable 2nd Physical channel
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\used", api.NO)
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\protocol_enabled", api.OFF)
-}
-
 func (c *config) baseConfig(s *ini.Section) {
 	// continuous measurement
 	c.set(s, "continuous", api.ON)
@@ -174,10 +141,24 @@ func (c *config) baseConfig(s *ini.Section) {
 
 	// ch8 is a ref channel. Always ON
 	c.set(s, "ch8\\used", api.YES)
+
+	// disable synce
+	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\synce_enabled", api.OFF)
+
+	// ptp dscp
+	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\dscp", "0")
+
+	// DHCP
+	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v6", api.DHCP)
+	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v4", api.DISABLED)
+
+	// Disable 2nd Physical channel
+	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\used", api.NO)
+	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\protocol_enabled", api.OFF)
 }
 
 // Config configures target Calnex with Network/Calnex configs if apply is specified
-func Config(target string, insecureTLS bool, n *NetworkConfig, cc CalnexConfig, apply bool) error {
+func Config(target string, insecureTLS bool, cc CalnexConfig, apply bool) error {
 	var c config
 	api := api.NewAPI(target, insecureTLS)
 
@@ -190,9 +171,6 @@ func Config(target string, insecureTLS bool, n *NetworkConfig, cc CalnexConfig, 
 
 	// set static config
 	c.baseConfig(s)
-
-	// set IP/Gateway/Mask
-	c.nicConfig(s, n)
 
 	// set measure config
 	c.measureConfig(s, cc)

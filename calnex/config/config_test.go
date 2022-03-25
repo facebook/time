@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -77,6 +76,18 @@ continuous=On
 meas_time=1 days 1 hours
 tie_mode=TIE + 1 PPS TE
 ch8\used=Yes
+ch6\synce_enabled=Off
+ch7\synce_enabled=Off
+ch6\ptp_synce\ptp\dscp=0
+ch7\ptp_synce\ptp\dscp=0
+ch6\ptp_synce\ethernet\dhcp_v6=DHCP
+ch7\ptp_synce\ethernet\dhcp_v6=DHCP
+ch6\ptp_synce\ethernet\dhcp_v4=Disabled
+ch7\ptp_synce\ethernet\dhcp_v4=Disabled
+ch6\used=No
+ch7\used=No
+ch6\protocol_enabled=Off
+ch7\protocol_enabled=Off
 `
 
 	c := config{}
@@ -87,81 +98,6 @@ ch8\used=Yes
 	s := f.Section("measure")
 
 	c.baseConfig(s)
-	require.True(t, c.changed)
-
-	buf, err := api.ToBuffer(f)
-	require.NoError(t, err)
-	require.Equal(t, expectedConfig, buf.String())
-}
-
-func TestNicConfig(t *testing.T) {
-	testConfig := `[measure]
-ch6\used=Yes
-ch6\synce_enabled=On
-ch6\protocol_enabled=On
-ch6\ptp_synce\ptp\dscp=42
-ch6\ptp_synce\ethernet\dhcp_v4=Enabled
-ch6\ptp_synce\ethernet\dhcp_v6=Disabled
-ch6\ptp_synce\ethernet\gateway=192.168.4.1
-ch6\ptp_synce\ethernet\gateway_v6=2000::000a
-ch6\ptp_synce\ethernet\ip_address=192.168.4.200
-ch6\ptp_synce\ethernet\ipv6_address=2000::000b
-ch6\ptp_synce\ethernet\mask=255.255.255.0
-ch6\ptp_synce\ethernet\mask_v6=32
-ch7\used=Yes
-ch7\synce_enabled=On
-ch7\protocol_enabled=On
-ch7\ptp_synce\ptp\dscp=42
-ch7\ptp_synce\ethernet\dhcp_v4=Disabled
-ch7\ptp_synce\ethernet\dhcp_v6=Static
-ch7\ptp_synce\ethernet\gateway=192.168.5.1
-ch7\ptp_synce\ethernet\gateway_v6=2000::000a
-ch7\ptp_synce\ethernet\ip_address=192.168.5.200
-ch7\ptp_synce\ethernet\ipv6_address=2000::000b
-ch7\ptp_synce\ethernet\mask=255.255.255.0
-`
-
-	expectedConfig := `[measure]
-ch6\used=No
-ch6\synce_enabled=Off
-ch6\protocol_enabled=Off
-ch6\ptp_synce\ptp\dscp=0
-ch6\ptp_synce\ethernet\dhcp_v4=Disabled
-ch6\ptp_synce\ethernet\dhcp_v6=Static
-ch6\ptp_synce\ethernet\gateway=fd00:3226:310a::a
-ch6\ptp_synce\ethernet\gateway_v6=fd00:3226:310a::a
-ch6\ptp_synce\ethernet\ip_address=fd00:3226:310a::1
-ch6\ptp_synce\ethernet\ipv6_address=fd00:3226:310a::1
-ch6\ptp_synce\ethernet\mask=64
-ch6\ptp_synce\ethernet\mask_v6=64
-ch7\used=No
-ch7\synce_enabled=Off
-ch7\protocol_enabled=Off
-ch7\ptp_synce\ptp\dscp=0
-ch7\ptp_synce\ethernet\dhcp_v4=Disabled
-ch7\ptp_synce\ethernet\dhcp_v6=Static
-ch7\ptp_synce\ethernet\gateway=192.168.5.1
-ch7\ptp_synce\ethernet\gateway_v6=2000::000a
-ch7\ptp_synce\ethernet\ip_address=192.168.5.200
-ch7\ptp_synce\ethernet\ipv6_address=2000::000b
-ch7\ptp_synce\ethernet\mask=255.255.255.0
-`
-
-	c := config{}
-
-	f, err := ini.Load([]byte(testConfig))
-	require.NoError(t, err)
-
-	s := f.Section("measure")
-
-	n := &NetworkConfig{
-		Eth1: net.ParseIP("fd00:3226:310a::1"),
-		Gw1:  net.ParseIP("fd00:3226:310a::a"),
-		Eth2: net.ParseIP("fd00:3226:310a::2"),
-		Gw2:  net.ParseIP("fd00:3226:310a::a"),
-	}
-
-	c.nicConfig(s, n)
 	require.True(t, c.changed)
 
 	buf, err := api.ToBuffer(f)
@@ -583,17 +519,11 @@ ch0\freq=1 Hz
 ch6\synce_enabled=Off
 ch6\ptp_synce\ptp\dscp=0
 ch6\ptp_synce\ethernet\dhcp_v4=Disabled
-ch6\ptp_synce\ethernet\dhcp_v6=Static
-ch6\ptp_synce\ethernet\gateway=fd00:3226:310a::a
-ch6\ptp_synce\ethernet\gateway_v6=fd00:3226:310a::a
-ch6\ptp_synce\ethernet\ip_address=fd00:3226:310a::1
-ch6\ptp_synce\ethernet\ipv6_address=fd00:3226:310a::1
-ch6\ptp_synce\ethernet\mask=64
-ch6\ptp_synce\ethernet\mask_v6=64
+ch6\ptp_synce\ethernet\dhcp_v6=DHCP
 ch7\synce_enabled=Off
 ch7\ptp_synce\ptp\dscp=0
 ch7\ptp_synce\ethernet\dhcp_v4=Disabled
-ch7\ptp_synce\ethernet\dhcp_v6=Static
+ch7\ptp_synce\ethernet\dhcp_v6=DHCP
 ch9\ptp_synce\ntp\server_ip=fd00:3226:301b::3f
 ch9\ptp_synce\ntp\server_ip_ipv6=fd00:3226:301b::3f
 ch9\ptp_synce\physical_packet_channel=Channel 1
@@ -639,13 +569,6 @@ ch30\ptp_synce\ptp\domain=0
 	calnexAPI := api.NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
-	n := &NetworkConfig{
-		Eth1: net.ParseIP("fd00:3226:310a::1"),
-		Gw1:  net.ParseIP("fd00:3226:310a::a"),
-		Eth2: net.ParseIP("fd00:3226:310a::2"),
-		Gw2:  net.ParseIP("fd00:3226:310a::a"),
-	}
-
 	mc := map[api.Channel]MeasureConfig{
 		api.ChannelA: {
 			Target: "fd00:3226:301b::1f",
@@ -661,15 +584,14 @@ ch30\ptp_synce\ptp\domain=0
 		},
 	}
 
-	err := Config(parsed.Host, true, n, CalnexConfig(mc), true)
+	err := Config(parsed.Host, true, CalnexConfig(mc), true)
 	require.NoError(t, err)
 }
 
 func TestConfigFail(t *testing.T) {
-	n := &NetworkConfig{}
 	mc := map[api.Channel]MeasureConfig{}
 
-	err := Config("localhost", true, n, CalnexConfig(mc), true)
+	err := Config("localhost", true, CalnexConfig(mc), true)
 	require.Error(t, err)
 }
 
