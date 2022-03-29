@@ -57,7 +57,7 @@ type Result struct {
 type Version struct {
 	Firmware string
 }
-	
+
 // GNSS is a struct representing Calnex GNSS JSON response
 type GNSS struct {
 	AntennaStatus         string
@@ -774,7 +774,6 @@ func (a *API) Reboot() error {
 	return a.get(rebootURL)
 }
 
-	
 // GnssStatus returns current GNSS status
 func (a *API) GnssStatus() (*GNSS, error) {
 	url := fmt.Sprintf(gnssURL, a.source)
