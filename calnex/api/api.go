@@ -57,6 +57,15 @@ type Result struct {
 type Version struct {
 	Firmware string
 }
+	
+// GNSS is a struct representing Calnex GNSS JSON response
+type GNSS struct {
+	AntennaStatus         string
+	Locked                bool
+	LockedSatellites      int
+	SurveyComplete        bool
+	SurveyPercentComplete int
+}
 
 // Channel is a Calnex channel object
 type Channel int
@@ -393,6 +402,8 @@ const (
 	versionURL     = "https://%s/api/version"
 	firmwareURL    = "https://%s/api/updatefirmware"
 	certificateURL = "https://%s/api/installcertificate"
+
+	gnssURL = "https://%s/api/gnss/status"
 )
 
 var (
@@ -761,4 +772,26 @@ func (a *API) Reboot() error {
 		}
 	}
 	return a.get(rebootURL)
+}
+
+	
+// GnssStatus returns current GNSS status
+func (a *API) GnssStatus() (*GNSS, error) {
+	url := fmt.Sprintf(gnssURL, a.source)
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(http.StatusText(resp.StatusCode))
+	}
+
+	g := &GNSS{}
+	if err = json.NewDecoder(resp.Body).Decode(g); err != nil {
+		return nil, err
+	}
+
+	return g, nil
 }
