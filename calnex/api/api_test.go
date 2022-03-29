@@ -577,3 +577,28 @@ func TestMeasureChannelDatatypeMap(t *testing.T) {
 		require.Equal(t, TWOWAYTE, MeasureChannelDatatypeMap[Channel(i)])
 	}
 }
+
+func TestGnssStatus(t *testing.T) {
+	sampleResp := "{\"antennaStatus\":\"OK\",\"locked\":true,\"lockedSatellites\":9,\"surveyComplete\":true,\"surveyPercentComplete\":100}"
+	expected := &GNSS{
+		AntennaStatus:         "OK",
+		Locked:                true,
+		LockedSatellites:      9,
+		SurveyComplete:        true,
+		SurveyPercentComplete: 100,
+	}
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI.Client = ts.Client()
+
+	g, err := calnexAPI.GnssStatus()
+	require.NoError(t, err)
+	require.Equal(t, expected, g)
+}
