@@ -45,6 +45,8 @@ type Config struct {
 	RecvWorkers    int
 	QueueSize      int
 	DrainInterval  time.Duration
+	ClockClass     uint
+	ClockAccuracy  uint
 
 	clockIdentity ptp.ClockIdentity
 }

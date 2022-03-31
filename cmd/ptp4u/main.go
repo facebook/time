@@ -54,6 +54,8 @@ func main() {
 	flag.IntVar(&c.QueueSize, "queue", 0, "Size of the queue to send out packets")
 	flag.DurationVar(&c.MetricInterval, "metricinterval", 1*time.Minute, "Interval of resetting metrics")
 	flag.DurationVar(&c.DrainInterval, "draininterval", 30*time.Second, "Interval for drain checks")
+	flag.UintVar(&c.ClockClass, "classclass", 6, "Clock class to report via announce messages. 6 - Locked with Primary Reference Clock")
+	flag.UintVar(&c.ClockAccuracy, "clockaccuracy", 0x21, "Clock accuracy to report via announce messages. // 0x21 - Time Accurate within 100ns")
 
 	flag.Parse()
 
