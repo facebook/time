@@ -260,8 +260,8 @@ func (sc *SubscriptionClient) initAnnounce() {
 			Reserved:             0,
 			GrandmasterPriority1: 128,
 			GrandmasterClockQuality: ptp.ClockQuality{
-				ClockClass:              6,
-				ClockAccuracy:           33, // 0x21 - Time Accurate within 100ns
+				ClockClass:              0,
+				ClockAccuracy:           0,
 				OffsetScaledLogVariance: 23008,
 			},
 			GrandmasterPriority2: 128,
@@ -278,6 +278,8 @@ func (sc *SubscriptionClient) UpdateAnnounce() {
 	sc.announceP.SequenceID = sc.sequenceID
 	sc.announceP.LogMessageInterval = i
 	sc.announceP.CurrentUTCOffset = int16(sc.serverConfig.UTCOffset.Seconds())
+	sc.announceP.GrandmasterClockQuality.ClockClass = uint8(sc.serverConfig.ClockClass)
+	sc.announceP.GrandmasterClockQuality.ClockAccuracy = uint8(sc.serverConfig.ClockAccuracy)
 }
 
 // Announce returns ptp Announce packet

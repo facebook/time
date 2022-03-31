@@ -170,9 +170,11 @@ func TestAnnouncePacket(t *testing.T) {
 	UTCOffset := 3 * time.Second
 	sequenceID := uint16(42)
 	interval := 3 * time.Second
+	clockClass := uint(8)
+	clockAccuracy := uint(42)
 
 	w := &sendWorker{}
-	c := &Config{clockIdentity: ptp.ClockIdentity(1234), UTCOffset: UTCOffset}
+	c := &Config{clockIdentity: ptp.ClockIdentity(1234), ClockClass: clockClass, ClockAccuracy: clockAccuracy, UTCOffset: UTCOffset}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
@@ -192,6 +194,8 @@ func TestAnnouncePacket(t *testing.T) {
 	require.Equal(t, sequenceID+1, sc.Announce().Header.SequenceID)
 	require.Equal(t, sp, sc.Announce().Header.SourcePortIdentity)
 	require.Equal(t, i, sc.Announce().Header.LogMessageInterval)
+	require.Equal(t, uint8(clockClass), sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockClass)
+	require.Equal(t, uint8(clockAccuracy), sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockAccuracy)
 	require.Equal(t, int16(UTCOffset.Seconds()), sc.Announce().AnnounceBody.CurrentUTCOffset)
 }
 
