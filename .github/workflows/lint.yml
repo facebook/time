@@ -10,5 +10,5 @@ jobs:
           go-version: 1.16
       - run: sudo apt-get install libpcap-dev
       - uses: golangci/golangci-lint-action@v2
-        with:
-          version: latest
+      - run: if [ "$(go fmt ./... | wc -l)" -gt 0 ]; then exit 1; fi
+      - uses: reviewdog/action-misspell@v1
