@@ -43,7 +43,7 @@ func TestConfigifaceIPs(t *testing.T) {
 }
 
 func TestConfigIfaceHasIP(t *testing.T) {
-	c := Config{Interface: "lo"}
+	c := Config{StaticConfig: StaticConfig{Interface: "lo"}}
 
 	c.IP = net.ParseIP("::")
 	found, err := c.IfaceHasIP()
@@ -55,7 +55,7 @@ func TestConfigIfaceHasIP(t *testing.T) {
 	require.Nil(t, err)
 	require.False(t, found)
 
-	c = Config{Interface: "lol-does-not-exist"}
+	c = Config{StaticConfig: StaticConfig{Interface: "lol-does-not-exist"}}
 	c.IP = net.ParseIP("::")
 	found, err = c.IfaceHasIP()
 	require.NotNil(t, err)
@@ -64,7 +64,7 @@ func TestConfigIfaceHasIP(t *testing.T) {
 
 func TestConfigSetUTCOffsetFromSHM(t *testing.T) {
 	utcoffset := 42 * time.Second
-	c := Config{UTCOffset: utcoffset}
+	c := Config{DynamicConfig: DynamicConfig{UTCOffset: utcoffset}}
 	err := c.SetUTCOffsetFromSHM()
 	require.NotNil(t, err)
 	require.Equal(t, utcoffset, c.UTCOffset)
@@ -72,7 +72,7 @@ func TestConfigSetUTCOffsetFromSHM(t *testing.T) {
 
 func TestConfigSetUTCOffsetFromLeapsectz(t *testing.T) {
 	utcoffset := 42 * time.Second
-	c := Config{UTCOffset: utcoffset}
+	c := Config{DynamicConfig: DynamicConfig{UTCOffset: utcoffset}}
 	err := c.SetUTCOffsetFromLeapsectz()
 	require.NoError(t, err)
 	require.Greater(t, 50*time.Second, c.UTCOffset)

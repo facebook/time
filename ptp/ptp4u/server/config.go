@@ -27,26 +27,45 @@ import (
 	ptp "github.com/facebook/time/ptp/protocol"
 )
 
-// Config is a server config structure
-type Config struct {
+// StaticConfig is a set of static options which require a server restart
+type StaticConfig struct {
+	ConfigFile     string
+	DebugAddr      string
 	DSCP           int
 	Interface      string
 	IP             net.IP
-	LogLevel       string
-	MaxSubDuration time.Duration
-	MetricInterval time.Duration
-	MinSubInterval time.Duration
-	MonitoringPort int
-	SHM            bool
 	Leapsectz      bool
-	TimestampType  string
-	UTCOffset      time.Duration
-	SendWorkers    int
-	RecvWorkers    int
+	LogLevel       string
+	MonitoringPort int
 	QueueSize      int
-	DrainInterval  time.Duration
-	ClockClass     uint
-	ClockAccuracy  uint
+	RecvWorkers    int
+	SendWorkers    int
+	SHM            bool
+	TimestampType  string
+}
+
+// DynamicConfig is a set of dynamic options which don't need a server restart
+type DynamicConfig struct {
+	// ClockCccuracy to report via announce messages. Time Accurate within 100ns
+	ClockAccuracy uint8
+	// ClockClass to report via announce messages. 6 - Locked with Primary Reference Clock
+	ClockClass uint8
+	// DrainInterval is an interval for drain checks
+	DrainInterval time.Duration
+	// MaxSubDuration is a maximum sync/announce/delay_resp subscription duration
+	MaxSubDuration time.Duration
+	// MetricInterval is an interval of resetting metrics
+	MetricInterval time.Duration
+	// MinSubInterval is a minimum interval of the sync/announce subscription messages
+	MinSubInterval time.Duration
+	// UTCOffset is a current UTC offset.
+	UTCOffset time.Duration
+}
+
+// Config is a server config structure
+type Config struct {
+	StaticConfig
+	DynamicConfig
 
 	clockIdentity ptp.ClockIdentity
 }

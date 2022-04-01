@@ -170,11 +170,11 @@ func TestAnnouncePacket(t *testing.T) {
 	UTCOffset := 3 * time.Second
 	sequenceID := uint16(42)
 	interval := 3 * time.Second
-	clockClass := uint(8)
-	clockAccuracy := uint(42)
+	clockClass := uint8(8)
+	clockAccuracy := uint8(42)
 
 	w := &sendWorker{}
-	c := &Config{clockIdentity: ptp.ClockIdentity(1234), ClockClass: clockClass, ClockAccuracy: clockAccuracy, UTCOffset: UTCOffset}
+	c := &Config{clockIdentity: ptp.ClockIdentity(1234), DynamicConfig: DynamicConfig{ClockClass: clockClass, ClockAccuracy: clockAccuracy, UTCOffset: UTCOffset}}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID

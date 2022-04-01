@@ -33,8 +33,10 @@ func TestFindWorker(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
-		TimestampType: timestamp.SWTIMESTAMP,
-		SendWorkers:   10,
+		StaticConfig: StaticConfig{
+			TimestampType: timestamp.SWTIMESTAMP,
+			SendWorkers:   10,
+		},
 	}
 	s := Server{
 		Config: c,
@@ -74,10 +76,12 @@ func TestStartEventListener(t *testing.T) {
 	ptp.PortEvent = 0
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
-		TimestampType: timestamp.SWTIMESTAMP,
-		SendWorkers:   10,
-		RecvWorkers:   10,
-		IP:            net.ParseIP("127.0.0.1"),
+		StaticConfig: StaticConfig{
+			TimestampType: timestamp.SWTIMESTAMP,
+			SendWorkers:   10,
+			RecvWorkers:   10,
+			IP:            net.ParseIP("127.0.0.1"),
+		},
 	}
 	s := Server{
 		Config: c,
@@ -92,10 +96,12 @@ func TestStartGeneralListener(t *testing.T) {
 	ptp.PortGeneral = 0
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
-		TimestampType: timestamp.SWTIMESTAMP,
-		SendWorkers:   10,
-		RecvWorkers:   10,
-		IP:            net.ParseIP("127.0.0.1"),
+		StaticConfig: StaticConfig{
+			TimestampType: timestamp.SWTIMESTAMP,
+			SendWorkers:   10,
+			RecvWorkers:   10,
+			IP:            net.ParseIP("127.0.0.1"),
+		},
 	}
 	s := Server{
 		Config: c,
@@ -110,7 +116,9 @@ func TestSendGrant(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
-		SendWorkers:   10,
+		StaticConfig: StaticConfig{
+			SendWorkers: 10,
+		},
 	}
 	s := Server{
 		Config: c,

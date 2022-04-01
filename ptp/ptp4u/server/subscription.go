@@ -278,8 +278,8 @@ func (sc *SubscriptionClient) UpdateAnnounce() {
 	sc.announceP.SequenceID = sc.sequenceID
 	sc.announceP.LogMessageInterval = i
 	sc.announceP.CurrentUTCOffset = int16(sc.serverConfig.UTCOffset.Seconds())
-	sc.announceP.GrandmasterClockQuality.ClockClass = uint8(sc.serverConfig.ClockClass)
-	sc.announceP.GrandmasterClockQuality.ClockAccuracy = uint8(sc.serverConfig.ClockAccuracy)
+	sc.announceP.GrandmasterClockQuality.ClockClass = sc.serverConfig.ClockClass
+	sc.announceP.GrandmasterClockQuality.ClockAccuracy = sc.serverConfig.ClockAccuracy
 }
 
 // Announce returns ptp Announce packet
