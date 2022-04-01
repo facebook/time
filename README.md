@@ -1,6 +1,6 @@
 # Time 
 
-[![CircleCI](https://circleci.com/gh/facebook/time/tree/main.svg?style=svg)](https://circleci.com/gh/facebook/time/tree/main)
+[![Build Status](https://img.shields.io/github/workflow/status/facebook/time/test/main)](https://github.com/facebook/time/actions?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/facebook/time/branch/main/graph/badge.svg?token=QC44PEpHRi)](https://codecov.io/gh/facebook/time)
 [![Go Report Card](https://goreportcard.com/badge/github.com/facebook/time)](https://goreportcard.com/report/github.com/facebook/time)
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/facebook/time)
