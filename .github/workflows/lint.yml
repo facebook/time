@@ -11,4 +11,9 @@ jobs:
       - run: sudo apt-get install libpcap-dev
       - uses: golangci/golangci-lint-action@v2
       - run: if [ "$(go fmt ./... | wc -l)" -gt 0 ]; then exit 1; fi
-      - uses: reviewdog/action-misspell@v1
+      - run: |
+          go get -v -u github.com/u-root/u-root/tools/checklicenses
+          go run github.com/u-root/u-root/tools/checklicenses -c .github/config.json
+      - run: |
+          go get -v -u github.com/client9/misspell
+          go run github.com/client9/misspell/cmd/misspell -error ./
