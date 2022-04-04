@@ -22,7 +22,6 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
 	"time"
 
 	"github.com/facebook/time/ptp/ptp4u/drain"
@@ -30,7 +29,6 @@ import (
 	"github.com/facebook/time/ptp/ptp4u/stats"
 	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
-	yaml "gopkg.in/yaml.v2"
 )
 
 func main() {
@@ -49,8 +47,6 @@ func main() {
 
 	var ipaddr string
 
-	flag.BoolVar(&c.Leapsectz, "leapsectz", false, "Leapsectz to determine UTC offset periodically")
-	flag.BoolVar(&c.SHM, "shm", false, "Use Share Memory Segment to determine UTC offset periodically (leapsectz has a priority)")
 	flag.IntVar(&c.DSCP, "dscp", 0, "DSCP for PTP packets, valid values are between 0-63 (used by send workers)")
 	flag.IntVar(&c.MonitoringPort, "monitoringport", 8888, "Port to run monitoring server on")
 	flag.IntVar(&c.QueueSize, "queue", 0, "Size of the queue to send out packets")
@@ -78,13 +74,7 @@ func main() {
 	}
 
 	if c.ConfigFile != "" {
-		cData, err := os.ReadFile(c.ConfigFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = yaml.Unmarshal(cData, &c.DynamicConfig)
-		if err != nil {
+		if err := c.ReadDynamicConfig(); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -119,15 +109,6 @@ func main() {
 		}()
 	}
 
-	if c.Leapsectz {
-		if err := c.SetUTCOffsetFromLeapsectz(); err != nil {
-			log.Fatalf("Failed to set UTC offset: %v", err)
-		}
-	} else if c.SHM {
-		if err := c.SetUTCOffsetFromSHM(); err != nil {
-			log.Fatalf("Failed to set UTC offset: %v", err)
-		}
-	}
 	log.Infof("UTC offset is: %v", c.UTCOffset)
 
 	// Monitoring

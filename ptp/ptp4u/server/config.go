@@ -17,15 +17,16 @@ limitations under the License.
 package server
 
 import (
-	"fmt"
+	"errors"
 	"net"
+	"os"
 	"time"
 
-	"github.com/facebook/time/leapsectz"
-	"github.com/facebook/time/ntp/shm"
-	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
+	yaml "gopkg.in/yaml.v2"
 )
+
+var errInsaneUTCoffset = errors.New("UTC offset is outside of sane range")
 
 // StaticConfig is a set of static options which require a server restart
 type StaticConfig struct {
@@ -34,13 +35,11 @@ type StaticConfig struct {
 	DSCP           int
 	Interface      string
 	IP             net.IP
-	Leapsectz      bool
 	LogLevel       string
 	MonitoringPort int
 	QueueSize      int
 	RecvWorkers    int
 	SendWorkers    int
-	SHM            bool
 	TimestampType  string
 }
 
@@ -70,50 +69,21 @@ type Config struct {
 	clockIdentity ptp.ClockIdentity
 }
 
-func leapSanity(sec int) bool {
-	if sec > 30 && sec < 50 {
-		return true
-	}
-	return false
-}
-
-// SetUTCOffsetFromSHM reads SHM and if valid sets UTC offset
-func (c *Config) SetUTCOffsetFromSHM() error {
-	phcTime, err := phc.Time(c.Interface, phc.MethodSyscallClockGettime)
+func (c *Config) ReadDynamicConfig() error {
+	cData, err := os.ReadFile(c.ConfigFile)
 	if err != nil {
 		return err
 	}
 
-	shmTime, err := shm.Time()
+	err = yaml.Unmarshal(cData, &c.DynamicConfig)
 	if err != nil {
 		return err
 	}
 
-	// Safety check (http://leapsecond.com/java/gpsclock.htm):
-	// SHM (NTP) time is always behind of the PHC (PTP) (as of 2021 by 37 seconds)
-	// PHC (PTP) time is always ahead of the SHM (NTP)
-	// SHM+30 <PHC< SHM+50
-	uo := phcTime.Sub(shmTime).Round(time.Second)
-	if !leapSanity(int(uo.Seconds())) {
-		return fmt.Errorf("shm (%s) and phc (%s) times are too far away: %s", shmTime, phcTime, uo)
-	}
-
-	c.UTCOffset = uo
-	return nil
-}
-
-func (c *Config) SetUTCOffsetFromLeapsectz() error {
-	var uo int32 = 10
-	latestLeap, err := leapsectz.Latest("")
-	if err != nil {
+	if err := c.UTCOffsetSanity(); err != nil {
 		return err
 	}
-	uo += latestLeap.Nleap
 
-	if !leapSanity(int(uo)) {
-		return fmt.Errorf("UTC offset is unrealistic: %d seconds", uo)
-	}
-	c.UTCOffset = time.Duration(uo) * time.Second
 	return nil
 }
 
@@ -131,6 +101,14 @@ func (c *Config) IfaceHasIP() (bool, error) {
 	}
 
 	return false, nil
+}
+
+// UTCOffsetSanity checks if UTC offset value has an adequate value
+func (c *Config) UTCOffsetSanity() error {
+	if c.UTCOffset < 30*time.Second || c.UTCOffset > 50*time.Second {
+		return errInsaneUTCoffset
+	}
+	return nil
 }
 
 // ifaceIPs gets all IPs on the specified interface

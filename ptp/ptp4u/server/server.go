@@ -96,8 +96,7 @@ func (s *Server) Start() error {
 	// Run active metric reporting
 	go func() {
 		defer wg.Done()
-		for {
-			<-time.After(s.Config.MetricInterval)
+		for ; true; <-time.After(s.Config.MetricInterval) {
 			for _, w := range s.sw {
 				w.inventoryClients()
 			}
@@ -111,9 +110,7 @@ func (s *Server) Start() error {
 	// Drain check
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(s.Config.DrainInterval)
-		defer ticker.Stop()
-		for ; true; <-ticker.C {
+		for ; true; <-time.After(s.Config.DrainInterval) {
 			var drain bool
 			for _, check := range s.Checks {
 				if check.Check() {
@@ -130,24 +127,6 @@ func (s *Server) Start() error {
 				s.Undrain()
 				s.Stats.SetDrain(0)
 			}
-		}
-	}()
-
-	// Update UTC offset periodically
-	go func() {
-		defer wg.Done()
-		for {
-			<-time.After(1 * time.Minute)
-			if s.Config.Leapsectz {
-				if err := s.Config.SetUTCOffsetFromLeapsectz(); err != nil {
-					log.Errorf("Failed to update UTC offset: %v. Keeping the last known: %s", err, s.Config.UTCOffset)
-				}
-			} else if s.Config.SHM {
-				if err := s.Config.SetUTCOffsetFromSHM(); err != nil {
-					log.Errorf("Failed to update UTC offset: %v. Keeping the last known: %s", err, s.Config.UTCOffset)
-				}
-			}
-			log.Debugf("UTC offset is: %v", s.Config.UTCOffset.Seconds())
 		}
 	}()
 
