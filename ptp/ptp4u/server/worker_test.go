@@ -31,7 +31,9 @@ import (
 func TestWorkerQueue(t *testing.T) {
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
-		TimestampType: timestamp.SWTIMESTAMP,
+		StaticConfig: StaticConfig{
+			TimestampType: timestamp.SWTIMESTAMP,
+		},
 	}
 
 	st := stats.NewJSONStats()
@@ -78,7 +80,9 @@ func TestWorkerQueue(t *testing.T) {
 func TestFindSubscription(t *testing.T) {
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
-		TimestampType: timestamp.SWTIMESTAMP,
+		StaticConfig: StaticConfig{
+			TimestampType: timestamp.SWTIMESTAMP,
+		},
 	}
 
 	w := &sendWorker{
@@ -112,8 +116,9 @@ func TestInventoryClients(t *testing.T) {
 	}
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
-		QueueSize:     100, // Making sure subscriptions aren't blocked
-
+		StaticConfig: StaticConfig{
+			QueueSize: 100, // Making sure subscriptions aren't blocked
+		},
 	}
 
 	st := stats.NewJSONStats()

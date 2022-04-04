@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"time"
 
 	"github.com/facebook/time/ptp/ptp4u/drain"
@@ -29,34 +30,38 @@ import (
 	"github.com/facebook/time/ptp/ptp4u/stats"
 	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
+	yaml "gopkg.in/yaml.v2"
 )
 
 func main() {
-	c := &server.Config{}
+	// Set reasonable defaults for Dynamic config
+	c := &server.Config{
+		DynamicConfig: server.DynamicConfig{
+			ClockAccuracy:  0x21,
+			ClockClass:     6,
+			DrainInterval:  30 * time.Second,
+			MaxSubDuration: 1 * time.Hour,
+			MetricInterval: 1 * time.Minute,
+			MinSubInterval: 1 * time.Second,
+			UTCOffset:      37 * time.Second,
+		},
+	}
 
 	var ipaddr string
-	var pprofaddr string
 
-	flag.IntVar(&c.DSCP, "dscp", 0, "DSCP for PTP packets, valid values are between 0-63 (used by send workers)")
-	flag.StringVar(&ipaddr, "ip", "::", "IP to bind on")
-	flag.StringVar(&pprofaddr, "pprofaddr", "", "host:port for the pprof to bind")
-	flag.StringVar(&c.Interface, "iface", "eth0", "Set the interface")
-	flag.StringVar(&c.LogLevel, "loglevel", "warning", "Set a log level. Can be: debug, info, warning, error")
-	flag.DurationVar(&c.MinSubInterval, "minsubinterval", 1*time.Second, "Minimum interval of the sync/announce subscription messages")
-	flag.DurationVar(&c.MaxSubDuration, "maxsubduration", 1*time.Hour, "Maximum sync/announce/delay_resp subscription duration")
-	flag.StringVar(&c.TimestampType, "timestamptype", timestamp.HWTIMESTAMP, fmt.Sprintf("Timestamp type. Can be: %s, %s", timestamp.HWTIMESTAMP, timestamp.SWTIMESTAMP))
-	flag.DurationVar(&c.UTCOffset, "utcoffset", 37*time.Second, "Set the UTC offset. Ignored if shm or leapsectz are set")
 	flag.BoolVar(&c.Leapsectz, "leapsectz", false, "Leapsectz to determine UTC offset periodically")
 	flag.BoolVar(&c.SHM, "shm", false, "Use Share Memory Segment to determine UTC offset periodically (leapsectz has a priority)")
-	flag.IntVar(&c.SendWorkers, "workers", 100, "Set the number of send workers")
-	flag.IntVar(&c.RecvWorkers, "recvworkers", 10, "Set the number of receive workers")
+	flag.IntVar(&c.DSCP, "dscp", 0, "DSCP for PTP packets, valid values are between 0-63 (used by send workers)")
 	flag.IntVar(&c.MonitoringPort, "monitoringport", 8888, "Port to run monitoring server on")
 	flag.IntVar(&c.QueueSize, "queue", 0, "Size of the queue to send out packets")
-	flag.DurationVar(&c.MetricInterval, "metricinterval", 1*time.Minute, "Interval of resetting metrics")
-	flag.DurationVar(&c.DrainInterval, "draininterval", 30*time.Second, "Interval for drain checks")
-	flag.UintVar(&c.ClockClass, "classclass", 6, "Clock class to report via announce messages. 6 - Locked with Primary Reference Clock")
-	flag.UintVar(&c.ClockAccuracy, "clockaccuracy", 0x21, "Clock accuracy to report via announce messages. // 0x21 - Time Accurate within 100ns")
-
+	flag.IntVar(&c.RecvWorkers, "recvworkers", 10, "Set the number of receive workers")
+	flag.IntVar(&c.SendWorkers, "workers", 100, "Set the number of send workers")
+	flag.StringVar(&c.ConfigFile, "config", "", "Path to a config with dynamic settings")
+	flag.StringVar(&c.DebugAddr, "pprofaddr", "", "host:port for the pprof to bind")
+	flag.StringVar(&c.Interface, "iface", "eth0", "Set the interface")
+	flag.StringVar(&c.LogLevel, "loglevel", "warning", "Set a log level. Can be: debug, info, warning, error")
+	flag.StringVar(&c.TimestampType, "timestamptype", timestamp.HWTIMESTAMP, fmt.Sprintf("Timestamp type. Can be: %s, %s", timestamp.HWTIMESTAMP, timestamp.SWTIMESTAMP))
+	flag.StringVar(&ipaddr, "ip", "::", "IP to bind on")
 	flag.Parse()
 
 	switch c.LogLevel {
@@ -70,6 +75,18 @@ func main() {
 		log.SetLevel(log.ErrorLevel)
 	default:
 		log.Fatalf("Unrecognized log level: %v", c.LogLevel)
+	}
+
+	if c.ConfigFile != "" {
+		cData, err := os.ReadFile(c.ConfigFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = yaml.Unmarshal(cData, &c.DynamicConfig)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	if c.DSCP < 0 || c.DSCP > 63 {
@@ -95,10 +112,10 @@ func main() {
 		log.Fatalf("IP '%s' is not found on interface '%s'", c.IP, c.Interface)
 	}
 
-	if pprofaddr != "" {
-		log.Warningf("Staring profiler on %s", pprofaddr)
+	if c.DebugAddr != "" {
+		log.Warningf("Staring profiler on %s", c.DebugAddr)
 		go func() {
-			log.Println(http.ListenAndServe(pprofaddr, nil))
+			log.Println(http.ListenAndServe(c.DebugAddr, nil))
 		}()
 	}
 

@@ -3,7 +3,6 @@ module github.com/facebook/time
 go 1.16
 
 require (
-	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
 	github.com/davecgh/go-spew v1.1.1
 	github.com/fatih/color v1.13.0
 	github.com/go-ini/ini v1.66.2
@@ -11,6 +10,7 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/hashicorp/go-version v1.3.0
 	github.com/jsimonetti/rtnetlink v0.0.0-20211213041634-9dff439f7e79
+	github.com/mattn/go-runewidth v0.0.10 // indirect
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.8.1
@@ -20,4 +20,5 @@ require (
 	golang.org/x/net v0.0.0-20211209124913-491a49abca63
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20211210111614-af8b64212486
+	gopkg.in/yaml.v2 v2.4.0
 )

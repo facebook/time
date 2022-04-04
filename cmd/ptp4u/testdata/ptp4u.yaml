@@ -1,0 +1,7 @@
+clockaccuracy: 0x21
+clockclass: 6
+draininterval : "30s"
+maxsubduration: "1h"
+metricinterval : "1m"
+minsubinterval: "1s"
+utcoffset     : "37s"
