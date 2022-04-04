@@ -18,8 +18,10 @@ package server
 
 import (
 	"context"
+	"io/ioutil"
 	"math/rand"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/facebook/time/ptp/ptp4u/stats"
 	"github.com/facebook/time/timestamp"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 )
 
 func TestFindWorker(t *testing.T) {
@@ -156,4 +159,50 @@ func TestUndrain(t *testing.T) {
 	require.ErrorIs(t, context.Canceled, s.ctx.Err())
 	s.Undrain()
 	require.NoError(t, s.ctx.Err())
+}
+
+func TestConfigReload(t *testing.T) {
+	expected := &Config{
+		DynamicConfig: DynamicConfig{
+			ClockAccuracy:  0,
+			ClockClass:     1,
+			DrainInterval:  2 * time.Second,
+			MaxSubDuration: 3 * time.Hour,
+			MetricInterval: 4 * time.Minute,
+			MinSubInterval: 5 * time.Second,
+			UTCOffset:      37 * time.Second,
+		},
+	}
+
+	c := &Config{}
+	s := Server{
+		Config: c,
+		Stats:  stats.NewJSONStats(),
+	}
+
+	cfg, err := ioutil.TempFile("", "ptp4u")
+	require.NoError(t, err)
+	defer os.Remove(cfg.Name())
+
+	config := `clockaccuracy: 0
+clockclass: 1
+draininterval: "2s"
+maxsubduration: "3h"
+metricinterval: "4m"
+minsubinterval: "5s"
+utcoffset: "37s"
+`
+	_, err = cfg.WriteString(config)
+	require.NoError(t, err)
+
+	c.ConfigFile = cfg.Name()
+
+	go s.configReload()
+	time.Sleep(100 * time.Millisecond)
+
+	err = unix.Kill(unix.Getpid(), unix.SIGHUP)
+	require.NoError(t, err)
+	time.Sleep(100 * time.Millisecond)
+
+	require.Equal(t, expected.DynamicConfig, c.DynamicConfig)
 }

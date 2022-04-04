@@ -59,6 +59,9 @@ type Stats interface {
 	// IncWorkerSubs atomically add 1 to the counter
 	IncWorkerSubs(workerid int)
 
+	// IncReload atomically add 1 to the counter
+	IncReload()
+
 	// DecSubscription atomically removes 1 from the counter
 	DecSubscription(t ptp.MessageType)
 
@@ -168,6 +171,7 @@ type counters struct {
 	workerSubs    syncMapInt64
 	utcoffset     int64
 	drain         int64
+	reload        int64
 }
 
 func (c *counters) init() {
@@ -192,6 +196,7 @@ func (c *counters) reset() {
 	c.txtsattempts.reset()
 	c.utcoffset = 0
 	c.drain = 0
+	c.reload = 0
 }
 
 // toMap converts counters to a map
@@ -245,6 +250,7 @@ func (c *counters) toMap() (export map[string]int64) {
 
 	res["utcoffset"] = c.utcoffset
 	res["drain"] = c.drain
+	res["reload"] = c.reload
 
 	return res
 }

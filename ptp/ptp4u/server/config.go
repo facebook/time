@@ -69,21 +69,32 @@ type Config struct {
 	clockIdentity ptp.ClockIdentity
 }
 
+// UTCOffsetSanity checks if UTC offset value has an adequate value
+func (dc *DynamicConfig) UTCOffsetSanity() error {
+	if dc.UTCOffset < 30*time.Second || dc.UTCOffset > 50*time.Second {
+		return errInsaneUTCoffset
+	}
+	return nil
+}
+
 func (c *Config) ReadDynamicConfig() error {
 	cData, err := os.ReadFile(c.ConfigFile)
 	if err != nil {
 		return err
 	}
 
-	err = yaml.Unmarshal(cData, &c.DynamicConfig)
+	d := c.DynamicConfig
+
+	err = yaml.Unmarshal(cData, &d)
 	if err != nil {
 		return err
 	}
 
-	if err := c.UTCOffsetSanity(); err != nil {
+	if err := d.UTCOffsetSanity(); err != nil {
 		return err
 	}
 
+	c.DynamicConfig = d
 	return nil
 }
 
@@ -101,14 +112,6 @@ func (c *Config) IfaceHasIP() (bool, error) {
 	}
 
 	return false, nil
-}
-
-// UTCOffsetSanity checks if UTC offset value has an adequate value
-func (c *Config) UTCOffsetSanity() error {
-	if c.UTCOffset < 30*time.Second || c.UTCOffset > 50*time.Second {
-		return errInsaneUTCoffset
-	}
-	return nil
 }
 
 // ifaceIPs gets all IPs on the specified interface

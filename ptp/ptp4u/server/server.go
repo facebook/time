@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
+	"os/signal"
 	"sync"
 	"time"
 
@@ -93,20 +95,6 @@ func (s *Server) Start() error {
 		s.startEventListener()
 	}()
 
-	// Run active metric reporting
-	go func() {
-		defer wg.Done()
-		for ; true; <-time.After(s.Config.MetricInterval) {
-			for _, w := range s.sw {
-				w.inventoryClients()
-			}
-			s.Stats.SetUTCOffset(int64(s.Config.UTCOffset.Seconds()))
-
-			s.Stats.Snapshot()
-			s.Stats.Reset()
-		}
-	}()
-
 	// Drain check
 	go func() {
 		defer wg.Done()
@@ -127,6 +115,26 @@ func (s *Server) Start() error {
 				s.Undrain()
 				s.Stats.SetDrain(0)
 			}
+		}
+	}()
+
+	// Reload dynamic config
+	go func() {
+		defer wg.Done()
+		s.configReload()
+	}()
+
+	// Run active metric reporting
+	go func() {
+		defer wg.Done()
+		for ; true; <-time.After(s.Config.MetricInterval) {
+			for _, w := range s.sw {
+				w.inventoryClients()
+			}
+			s.Stats.SetUTCOffset(int64(s.Config.UTCOffset.Seconds()))
+
+			s.Stats.Snapshot()
+			s.Stats.Reset()
 		}
 	}()
 
@@ -410,5 +418,20 @@ func (s *Server) Drain() {
 func (s *Server) Undrain() {
 	if s.ctx != nil && s.ctx.Err() != nil {
 		s.ctx, s.cancel = context.WithCancel(context.Background())
+	}
+}
+
+// configReload watches for SIGHUP and reloads the dynamic config
+func (s *Server) configReload() {
+	log.Infof("Engaging the SIGHUP monitoring")
+	hangupchan := make(chan os.Signal, 10)
+	signal.Notify(hangupchan, unix.SIGHUP)
+	for range hangupchan {
+		log.Info("SIGHUP received, reloading config")
+		err := s.Config.ReadDynamicConfig()
+		if err != nil {
+			log.Errorf("Failed to reload config: %v. Moving on", err)
+		}
+		s.Stats.IncReload()
 	}
 }

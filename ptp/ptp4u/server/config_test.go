@@ -64,7 +64,7 @@ func TestConfigIfaceHasIP(t *testing.T) {
 	require.False(t, found)
 }
 
-func TestReadDynamicConfig(t *testing.T) {
+func TestReadDynamicConfigOk(t *testing.T) {
 	expected := &Config{
 		DynamicConfig: DynamicConfig{
 			ClockAccuracy:  0,
@@ -85,7 +85,7 @@ func TestReadDynamicConfig(t *testing.T) {
 	require.NoError(t, err)
 	defer os.Remove(cfg.Name())
 
-	text := `clockaccuracy: 0
+	config := `clockaccuracy: 0
 clockclass: 1
 draininterval: "2s"
 maxsubduration: "3h"
@@ -93,7 +93,7 @@ metricinterval: "4m"
 minsubinterval: "5s"
 utcoffset: "37s"
 `
-	_, err = cfg.WriteString(text)
+	_, err = cfg.WriteString(config)
 	require.NoError(t, err)
 
 	c.ConfigFile = cfg.Name()
@@ -102,12 +102,48 @@ utcoffset: "37s"
 	require.Equal(t, expected.DynamicConfig, c.DynamicConfig)
 }
 
+func TestReadDynamicConfigInvalid(t *testing.T) {
+	expected := &Config{
+		DynamicConfig: DynamicConfig{
+			ClockAccuracy:  0,
+			ClockClass:     1,
+			DrainInterval:  2 * time.Second,
+			MaxSubDuration: 3 * time.Hour,
+			MetricInterval: 4 * time.Minute,
+			MinSubInterval: 5 * time.Second,
+			UTCOffset:      37 * time.Second,
+		},
+	}
+	c := *expected
+
+	config := `clockaccuracy: 1
+clockclass: 2
+draininterval: "3s"
+maxsubduration: "4h"
+metricinterval: "5m"
+minsubinterval: "6s"
+utcoffset: "7s"
+`
+	cfg, err := ioutil.TempFile("", "ptp4u")
+	require.NoError(t, err)
+	defer os.Remove(cfg.Name())
+
+	_, err = cfg.WriteString(config)
+	require.NoError(t, err)
+
+	c.ConfigFile = cfg.Name()
+	err = c.ReadDynamicConfig()
+	require.ErrorIs(t, err, errInsaneUTCoffset)
+	// Make sure config did not reload
+	require.Equal(t, expected.DynamicConfig, c.DynamicConfig)
+}
+
 func TestUTCOffsetSanity(t *testing.T) {
-	c := &Config{}
-	c.UTCOffset = 10 * time.Second
-	require.ErrorIs(t, errInsaneUTCoffset, c.UTCOffsetSanity())
-	c.UTCOffset = 60 * time.Second
-	require.ErrorIs(t, errInsaneUTCoffset, c.UTCOffsetSanity())
-	c.UTCOffset = 37 * time.Second
-	require.NoError(t, c.UTCOffsetSanity())
+	dc := &DynamicConfig{}
+	dc.UTCOffset = 10 * time.Second
+	require.ErrorIs(t, errInsaneUTCoffset, dc.UTCOffsetSanity())
+	dc.UTCOffset = 60 * time.Second
+	require.ErrorIs(t, errInsaneUTCoffset, dc.UTCOffsetSanity())
+	dc.UTCOffset = 37 * time.Second
+	require.NoError(t, dc.UTCOffsetSanity())
 }
