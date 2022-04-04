@@ -17,7 +17,9 @@ limitations under the License.
 package server
 
 import (
+	"io/ioutil"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -62,25 +64,50 @@ func TestConfigIfaceHasIP(t *testing.T) {
 	require.False(t, found)
 }
 
-func TestConfigSetUTCOffsetFromSHM(t *testing.T) {
-	utcoffset := 42 * time.Second
-	c := Config{DynamicConfig: DynamicConfig{UTCOffset: utcoffset}}
-	err := c.SetUTCOffsetFromSHM()
-	require.NotNil(t, err)
-	require.Equal(t, utcoffset, c.UTCOffset)
-}
+func TestReadDynamicConfig(t *testing.T) {
+	expected := &Config{
+		DynamicConfig: DynamicConfig{
+			ClockAccuracy:  0,
+			ClockClass:     1,
+			DrainInterval:  2 * time.Second,
+			MaxSubDuration: 3 * time.Hour,
+			MetricInterval: 4 * time.Minute,
+			MinSubInterval: 5 * time.Second,
+			UTCOffset:      37 * time.Second,
+		},
+	}
 
-func TestConfigSetUTCOffsetFromLeapsectz(t *testing.T) {
-	utcoffset := 42 * time.Second
-	c := Config{DynamicConfig: DynamicConfig{UTCOffset: utcoffset}}
-	err := c.SetUTCOffsetFromLeapsectz()
+	c := &Config{}
+
+	err := c.ReadDynamicConfig()
+	require.Error(t, err)
+	cfg, err := ioutil.TempFile("", "ptp4u")
 	require.NoError(t, err)
-	require.Greater(t, 50*time.Second, c.UTCOffset)
-	require.Less(t, 30*time.Second, c.UTCOffset)
+	defer os.Remove(cfg.Name())
+
+	text := `clockaccuracy: 0
+clockclass: 1
+draininterval: "2s"
+maxsubduration: "3h"
+metricinterval: "4m"
+minsubinterval: "5s"
+utcoffset: "37s"
+`
+	_, err = cfg.WriteString(text)
+	require.NoError(t, err)
+
+	c.ConfigFile = cfg.Name()
+	err = c.ReadDynamicConfig()
+	require.NoError(t, err)
+	require.Equal(t, expected.DynamicConfig, c.DynamicConfig)
 }
 
-func TestLeapSanity(t *testing.T) {
-	require.False(t, leapSanity(10))
-	require.False(t, leapSanity(60))
-	require.True(t, leapSanity(37))
+func TestUTCOffsetSanity(t *testing.T) {
+	c := &Config{}
+	c.UTCOffset = 10 * time.Second
+	require.ErrorIs(t, errInsaneUTCoffset, c.UTCOffsetSanity())
+	c.UTCOffset = 60 * time.Second
+	require.ErrorIs(t, errInsaneUTCoffset, c.UTCOffsetSanity())
+	c.UTCOffset = 37 * time.Second
+	require.NoError(t, c.UTCOffsetSanity())
 }
