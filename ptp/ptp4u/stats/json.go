@@ -67,6 +67,7 @@ func (s *JSONStats) Snapshot() {
 	s.txtsattempts.copy(&s.report.txtsattempts)
 	s.report.utcoffset = s.utcoffset
 	s.report.drain = s.drain
+	s.report.reload = s.reload
 }
 
 // handleRequest is a handler used for all http monitoring requests
@@ -115,6 +116,11 @@ func (s *JSONStats) IncTXSignaling(t ptp.MessageType) {
 // IncWorkerSubs atomically add 1 to the counter
 func (s *JSONStats) IncWorkerSubs(workerid int) {
 	s.workerSubs.inc(workerid)
+}
+
+// IncReload atomically add 1 to the counter
+func (s *JSONStats) IncReload() {
+	atomic.StoreInt64(&s.reload, 1)
 }
 
 // DecSubscription atomically removes 1 from the counter

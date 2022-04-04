@@ -155,6 +155,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	stats.IncRXSignaling(ptp.MessageDelayResp)
 	stats.SetUTCOffset(1)
 	stats.SetDrain(1)
+	stats.IncReload()
 
 	stats.Snapshot()
 
@@ -165,12 +166,14 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	expectedStats.rxSignaling.store(int(ptp.MessageDelayResp), 3)
 	expectedStats.utcoffset = 1
 	expectedStats.drain = 1
+	expectedStats.reload = 1
 
 	require.Equal(t, expectedStats.subscriptions.m, stats.report.subscriptions.m)
 	require.Equal(t, expectedStats.tx.m, stats.report.tx.m)
 	require.Equal(t, expectedStats.rxSignaling.m, stats.report.rxSignaling.m)
 	require.Equal(t, expectedStats.utcoffset, stats.report.utcoffset)
 	require.Equal(t, expectedStats.drain, stats.report.drain)
+	require.Equal(t, expectedStats.reload, stats.report.reload)
 }
 
 func TestJSONExport(t *testing.T) {
@@ -187,6 +190,7 @@ func TestJSONExport(t *testing.T) {
 	stats.IncRXSignaling(ptp.MessageDelayResp)
 	stats.SetUTCOffset(1)
 	stats.SetDrain(1)
+	stats.IncReload()
 
 	stats.Snapshot()
 
@@ -207,6 +211,7 @@ func TestJSONExport(t *testing.T) {
 	expectedMap["rx.signaling.delay_resp"] = 3
 	expectedMap["utcoffset"] = 1
 	expectedMap["drain"] = 1
+	expectedMap["reload"] = 1
 
 	require.Equal(t, expectedMap, data)
 }
