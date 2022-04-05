@@ -284,10 +284,50 @@ func NewTimestamp(t time.Time) Timestamp {
 	return ts
 }
 
+// ClockClass represents a PTP clock class
+type ClockClass uint8
+
+// Available Clock Classes
+// https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.4
+const (
+	ClockClass6  ClockClass = 6
+	ClockClass7  ClockClass = 7
+	ClockClass13 ClockClass = 13
+	ClockClass52 ClockClass = 52
+	Clockclass58 ClockClass = 58
+)
+
+// ClockAccuracy represents a PTP clock accuracy
+type ClockAccuracy uint8
+
+// Available Clock Accuracy
+// https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.5
+const (
+	ClockAccuracyNanosecond25       ClockAccuracy = 0x20
+	ClockAccuracyNanosecond100      ClockAccuracy = 0x21
+	ClockAccuracyNanosecond250      ClockAccuracy = 0x22
+	ClockAccuracyMicrosecond1       ClockAccuracy = 0x23
+	ClockAccuracyMicrosecond2point5 ClockAccuracy = 0x24
+	ClockAccuracyMicrosecond10      ClockAccuracy = 0x25
+	ClockAccuracyMicrosecond25      ClockAccuracy = 0x26
+	ClockAccuracyMicrosecond100     ClockAccuracy = 0x27
+	ClockAccuracyMicrosecond250     ClockAccuracy = 0x28
+	ClockAccuracyMillisecond1       ClockAccuracy = 0x29
+	ClockAccuracyMillisecond2point5 ClockAccuracy = 0x2A
+	ClockAccuracyMillisecond10      ClockAccuracy = 0x2B
+	ClockAccuracyMillisecond25      ClockAccuracy = 0x2C
+	ClockAccuracyMillisecond100     ClockAccuracy = 0x2D
+	ClockAccuracyMillisecond250     ClockAccuracy = 0x2E
+	ClockAccuracySecond1            ClockAccuracy = 0x2F
+	ClockAccuracySecond10           ClockAccuracy = 0x30
+	ClockAccuracySecondGreater10    ClockAccuracy = 0x31
+	ClockAccuracyUnknown            ClockAccuracy = 0xFE
+)
+
 // ClockQuality represents the quality of a clock.
 type ClockQuality struct {
-	ClockClass              uint8
-	ClockAccuracy           uint8
+	ClockClass              ClockClass
+	ClockAccuracy           ClockAccuracy
 	OffsetScaledLogVariance uint16
 }
 

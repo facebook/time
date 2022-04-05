@@ -46,9 +46,9 @@ type StaticConfig struct {
 // DynamicConfig is a set of dynamic options which don't need a server restart
 type DynamicConfig struct {
 	// ClockCccuracy to report via announce messages. Time Accurate within 100ns
-	ClockAccuracy uint8
+	ClockAccuracy ptp.ClockAccuracy
 	// ClockClass to report via announce messages. 6 - Locked with Primary Reference Clock
-	ClockClass uint8
+	ClockClass ptp.ClockClass
 	// DrainInterval is an interval for drain checks
 	DrainInterval time.Duration
 	// MaxSubDuration is a maximum sync/announce/delay_resp subscription duration

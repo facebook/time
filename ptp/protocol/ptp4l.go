@@ -209,8 +209,8 @@ func (e *UnicastMasterEntry) UnmarshalBinary(b []byte) error {
 	}
 	e.PortIdentity.ClockIdentity = ClockIdentity(binary.BigEndian.Uint64(b[0:]))
 	e.PortIdentity.PortNumber = binary.BigEndian.Uint16(b[8:])
-	e.ClockQuality.ClockClass = b[10]
-	e.ClockQuality.ClockAccuracy = b[11]
+	e.ClockQuality.ClockClass = ClockClass(b[10])
+	e.ClockQuality.ClockAccuracy = ClockAccuracy(b[11])
 	e.ClockQuality.OffsetScaledLogVariance = binary.BigEndian.Uint16(b[12:])
 	if b[14] == 0 {
 		e.Selected = false
