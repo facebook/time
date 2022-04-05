@@ -73,7 +73,7 @@ func TestSubscriptionExpire(t *testing.T) {
 	require.True(t, sc.Running())
 
 	// Wait to expire
-	time.Sleep(110 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
 	require.True(t, sc.Expired())
 	require.False(t, sc.Running())
 }

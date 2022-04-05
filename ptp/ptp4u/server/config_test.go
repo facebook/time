@@ -103,18 +103,16 @@ utcoffset: "37s"
 }
 
 func TestReadDynamicConfigInvalid(t *testing.T) {
-	expected := &Config{
-		DynamicConfig: DynamicConfig{
-			ClockAccuracy:  0,
-			ClockClass:     1,
-			DrainInterval:  2 * time.Second,
-			MaxSubDuration: 3 * time.Hour,
-			MetricInterval: 4 * time.Minute,
-			MinSubInterval: 5 * time.Second,
-			UTCOffset:      37 * time.Second,
-		},
+	expected := DynamicConfig{
+		ClockAccuracy:  0,
+		ClockClass:     1,
+		DrainInterval:  2 * time.Second,
+		MaxSubDuration: 3 * time.Hour,
+		MetricInterval: 4 * time.Minute,
+		MinSubInterval: 5 * time.Second,
+		UTCOffset:      37 * time.Second,
 	}
-	c := *expected
+	c := &Config{DynamicConfig: expected}
 
 	config := `clockaccuracy: 1
 clockclass: 2
@@ -135,7 +133,7 @@ utcoffset: "7s"
 	err = c.ReadDynamicConfig()
 	require.ErrorIs(t, err, errInsaneUTCoffset)
 	// Make sure config did not reload
-	require.Equal(t, expected.DynamicConfig, c.DynamicConfig)
+	require.Equal(t, expected, c.DynamicConfig)
 }
 
 func TestUTCOffsetSanity(t *testing.T) {

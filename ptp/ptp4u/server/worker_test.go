@@ -123,7 +123,7 @@ func TestInventoryClients(t *testing.T) {
 
 	st := stats.NewJSONStats()
 	go st.Start(0)
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	w := newSendWorker(0, c, st)
 
@@ -131,7 +131,7 @@ func TestInventoryClients(t *testing.T) {
 	scS1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, 10*time.Millisecond, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi1, ptp.MessageSync, scS1)
 	go scS1.Start(context.Background())
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	w.inventoryClients()
 	require.Equal(t, 1, len(w.clients))
@@ -139,7 +139,7 @@ func TestInventoryClients(t *testing.T) {
 	scA1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, 10*time.Millisecond, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi1, ptp.MessageAnnounce, scA1)
 	go scA1.Start(context.Background())
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	w.inventoryClients()
 	require.Equal(t, 2, len(w.clients))
@@ -147,24 +147,24 @@ func TestInventoryClients(t *testing.T) {
 	scS2 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, 10*time.Millisecond, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi2, ptp.MessageSync, scS2)
 	go scS2.Start(context.Background())
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	w.inventoryClients()
 	require.Equal(t, 2, len(w.clients[ptp.MessageSync]))
 
 	// Shutting down
 	scS1.setExpire(time.Now())
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	w.inventoryClients()
 	require.Equal(t, 1, len(w.clients[ptp.MessageSync]))
 
 	scA1.setExpire(time.Now())
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	w.inventoryClients()
 	require.Equal(t, 0, len(w.clients[ptp.MessageAnnounce]))
 
 	scS2.Stop()
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	w.inventoryClients()
 	require.Equal(t, 0, len(w.clients[ptp.MessageSync]))
 }

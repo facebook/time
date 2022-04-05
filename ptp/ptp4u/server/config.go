@@ -20,6 +20,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"sync"
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -67,6 +68,8 @@ type Config struct {
 	DynamicConfig
 
 	clockIdentity ptp.ClockIdentity
+	// Since we read/write the config dynamically we need to lock the struct
+	sync.Mutex
 }
 
 // UTCOffsetSanity checks if UTC offset value has an adequate value
@@ -83,6 +86,8 @@ func (c *Config) ReadDynamicConfig() error {
 		return err
 	}
 
+	c.Lock()
+	defer c.Unlock()
 	d := c.DynamicConfig
 
 	err = yaml.Unmarshal(cData, &d)

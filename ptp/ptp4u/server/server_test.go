@@ -204,5 +204,7 @@ utcoffset: "37s"
 	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
 
+	c.Lock()
+	defer c.Unlock()
 	require.Equal(t, expected.DynamicConfig, c.DynamicConfig)
 }
