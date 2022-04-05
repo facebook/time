@@ -37,7 +37,7 @@ var (
 func init() {
 	RootCmd.AddCommand(oscillatordCmd)
 	oscillatordCmd.Flags().StringVarP(&oscillatordAddressFlag, "address", "a", "127.0.0.1", "address to connect to")
-	oscillatordCmd.Flags().IntVarP(&oscillatordPortFlag, "port", "p", 2958, "port to connect to")
+	oscillatordCmd.Flags().IntVarP(&oscillatordPortFlag, "port", "p", oscillatord.MonitoringPort, "port to connect to")
 	oscillatordCmd.Flags().BoolVarP(&oscillatorJSONFlag, "json", "j", false, "JSON output")
 }
 

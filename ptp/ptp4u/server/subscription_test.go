@@ -170,8 +170,8 @@ func TestAnnouncePacket(t *testing.T) {
 	UTCOffset := 3 * time.Second
 	sequenceID := uint16(42)
 	interval := 3 * time.Second
-	clockClass := uint8(8)
-	clockAccuracy := uint8(42)
+	clockClass := ptp.ClockClass7
+	clockAccuracy := ptp.ClockAccuracyMicrosecond1
 
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234), DynamicConfig: DynamicConfig{ClockClass: clockClass, ClockAccuracy: clockAccuracy, UTCOffset: UTCOffset}}
@@ -194,8 +194,8 @@ func TestAnnouncePacket(t *testing.T) {
 	require.Equal(t, sequenceID+1, sc.Announce().Header.SequenceID)
 	require.Equal(t, sp, sc.Announce().Header.SourcePortIdentity)
 	require.Equal(t, i, sc.Announce().Header.LogMessageInterval)
-	require.Equal(t, uint8(clockClass), sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockClass)
-	require.Equal(t, uint8(clockAccuracy), sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockAccuracy)
+	require.Equal(t, ptp.ClockClass7, sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockClass)
+	require.Equal(t, ptp.ClockAccuracyMicrosecond1, sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockAccuracy)
 	require.Equal(t, int16(UTCOffset.Seconds()), sc.Announce().AnnounceBody.CurrentUTCOffset)
 }
 

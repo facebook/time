@@ -28,6 +28,9 @@ import (
 	"io"
 )
 
+// MonitoringPort is an oscillatord monitoring socket port
+const MonitoringPort = 2958
+
 // AntennaStatus is an enum describing antenna status as reported by oscillatord
 type AntennaStatus int
 
