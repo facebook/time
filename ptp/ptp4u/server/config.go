@@ -18,12 +18,14 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"sync"
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	"golang.org/x/sys/unix"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -38,6 +40,7 @@ type StaticConfig struct {
 	IP             net.IP
 	LogLevel       string
 	MonitoringPort int
+	PidFile        string
 	QueueSize      int
 	RecvWorkers    int
 	SendWorkers    int
@@ -117,6 +120,16 @@ func (c *Config) IfaceHasIP() (bool, error) {
 	}
 
 	return false, nil
+}
+
+// CreatePidFile creates a PID file in a defined location
+func (c *Config) CreatePidFile() error {
+	return os.WriteFile(c.PidFile, []byte(fmt.Sprintf("%d\n", unix.Getpid())), 0644)
+}
+
+// DeletePidFile deletes a PID file from a defined location
+func (c *Config) DeletePidFile() error {
+	return os.Remove(c.PidFile)
 }
 
 // ifaceIPs gets all IPs on the specified interface
