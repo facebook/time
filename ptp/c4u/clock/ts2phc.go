@@ -17,8 +17,6 @@ limitations under the License.
 package clock
 
 import (
-	"time"
-
 	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
 )
@@ -29,7 +27,9 @@ const (
 )
 
 func ts2phc() (*ptp.ClockQuality, error) {
-	c := &ptp.ClockQuality{}
+	c := &ptp.ClockQuality{
+		ClockAccuracy: ptp.ClockAccuracyUnknown,
+	}
 
 	tcard, err := phc.TimeAndOffsetFromDevice(phcTimeCardPath, phc.MethodIoctlSysOffsetExtended)
 	if err != nil {
@@ -44,21 +44,8 @@ func ts2phc() (*ptp.ClockQuality, error) {
 	sysOffset := tcard.SysTime.Sub(tnic.SysTime)
 	phcOffset := tcard.PHCTime.Sub(tnic.PHCTime)
 	phcOffset -= sysOffset
-	if phcOffset < 0 {
-		phcOffset *= -1
-	}
 
-	// https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.4
-	// https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.5
-	if phcOffset < 100*time.Nanosecond {
-		c.ClockAccuracy = ptp.ClockAccuracyNanosecond100 // 100ns
-	} else if phcOffset < time.Microsecond {
-		c.ClockAccuracy = ptp.ClockAccuracyMicrosecond1 // 1us
-	} else if phcOffset < 250*time.Microsecond {
-		c.ClockAccuracy = ptp.ClockAccuracyMicrosecond250 // 250us
-	} else {
-		c.ClockAccuracy = ptp.ClockAccuracySecondGreater10 // >10 second
-	}
+	c.ClockAccuracy = ptp.ClockAccuracyFromOffset(phcOffset)
 
 	return c, nil
 }

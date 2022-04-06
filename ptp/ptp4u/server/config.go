@@ -31,6 +31,9 @@ import (
 
 var errInsaneUTCoffset = errors.New("UTC offset is outside of sane range")
 
+// dcMux is a dynamic config mutex
+var dcMux = sync.Mutex{}
+
 // StaticConfig is a set of static options which require a server restart
 type StaticConfig struct {
 	ConfigFile     string
@@ -71,11 +74,10 @@ type Config struct {
 	DynamicConfig
 
 	clockIdentity ptp.ClockIdentity
-	// Since we read/write the config dynamically we need to lock the struct
-	sync.Mutex
 }
 
 // UTCOffsetSanity checks if UTC offset value has an adequate value
+// As of Apr 2022 TAI UTC offset is 37 seconds
 func (dc *DynamicConfig) UTCOffsetSanity() error {
 	if dc.UTCOffset < 30*time.Second || dc.UTCOffset > 50*time.Second {
 		return errInsaneUTCoffset
@@ -83,27 +85,32 @@ func (dc *DynamicConfig) UTCOffsetSanity() error {
 	return nil
 }
 
-func (c *Config) ReadDynamicConfig() error {
-	cData, err := os.ReadFile(c.ConfigFile)
+func ReadDynamicConfig(path string) (*DynamicConfig, error) {
+	dc := &DynamicConfig{}
+	cData, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	err = yaml.Unmarshal(cData, &dc)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := dc.UTCOffsetSanity(); err != nil {
+		return nil, err
+	}
+
+	return dc, nil
+}
+
+func (dc *DynamicConfig) Write(path string) error {
+	d, err := yaml.Marshal(&dc)
 	if err != nil {
 		return err
 	}
 
-	c.Lock()
-	defer c.Unlock()
-	d := c.DynamicConfig
-
-	err = yaml.Unmarshal(cData, &d)
-	if err != nil {
-		return err
-	}
-
-	if err := d.UTCOffsetSanity(); err != nil {
-		return err
-	}
-
-	c.DynamicConfig = d
-	return nil
+	return os.WriteFile(path, d, 0644)
 }
 
 // IfaceHasIP checks if selected IP is on interface
@@ -122,12 +129,12 @@ func (c *Config) IfaceHasIP() (bool, error) {
 	return false, nil
 }
 
-// CreatePidFile creates a PID file in a defined location
+// CreatePidFile creates a pid file in a defined location
 func (c *Config) CreatePidFile() error {
 	return os.WriteFile(c.PidFile, []byte(fmt.Sprintf("%d\n", unix.Getpid())), 0644)
 }
 
-// DeletePidFile deletes a PID file from a defined location
+// DeletePidFile deletes a pid file from a defined location
 func (c *Config) DeletePidFile() error {
 	return os.Remove(c.PidFile)
 }

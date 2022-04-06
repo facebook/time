@@ -65,22 +65,19 @@ func TestConfigIfaceHasIP(t *testing.T) {
 }
 
 func TestReadDynamicConfigOk(t *testing.T) {
-	expected := &Config{
-		DynamicConfig: DynamicConfig{
-			ClockAccuracy:  0,
-			ClockClass:     1,
-			DrainInterval:  2 * time.Second,
-			MaxSubDuration: 3 * time.Hour,
-			MetricInterval: 4 * time.Minute,
-			MinSubInterval: 5 * time.Second,
-			UTCOffset:      37 * time.Second,
-		},
+	expected := &DynamicConfig{
+		ClockAccuracy:  0,
+		ClockClass:     1,
+		DrainInterval:  2 * time.Second,
+		MaxSubDuration: 3 * time.Hour,
+		MetricInterval: 4 * time.Minute,
+		MinSubInterval: 5 * time.Second,
+		UTCOffset:      37 * time.Second,
 	}
 
-	c := &Config{}
-
-	err := c.ReadDynamicConfig()
+	dc, err := ReadDynamicConfig("")
 	require.Error(t, err)
+	require.Nil(t, dc)
 	cfg, err := ioutil.TempFile("", "ptp4u")
 	require.NoError(t, err)
 	defer os.Remove(cfg.Name())
@@ -96,24 +93,12 @@ utcoffset: "37s"
 	_, err = cfg.WriteString(config)
 	require.NoError(t, err)
 
-	c.ConfigFile = cfg.Name()
-	err = c.ReadDynamicConfig()
+	dc, err = ReadDynamicConfig(cfg.Name())
 	require.NoError(t, err)
-	require.Equal(t, expected.DynamicConfig, c.DynamicConfig)
+	require.Equal(t, expected, dc)
 }
 
 func TestReadDynamicConfigInvalid(t *testing.T) {
-	expected := DynamicConfig{
-		ClockAccuracy:  0,
-		ClockClass:     1,
-		DrainInterval:  2 * time.Second,
-		MaxSubDuration: 3 * time.Hour,
-		MetricInterval: 4 * time.Minute,
-		MinSubInterval: 5 * time.Second,
-		UTCOffset:      37 * time.Second,
-	}
-	c := &Config{DynamicConfig: expected}
-
 	config := `clockaccuracy: 1
 clockclass: 2
 draininterval: "3s"
@@ -129,11 +114,56 @@ utcoffset: "7s"
 	_, err = cfg.WriteString(config)
 	require.NoError(t, err)
 
-	c.ConfigFile = cfg.Name()
-	err = c.ReadDynamicConfig()
+	dc, err := ReadDynamicConfig(cfg.Name())
 	require.ErrorIs(t, err, errInsaneUTCoffset)
-	// Make sure config did not reload
-	require.Equal(t, expected, c.DynamicConfig)
+	require.Nil(t, dc)
+}
+
+func TestReadDynamicConfigDamaged(t *testing.T) {
+	config := "Random stuff"
+	cfg, err := ioutil.TempFile("", "ptp4u")
+	require.NoError(t, err)
+	defer os.Remove(cfg.Name())
+
+	_, err = cfg.WriteString(config)
+	require.NoError(t, err)
+
+	dc, err := ReadDynamicConfig(cfg.Name())
+	require.Error(t, err)
+	require.Nil(t, dc)
+}
+
+func TestWriteDynamicConfig(t *testing.T) {
+	expected := `clockaccuracy: 0
+clockclass: 1
+draininterval: 2s
+maxsubduration: 3h0m0s
+metricinterval: 4m0s
+minsubinterval: 5s
+utcoffset: 37s
+`
+	dc := &DynamicConfig{
+		ClockAccuracy:  0,
+		ClockClass:     1,
+		DrainInterval:  2 * time.Second,
+		MaxSubDuration: 3 * time.Hour,
+		MetricInterval: 4 * time.Minute,
+		MinSubInterval: 5 * time.Second,
+		UTCOffset:      37 * time.Second,
+	}
+
+	cfg, err := ioutil.TempFile("", "ptp4u")
+	require.NoError(t, err)
+	os.Remove(cfg.Name())
+	require.NoFileExists(t, cfg.Name())
+
+	err = dc.Write(cfg.Name())
+	defer os.Remove(cfg.Name())
+	require.NoError(t, err)
+
+	real, err := os.ReadFile(cfg.Name())
+	require.NoError(t, err)
+	require.Equal(t, expected, string(real))
 }
 
 func TestUTCOffsetSanity(t *testing.T) {

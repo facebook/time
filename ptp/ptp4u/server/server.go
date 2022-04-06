@@ -438,10 +438,14 @@ func (s *Server) handleSighup() {
 	signal.Notify(sigchan, unix.SIGHUP)
 	for range sigchan {
 		log.Info("SIGHUP received, reloading config")
-		err := s.Config.ReadDynamicConfig()
+		dc, err := ReadDynamicConfig(s.Config.ConfigFile)
 		if err != nil {
 			log.Errorf("Failed to reload config: %v. Moving on", err)
+			continue
 		}
+		dcMux.Lock()
+		s.Config.DynamicConfig = *dc
+		dcMux.Unlock()
 		s.Stats.IncReload()
 	}
 }

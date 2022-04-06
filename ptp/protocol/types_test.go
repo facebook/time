@@ -258,3 +258,24 @@ func TestPortAddress(t *testing.T) {
 		})
 	}
 }
+
+func TestClockAccuracyFromOffset(t *testing.T) {
+	require.Equal(t, ClockAccuracyNanosecond25, ClockAccuracyFromOffset(-8*time.Nanosecond))
+	require.Equal(t, ClockAccuracyNanosecond100, ClockAccuracyFromOffset(42*time.Nanosecond))
+	require.Equal(t, ClockAccuracyNanosecond250, ClockAccuracyFromOffset(-242*time.Nanosecond))
+	require.Equal(t, ClockAccuracyMicrosecond1, ClockAccuracyFromOffset(567*time.Nanosecond))
+	require.Equal(t, ClockAccuracyMicrosecond2point5, ClockAccuracyFromOffset(2*time.Microsecond))
+	require.Equal(t, ClockAccuracyMicrosecond10, ClockAccuracyFromOffset(8*time.Microsecond))
+	require.Equal(t, ClockAccuracyMicrosecond25, ClockAccuracyFromOffset(10*time.Microsecond))
+	require.Equal(t, ClockAccuracyMicrosecond100, ClockAccuracyFromOffset(-42*time.Microsecond))
+	require.Equal(t, ClockAccuracyMicrosecond250, ClockAccuracyFromOffset(123*time.Microsecond))
+	require.Equal(t, ClockAccuracyMillisecond1, ClockAccuracyFromOffset(678*time.Microsecond))
+	require.Equal(t, ClockAccuracyMillisecond2point5, ClockAccuracyFromOffset(2499*time.Microsecond))
+	require.Equal(t, ClockAccuracyMillisecond10, ClockAccuracyFromOffset(-8*time.Millisecond))
+	require.Equal(t, ClockAccuracyMillisecond25, ClockAccuracyFromOffset(24*time.Millisecond))
+	require.Equal(t, ClockAccuracyMillisecond100, ClockAccuracyFromOffset(69*time.Millisecond))
+	require.Equal(t, ClockAccuracyMillisecond250, ClockAccuracyFromOffset(222*time.Millisecond))
+	require.Equal(t, ClockAccuracySecond1, ClockAccuracyFromOffset(-999*time.Millisecond))
+	require.Equal(t, ClockAccuracySecond10, ClockAccuracyFromOffset(8*time.Second))
+	require.Equal(t, ClockAccuracySecondGreater10, ClockAccuracyFromOffset(9*time.Minute))
+}

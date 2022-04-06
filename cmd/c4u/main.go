@@ -18,71 +18,18 @@ package main
 
 import (
 	"flag"
-	"os"
-	"time"
 
-	"github.com/facebook/time/ptp/c4u/clock"
-	"github.com/facebook/time/ptp/c4u/utcoffset"
-	"github.com/facebook/time/ptp/ptp4u/server"
-	log "github.com/sirupsen/logrus"
-	yaml "gopkg.in/yaml.v2"
-)
-
-var (
-	save bool
-	path string
+	"github.com/facebook/time/ptp/c4u"
 )
 
 func main() {
-	flag.BoolVar(&save, "save", false, "Save config to the path instead of reading it")
-	flag.StringVar(&path, "path", "/etc/ptp4u.yaml", "Path to a config file")
+	c := &c4u.Config{}
+
+	flag.BoolVar(&c.Save, "save", false, "Save config to the path instead of reading it")
+	flag.StringVar(&c.Path, "path", "/etc/ptp4u.yaml", "Path to a config file")
+	flag.StringVar(&c.Pid, "ptp4u", "/var/run/ptp4u.pid", "Path to a ptp4u pid file")
+	flag.IntVar(&c.TAU, "tau", 60, "Sliding window size (seconds) for clock data calculations")
 	flag.Parse()
 
-	current := &server.DynamicConfig{}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = yaml.Unmarshal(data, &current)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Generate
-	config := &server.DynamicConfig{
-		DrainInterval:  30 * time.Second,
-		MaxSubDuration: 1 * time.Hour,
-		MetricInterval: 1 * time.Minute,
-		MinSubInterval: 1 * time.Second,
-	}
-
-	c, err := clock.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-	config.ClockClass = c.ClockClass
-	config.ClockAccuracy = c.ClockAccuracy
-
-	u, err := utcoffset.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-	config.UTCOffset = u
-
-	if save {
-		d, err := yaml.Marshal(&config)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = os.WriteFile(path, d, 0644)
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		log.Printf("Current: %+v", current)
-		log.Printf("Pending: %+v", config)
-	}
+	c4u.Run(c)
 }
