@@ -22,6 +22,8 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/facebook/time/ptp/ptp4u/drain"
@@ -29,6 +31,7 @@ import (
 	"github.com/facebook/time/ptp/ptp4u/stats"
 	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 func main() {
@@ -56,6 +59,7 @@ func main() {
 	flag.StringVar(&c.DebugAddr, "pprofaddr", "", "host:port for the pprof to bind")
 	flag.StringVar(&c.Interface, "iface", "eth0", "Set the interface")
 	flag.StringVar(&c.LogLevel, "loglevel", "warning", "Set a log level. Can be: debug, info, warning, error")
+	flag.StringVar(&c.PidFile, "pidfile", "/var/run/ptp4u.pid", "Pid file location")
 	flag.StringVar(&c.TimestampType, "timestamptype", timestamp.HWTIMESTAMP, fmt.Sprintf("Timestamp type. Can be: %s, %s", timestamp.HWTIMESTAMP, timestamp.SWTIMESTAMP))
 	flag.StringVar(&ipaddr, "ip", "::", "IP to bind on")
 	flag.Parse()
@@ -72,6 +76,20 @@ func main() {
 	default:
 		log.Fatalf("Unrecognized log level: %v", c.LogLevel)
 	}
+
+	if err := c.CreatePidFile(); err != nil {
+		log.Fatal(err)
+	}
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, unix.SIGTERM, unix.SIGINT)
+	go func() {
+		<-sig
+		log.Warning("Shutting down ptp4u")
+		if err := c.DeletePidFile(); err != nil {
+			log.Fatalf("Failed to remove pid file: %v", err)
+		}
+		os.Exit(0)
+	}()
 
 	if c.ConfigFile != "" {
 		if err := c.ReadDynamicConfig(); err != nil {

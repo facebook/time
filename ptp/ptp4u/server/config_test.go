@@ -145,3 +145,19 @@ func TestUTCOffsetSanity(t *testing.T) {
 	dc.UTCOffset = 37 * time.Second
 	require.NoError(t, dc.UTCOffsetSanity())
 }
+
+func TestPidFile(t *testing.T) {
+	cfg, err := ioutil.TempFile("", "ptp4u")
+	require.NoError(t, err)
+	os.Remove(cfg.Name())
+	require.NoFileExists(t, cfg.Name())
+
+	c := &Config{StaticConfig: StaticConfig{PidFile: cfg.Name()}}
+	err = c.CreatePidFile()
+	require.NoError(t, err)
+	require.FileExists(t, c.PidFile)
+
+	err = c.DeletePidFile()
+	require.NoError(t, err)
+	require.NoFileExists(t, c.PidFile)
+}
