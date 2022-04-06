@@ -56,6 +56,10 @@ type Server struct {
 
 // Start the workers send bind to event and general UDP ports
 func (s *Server) Start() error {
+	if err := s.Config.CreatePidFile(); err != nil {
+		return err
+	}
+
 	// Set clock identity
 	iface, err := net.InterfaceByName(s.Config.Interface)
 	if err != nil {
@@ -118,10 +122,16 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	// Reload dynamic config
+	// Watch for SIGHUP and reload dynamic config
 	go func() {
 		defer wg.Done()
-		s.configReload()
+		s.handleSighup()
+	}()
+
+	// Watch for SIGTERM and remove pid file
+	go func() {
+		defer wg.Done()
+		s.handleSigterm()
 	}()
 
 	// Run active metric reporting
@@ -421,17 +431,29 @@ func (s *Server) Undrain() {
 	}
 }
 
-// configReload watches for SIGHUP and reloads the dynamic config
-func (s *Server) configReload() {
+// handleSighup watches for SIGHUP and reloads the dynamic config
+func (s *Server) handleSighup() {
 	log.Infof("Engaging the SIGHUP monitoring")
-	hangupchan := make(chan os.Signal, 10)
-	signal.Notify(hangupchan, unix.SIGHUP)
-	for range hangupchan {
+	sigchan := make(chan os.Signal, 10)
+	signal.Notify(sigchan, unix.SIGHUP)
+	for range sigchan {
 		log.Info("SIGHUP received, reloading config")
 		err := s.Config.ReadDynamicConfig()
 		if err != nil {
 			log.Errorf("Failed to reload config: %v. Moving on", err)
 		}
 		s.Stats.IncReload()
+	}
+}
+
+// handleSigterm watches for SIGTERM and SIGINT and removes the pid file
+func (s *Server) handleSigterm() {
+	log.Infof("Engaging the SIGTERM/SIGINT monitoring")
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, unix.SIGTERM, unix.SIGINT)
+	<-sigchan
+	log.Warning("Shutting down ptp4u")
+	if err := s.Config.DeletePidFile(); err != nil {
+		log.Fatalf("Failed to remove pid file: %v", err)
 	}
 }

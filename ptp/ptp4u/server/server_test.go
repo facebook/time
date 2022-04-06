@@ -161,7 +161,7 @@ func TestUndrain(t *testing.T) {
 	require.NoError(t, s.ctx.Err())
 }
 
-func TestConfigReload(t *testing.T) {
+func TestHandleSighup(t *testing.T) {
 	expected := &Config{
 		DynamicConfig: DynamicConfig{
 			ClockAccuracy:  0,
@@ -197,7 +197,7 @@ utcoffset: "37s"
 
 	c.ConfigFile = cfg.Name()
 
-	go s.configReload()
+	go s.handleSighup()
 	time.Sleep(100 * time.Millisecond)
 
 	err = unix.Kill(unix.Getpid(), unix.SIGHUP)
@@ -207,4 +207,31 @@ utcoffset: "37s"
 	c.Lock()
 	defer c.Unlock()
 	require.Equal(t, expected.DynamicConfig, c.DynamicConfig)
+}
+
+func TestHandleSigterm(t *testing.T) {
+	cfg, err := ioutil.TempFile("", "ptp4u")
+	require.NoError(t, err)
+	os.Remove(cfg.Name())
+	require.NoFileExists(t, cfg.Name())
+
+	c := &Config{StaticConfig: StaticConfig{PidFile: cfg.Name()}}
+	s := Server{
+		Config: c,
+		Stats:  stats.NewJSONStats(),
+	}
+
+	err = c.CreatePidFile()
+	require.NoError(t, err)
+	require.FileExists(t, c.PidFile)
+
+	// Delayed SIGTERM
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		err = unix.Kill(unix.Getpid(), unix.SIGTERM)
+	}()
+
+	// Must exit the method
+	s.handleSigterm()
+	require.NoFileExists(t, cfg.Name())
 }
