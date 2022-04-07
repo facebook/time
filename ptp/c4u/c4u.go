@@ -24,13 +24,14 @@ import (
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/ptp4u/server"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 type Config struct {
-	Save bool
-	Path string
-	Pid  string
-	TAU  int
+	Apply bool
+	Path  string
+	Pid   string
+	TAU   int
 }
 
 type ringBuffer struct {
@@ -98,12 +99,26 @@ func Run(config *Config) {
 			log.Infof("Current: %+v", current)
 			log.Infof("Pending: %+v", pending)
 
-			if config.Save {
+			if config.Apply {
 				log.Infof("Saving a pending config to %s", config.Path)
 				err := pending.Write(config.Path)
 				if err != nil {
 					log.Errorf("Failed save the ptp4u config: %v", err)
+					continue
 				}
+
+				pid, err := server.ReadPidFile(config.Pid)
+				if err != nil {
+					log.Errorf("Failed to read ptp4u pid: %v", err)
+					continue
+				}
+
+				err = unix.Kill(pid, unix.SIGHUP)
+				if err != nil {
+					log.Errorf("Failed to send SIGHUP to ptp4u %d: %v", pid, err)
+					continue
+				}
+				log.Infof("SIGHUP is sent to ptp4u pid: %d", pid)
 			}
 		}
 	}

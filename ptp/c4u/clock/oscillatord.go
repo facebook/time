@@ -50,7 +50,7 @@ func oscillatord() (*ptp.ClockQuality, error) {
 	// Wait for oscillatord correct monitoring socket implementation
 	// https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.4
 	// https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.5
-	if status.Oscillator.Lock {
+	if status.Oscillator.Lock && status.GNSS.FixOK {
 		c.ClockClass = ClockClassLocked
 		c.ClockAccuracy = ptp.ClockAccuracyNanosecond100
 	} else {

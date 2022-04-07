@@ -25,7 +25,7 @@ import (
 func main() {
 	c := &c4u.Config{}
 
-	flag.BoolVar(&c.Save, "save", false, "Save config to the path instead of reading it")
+	flag.BoolVar(&c.Apply, "apply", false, "Save the ptp4u config to the path and send the SIGHUP to ptp4u")
 	flag.StringVar(&c.Path, "path", "/etc/ptp4u.yaml", "Path to a config file")
 	flag.StringVar(&c.Pid, "ptp4u", "/var/run/ptp4u.pid", "Path to a ptp4u pid file")
 	flag.IntVar(&c.TAU, "tau", 60, "Sliding window size (seconds) for clock data calculations")

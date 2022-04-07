@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 )
 
 func TestConfigifaceIPs(t *testing.T) {
@@ -179,13 +180,23 @@ func TestUTCOffsetSanity(t *testing.T) {
 func TestPidFile(t *testing.T) {
 	cfg, err := ioutil.TempFile("", "ptp4u")
 	require.NoError(t, err)
+	c := &Config{StaticConfig: StaticConfig{PidFile: cfg.Name()}}
+
+	_, err = cfg.WriteString("rubbish")
+	require.NoError(t, err)
+	pid, err := ReadPidFile(c.PidFile)
+	require.Error(t, err)
+	require.Equal(t, 0, pid)
 	os.Remove(cfg.Name())
 	require.NoFileExists(t, cfg.Name())
 
-	c := &Config{StaticConfig: StaticConfig{PidFile: cfg.Name()}}
 	err = c.CreatePidFile()
 	require.NoError(t, err)
 	require.FileExists(t, c.PidFile)
+
+	pid, err = ReadPidFile(c.PidFile)
+	require.NoError(t, err)
+	require.Equal(t, unix.Getpid(), pid)
 
 	err = c.DeletePidFile()
 	require.NoError(t, err)
