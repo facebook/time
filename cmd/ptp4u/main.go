@@ -75,9 +75,11 @@ func main() {
 	}
 
 	if c.ConfigFile != "" {
-		if err := c.ReadDynamicConfig(); err != nil {
+		dc, err := server.ReadDynamicConfig(c.ConfigFile)
+		if err != nil {
 			log.Fatal(err)
 		}
+		c.DynamicConfig = *dc
 	}
 
 	if c.DSCP < 0 || c.DSCP > 63 {

@@ -204,9 +204,9 @@ utcoffset: "37s"
 	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
 
-	c.Lock()
-	defer c.Unlock()
+	dcMux.Lock()
 	require.Equal(t, expected.DynamicConfig, c.DynamicConfig)
+	dcMux.Unlock()
 }
 
 func TestHandleSigterm(t *testing.T) {

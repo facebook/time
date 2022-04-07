@@ -28,7 +28,10 @@ import (
 const timeout = time.Second
 
 func oscillatord() (*ptp.ClockQuality, error) {
-	c := &ptp.ClockQuality{}
+	c := &ptp.ClockQuality{
+		ClockClass:    ClockClassHoldover,
+		ClockAccuracy: ptp.ClockAccuracyUnknown,
+	}
 	conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", osc.MonitoringPort))
 	if err != nil {
 		return nil, err

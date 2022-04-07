@@ -27,8 +27,8 @@ const (
 	ClockClassUncalibrated ptp.ClockClass = ptp.ClockClass52
 )
 
-func worst(clocks []*ptp.ClockQuality) *ptp.ClockQuality {
-	w := &ptp.ClockQuality{}
+func Worst(clocks []ptp.ClockQuality) *ptp.ClockQuality {
+	w := ptp.ClockQuality{}
 	for _, c := range clocks {
 		// Higher value of accuracy means worse
 		if c.ClockAccuracy > w.ClockAccuracy {
@@ -40,7 +40,7 @@ func worst(clocks []*ptp.ClockQuality) *ptp.ClockQuality {
 			w.ClockClass = c.ClockClass
 		}
 	}
-	return w
+	return &w
 }
 
 func Run() (*ptp.ClockQuality, error) {
@@ -54,5 +54,5 @@ func Run() (*ptp.ClockQuality, error) {
 		return nil, err
 	}
 
-	return worst([]*ptp.ClockQuality{oscillatord, ts2phc}), nil
+	return Worst([]ptp.ClockQuality{*oscillatord, *ts2phc}), nil
 }
