@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -137,6 +139,16 @@ func (c *Config) CreatePidFile() error {
 // DeletePidFile deletes a pid file from a defined location
 func (c *Config) DeletePidFile() error {
 	return os.Remove(c.PidFile)
+}
+
+// ReadPidFile read a pid file from a path location and returns a pid
+func ReadPidFile(path string) (int, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+
+	return strconv.Atoi(strings.Replace(string(content), "\n", "", -1))
 }
 
 // ifaceIPs gets all IPs on the specified interface

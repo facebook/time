@@ -99,18 +99,18 @@ func TestSubscriptionEnd(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 10 * time.Millisecond
-	expire := time.Now().Add(200 * time.Millisecond)
+	expire := time.Now().Add(300 * time.Millisecond)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go sc.Start(ctx)
 
-	time.Sleep(1 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	require.True(t, sc.Running())
 
 	cancel()
-	time.Sleep(1 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	require.False(t, sc.Running())
 }
 
