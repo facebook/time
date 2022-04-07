@@ -179,6 +179,27 @@ func TestLatest(t *testing.T) {
 	require.Equal(t, expected, ls)
 }
 
+func TestLatestFuture(t *testing.T) {
+	expected := &LeapSecond{1649346026, 2}
+
+	ls := []LeapSecond{
+		{1649346016, 1},
+		{1649346026, 2},
+		{2649346018, 3},
+	}
+
+	f, err := ioutil.TempFile(os.TempDir(), "leaptest-")
+	require.NoError(t, err)
+	defer os.Remove(f.Name())
+
+	err = Write(f, '2', ls, "UTC")
+	require.NoError(t, err)
+
+	latest, err := Latest(f.Name())
+	require.NoError(t, err)
+	require.Equal(t, expected, latest)
+}
+
 func TestPrepareHeader(t *testing.T) {
 	byteData := []byte{
 		'T', 'Z', 'i', 'f', // magic
