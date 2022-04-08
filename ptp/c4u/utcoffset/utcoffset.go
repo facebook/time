@@ -23,8 +23,8 @@ import (
 )
 
 func Run() (time.Duration, error) {
-	// TAI <-> GPS offset is 10 seconds
-	// http://leapsecond.com/java/gpsclock.htm
+	// TAI <-> UTC offset was 10 seconds before introduction of leap seconds.
+	// https://en.wikipedia.org/wiki/Leap_second
 	var uo int32 = 10
 
 	latestLeap, err := leapsectz.Latest("")

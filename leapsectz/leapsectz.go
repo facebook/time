@@ -79,19 +79,19 @@ func Parse(srcfile string) ([]LeapSecond, error) {
 
 // Latest returns the latest leap second from srcfile. Pass "" to use default file
 func Latest(srcfile string) (*LeapSecond, error) {
-	res := &LeapSecond{}
+	res := LeapSecond{}
 	leapSeconds, err := Parse(srcfile)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, leapSecond := range leapSeconds {
-		if leapSecond.Time().After(res.Time()) {
-			res = &leapSecond
+		if leapSecond.Time().After(res.Time()) && leapSecond.Time().Before(time.Now()) {
+			res = leapSecond
 		}
 	}
 
-	return res, nil
+	return &res, nil
 }
 
 func parseVx(r io.Reader) ([]LeapSecond, error) {
