@@ -27,11 +27,25 @@ import (
 
 const timeout = time.Second
 
-func oscillatord() (*ptp.ClockQuality, error) {
+// https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.4
+// https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.5
+func clockQualityFromOscillatord(status *osc.Status) *ptp.ClockQuality {
 	c := &ptp.ClockQuality{
-		ClockClass:    ClockClassHoldover,
+		ClockClass:    ClockClassUncalibrated,
 		ClockAccuracy: ptp.ClockAccuracyUnknown,
 	}
+
+	if status.GNSS.FixOK && status.Oscillator.Lock {
+		c.ClockClass = ClockClassLocked
+		c.ClockAccuracy = ptp.ClockAccuracyNanosecond100
+	} else if status.Oscillator.Lock {
+		c.ClockClass = ClockClassHoldover
+		c.ClockAccuracy = ptp.ClockAccuracyMicrosecond1
+	}
+	return c
+}
+
+func oscillatord() (*ptp.ClockQuality, error) {
 	conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", osc.MonitoringPort))
 	if err != nil {
 		return nil, err
@@ -48,15 +62,5 @@ func oscillatord() (*ptp.ClockQuality, error) {
 	}
 
 	// Wait for oscillatord correct monitoring socket implementation
-	// https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.4
-	// https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.5
-	if status.Oscillator.Lock && status.GNSS.FixOK {
-		c.ClockClass = ClockClassLocked
-		c.ClockAccuracy = ptp.ClockAccuracyNanosecond100
-	} else {
-		c.ClockClass = ClockClassHoldover
-		c.ClockAccuracy = ptp.ClockAccuracyMicrosecond1
-	}
-
-	return c, nil
+	return clockQualityFromOscillatord(status), nil
 }

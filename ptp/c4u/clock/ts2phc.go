@@ -27,9 +27,7 @@ const (
 )
 
 func ts2phc() (*ptp.ClockQuality, error) {
-	c := &ptp.ClockQuality{
-		ClockAccuracy: ptp.ClockAccuracyUnknown,
-	}
+	c := &ptp.ClockQuality{}
 
 	tcard, err := phc.TimeAndOffsetFromDevice(phcTimeCardPath, phc.MethodIoctlSysOffsetExtended)
 	if err != nil {
