@@ -26,12 +26,55 @@ import (
 func TestWorst(t *testing.T) {
 	expected := &ptp.ClockQuality{ClockClass: ptp.ClockClass13, ClockAccuracy: ptp.ClockAccuracyMicrosecond1}
 
-	clocks := []ptp.ClockQuality{
-		ptp.ClockQuality{ClockClass: ptp.ClockClass6, ClockAccuracy: ptp.ClockAccuracyNanosecond100},
-		ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyMicrosecond1},
-		ptp.ClockQuality{ClockClass: ptp.ClockClass13, ClockAccuracy: ptp.ClockAccuracyNanosecond250},
+	clocks := []*ptp.ClockQuality{
+		&ptp.ClockQuality{ClockClass: ptp.ClockClass6, ClockAccuracy: ptp.ClockAccuracyNanosecond100},
+		&ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyMicrosecond1},
+		&ptp.ClockQuality{ClockClass: ptp.ClockClass13, ClockAccuracy: ptp.ClockAccuracyNanosecond250},
 	}
 
 	w := Worst(clocks)
 	require.Equal(t, expected, w)
+
+	clocks = []*ptp.ClockQuality{
+		&ptp.ClockQuality{ClockClass: ptp.ClockClass13, ClockAccuracy: ptp.ClockAccuracyMicrosecond1},
+		nil,
+	}
+
+	w = Worst(clocks)
+	require.Equal(t, expected, w)
+
+	clocks = []*ptp.ClockQuality{nil, nil}
+
+	w = Worst(clocks)
+	require.Nil(t, w)
+}
+
+func TestBufferRing(t *testing.T) {
+	sample := 2
+	rb := NewRingBuffer(sample)
+	require.Equal(t, sample, rb.size)
+	// Write 1
+	rb.Write(&ptp.ClockQuality{ClockClass: ptp.ClockClass6, ClockAccuracy: ptp.ClockAccuracyNanosecond100})
+	require.Equal(t, 1, rb.index)
+	require.Equal(t, []*ptp.ClockQuality{&ptp.ClockQuality{ClockClass: ptp.ClockClass6, ClockAccuracy: ptp.ClockAccuracyNanosecond100}, nil}, rb.Data())
+
+	// Write 2
+	rb.Write(&ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyNanosecond250})
+	require.Equal(t, 2, rb.index)
+	require.Equal(t, []*ptp.ClockQuality{&ptp.ClockQuality{ClockClass: ptp.ClockClass6, ClockAccuracy: ptp.ClockAccuracyNanosecond100}, &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyNanosecond250}}, rb.Data())
+
+	// Write 3
+	rb.Write(&ptp.ClockQuality{ClockClass: ptp.ClockClass13, ClockAccuracy: ptp.ClockAccuracyMicrosecond1})
+	require.Equal(t, 1, rb.index)
+	require.Equal(t, []*ptp.ClockQuality{&ptp.ClockQuality{ClockClass: ptp.ClockClass13, ClockAccuracy: ptp.ClockAccuracyMicrosecond1}, &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyNanosecond250}}, rb.Data())
+
+	// Write 4
+	rb.Write(nil)
+	require.Equal(t, 2, rb.index)
+	require.Equal(t, []*ptp.ClockQuality{&ptp.ClockQuality{ClockClass: ptp.ClockClass13, ClockAccuracy: ptp.ClockAccuracyMicrosecond1}, nil}, rb.Data())
+
+	// Write 5
+	rb.Write(nil)
+	require.Equal(t, 1, rb.index)
+	require.Equal(t, []*ptp.ClockQuality{nil, nil}, rb.Data())
 }

@@ -27,9 +27,43 @@ const (
 	ClockClassUncalibrated ptp.ClockClass = ptp.ClockClass52
 )
 
-func Worst(clocks []ptp.ClockQuality) *ptp.ClockQuality {
-	w := ptp.ClockQuality{}
+// RingBuffer is a ring buffer of ClockQuality data
+type RingBuffer struct {
+	data  []*ptp.ClockQuality
+	index int
+	size  int
+}
+
+// NewRingBuffer creates new RingBuffer of a defined size
+func NewRingBuffer(size int) *RingBuffer {
+	return &RingBuffer{size: size, data: make([]*ptp.ClockQuality, size)}
+}
+
+// Write new element to a ring buffer
+func (rb *RingBuffer) Write(c *ptp.ClockQuality) {
+	if rb.index >= rb.size {
+		rb.index = 0
+	}
+	rb.data[rb.index] = c
+	rb.index++
+}
+
+// Export data from the ring buffer
+func (rb *RingBuffer) Data() []*ptp.ClockQuality {
+	return rb.data
+}
+
+func Worst(clocks []*ptp.ClockQuality) *ptp.ClockQuality {
+	var w *ptp.ClockQuality
 	for _, c := range clocks {
+		if c == nil {
+			continue
+		}
+
+		if w == nil {
+			w = &ptp.ClockQuality{}
+		}
+
 		// Higher value of accuracy means worse
 		if c.ClockAccuracy > w.ClockAccuracy {
 			w.ClockAccuracy = c.ClockAccuracy
@@ -40,7 +74,7 @@ func Worst(clocks []ptp.ClockQuality) *ptp.ClockQuality {
 			w.ClockClass = c.ClockClass
 		}
 	}
-	return &w
+	return w
 }
 
 func Run() (*ptp.ClockQuality, error) {
@@ -54,5 +88,5 @@ func Run() (*ptp.ClockQuality, error) {
 		return nil, err
 	}
 
-	return Worst([]ptp.ClockQuality{*oscillatord, *ts2phc}), nil
+	return Worst([]*ptp.ClockQuality{oscillatord, ts2phc}), nil
 }

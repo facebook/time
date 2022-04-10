@@ -180,6 +180,7 @@ func TestUTCOffsetSanity(t *testing.T) {
 func TestPidFile(t *testing.T) {
 	cfg, err := ioutil.TempFile("", "ptp4u")
 	require.NoError(t, err)
+	defer os.Remove(cfg.Name())
 	c := &Config{StaticConfig: StaticConfig{PidFile: cfg.Name()}}
 
 	_, err = cfg.WriteString("rubbish")

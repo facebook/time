@@ -28,32 +28,10 @@ import (
 )
 
 type Config struct {
-	Apply bool
-	Path  string
-	Pid   string
-	TAU   int
-}
-
-type ringBuffer struct {
-	data  []ptp.ClockQuality
-	index int
-	size  int
-}
-
-func NewRingBuffer(size int) *ringBuffer {
-	return &ringBuffer{size: size, data: make([]ptp.ClockQuality, size)}
-}
-
-func (rb *ringBuffer) Write(c ptp.ClockQuality) {
-	if rb.index >= rb.size {
-		rb.index = 0
-	}
-	rb.data[rb.index] = c
-	rb.index++
-}
-
-func (rb *ringBuffer) Data() []ptp.ClockQuality {
-	return rb.data
+	Apply  bool
+	Path   string
+	Pid    string
+	Sample int
 }
 
 var defaultConfig = &server.DynamicConfig{
@@ -63,63 +41,69 @@ var defaultConfig = &server.DynamicConfig{
 	MinSubInterval: 1 * time.Second,
 }
 
-func Run(config *Config) {
-	rb := NewRingBuffer(config.TAU)
-
-	for it := time.NewTicker(time.Second); true; <-it.C {
-		// Clock data
-		c, err := clock.Run()
-		if err != nil {
-			log.Errorf("Failed to collect clock data: %v", err)
-			continue
+// Run config generation once
+func Run(config *Config, rb *clock.RingBuffer) {
+	c, err := clock.Run()
+	if err != nil {
+		log.Errorf("Failed to collect clock data: %v", err)
+	}
+	// To avoid stale data always continue to fill the ring buffer
+	// even with nil values
+	rb.Write(c)
+	w := clock.Worst(rb.Data())
+	// If all data in ring buffer is nil we have to give up and pronounce
+	// clock as uncalibrated with unknown accuracy
+	if w == nil {
+		w = &ptp.ClockQuality{
+			ClockClass:    clock.ClockClassUncalibrated,
+			ClockAccuracy: ptp.ClockAccuracyUnknown,
 		}
-		rb.Write(*c)
-		w := clock.Worst(rb.Data())
+	}
 
-		// UTC data
-		u, err := utcoffset.Run()
-		if err != nil {
-			log.Errorf("Failed to collect UTC offset data: %v", err)
-			continue
-		}
+	// UTC data
+	u, err := utcoffset.Run()
+	if err != nil {
+		log.Errorf("Failed to collect UTC offset data: %v", err)
+		// Keep going. UTC offset will be 0.
+		// Clock data needs to be updated anyway as higher priority
+	}
 
-		current, err := server.ReadDynamicConfig(config.Path)
-		if err != nil {
-			log.Errorf("Failed read current ptp4u config: %v. Using defaults", err)
-			current = defaultConfig
-		}
-		pending := &server.DynamicConfig{}
-		*pending = *current
+	current, err := server.ReadDynamicConfig(config.Path)
+	if err != nil {
+		log.Errorf("Failed read current ptp4u config: %v. Using defaults", err)
+		current = defaultConfig
+	}
+	pending := &server.DynamicConfig{}
+	*pending = *current
 
-		pending.ClockClass = w.ClockClass
-		pending.ClockAccuracy = w.ClockAccuracy
-		pending.UTCOffset = u
+	pending.ClockClass = w.ClockClass
+	pending.ClockAccuracy = w.ClockAccuracy
+	pending.UTCOffset = u
 
-		if *current != *pending {
-			log.Infof("Current: %+v", current)
-			log.Infof("Pending: %+v", pending)
+	if *current != *pending {
+		log.Infof("Current: %+v", current)
+		log.Infof("Pending: %+v", pending)
 
-			if config.Apply {
-				log.Infof("Saving a pending config to %s", config.Path)
-				err := pending.Write(config.Path)
-				if err != nil {
-					log.Errorf("Failed save the ptp4u config: %v", err)
-					continue
-				}
-
-				pid, err := server.ReadPidFile(config.Pid)
-				if err != nil {
-					log.Errorf("Failed to read ptp4u pid: %v", err)
-					continue
-				}
-
-				err = unix.Kill(pid, unix.SIGHUP)
-				if err != nil {
-					log.Errorf("Failed to send SIGHUP to ptp4u %d: %v", pid, err)
-					continue
-				}
-				log.Infof("SIGHUP is sent to ptp4u pid: %d", pid)
+		if config.Apply {
+			log.Infof("Saving a pending config to %s", config.Path)
+			err := pending.Write(config.Path)
+			if err != nil {
+				log.Errorf("Failed save the ptp4u config: %v", err)
+				return
 			}
+
+			pid, err := server.ReadPidFile(config.Pid)
+			if err != nil {
+				log.Errorf("Failed to read ptp4u pid: %v", err)
+				return
+			}
+
+			err = unix.Kill(pid, unix.SIGHUP)
+			if err != nil {
+				log.Errorf("Failed to send SIGHUP to ptp4u %d: %v", pid, err)
+				return
+			}
+			log.Infof("SIGHUP is sent to ptp4u pid: %d", pid)
 		}
 	}
 }
