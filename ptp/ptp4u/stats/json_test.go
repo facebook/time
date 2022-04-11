@@ -134,6 +134,20 @@ func TestJSONStatsSetUTCOffset(t *testing.T) {
 	require.Equal(t, int64(42), stats.utcoffset)
 }
 
+func TestJSONStatsSetClockAccuracy(t *testing.T) {
+	stats := NewJSONStats()
+
+	stats.SetClockAccuracy(42)
+	require.Equal(t, int64(42), stats.clockaccuracy)
+}
+
+func TestJSONStatsSetClockCLass(t *testing.T) {
+	stats := NewJSONStats()
+
+	stats.SetClockClass(42)
+	require.Equal(t, int64(42), stats.clockclass)
+}
+
 func TestJSONStatsSetDrain(t *testing.T) {
 	stats := NewJSONStats()
 
@@ -153,6 +167,8 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	stats.IncRXSignaling(ptp.MessageDelayResp)
 	stats.IncRXSignaling(ptp.MessageDelayResp)
 	stats.IncRXSignaling(ptp.MessageDelayResp)
+	stats.SetClockAccuracy(1)
+	stats.SetClockClass(1)
 	stats.SetUTCOffset(1)
 	stats.SetDrain(1)
 	stats.IncReload()
@@ -165,6 +181,8 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	expectedStats.tx.store(int(ptp.MessageSync), 2)
 	expectedStats.rxSignaling.store(int(ptp.MessageDelayResp), 3)
 	expectedStats.utcoffset = 1
+	expectedStats.clockaccuracy = 1
+	expectedStats.clockclass = 1
 	expectedStats.drain = 1
 	expectedStats.reload = 1
 
@@ -172,6 +190,8 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	require.Equal(t, expectedStats.tx.m, stats.report.tx.m)
 	require.Equal(t, expectedStats.rxSignaling.m, stats.report.rxSignaling.m)
 	require.Equal(t, expectedStats.utcoffset, stats.report.utcoffset)
+	require.Equal(t, expectedStats.clockaccuracy, stats.report.clockaccuracy)
+	require.Equal(t, expectedStats.clockclass, stats.report.clockclass)
 	require.Equal(t, expectedStats.drain, stats.report.drain)
 	require.Equal(t, expectedStats.reload, stats.report.reload)
 }
@@ -189,6 +209,8 @@ func TestJSONExport(t *testing.T) {
 	stats.IncRXSignaling(ptp.MessageDelayResp)
 	stats.IncRXSignaling(ptp.MessageDelayResp)
 	stats.SetUTCOffset(1)
+	stats.SetClockAccuracy(1)
+	stats.SetClockClass(1)
 	stats.SetDrain(1)
 	stats.IncReload()
 
@@ -210,6 +232,8 @@ func TestJSONExport(t *testing.T) {
 	expectedMap["tx.sync"] = 2
 	expectedMap["rx.signaling.delay_resp"] = 3
 	expectedMap["utcoffset"] = 1
+	expectedMap["clockaccuracy"] = 1
+	expectedMap["clockclass"] = 1
 	expectedMap["drain"] = 1
 	expectedMap["reload"] = 1
 

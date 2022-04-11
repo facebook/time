@@ -73,6 +73,8 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	c.workerSubs.store(1, 1)
 	c.txtsattempts.store(1, 1)
 	c.utcoffset = 1
+	c.clockaccuracy = 1
+	c.clockclass = 1
 	c.drain = 1
 	c.reload = 1
 
@@ -85,6 +87,8 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	require.Equal(t, int64(1), c.workerSubs.load(1))
 	require.Equal(t, int64(1), c.txtsattempts.load(1))
 	require.Equal(t, int64(1), c.utcoffset)
+	require.Equal(t, int64(1), c.clockaccuracy)
+	require.Equal(t, int64(1), c.clockclass)
 	require.Equal(t, int64(1), c.drain)
 	require.Equal(t, int64(1), c.reload)
 
@@ -99,6 +103,8 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	require.Equal(t, int64(0), c.workerSubs.load(1))
 	require.Equal(t, int64(0), c.txtsattempts.load(1))
 	require.Equal(t, int64(0), c.utcoffset)
+	require.Equal(t, int64(0), c.clockaccuracy)
+	require.Equal(t, int64(0), c.clockclass)
 	require.Equal(t, int64(0), c.drain)
 	require.Equal(t, int64(0), c.reload)
 }
@@ -111,6 +117,8 @@ func TestCountersToMap(t *testing.T) {
 	c.tx.store(int(ptp.MessageSync), 2)
 	c.rxSignaling.store(int(ptp.MessageDelayResp), 3)
 	c.utcoffset = 1
+	c.clockaccuracy = 42
+	c.clockclass = 6
 	c.drain = 1
 	c.reload = 2
 
@@ -121,6 +129,8 @@ func TestCountersToMap(t *testing.T) {
 	expectedMap["tx.sync"] = 2
 	expectedMap["rx.signaling.delay_resp"] = 3
 	expectedMap["utcoffset"] = 1
+	expectedMap["clockaccuracy"] = 42
+	expectedMap["clockclass"] = 6
 	expectedMap["drain"] = 1
 	expectedMap["reload"] = 2
 
