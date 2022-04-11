@@ -142,6 +142,8 @@ func (s *Server) Start() error {
 				w.inventoryClients()
 			}
 			s.Stats.SetUTCOffset(int64(s.Config.UTCOffset.Seconds()))
+			s.Stats.SetClockAccuracy(int64(s.Config.ClockAccuracy))
+			s.Stats.SetClockClass(int64(s.Config.ClockClass))
 
 			s.Stats.Snapshot()
 			s.Stats.Reset()
