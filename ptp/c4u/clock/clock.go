@@ -17,6 +17,8 @@ limitations under the License.
 package clock
 
 import (
+	"sort"
+
 	ptp "github.com/facebook/time/ptp/protocol"
 )
 
@@ -54,27 +56,33 @@ func (rb *RingBuffer) Data() []*ptp.ClockQuality {
 }
 
 func Worst(clocks []*ptp.ClockQuality) *ptp.ClockQuality {
-	var w *ptp.ClockQuality
+	var w ptp.ClockQuality
+	var ca []ptp.ClockAccuracy
+	var cc []ptp.ClockClass
+
 	for _, c := range clocks {
 		if c == nil {
 			continue
 		}
 
-		if w == nil {
-			w = &ptp.ClockQuality{}
-		}
-
-		// Higher value of accuracy means worse
-		if c.ClockAccuracy > w.ClockAccuracy {
-			w.ClockAccuracy = c.ClockAccuracy
-		}
-
-		// Assuming higher class means worse
-		if c.ClockClass > w.ClockClass {
-			w.ClockClass = c.ClockClass
-		}
+		ca = append(ca, c.ClockAccuracy)
+		cc = append(cc, c.ClockClass)
 	}
-	return w
+
+	if len(ca) == 0 || len(cc) == 0 {
+		return nil
+	}
+
+	sort.Slice(ca, func(i, j int) bool { return ca[i] < ca[j] })
+	sort.Slice(cc, func(i, j int) bool { return cc[i] < cc[j] })
+
+	ca1 := len(ca) / 100 * 1
+	cc1 := len(cc) / 100 * 1
+
+	w.ClockAccuracy = ca[len(ca)-1-ca1]
+	w.ClockClass = cc[len(cc)-1-cc1]
+
+	return &w
 }
 
 func Run() (*ptp.ClockQuality, error) {

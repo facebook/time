@@ -49,6 +49,27 @@ func TestWorst(t *testing.T) {
 	require.Nil(t, w)
 }
 
+func TestWorstP99(t *testing.T) {
+	expected := &ptp.ClockQuality{ClockClass: ptp.ClockClass6, ClockAccuracy: ptp.ClockAccuracyNanosecond100}
+
+	clocks := []*ptp.ClockQuality{}
+	for i := 0; i < 594; i++ {
+		clocks = append(clocks, &ptp.ClockQuality{ClockClass: ptp.ClockClass6, ClockAccuracy: ptp.ClockAccuracyNanosecond100})
+	}
+	for i := 0; i < 6; i++ {
+		clocks = append(clocks, &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyNanosecond250})
+	}
+
+	w := Worst(clocks)
+	require.Equal(t, expected, w)
+
+	// Changing 1 element to sway P99 over the border
+	clocks[592] = &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyNanosecond250}
+	expected = &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyNanosecond250}
+	w = Worst(clocks)
+	require.Equal(t, expected, w)
+}
+
 func TestBufferRing(t *testing.T) {
 	sample := 2
 	rb := NewRingBuffer(sample)
