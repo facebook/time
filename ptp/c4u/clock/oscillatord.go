@@ -29,23 +29,28 @@ const timeout = time.Second
 
 // https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.4
 // https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.5
-func clockQualityFromOscillatord(status *osc.Status) *ptp.ClockQuality {
-	c := &ptp.ClockQuality{
-		ClockClass:    ClockClassUncalibrated,
-		ClockAccuracy: ptp.ClockAccuracyUnknown,
+func clockQualityFromOscillatord(status *osc.Status) *oscillatorState {
+	c := &oscillatorState{
+		ClockClass: ClockClassUncalibrated,
+		Offset:     0,
 	}
 
 	if status.GNSS.FixOK && status.Oscillator.Lock {
 		c.ClockClass = ClockClassLocked
-		c.ClockAccuracy = ptp.ClockAccuracyNanosecond100
+		c.Offset = 100 * time.Nanosecond
 	} else if status.Oscillator.Lock {
 		c.ClockClass = ClockClassHoldover
-		c.ClockAccuracy = ptp.ClockAccuracyMicrosecond1
+		c.Offset = time.Microsecond
 	}
 	return c
 }
 
-func oscillatord() (*ptp.ClockQuality, error) {
+type oscillatorState struct {
+	Offset     time.Duration
+	ClockClass ptp.ClockClass
+}
+
+func oscillatord() (*oscillatorState, error) {
 	conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", osc.MonitoringPort))
 	if err != nil {
 		return nil, err
@@ -60,7 +65,5 @@ func oscillatord() (*ptp.ClockQuality, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// Wait for oscillatord correct monitoring socket implementation
 	return clockQualityFromOscillatord(status), nil
 }

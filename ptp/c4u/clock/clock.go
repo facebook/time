@@ -17,7 +17,11 @@ limitations under the License.
 package clock
 
 import (
+	"fmt"
+	"time"
+
 	ptp "github.com/facebook/time/ptp/protocol"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -27,20 +31,26 @@ const (
 	ClockClassUncalibrated ptp.ClockClass = ptp.ClockClass52
 )
 
+type DataPoint struct {
+	PHCOffset            time.Duration
+	OscillatorOffset     time.Duration
+	OscillatorClockClass ptp.ClockClass
+}
+
 // RingBuffer is a ring buffer of ClockQuality data
 type RingBuffer struct {
-	data  []*ptp.ClockQuality
+	data  []*DataPoint
 	index int
 	size  int
 }
 
 // NewRingBuffer creates new RingBuffer of a defined size
 func NewRingBuffer(size int) *RingBuffer {
-	return &RingBuffer{size: size, data: make([]*ptp.ClockQuality, size)}
+	return &RingBuffer{size: size, data: make([]*DataPoint, size)}
 }
 
 // Write new element to a ring buffer
-func (rb *RingBuffer) Write(c *ptp.ClockQuality) {
+func (rb *RingBuffer) Write(c *DataPoint) {
 	if rb.index >= rb.size {
 		rb.index = 0
 	}
@@ -49,44 +59,74 @@ func (rb *RingBuffer) Write(c *ptp.ClockQuality) {
 }
 
 // Export data from the ring buffer
-func (rb *RingBuffer) Data() []*ptp.ClockQuality {
+func (rb *RingBuffer) Data() []*DataPoint {
 	return rb.data
 }
 
-func Worst(clocks []*ptp.ClockQuality) *ptp.ClockQuality {
+func Worst(points []*DataPoint, accuracyExpr string) (*ptp.ClockQuality, error) {
+	expr, err := prepareExpression(accuracyExpr)
+	if err != nil {
+		return nil, fmt.Errorf("evaluating accuracy math: %w", err)
+	}
+	phcOffsets := []float64{}
+	oscillatorOffsets := []float64{}
 	var w *ptp.ClockQuality
-	for _, c := range clocks {
+	for _, c := range points {
 		if c == nil {
 			continue
 		}
-
 		if w == nil {
 			w = &ptp.ClockQuality{}
 		}
-
-		// Higher value of accuracy means worse
-		if c.ClockAccuracy > w.ClockAccuracy {
-			w.ClockAccuracy = c.ClockAccuracy
+		phcOffsets = append(phcOffsets, float64(c.PHCOffset))
+		// if oscillator is uncalibrated, ignore the offset as it's meaningless
+		if c.OscillatorClockClass != ClockClassUncalibrated {
+			oscillatorOffsets = append(oscillatorOffsets, float64(c.OscillatorOffset))
 		}
 
+		// TODO: consider better way to select clock class
 		// Assuming higher class means worse
-		if c.ClockClass > w.ClockClass {
-			w.ClockClass = c.ClockClass
+		if c.OscillatorClockClass > w.ClockClass {
+			w.ClockClass = c.OscillatorClockClass
 		}
 	}
-	return w
+	if w == nil {
+		return nil, nil
+	}
+
+	parameters := map[string]interface{}{
+		"phcoffset":        phcOffsets,
+		"oscillatoroffset": oscillatorOffsets,
+	}
+	vRaw, err := expr.Evaluate(parameters)
+	if err != nil {
+		return nil, err
+	}
+	v := time.Duration(vRaw.(float64))
+	accFromOffset := ptp.ClockAccuracyFromOffset(v)
+	log.Debugf("result of %q = %v", accuracyExpr, v)
+	log.Debugf("clockAccuracy: %v\n", accFromOffset)
+	w.ClockAccuracy = accFromOffset
+
+	return w, nil
 }
 
-func Run() (*ptp.ClockQuality, error) {
+func Run() (*DataPoint, error) {
 	oscillatord, err := oscillatord()
 	if err != nil {
 		return nil, err
 	}
 
-	ts2phc, err := ts2phc()
+	phcOffset, err := ts2phc()
 	if err != nil {
 		return nil, err
 	}
 
-	return Worst([]*ptp.ClockQuality{oscillatord, ts2phc}), nil
+	d := &DataPoint{
+		PHCOffset:            phcOffset,
+		OscillatorOffset:     oscillatord.Offset,
+		OscillatorClockClass: oscillatord.ClockClass,
+	}
+
+	return d, nil
 }

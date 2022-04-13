@@ -48,12 +48,14 @@ func TestRun(t *testing.T) {
 	defer os.Remove(cfg.Name())
 
 	c := &Config{
-		Path:   cfg.Name(),
-		Sample: 3,
-		Apply:  true,
+		Path:         cfg.Name(),
+		Sample:       3,
+		Apply:        true,
+		AccuracyExpr: "1",
 	}
 
-	Run(c, clock.NewRingBuffer(1))
+	err = Run(c, clock.NewRingBuffer(1))
+	require.NoError(t, err)
 
 	dc, err := server.ReadDynamicConfig(c.Path)
 	require.NoError(t, err)
