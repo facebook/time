@@ -18,9 +18,9 @@ package clock
 
 import (
 	"testing"
+	"time"
 
 	osc "github.com/facebook/time/oscillatord"
-	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,17 +33,17 @@ func TestClockQualityFromOscillatord(t *testing.T) {
 			Lock: true,
 		},
 	}
-	expectedLock := &ptp.ClockQuality{
-		ClockClass:    ClockClassLocked,
-		ClockAccuracy: ptp.ClockAccuracyNanosecond100,
+	expectedLock := &oscillatorState{
+		ClockClass: ClockClassLocked,
+		Offset:     100 * time.Nanosecond,
 	}
-	expectedHoldover := &ptp.ClockQuality{
-		ClockClass:    ClockClassHoldover,
-		ClockAccuracy: ptp.ClockAccuracyMicrosecond1,
+	expectedHoldover := &oscillatorState{
+		ClockClass: ClockClassHoldover,
+		Offset:     time.Microsecond,
 	}
-	expectedFailed := &ptp.ClockQuality{
-		ClockClass:    ClockClassUncalibrated,
-		ClockAccuracy: ptp.ClockAccuracyUnknown,
+	expectedFailed := &oscillatorState{
+		ClockClass: ClockClassUncalibrated,
+		Offset:     0,
 	}
 	require.Equal(t, expectedLock, clockQualityFromOscillatord(status))
 	status.GNSS.FixOK = false

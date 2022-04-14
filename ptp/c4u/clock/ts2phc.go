@@ -18,7 +18,7 @@ package clock
 
 import (
 	"github.com/facebook/time/phc"
-	ptp "github.com/facebook/time/ptp/protocol"
+	"time"
 )
 
 const (
@@ -26,24 +26,20 @@ const (
 	phcNICPath      = "/dev/ptp0"
 )
 
-func ts2phc() (*ptp.ClockQuality, error) {
-	c := &ptp.ClockQuality{}
-
+func ts2phc() (time.Duration, error) {
 	tcard, err := phc.TimeAndOffsetFromDevice(phcTimeCardPath, phc.MethodIoctlSysOffsetExtended)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	tnic, err := phc.TimeAndOffsetFromDevice(phcNICPath, phc.MethodIoctlSysOffsetExtended)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	sysOffset := tcard.SysTime.Sub(tnic.SysTime)
 	phcOffset := tcard.PHCTime.Sub(tnic.PHCTime)
 	phcOffset -= sysOffset
 
-	c.ClockAccuracy = ptp.ClockAccuracyFromOffset(phcOffset)
-
-	return c, nil
+	return phcOffset, nil
 }

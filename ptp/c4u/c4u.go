@@ -28,10 +28,11 @@ import (
 )
 
 type Config struct {
-	Apply  bool
-	Path   string
-	Pid    string
-	Sample int
+	Apply        bool
+	Path         string
+	Pid          string
+	Sample       int
+	AccuracyExpr string
 }
 
 var defaultConfig = &server.DynamicConfig{
@@ -42,7 +43,7 @@ var defaultConfig = &server.DynamicConfig{
 }
 
 // Run config generation once
-func Run(config *Config, rb *clock.RingBuffer) {
+func Run(config *Config, rb *clock.RingBuffer) error {
 	c, err := clock.Run()
 	if err != nil {
 		log.Errorf("Failed to collect clock data: %v", err)
@@ -50,7 +51,10 @@ func Run(config *Config, rb *clock.RingBuffer) {
 	// To avoid stale data always continue to fill the ring buffer
 	// even with nil values
 	rb.Write(c)
-	w := clock.Worst(rb.Data())
+	w, err := clock.Worst(rb.Data(), config.AccuracyExpr)
+	if err != nil {
+		return err
+	}
 	// If all data in ring buffer is nil we have to give up and pronounce
 	// clock as uncalibrated with unknown accuracy
 	if w == nil {
@@ -89,21 +93,22 @@ func Run(config *Config, rb *clock.RingBuffer) {
 			err := pending.Write(config.Path)
 			if err != nil {
 				log.Errorf("Failed save the ptp4u config: %v", err)
-				return
+				return nil
 			}
 
 			pid, err := server.ReadPidFile(config.Pid)
 			if err != nil {
 				log.Errorf("Failed to read ptp4u pid: %v", err)
-				return
+				return nil
 			}
 
 			err = unix.Kill(pid, unix.SIGHUP)
 			if err != nil {
 				log.Errorf("Failed to send SIGHUP to ptp4u %d: %v", pid, err)
-				return
+				return nil
 			}
 			log.Infof("SIGHUP is sent to ptp4u pid: %d", pid)
 		}
 	}
+	return nil
 }

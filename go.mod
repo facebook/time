@@ -3,7 +3,9 @@ module github.com/facebook/time
 go 1.16
 
 require (
+	github.com/Knetic/govaluate v3.0.0+incompatible // indirect
 	github.com/davecgh/go-spew v1.1.1
+	github.com/eclesh/welford v0.0.0-20150116075914-eec62615b1f0 // indirect
 	github.com/fatih/color v1.13.0
 	github.com/go-ini/ini v1.66.2
 	github.com/golang/mock v1.6.0
