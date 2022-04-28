@@ -17,7 +17,6 @@ limitations under the License.
 package export
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -44,10 +43,7 @@ func (w *writer) Write(p []byte) (int, error) {
 
 func TestExport(t *testing.T) {
 	w := &writer{}
-	handler := func(e *Entry) {
-		entryj, _ := json.Marshal(e)
-		fmt.Fprintln(w, string(entryj))
-	}
+	l := JSONLogger{Out: w}
 
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
@@ -84,7 +80,7 @@ func TestExport(t *testing.T) {
 		fmt.Sprintf("{\"float\":{\"value\":-2.50504e-7},\"int\":{\"time\":1607961194},\"normal\":{\"channel\":\"VP1\",\"target\":\"127.0.0.1\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host),
 		fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"a\",\"target\":\"127.0.0.1\",\"protocol\":\"pps\",\"source\":\"%s\"}}\n", parsed.Host),
 	}
-	err := Export(parsed.Host, true, []api.Channel{}, handler)
+	err := Export(parsed.Host, true, []api.Channel{}, l)
 	require.NoError(t, err)
 	require.ElementsMatch(t, expected, w.data)
 }

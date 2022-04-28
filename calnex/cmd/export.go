@@ -17,8 +17,7 @@ limitations under the License.
 package cmd
 
 import (
-	"encoding/json"
-	"fmt"
+	"os"
 
 	"github.com/facebook/time/calnex/api"
 	"github.com/facebook/time/calnex/export"
@@ -48,11 +47,8 @@ var exportCmd = &cobra.Command{
 			}
 			chs = append(chs, *c)
 		}
-		handler := func(e *export.Entry) {
-			entryj, _ := json.Marshal(e)
-			fmt.Println(string(entryj))
-		}
-		if err := export.Export(source, insecureTLS, chs, handler); err != nil {
+		l := export.JSONLogger{Out: os.Stdout}
+		if err := export.Export(source, insecureTLS, chs, l); err != nil {
 			log.Fatal(err)
 		}
 	},
