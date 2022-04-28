@@ -26,6 +26,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+
+	ptp "github.com/facebook/time/ptp/protocol"
 )
 
 // MonitoringPort is an oscillatord monitoring socket port
@@ -153,6 +155,48 @@ func (c LeapSecondChange) String() string {
 	return s
 }
 
+// ClockClass is a oscillatord specific clockClass
+type ClockClass ptp.ClockClass
+
+const (
+	ClockClassLock         = ClockClass(ptp.ClockClass6)
+	ClockClassHoldover     = ClockClass(ptp.ClockClass7)
+	ClockClassCalibrating  = ClockClass(ptp.ClockClass13)
+	ClockClassUncalibrated = ClockClass(ptp.ClockClass52)
+)
+
+func (c *ClockClass) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case "Lock":
+		*c = ClockClassLock
+	case "Holdover":
+		*c = ClockClassHoldover
+	case "Calibrating":
+		*c = ClockClassCalibrating
+	case "Uncalibrated":
+		*c = ClockClassUncalibrated
+	default:
+		return fmt.Errorf("clock class %s not supported", string(text))
+	}
+
+	return nil
+}
+
+var clockClassToString = map[ClockClass]string{
+	ClockClassLock:         "Lock",
+	ClockClassHoldover:     "Holdover",
+	ClockClassCalibrating:  "Calibrating",
+	ClockClassUncalibrated: "Uncalibrated",
+}
+
+func (c ClockClass) String() string {
+	s, found := clockClassToString[c]
+	if !found {
+		return "UNSUPPORTED VALUE"
+	}
+	return s
+}
+
 // Oscillator describes structure that oscillatord returns for oscillator
 type Oscillator struct {
 	Model       string  `json:"model"`
@@ -173,10 +217,17 @@ type GNSS struct {
 	SatellitesCount int              `json:"satellites_count"`
 }
 
+// Clock describes structure that oscillatord returns for clock
+type Clock struct {
+	Class  ClockClass `json:"class"`
+	Offset int        `json:"offset"`
+}
+
 // Status is whole structure that oscillatord returns for monitoring
 type Status struct {
 	Oscillator Oscillator `json:"oscillator"`
 	GNSS       GNSS       `json:"gnss"`
+	Clock      Clock      `json:"clock"`
 }
 
 // ReadStatus talks to oscillatord via monitoring port connection and reads reported Status
