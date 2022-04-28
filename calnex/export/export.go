@@ -27,7 +27,7 @@ var errNoUsedChannels = errors.New("no used channels")
 var errNoTarget = errors.New("no target succeeds")
 
 // Export data from the device about specified channels to the specified output
-func Export(source string, insecureTLS bool, channels []api.Channel, f func(e *Entry)) (err error) {
+func Export(source string, insecureTLS bool, channels []api.Channel, l Logger) (err error) {
 	var success bool
 	calnexAPI := api.NewAPI(source, insecureTLS)
 
@@ -69,7 +69,7 @@ func Export(source string, insecureTLS bool, channels []api.Channel, f func(e *E
 				break
 			}
 
-			f(entry)
+			l.PrintEntry(entry)
 		}
 		success = success || printSuccess
 	}
