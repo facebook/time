@@ -59,6 +59,8 @@ func printOscillatordJSON(status *oscillatord.Status) error {
 		GNSSLSChange        int64 `json:"ptp.timecard.gnss.leap_second_change"`
 		GNSSLeapSeconds     int64 `json:"ptp.timecard.gnss.leap_seconds"`
 		GNSSSatellitesCount int64 `json:"ptp.timecard.gnss.satellites_count"`
+		ClockClass          int64 `json:"ptp.timecard.clock.class"`
+		ClockOffset         int64 `json:"ptp.timecard.clock.offset"`
 	}{
 		Temperature:         int64(status.Oscillator.Temperature),
 		Lock:                bool2int(status.Oscillator.Lock),
@@ -69,6 +71,8 @@ func printOscillatordJSON(status *oscillatord.Status) error {
 		GNSSLSChange:        int64(status.GNSS.LSChange),
 		GNSSLeapSeconds:     int64(status.GNSS.LeapSeconds),
 		GNSSSatellitesCount: int64(status.GNSS.SatellitesCount),
+		ClockClass:          int64(status.Clock.Class),
+		ClockOffset:         int64(status.Clock.Offset),
 	}
 	toPrint, err := json.Marshal(output)
 	if err != nil {
@@ -94,6 +98,10 @@ func printOscillatord(status *oscillatord.Status) {
 	fmt.Printf("\tleap_second_change: %s (%d)\n", status.GNSS.LSChange, status.GNSS.LSChange)
 	fmt.Printf("\tleap_seconds: %d\n", status.GNSS.LeapSeconds)
 	fmt.Printf("\tsatellites_count: %d\n", status.GNSS.SatellitesCount)
+
+	fmt.Println("Clock:")
+	fmt.Printf("\tclass: %s (%d)\n", status.Clock.Class, status.Clock.Class)
+	fmt.Printf("\toffset: %d\n", status.Clock.Offset)
 }
 
 func oscillatordRun(address string, jsonOut bool) error {
