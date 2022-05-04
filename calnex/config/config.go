@@ -110,6 +110,7 @@ func (c *config) measureConfig(s *ini.Section, cc CalnexConfig) {
 			c.set(s, fmt.Sprintf("%s\\server_ip", ch.CalnexAPI()), m.Target)
 			c.set(s, fmt.Sprintf("%s\\trig_level", ch.CalnexAPI()), "500 mV")
 			c.set(s, fmt.Sprintf("%s\\freq", ch.CalnexAPI()), "1 Hz")
+			c.set(s, fmt.Sprintf("%s\\suppress_steps", ch.CalnexAPI()), api.YES)
 		}
 
 		// enable PTP/NTP channels
