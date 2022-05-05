@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	ClockClassLocked       ptp.ClockClass = ptp.ClockClass6
+	ClockClassLock         ptp.ClockClass = ptp.ClockClass6
 	ClockClassHoldover     ptp.ClockClass = ptp.ClockClass7
 	ClockClassCalibrating  ptp.ClockClass = ptp.ClockClass13
 	ClockClassUncalibrated ptp.ClockClass = ptp.ClockClass52

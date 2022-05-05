@@ -32,17 +32,17 @@ func TestWorst(t *testing.T) {
 		&DataPoint{
 			PHCOffset:            100 * time.Nanosecond,
 			OscillatorOffset:     100 * time.Nanosecond,
-			OscillatorClockClass: ClockClassLocked,
+			OscillatorClockClass: ClockClassLock,
 		},
 		&DataPoint{
 			PHCOffset:            time.Microsecond,
 			OscillatorOffset:     100 * time.Nanosecond,
-			OscillatorClockClass: ClockClassLocked,
+			OscillatorClockClass: ClockClassLock,
 		},
 		&DataPoint{
 			PHCOffset:            250 * time.Nanosecond,
 			OscillatorOffset:     100 * time.Nanosecond,
-			OscillatorClockClass: ClockClassLocked,
+			OscillatorClockClass: ClockClassLock,
 		},
 	}
 
@@ -60,7 +60,7 @@ func TestWorst(t *testing.T) {
 		&DataPoint{
 			PHCOffset:            10 * time.Nanosecond,
 			OscillatorOffset:     100 * time.Nanosecond,
-			OscillatorClockClass: ClockClassLocked,
+			OscillatorClockClass: ClockClassLock,
 		},
 		nil,
 	}
@@ -104,7 +104,7 @@ func TestBufferRing(t *testing.T) {
 	sample := 2
 	rb := NewRingBuffer(sample)
 	require.Equal(t, sample, rb.size)
-	cc100 := &DataPoint{PHCOffset: 100 * time.Nanosecond, OscillatorOffset: 100 * time.Nanosecond, OscillatorClockClass: ClockClassLocked}
+	cc100 := &DataPoint{PHCOffset: 100 * time.Nanosecond, OscillatorOffset: 100 * time.Nanosecond, OscillatorClockClass: ClockClassLock}
 	cc250 := &DataPoint{PHCOffset: 250 * time.Nanosecond, OscillatorOffset: 250 * time.Nanosecond, OscillatorClockClass: ClockClassCalibrating}
 	cc1u := &DataPoint{PHCOffset: time.Microsecond, OscillatorOffset: time.Microsecond, OscillatorClockClass: ClockClassHoldover}
 	// Write 1

@@ -27,6 +27,11 @@ import (
 
 const timeout = time.Second
 
+type oscillatorState struct {
+	Offset     time.Duration
+	ClockClass ptp.ClockClass
+}
+
 // https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.4
 // https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.5
 func clockQualityFromOscillatord(status *osc.Status) *oscillatorState {
@@ -35,19 +40,14 @@ func clockQualityFromOscillatord(status *osc.Status) *oscillatorState {
 		Offset:     0,
 	}
 
-	if status.GNSS.FixOK && status.Oscillator.Lock {
-		c.ClockClass = ClockClassLocked
-		c.Offset = 100 * time.Nanosecond
-	} else if status.Oscillator.Lock {
-		c.ClockClass = ClockClassHoldover
-		c.Offset = time.Microsecond
+	// Safety check in case oscillatord returns an empty struct
+	// + Oscillatord being Unlock means we are Uncalibrated anyway.
+	if status.Oscillator.Lock {
+		c.ClockClass = ptp.ClockClass(status.Clock.Class)
+		c.Offset = status.Clock.Offset
 	}
-	return c
-}
 
-type oscillatorState struct {
-	Offset     time.Duration
-	ClockClass ptp.ClockClass
+	return c
 }
 
 func oscillatord() (*oscillatorState, error) {
