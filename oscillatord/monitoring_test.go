@@ -102,6 +102,9 @@ func TestAntennaStatus(t *testing.T) {
 	var a AntennaStatus
 	require.Equal(t, AntStatusInit, a)
 	require.Equal(t, antennaStatusToString[AntStatusInit], AntStatusInit.String())
+	for k := range antennaStatusToString {
+		require.Equal(t, antennaStatusToString[k], k.String())
+	}
 
 	a = 42
 	require.Equal(t, "UNSUPPORTED VALUE", a.String())
@@ -111,6 +114,9 @@ func TestAntennaPower(t *testing.T) {
 	var a AntennaPower
 	require.Equal(t, AntPowerOff, a)
 	require.Equal(t, antennaPowerToString[AntPowerOff], AntPowerOff.String())
+	for k := range antennaPowerToString {
+		require.Equal(t, antennaPowerToString[k], k.String())
+	}
 
 	a = 42
 	require.Equal(t, "UNSUPPORTED VALUE", a.String())
@@ -120,6 +126,9 @@ func TestGNSSFix(t *testing.T) {
 	var g GNSSFix
 	require.Equal(t, FixUnknown, g)
 	require.Equal(t, gnssFixToString[FixUnknown], FixUnknown.String())
+	for k := range gnssFixToString {
+		require.Equal(t, gnssFixToString[k], k.String())
+	}
 
 	g = 42
 	require.Equal(t, "UNSUPPORTED VALUE", g.String())
@@ -129,6 +138,9 @@ func TestLeapSecondChange(t *testing.T) {
 	var l LeapSecondChange
 	require.Equal(t, LeapNoWarning, l)
 	require.Equal(t, leapSecondChangeToString[LeapNoWarning], LeapNoWarning.String())
+	for k := range leapSecondChangeToString {
+		require.Equal(t, leapSecondChangeToString[k], k.String())
+	}
 
 	l = 42
 	require.Equal(t, "UNSUPPORTED VALUE", l.String())
@@ -139,10 +151,12 @@ func TestClockClass(t *testing.T) {
 	require.Equal(t, ClockClass(ptp.ClockClass7), ClockClassHoldover)
 	require.Equal(t, ClockClass(ptp.ClockClass13), ClockClassCalibrating)
 	require.Equal(t, ClockClass(ptp.ClockClass52), ClockClassUncalibrated)
+
 	require.Equal(t, clockClassToString[ClockClassLock], ClockClassLock.String())
-	require.Equal(t, clockClassToString[ClockClassHoldover], ClockClassHoldover.String())
-	require.Equal(t, clockClassToString[ClockClassCalibrating], ClockClassCalibrating.String())
-	require.Equal(t, clockClassToString[ClockClassUncalibrated], ClockClassUncalibrated.String())
+	for k := range clockClassToString {
+		require.Equal(t, clockClassToString[k], k.String())
+	}
+
 	require.Equal(t, "UNSUPPORTED VALUE", ClockClass(42).String())
 }
 

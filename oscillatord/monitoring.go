@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
 )
@@ -219,8 +220,8 @@ type GNSS struct {
 
 // Clock describes structure that oscillatord returns for clock
 type Clock struct {
-	Class  ClockClass `json:"class"`
-	Offset int        `json:"offset"`
+	Class  ClockClass    `json:"class"`
+	Offset time.Duration `json:"offset"`
 }
 
 // Status is whole structure that oscillatord returns for monitoring

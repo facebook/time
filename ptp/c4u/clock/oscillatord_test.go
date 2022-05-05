@@ -21,33 +21,52 @@ import (
 	"time"
 
 	osc "github.com/facebook/time/oscillatord"
+	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/stretchr/testify/require"
 )
 
 func TestClockQualityFromOscillatord(t *testing.T) {
 	status := &osc.Status{
-		GNSS: osc.GNSS{
-			FixOK: true,
-		},
 		Oscillator: osc.Oscillator{
 			Lock: true,
 		},
+		Clock: osc.Clock{
+			Class:  osc.ClockClass(ptp.ClockClass6),
+			Offset: 42 * time.Nanosecond,
+		},
 	}
 	expectedLock := &oscillatorState{
-		ClockClass: ClockClassLocked,
-		Offset:     100 * time.Nanosecond,
+		ClockClass: ClockClassLock,
+		Offset:     42 * time.Nanosecond,
 	}
 	expectedHoldover := &oscillatorState{
 		ClockClass: ClockClassHoldover,
-		Offset:     time.Microsecond,
+		Offset:     42 * time.Nanosecond,
+	}
+	expectedCalibrating := &oscillatorState{
+		ClockClass: ClockClassCalibrating,
+		Offset:     42 * time.Nanosecond,
+	}
+	expectedUncalibrated := &oscillatorState{
+		ClockClass: ClockClassUncalibrated,
+		Offset:     42 * time.Nanosecond,
 	}
 	expectedFailed := &oscillatorState{
 		ClockClass: ClockClassUncalibrated,
 		Offset:     0,
 	}
+
 	require.Equal(t, expectedLock, clockQualityFromOscillatord(status))
-	status.GNSS.FixOK = false
+
+	status.Clock.Class = osc.ClockClass(ptp.ClockClass7)
 	require.Equal(t, expectedHoldover, clockQualityFromOscillatord(status))
+
+	status.Clock.Class = osc.ClockClass(ptp.ClockClass13)
+	require.Equal(t, expectedCalibrating, clockQualityFromOscillatord(status))
+
+	status.Clock.Class = osc.ClockClass(ptp.ClockClass52)
+	require.Equal(t, expectedUncalibrated, clockQualityFromOscillatord(status))
+
 	status.Oscillator.Lock = false
 	require.Equal(t, expectedFailed, clockQualityFromOscillatord(status))
 }
