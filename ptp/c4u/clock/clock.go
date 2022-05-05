@@ -63,13 +63,21 @@ func (rb *RingBuffer) Data() []*DataPoint {
 	return rb.data
 }
 
-func Worst(points []*DataPoint, accuracyExpr string) (*ptp.ClockQuality, error) {
-	expr, err := prepareExpression(accuracyExpr)
+func Worst(points []*DataPoint, accuracyExpr, classExpr string) (*ptp.ClockQuality, error) {
+	aexpr, err := prepareExpression(accuracyExpr)
 	if err != nil {
 		return nil, fmt.Errorf("evaluating accuracy math: %w", err)
 	}
+
+	cexpr, err := prepareExpression(classExpr)
+	if err != nil {
+		return nil, fmt.Errorf("evaluating class math: %w", err)
+	}
+
 	phcOffsets := []float64{}
 	oscillatorOffsets := []float64{}
+	oscillatorClasses := []float64{}
+
 	var w *ptp.ClockQuality
 	for _, c := range points {
 		if c == nil {
@@ -84,29 +92,37 @@ func Worst(points []*DataPoint, accuracyExpr string) (*ptp.ClockQuality, error) 
 			oscillatorOffsets = append(oscillatorOffsets, float64(c.OscillatorOffset))
 		}
 
-		// TODO: consider better way to select clock class
-		// Assuming higher class means worse
-		if c.OscillatorClockClass > w.ClockClass {
-			w.ClockClass = c.OscillatorClockClass
-		}
+		oscillatorClasses = append(oscillatorClasses, float64(c.OscillatorClockClass))
 	}
 	if w == nil {
 		return nil, nil
 	}
 
-	parameters := map[string]interface{}{
+	offsets := map[string]interface{}{
 		"phcoffset":        phcOffsets,
 		"oscillatoroffset": oscillatorOffsets,
 	}
-	vRaw, err := expr.Evaluate(parameters)
+	oRaw, err := aexpr.Evaluate(offsets)
 	if err != nil {
 		return nil, err
 	}
-	v := time.Duration(vRaw.(float64))
-	accFromOffset := ptp.ClockAccuracyFromOffset(v)
-	log.Debugf("result of %q = %v", accuracyExpr, v)
+	o := time.Duration(oRaw.(float64))
+	accFromOffset := ptp.ClockAccuracyFromOffset(o)
+	log.Debugf("result of %q = %v", accuracyExpr, o)
 	log.Debugf("clockAccuracy: %v\n", accFromOffset)
+
+	classes := map[string]interface{}{
+		"oscillatorclass": oscillatorClasses,
+	}
+	cRaw, err := cexpr.Evaluate(classes)
+	if err != nil {
+		return nil, err
+	}
+	c := ptp.ClockClass(cRaw.(float64))
+	log.Debugf("result of %q = %v", classExpr, c)
+
 	w.ClockAccuracy = accFromOffset
+	w.ClockClass = c
 
 	return w, nil
 }

@@ -19,6 +19,7 @@ package clock
 import (
 	"fmt"
 	"math"
+	"sort"
 
 	"github.com/Knetic/govaluate"
 	"github.com/eclesh/welford"
@@ -48,10 +49,17 @@ func stddev(input []float64) float64 {
 	return s.Stddev()
 }
 
+func p99(input []float64) float64 {
+	sort.Float64s(input)
+	p1 := len(input) / 100 * 1
+	return input[len(input)-1-p1]
+}
+
 // once oscillatord supports reporting offset we can add it here
 var supportedVariables = []string{
 	"phcoffset",
 	"oscillatoroffset",
+	"oscillatorclass",
 }
 
 func isSupportedVar(varName string) bool {
@@ -100,6 +108,13 @@ var functions = map[string]govaluate.ExpressionFunction{
 		}
 		vals := args[0].([]float64)
 		return stddev(vals), nil
+	},
+	"p99": func(args ...interface{}) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("stddev: wrong number of arguments: want 1, got %d", len(args))
+		}
+		vals := args[0].([]float64)
+		return p99(vals), nil
 	},
 }
 

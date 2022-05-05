@@ -39,6 +39,7 @@ func main() {
 	flag.StringVar(&c.Path, "path", "/etc/ptp4u.yaml", "Path to a config file")
 	flag.StringVar(&c.Pid, "ptp4u", "/var/run/ptp4u.pid", "Path to a ptp4u pid file")
 	flag.StringVar(&c.AccuracyExpr, "accuracyExpr", "max(abs(mean(phcoffset)) + 3 * stddev(phcoffset), abs(mean(oscillatoroffset)))", "Math to calculate clock accuracy")
+	flag.StringVar(&c.ClassExpr, "classExpr", "p99(oscillatorclass)", "Math to calculate clock class")
 	flag.IntVar(&sample, "sample", 600, "Sliding window size (samples) for clock data calculations")
 	flag.DurationVar(&interval, "interval", time.Second, "Data cata collection interval")
 	flag.StringVar(&logLevel, "loglevel", "info", "Set a log level. Can be: debug, info, warning, error")
