@@ -71,4 +71,10 @@ func TestMath(t *testing.T) {
 	result, err = e.Evaluate(map[string]interface{}{"phcoffset": []float64{1, 2, 3, 4, 5}})
 	require.NoError(t, err)
 	require.Equal(t, 2.5, result.(float64))
+
+	e, err = prepareExpression("p99(phcoffset)")
+	require.NoError(t, err)
+	result, err = e.Evaluate(map[string]interface{}{"phcoffset": []float64{1, 2, 3, 4, 5}})
+	require.NoError(t, err)
+	require.Equal(t, 5.0, result.(float64))
 }

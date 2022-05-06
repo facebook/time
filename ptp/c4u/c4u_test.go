@@ -52,6 +52,7 @@ func TestRun(t *testing.T) {
 		Sample:       3,
 		Apply:        true,
 		AccuracyExpr: "1",
+		ClassExpr:    "1",
 	}
 
 	err = Run(c, clock.NewRingBuffer(1))

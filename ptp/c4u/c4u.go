@@ -33,6 +33,7 @@ type Config struct {
 	Pid          string
 	Sample       int
 	AccuracyExpr string
+	ClassExpr    string
 }
 
 var defaultConfig = &server.DynamicConfig{
@@ -51,7 +52,7 @@ func Run(config *Config, rb *clock.RingBuffer) error {
 	// To avoid stale data always continue to fill the ring buffer
 	// even with nil values
 	rb.Write(c)
-	w, err := clock.Worst(rb.Data(), config.AccuracyExpr)
+	w, err := clock.Worst(rb.Data(), config.AccuracyExpr, config.ClassExpr)
 	if err != nil {
 		return err
 	}

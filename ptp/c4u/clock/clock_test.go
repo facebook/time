@@ -25,7 +25,8 @@ import (
 )
 
 func TestWorst(t *testing.T) {
-	expr := "max(abs(mean(phcoffset)) + 1 * stddev(phcoffset), abs(mean(oscillatoroffset)))"
+	aexpr := "max(abs(mean(phcoffset)) + 1 * stddev(phcoffset), abs(mean(oscillatoroffset)))"
+	cexpr := "p99(oscillatorclass)"
 	expected := &ptp.ClockQuality{ClockClass: ptp.ClockClass6, ClockAccuracy: ptp.ClockAccuracyMicrosecond1}
 
 	clocks := []*DataPoint{
@@ -46,7 +47,7 @@ func TestWorst(t *testing.T) {
 		},
 	}
 
-	w, err := Worst(clocks, expr)
+	w, err := Worst(clocks, aexpr, cexpr)
 	require.NoError(t, err)
 	require.Equal(t, expected, w)
 
@@ -65,20 +66,22 @@ func TestWorst(t *testing.T) {
 		nil,
 	}
 
-	w, err = Worst(clocks, expr)
+	w, err = Worst(clocks, aexpr, cexpr)
 	require.NoError(t, err)
 	require.Equal(t, expected, w)
 
 	clocks = []*DataPoint{nil, nil}
 
-	w, err = Worst(clocks, expr)
+	w, err = Worst(clocks, aexpr, cexpr)
 	require.NoError(t, err)
 	require.Nil(t, w)
 }
 
 func TestWorstBig(t *testing.T) {
-	expr := "abs(mean(phcoffset)) + stddev(phcoffset)" // p95 for normal distribution, see three-sigma rule of thumb
-	expected := &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyNanosecond100}
+	// p68 for normal distribution, see three-sigma rule of thumb
+	aexpr := "abs(mean(phcoffset)) + stddev(phcoffset)"
+	cexpr := "p99(oscillatorclass)"
+	expected := &ptp.ClockQuality{ClockClass: ptp.ClockClass6, ClockAccuracy: ptp.ClockAccuracyNanosecond100}
 
 	clocks := []*DataPoint{}
 	for i := 0; i < 594; i++ {
@@ -88,14 +91,14 @@ func TestWorstBig(t *testing.T) {
 		clocks = append(clocks, &DataPoint{OscillatorClockClass: ptp.ClockClass7, PHCOffset: 250 * time.Nanosecond})
 	}
 
-	w, err := Worst(clocks, expr)
+	w, err := Worst(clocks, aexpr, cexpr)
 	require.NoError(t, err)
 	require.Equal(t, expected, w)
 
 	// Changing 1 element to sway over the border
 	clocks[592] = &DataPoint{OscillatorClockClass: ptp.ClockClass7, PHCOffset: 250 * time.Nanosecond}
 	expected = &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyNanosecond250}
-	w, err = Worst(clocks, expr)
+	w, err = Worst(clocks, aexpr, cexpr)
 	require.NoError(t, err)
 	require.Equal(t, expected, w)
 }
