@@ -181,3 +181,41 @@ func TestClockClassUnmarshalText(t *testing.T) {
 	err = c.UnmarshalText([]byte("blah"))
 	require.Equal(t, errors.New("clock class blah not supported"), err)
 }
+
+func TestJSON(t *testing.T) {
+	expected := `{"ptp.timecard.clock.class":7,"ptp.timecard.clock.offset":-265095,"ptp.timecard.gnss.antenna_power":1,"ptp.timecard.gnss.antenna_status":4,"ptp.timecard.gnss.fix_num":5,"ptp.timecard.gnss.fix_ok":1,"ptp.timecard.gnss.leap_second_change":0,"ptp.timecard.gnss.leap_seconds":18,"ptp.timecard.gnss.satellites_count":10,"ptp.timecard.oscillator.coarse_ctrl":42,"ptp.timecard.oscillator.fine_ctrl":4242,"ptp.timecard.oscillator.lock":0,"ptp.timecard.oscillator.temperature":45}`
+	s := &Status{
+		Oscillator: Oscillator{
+			Model:       "sa5x",
+			FineCtrl:    4242,
+			CoarseCtrl:  42,
+			Lock:        false,
+			Temperature: 45.944,
+		},
+		GNSS: GNSS{
+			Fix:             Fix3D,
+			FixOK:           true,
+			AntennaPower:    AntPowerOn,
+			AntennaStatus:   AntStatusOpen,
+			LSChange:        LeapNoWarning,
+			LeapSeconds:     18,
+			SatellitesCount: 10,
+		},
+		Clock: Clock{
+			Class:  ClockClassHoldover,
+			Offset: -265095,
+		},
+	}
+	j, err := s.MonitoringJSON("ptp.timecard")
+	require.NoError(t, err)
+
+	require.Equal(t, expected, string(j))
+}
+
+func TestBool2int(t *testing.T) {
+	res := bool2int(true)
+	require.Equal(t, int64(1), res)
+
+	res = bool2int(false)
+	require.Equal(t, int64(0), res)
+}
