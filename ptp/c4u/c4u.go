@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/facebook/time/ptp/c4u/clock"
+	"github.com/facebook/time/ptp/c4u/stats"
 	"github.com/facebook/time/ptp/c4u/utcoffset"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/ptp4u/server"
@@ -44,14 +45,26 @@ var defaultConfig = &server.DynamicConfig{
 }
 
 // Run config generation once
-func Run(config *Config, rb *clock.RingBuffer) error {
+func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
+	defer st.Snapshot()
+	dataError := false
 	c, err := clock.Run()
 	if err != nil {
 		log.Errorf("Failed to collect clock data: %v", err)
+		dataError = true
 	}
 	// To avoid stale data always continue to fill the ring buffer
 	// even with nil values
 	rb.Write(c)
+	// stats
+	if c != nil {
+		st.SetPHCOffset(int64(c.PHCOffset))
+		st.SetOscillatorOffset(int64(c.OscillatorOffset))
+	} else {
+		st.SetPHCOffset(0)
+		st.SetOscillatorOffset(0)
+	}
+
 	w, err := clock.Worst(rb.Data(), config.AccuracyExpr, config.ClassExpr)
 	if err != nil {
 		return err
@@ -69,8 +82,15 @@ func Run(config *Config, rb *clock.RingBuffer) error {
 	u, err := utcoffset.Run()
 	if err != nil {
 		log.Errorf("Failed to collect UTC offset data: %v", err)
+		dataError = true
 		// Keep going. UTC offset will be 0.
 		// Clock data needs to be updated anyway as higher priority
+	}
+
+	if dataError {
+		st.IncDataError()
+	} else {
+		st.ResetDataError()
 	}
 
 	current, err := server.ReadDynamicConfig(config.Path)
@@ -84,6 +104,10 @@ func Run(config *Config, rb *clock.RingBuffer) error {
 	pending.ClockClass = w.ClockClass
 	pending.ClockAccuracy = w.ClockAccuracy
 	pending.UTCOffset = u
+
+	st.SetClockClass(int64(pending.ClockClass))
+	st.SetClockAccuracy(int64(pending.ClockAccuracy))
+	st.SetUTCOffset(int64(pending.UTCOffset.Seconds()))
 
 	if *current != *pending {
 		log.Infof("Current: %+v", current)
@@ -109,7 +133,12 @@ func Run(config *Config, rb *clock.RingBuffer) error {
 				return nil
 			}
 			log.Infof("SIGHUP is sent to ptp4u pid: %d", pid)
+			st.IncReload()
 		}
+	} else {
+		// set reload to 0
+		st.ResetReload()
 	}
+
 	return nil
 }
