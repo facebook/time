@@ -17,7 +17,6 @@ limitations under the License.
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"time"
@@ -29,9 +28,10 @@ import (
 )
 
 var (
-	oscillatordPortFlag    int
-	oscillatordAddressFlag string
-	oscillatorJSONFlag     bool
+	oscillatordPortFlag      int
+	oscillatordAddressFlag   string
+	oscillatorJSONFlag       bool
+	oscillatorJSONPrefixFlag string
 )
 
 func init() {
@@ -39,47 +39,7 @@ func init() {
 	oscillatordCmd.Flags().StringVarP(&oscillatordAddressFlag, "address", "a", "127.0.0.1", "address to connect to")
 	oscillatordCmd.Flags().IntVarP(&oscillatordPortFlag, "port", "p", oscillatord.MonitoringPort, "port to connect to")
 	oscillatordCmd.Flags().BoolVarP(&oscillatorJSONFlag, "json", "j", false, "JSON output")
-}
-
-func bool2int(b bool) int64 {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-func printOscillatordJSON(status *oscillatord.Status) error {
-	output := struct {
-		Temperature         int64 `json:"ptp.timecard.temperature"`
-		Lock                int64 `json:"ptp.timecard.lock"`
-		GNSSFixNum          int64 `json:"ptp.timecard.gnss.fix_num"`
-		GNSSFixOk           int64 `json:"ptp.timecard.gnss.fix_ok"`
-		GNSSAntennaPower    int64 `json:"ptp.timecard.gnss.antenna_power"`
-		GNSSAntennaStatus   int64 `json:"ptp.timecard.gnss.antenna_status"`
-		GNSSLSChange        int64 `json:"ptp.timecard.gnss.leap_second_change"`
-		GNSSLeapSeconds     int64 `json:"ptp.timecard.gnss.leap_seconds"`
-		GNSSSatellitesCount int64 `json:"ptp.timecard.gnss.satellites_count"`
-		ClockClass          int64 `json:"ptp.timecard.clock.class"`
-		ClockOffset         int64 `json:"ptp.timecard.clock.offset"`
-	}{
-		Temperature:         int64(status.Oscillator.Temperature),
-		Lock:                bool2int(status.Oscillator.Lock),
-		GNSSFixNum:          int64(status.GNSS.Fix),
-		GNSSFixOk:           bool2int(status.GNSS.FixOK),
-		GNSSAntennaPower:    int64(status.GNSS.AntennaPower),
-		GNSSAntennaStatus:   int64(status.GNSS.AntennaStatus),
-		GNSSLSChange:        int64(status.GNSS.LSChange),
-		GNSSLeapSeconds:     int64(status.GNSS.LeapSeconds),
-		GNSSSatellitesCount: int64(status.GNSS.SatellitesCount),
-		ClockClass:          int64(status.Clock.Class),
-		ClockOffset:         int64(status.Clock.Offset),
-	}
-	toPrint, err := json.Marshal(output)
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(toPrint))
-	return nil
+	oscillatordCmd.Flags().StringVarP(&oscillatorJSONPrefixFlag, "prefix", "r", "ptp.timecard", "JSON prefix")
 }
 
 func printOscillatord(status *oscillatord.Status) {
@@ -122,7 +82,9 @@ func oscillatordRun(address string, jsonOut bool) error {
 	}
 
 	if jsonOut {
-		return printOscillatordJSON(status)
+		toPrint, err := status.MonitoringJSON(oscillatorJSONPrefixFlag)
+		fmt.Println(string(toPrint))
+		return err
 	}
 
 	printOscillatord(status)

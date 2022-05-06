@@ -231,6 +231,36 @@ type Status struct {
 	Clock      Clock      `json:"clock"`
 }
 
+func (s *Status) MonitoringJSON(prefix string) ([]byte, error) {
+	if prefix != "" {
+		prefix = fmt.Sprintf("%s.", prefix)
+	}
+
+	output := map[string]int64{
+		fmt.Sprintf("%soscillator.temperature", prefix):  int64(s.Oscillator.Temperature),
+		fmt.Sprintf("%soscillator.fine_ctrl", prefix):    int64(s.Oscillator.FineCtrl),
+		fmt.Sprintf("%soscillator.coarse_ctrl", prefix):  int64(s.Oscillator.CoarseCtrl),
+		fmt.Sprintf("%soscillator.lock", prefix):         bool2int(s.Oscillator.Lock),
+		fmt.Sprintf("%sgnss.fix_num", prefix):            int64(s.GNSS.Fix),
+		fmt.Sprintf("%sgnss.fix_ok", prefix):             bool2int(s.GNSS.FixOK),
+		fmt.Sprintf("%sgnss.antenna_power", prefix):      int64(s.GNSS.AntennaPower),
+		fmt.Sprintf("%sgnss.antenna_status", prefix):     int64(s.GNSS.AntennaStatus),
+		fmt.Sprintf("%sgnss.leap_second_change", prefix): int64(s.GNSS.LSChange),
+		fmt.Sprintf("%sgnss.leap_seconds", prefix):       int64(s.GNSS.LeapSeconds),
+		fmt.Sprintf("%sgnss.satellites_count", prefix):   int64(s.GNSS.SatellitesCount),
+		fmt.Sprintf("%sclock.class", prefix):             int64(s.Clock.Class),
+		fmt.Sprintf("%sclock.offset", prefix):            int64(s.Clock.Offset),
+	}
+	return json.Marshal(output)
+}
+
+func bool2int(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // ReadStatus talks to oscillatord via monitoring port connection and reads reported Status
 func ReadStatus(conn io.ReadWriter) (*Status, error) {
 	// send newline to make oscillatord send us data
