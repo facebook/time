@@ -22,15 +22,17 @@ import (
 
 	"github.com/facebook/time/ptp/c4u"
 	"github.com/facebook/time/ptp/c4u/clock"
+	"github.com/facebook/time/ptp/c4u/stats"
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
 	var (
-		once     bool
-		interval time.Duration
-		sample   int
-		logLevel string
+		once           bool
+		interval       time.Duration
+		sample         int
+		logLevel       string
+		monitoringPort int
 	)
 	c := &c4u.Config{}
 
@@ -43,6 +45,7 @@ func main() {
 	flag.IntVar(&sample, "sample", 600, "Sliding window size (samples) for clock data calculations")
 	flag.DurationVar(&interval, "interval", time.Second, "Data cata collection interval")
 	flag.StringVar(&logLevel, "loglevel", "info", "Set a log level. Can be: debug, info, warning, error")
+	flag.IntVar(&monitoringPort, "monitoringport", 8889, "Port to run monitoring server on")
 	flag.Parse()
 
 	switch logLevel {
@@ -62,13 +65,16 @@ func main() {
 		sample = 1
 	}
 
+	st := stats.NewJSONStats()
+	go st.Start(monitoringPort)
+
 	rb := clock.NewRingBuffer(sample)
-	if err := c4u.Run(c, rb); err != nil {
+	if err := c4u.Run(c, rb, st); err != nil {
 		log.Fatal(err)
 	}
 
 	for it := time.NewTicker(interval); !once; <-it.C {
-		if err := c4u.Run(c, rb); err != nil {
+		if err := c4u.Run(c, rb, st); err != nil {
 			log.Fatal(err)
 		}
 	}

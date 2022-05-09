@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/facebook/time/ptp/c4u/clock"
+	"github.com/facebook/time/ptp/c4u/stats"
 	"github.com/facebook/time/ptp/c4u/utcoffset"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/ptp4u/server"
@@ -55,7 +56,9 @@ func TestRun(t *testing.T) {
 		ClassExpr:    "1",
 	}
 
-	err = Run(c, clock.NewRingBuffer(1))
+	st := stats.NewJSONStats()
+
+	err = Run(c, clock.NewRingBuffer(1), st)
 	require.NoError(t, err)
 
 	dc, err := server.ReadDynamicConfig(c.Path)
