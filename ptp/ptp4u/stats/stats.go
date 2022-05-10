@@ -86,8 +86,8 @@ type Stats interface {
 	// SetMaxTXTSAttempts atomically sets number of retries for get latest TX timestamp
 	SetMaxTXTSAttempts(workerid int, retries int64)
 
-	// SetUTCOffset atomically sets the utcoffset
-	SetUTCOffset(utcoffset int64)
+	// SetUTCOffsetSec atomically sets the utcoffset
+	SetUTCOffsetSec(utcoffsetSec int64)
 
 	// SetClockAccuracy atomically sets the clock accuracy
 	SetClockAccuracy(clockaccuracy int64)
@@ -175,7 +175,7 @@ type counters struct {
 	txtsattempts  syncMapInt64
 	workerQueue   syncMapInt64
 	workerSubs    syncMapInt64
-	utcoffset     int64
+	utcoffsetSec  int64
 	clockaccuracy int64
 	clockclass    int64
 	drain         int64
@@ -202,7 +202,7 @@ func (c *counters) reset() {
 	c.workerQueue.reset()
 	c.workerSubs.reset()
 	c.txtsattempts.reset()
-	c.utcoffset = 0
+	c.utcoffsetSec = 0
 	c.clockaccuracy = 0
 	c.clockclass = 0
 	c.drain = 0
@@ -258,7 +258,7 @@ func (c *counters) toMap() (export map[string]int64) {
 		res[fmt.Sprintf("worker.%d.txtsattempts", t)] = c
 	}
 
-	res["utcoffset"] = c.utcoffset
+	res["utcoffset_sec"] = c.utcoffsetSec
 	res["clockaccuracy"] = c.clockaccuracy
 	res["clockclass"] = c.clockclass
 	res["drain"] = c.drain

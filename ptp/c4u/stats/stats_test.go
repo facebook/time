@@ -24,20 +24,20 @@ import (
 
 func TestCountersToMap(t *testing.T) {
 	c := counters{
-		utcOffset:        1,
-		phcOffset:        2,
-		oscillatorOffset: 3,
-		clockAccuracy:    42,
-		clockClass:       6,
-		reload:           7,
-		dataError:        8,
+		utcOffsetSec:       1,
+		phcOffsetNS:        2,
+		oscillatorOffsetNS: 3,
+		clockAccuracy:      42,
+		clockClass:         6,
+		reload:             7,
+		dataError:          8,
 	}
 	result := c.toMap()
 
 	expectedMap := make(map[string]int64)
-	expectedMap["utcoffset"] = 1
-	expectedMap["phcoffset"] = 2
-	expectedMap["oscillatoroffset"] = 3
+	expectedMap["utcoffset_sec"] = 1
+	expectedMap["phcoffset_ns"] = 2
+	expectedMap["oscillatoroffset_ns"] = 3
 	expectedMap["clockaccuracy"] = 42
 	expectedMap["clockclass"] = 6
 	expectedMap["reload"] = 7

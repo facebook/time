@@ -65,7 +65,7 @@ func (s *JSONStats) Snapshot() {
 	s.workerQueue.copy(&s.report.workerQueue)
 	s.workerSubs.copy(&s.report.workerSubs)
 	s.txtsattempts.copy(&s.report.txtsattempts)
-	s.report.utcoffset = s.utcoffset
+	s.report.utcoffsetSec = s.utcoffsetSec
 	s.report.clockaccuracy = s.clockaccuracy
 	s.report.clockclass = s.clockclass
 	s.report.drain = s.drain
@@ -169,9 +169,9 @@ func (s *JSONStats) SetMaxTXTSAttempts(workerid int, attempts int64) {
 	}
 }
 
-// SetUTCOffset atomically sets the utcoffset
-func (s *JSONStats) SetUTCOffset(utcoffset int64) {
-	atomic.StoreInt64(&s.utcoffset, utcoffset)
+// SetUTCOffsetSec atomically sets the utcoffset
+func (s *JSONStats) SetUTCOffsetSec(utcoffsetSec int64) {
+	atomic.StoreInt64(&s.utcoffsetSec, utcoffsetSec)
 }
 
 // SetClockAccuracy atomically sets the clock accuracy
