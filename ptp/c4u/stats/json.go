@@ -53,9 +53,9 @@ func (s *JSONStats) Start(monitoringport int) {
 
 // Snapshot the values so they can be reported atomically
 func (s *JSONStats) Snapshot() {
-	s.report.utcOffset = s.utcOffset
-	s.report.phcOffset = s.phcOffset
-	s.report.oscillatorOffset = s.oscillatorOffset
+	s.report.utcOffsetSec = s.utcOffsetSec
+	s.report.phcOffsetNS = s.phcOffsetNS
+	s.report.oscillatorOffsetNS = s.oscillatorOffsetNS
 	s.report.clockAccuracy = s.clockAccuracy
 	s.report.clockClass = s.clockClass
 	s.report.reload = s.reload
@@ -95,19 +95,19 @@ func (s *JSONStats) ResetDataError() {
 	atomic.StoreInt64(&s.dataError, 0)
 }
 
-// SetUTCOffset atomically sets the utcoffset
-func (s *JSONStats) SetUTCOffset(utcOffset int64) {
-	atomic.StoreInt64(&s.utcOffset, utcOffset)
+// SetUTCOffsetSec atomically sets the utcoffset
+func (s *JSONStats) SetUTCOffsetSec(utcOffsetSec int64) {
+	atomic.StoreInt64(&s.utcOffsetSec, utcOffsetSec)
 }
 
-// SetPHCOffset atomically sets the phcoffset
-func (s *JSONStats) SetPHCOffset(phcOffset int64) {
-	atomic.StoreInt64(&s.phcOffset, phcOffset)
+// SetPHCOffsetNS atomically sets the phcoffset
+func (s *JSONStats) SetPHCOffsetNS(phcOffsetNS int64) {
+	atomic.StoreInt64(&s.phcOffsetNS, phcOffsetNS)
 }
 
-// SetOscillatorOffset atomically sets the oscillatoroffset
-func (s *JSONStats) SetOscillatorOffset(oscillatorOffset int64) {
-	atomic.StoreInt64(&s.oscillatorOffset, oscillatorOffset)
+// SetOscillatorOffsetNS atomically sets the oscillatoroffset
+func (s *JSONStats) SetOscillatorOffsetNS(oscillatorOffsetNS int64) {
+	atomic.StoreInt64(&s.oscillatorOffsetNS, oscillatorOffsetNS)
 }
 
 // SetClockAccuracy atomically sets the clock accuracy

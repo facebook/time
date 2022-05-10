@@ -58,11 +58,11 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 	rb.Write(c)
 	// stats
 	if c != nil {
-		st.SetPHCOffset(int64(c.PHCOffset))
-		st.SetOscillatorOffset(int64(c.OscillatorOffset))
+		st.SetPHCOffsetNS(int64(c.PHCOffset))
+		st.SetOscillatorOffsetNS(int64(c.OscillatorOffset))
 	} else {
-		st.SetPHCOffset(0)
-		st.SetOscillatorOffset(0)
+		st.SetPHCOffsetNS(0)
+		st.SetOscillatorOffsetNS(0)
 	}
 
 	w, err := clock.Worst(rb.Data(), config.AccuracyExpr, config.ClassExpr)
@@ -107,7 +107,7 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 
 	st.SetClockClass(int64(pending.ClockClass))
 	st.SetClockAccuracy(int64(pending.ClockAccuracy))
-	st.SetUTCOffset(int64(pending.UTCOffset.Seconds()))
+	st.SetUTCOffsetSec(int64(pending.UTCOffset.Seconds()))
 
 	if *current != *pending {
 		log.Infof("Current: %+v", current)

@@ -44,14 +44,14 @@ type Stats interface {
 	// ResetDataError atomically sets counter to 0
 	ResetDataError()
 
-	// SetUTCOffset atomically sets the utcOffset
-	SetUTCOffset(utcOffset int64)
+	// SetUTCOffsetSec atomically sets the utcOffsetSec
+	SetUTCOffsetSec(utcOffsetSec int64)
 
-	// SetUTCOffset atomically sets the phcOffset
-	SetPHCOffset(phcOffset int64)
+	// SetUTCOffsetNS atomically sets the phcOffsetNS
+	SetPHCOffsetNS(phcOffsetNS int64)
 
-	// SetOscillatorOffset atomically sets the oscillatorOffset
-	SetOscillatorOffset(oscillatorOffset int64)
+	// SetOscillatorOffsetNS atomically sets the oscillatorOffsetNS
+	SetOscillatorOffsetNS(oscillatorOffsetNS int64)
 
 	// SetClockAccuracy atomically sets the clock accuracy
 	SetClockAccuracy(clockAccuracy int64)
@@ -61,21 +61,21 @@ type Stats interface {
 }
 
 type counters struct {
-	utcOffset        int64
-	phcOffset        int64
-	oscillatorOffset int64
-	clockAccuracy    int64
-	clockClass       int64
-	reload           int64
-	dataError        int64
+	utcOffsetSec       int64
+	phcOffsetNS        int64
+	oscillatorOffsetNS int64
+	clockAccuracy      int64
+	clockClass         int64
+	reload             int64
+	dataError          int64
 }
 
 // toMap converts counters to a map
 func (c *counters) toMap() (export map[string]int64) {
 	res := make(map[string]int64)
-	res["utcoffset"] = c.utcOffset
-	res["phcoffset"] = c.phcOffset
-	res["oscillatoroffset"] = c.oscillatorOffset
+	res["utcoffset_sec"] = c.utcOffsetSec
+	res["phcoffset_ns"] = c.phcOffsetNS
+	res["oscillatoroffset_ns"] = c.oscillatorOffsetNS
 	res["clockaccuracy"] = c.clockAccuracy
 	res["clockclass"] = c.clockClass
 	res["reload"] = c.reload
