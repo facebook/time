@@ -34,7 +34,7 @@ type oscillatorState struct {
 
 // https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.4
 // https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.5
-func clockQualityFromOscillatord(status *osc.Status) *oscillatorState {
+func oscillatorStateFromStatus(status *osc.Status) *oscillatorState {
 	c := &oscillatorState{
 		ClockClass: ClockClassUncalibrated,
 		Offset:     0,
@@ -65,5 +65,5 @@ func oscillatord() (*oscillatorState, error) {
 	if err != nil {
 		return nil, err
 	}
-	return clockQualityFromOscillatord(status), nil
+	return oscillatorStateFromStatus(status), nil
 }

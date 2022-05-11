@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestClockQualityFromOscillatord(t *testing.T) {
+func TestOscillatorStateFromStatus(t *testing.T) {
 	status := &osc.Status{
 		Oscillator: osc.Oscillator{
 			Lock: true,
@@ -56,19 +56,19 @@ func TestClockQualityFromOscillatord(t *testing.T) {
 		Offset:     0,
 	}
 
-	require.Equal(t, expectedLock, clockQualityFromOscillatord(status))
+	require.Equal(t, expectedLock, oscillatorStateFromStatus(status))
 
 	status.Clock.Class = osc.ClockClass(ptp.ClockClass7)
-	require.Equal(t, expectedHoldover, clockQualityFromOscillatord(status))
+	require.Equal(t, expectedHoldover, oscillatorStateFromStatus(status))
 
 	status.Clock.Class = osc.ClockClass(ptp.ClockClass13)
-	require.Equal(t, expectedCalibrating, clockQualityFromOscillatord(status))
+	require.Equal(t, expectedCalibrating, oscillatorStateFromStatus(status))
 
 	status.Clock.Class = osc.ClockClass(ptp.ClockClass52)
-	require.Equal(t, expectedUncalibrated, clockQualityFromOscillatord(status))
+	require.Equal(t, expectedUncalibrated, oscillatorStateFromStatus(status))
 
 	status.Oscillator.Lock = false
-	require.Equal(t, expectedFailed, clockQualityFromOscillatord(status))
+	require.Equal(t, expectedFailed, oscillatorStateFromStatus(status))
 }
 
 func TestOscillatord(t *testing.T) {
