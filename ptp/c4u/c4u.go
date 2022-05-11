@@ -48,18 +48,18 @@ var defaultConfig = &server.DynamicConfig{
 func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 	defer st.Snapshot()
 	dataError := false
-	c, err := clock.Run()
+	dp, err := clock.Run()
 	if err != nil {
 		log.Errorf("Failed to collect clock data: %v", err)
 		dataError = true
 	}
 	// To avoid stale data always continue to fill the ring buffer
 	// even with nil values
-	rb.Write(c)
+	rb.Write(dp)
 	// stats
-	if c != nil {
-		st.SetPHCOffsetNS(int64(c.PHCOffset))
-		st.SetOscillatorOffsetNS(int64(c.OscillatorOffset))
+	if dp != nil {
+		st.SetPHCOffsetNS(int64(dp.PHCOffset))
+		st.SetOscillatorOffsetNS(int64(dp.OscillatorOffset))
 	} else {
 		st.SetPHCOffsetNS(0)
 		st.SetOscillatorOffsetNS(0)
