@@ -2,8 +2,8 @@
 Scalable PTPv2.1 two-step unicast server implementation
 
 ## Run
-Normally default arguments are good for most of the cases.
-However, there is a lot of room for cusomisation:
+Default arguments are good for most of the cases.
+However, there is a lot of room for customisation:
 ```
 /usr/local/bin/ptp4u -iface eth1 -workers 100 -minsubinterval 1us -monitoringport 1234
 ```

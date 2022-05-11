@@ -40,6 +40,9 @@ go get github.com/facebook/time/cmd/ptpcheck
 ## ptp4u
 Scalable unicast PTP server.
 
+## c4u
+Config generator for ptp4u.
+
 ### Quick Installation
 ```console
 go get github.com/facebook/time/cmd/ptp4u
