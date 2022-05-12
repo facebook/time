@@ -87,11 +87,8 @@ func Worst(points []*DataPoint, accuracyExpr, classExpr string) (*ptp.ClockQuali
 			w = &ptp.ClockQuality{}
 		}
 		phcOffsets = append(phcOffsets, float64(c.PHCOffset))
-		// if oscillator is uncalibrated, ignore the offset as it's meaningless
-		if c.OscillatorClockClass != ClockClassUncalibrated {
-			oscillatorOffsets = append(oscillatorOffsets, float64(c.OscillatorOffset))
-		}
 
+		oscillatorOffsets = append(oscillatorOffsets, float64(c.OscillatorOffset))
 		oscillatorClasses = append(oscillatorClasses, float64(c.OscillatorClockClass))
 	}
 	if w == nil {
@@ -121,8 +118,17 @@ func Worst(points []*DataPoint, accuracyExpr, classExpr string) (*ptp.ClockQuali
 	c := ptp.ClockClass(cRaw.(float64))
 	log.Debugf("result of %q = %v", classExpr, c)
 
-	w.ClockAccuracy = accFromOffset
 	w.ClockClass = c
+	w.ClockAccuracy = accFromOffset
+
+	// Some override logic to represent the situation better:
+	// * In holdover we don't know the offset. Let's fallback to 1us or worse
+	// * In uncalibrated state we don't know the offset - let's say it
+	if w.ClockClass == ClockClassHoldover && w.ClockAccuracy < ptp.ClockAccuracyMicrosecond1 {
+		w.ClockAccuracy = ptp.ClockAccuracyMicrosecond1
+	} else if w.ClockClass == ClockClassUncalibrated {
+		w.ClockAccuracy = ptp.ClockAccuracyUnknown
+	}
 
 	return w, nil
 }

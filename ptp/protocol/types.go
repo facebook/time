@@ -331,39 +331,39 @@ func ClockAccuracyFromOffset(offset time.Duration) ClockAccuracy {
 	}
 
 	// https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.4
-	if offset < 25*time.Nanosecond {
+	if offset <= 25*time.Nanosecond {
 		return ClockAccuracyNanosecond25
-	} else if offset < 100*time.Nanosecond {
+	} else if offset <= 100*time.Nanosecond {
 		return ClockAccuracyNanosecond100
-	} else if offset < 250*time.Nanosecond {
+	} else if offset <= 250*time.Nanosecond {
 		return ClockAccuracyNanosecond250
-	} else if offset < time.Microsecond {
+	} else if offset <= time.Microsecond {
 		return ClockAccuracyMicrosecond1
-	} else if offset < 2500*time.Nanosecond {
+	} else if offset <= 2500*time.Nanosecond {
 		return ClockAccuracyMicrosecond2point5
-	} else if offset < 10*time.Microsecond {
+	} else if offset <= 10*time.Microsecond {
 		return ClockAccuracyMicrosecond10
-	} else if offset < 25*time.Microsecond {
+	} else if offset <= 25*time.Microsecond {
 		return ClockAccuracyMicrosecond25
-	} else if offset < 100*time.Microsecond {
+	} else if offset <= 100*time.Microsecond {
 		return ClockAccuracyMicrosecond100
-	} else if offset < 250*time.Microsecond {
+	} else if offset <= 250*time.Microsecond {
 		return ClockAccuracyMicrosecond250
-	} else if offset < time.Millisecond {
+	} else if offset <= time.Millisecond {
 		return ClockAccuracyMillisecond1
-	} else if offset < 2500*time.Microsecond {
+	} else if offset <= 2500*time.Microsecond {
 		return ClockAccuracyMillisecond2point5
-	} else if offset < 10*time.Millisecond {
+	} else if offset <= 10*time.Millisecond {
 		return ClockAccuracyMillisecond10
-	} else if offset < 25*time.Millisecond {
+	} else if offset <= 25*time.Millisecond {
 		return ClockAccuracyMillisecond25
-	} else if offset < 100*time.Millisecond {
+	} else if offset <= 100*time.Millisecond {
 		return ClockAccuracyMillisecond100
-	} else if offset < 250*time.Millisecond {
+	} else if offset <= 250*time.Millisecond {
 		return ClockAccuracyMillisecond250
-	} else if offset < time.Second {
+	} else if offset <= time.Second {
 		return ClockAccuracySecond1
-	} else if offset < 10*time.Second {
+	} else if offset <= 10*time.Second {
 		return ClockAccuracySecond10
 	}
 
