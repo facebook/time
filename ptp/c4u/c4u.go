@@ -29,12 +29,15 @@ import (
 )
 
 type Config struct {
-	Apply        bool
-	Path         string
-	Pid          string
-	Sample       int
-	AccuracyExpr string
-	ClassExpr    string
+	Apply               bool
+	Path                string
+	Pid                 string
+	Sample              int
+	AccuracyExpr        string
+	ClassExpr           string
+	LockBaseLine        ptp.ClockAccuracy
+	CalibratingBaseLine ptp.ClockAccuracy
+	HoldoverBaseLine    ptp.ClockAccuracy
 }
 
 var defaultConfig = &server.DynamicConfig{
@@ -42,6 +45,35 @@ var defaultConfig = &server.DynamicConfig{
 	MaxSubDuration: 1 * time.Hour,
 	MetricInterval: 1 * time.Minute,
 	MinSubInterval: 1 * time.Second,
+}
+
+func evaluateClockQuality(config *Config, q *ptp.ClockQuality) *ptp.ClockQuality {
+	w := q
+
+	// If all data in ring buffer is nil we have to give up and pronounce
+	// clock as uncalibrated with unknown accuracy
+	if w == nil {
+		w = &ptp.ClockQuality{
+			ClockClass:    clock.ClockClassUncalibrated,
+			ClockAccuracy: ptp.ClockAccuracyUnknown,
+		}
+	}
+
+	// Some override logic to represent the situation better:
+	// * In locked/calibrating states we may fallback to nearly 0ns. Keep the baseline or worse
+	// * In holdover we don't know the offset. Let's fallback to Baseline or worse
+	// * In uncalibrated state we don't know the offset - let's say it
+	if w.ClockClass == clock.ClockClassLock && w.ClockAccuracy < config.LockBaseLine {
+		w.ClockAccuracy = config.LockBaseLine
+	} else if w.ClockClass == clock.ClockClassHoldover && w.ClockAccuracy < config.HoldoverBaseLine {
+		w.ClockAccuracy = config.HoldoverBaseLine
+	} else if w.ClockClass == clock.ClockClassCalibrating && w.ClockAccuracy < config.CalibratingBaseLine {
+		w.ClockAccuracy = config.CalibratingBaseLine
+	} else if w.ClockClass == clock.ClockClassUncalibrated {
+		w.ClockAccuracy = ptp.ClockAccuracyUnknown
+	}
+
+	return w
 }
 
 // Run config generation once
@@ -69,14 +101,9 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 	if err != nil {
 		return err
 	}
-	// If all data in ring buffer is nil we have to give up and pronounce
-	// clock as uncalibrated with unknown accuracy
-	if w == nil {
-		w = &ptp.ClockQuality{
-			ClockClass:    clock.ClockClassUncalibrated,
-			ClockAccuracy: ptp.ClockAccuracyUnknown,
-		}
-	}
+
+	// Evaluate and override if needed
+	q := evaluateClockQuality(config, w)
 
 	// UTC data
 	u, err := utcoffset.Run()
@@ -101,8 +128,8 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 	pending := &server.DynamicConfig{}
 	*pending = *current
 
-	pending.ClockClass = w.ClockClass
-	pending.ClockAccuracy = w.ClockAccuracy
+	pending.ClockClass = q.ClockClass
+	pending.ClockAccuracy = q.ClockAccuracy
 	pending.UTCOffset = u
 
 	st.SetClockClass(int64(pending.ClockClass))

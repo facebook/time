@@ -23,16 +23,20 @@ import (
 	"github.com/facebook/time/ptp/c4u"
 	"github.com/facebook/time/ptp/c4u/clock"
 	"github.com/facebook/time/ptp/c4u/stats"
+	ptp "github.com/facebook/time/ptp/protocol"
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
 	var (
-		once           bool
-		interval       time.Duration
-		sample         int
-		logLevel       string
-		monitoringPort int
+		interval            time.Duration
+		logLevel            string
+		monitoringPort      int
+		once                bool
+		sample              int
+		lockBaseLine        time.Duration
+		holdoverBaseLine    time.Duration
+		calibratingBaseLine time.Duration
 	)
 	c := &c4u.Config{}
 
@@ -46,6 +50,9 @@ func main() {
 	flag.DurationVar(&interval, "interval", time.Second, "Data cata collection interval")
 	flag.StringVar(&logLevel, "loglevel", "info", "Set a log level. Can be: debug, info, warning, error")
 	flag.IntVar(&monitoringPort, "monitoringport", 8889, "Port to run monitoring server on")
+	flag.DurationVar(&lockBaseLine, "lockBaseLine", 250*time.Nanosecond, "Minimum value for ClockClass in LOCK state")
+	flag.DurationVar(&holdoverBaseLine, "holdoverBaseLine", time.Microsecond, "Minimum value for ClockClass in HOLDOVER state")
+	flag.DurationVar(&calibratingBaseLine, "calibratingBaseLine", 250*time.Nanosecond, "Minimum value for ClockClass in CALIBRATING state")
 	flag.Parse()
 
 	switch logLevel {
@@ -60,6 +67,10 @@ func main() {
 	default:
 		log.Fatalf("Unrecognized log level: %v", logLevel)
 	}
+
+	c.LockBaseLine = ptp.ClockAccuracyFromOffset(lockBaseLine)
+	c.HoldoverBaseLine = ptp.ClockAccuracyFromOffset(holdoverBaseLine)
+	c.CalibratingBaseLine = ptp.ClockAccuracyFromOffset(calibratingBaseLine)
 
 	if once {
 		sample = 1
