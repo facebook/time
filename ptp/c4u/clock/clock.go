@@ -121,15 +121,6 @@ func Worst(points []*DataPoint, accuracyExpr, classExpr string) (*ptp.ClockQuali
 	w.ClockClass = c
 	w.ClockAccuracy = accFromOffset
 
-	// Some override logic to represent the situation better:
-	// * In holdover we don't know the offset. Let's fallback to 1us or worse
-	// * In uncalibrated state we don't know the offset - let's say it
-	if w.ClockClass == ClockClassHoldover && w.ClockAccuracy < ptp.ClockAccuracyMicrosecond1 {
-		w.ClockAccuracy = ptp.ClockAccuracyMicrosecond1
-	} else if w.ClockClass == ClockClassUncalibrated {
-		w.ClockAccuracy = ptp.ClockAccuracyUnknown
-	}
-
 	return w, nil
 }
 

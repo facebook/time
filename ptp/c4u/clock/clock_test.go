@@ -97,31 +97,8 @@ func TestWorstBig(t *testing.T) {
 
 	// Changing 1 element to sway over the border
 	clocks[592] = &DataPoint{OscillatorClockClass: ptp.ClockClass7, PHCOffset: 250 * time.Nanosecond}
-	expected = &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyMicrosecond1}
+	expected = &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyNanosecond100}
 	w, err = Worst(clocks, aexpr, cexpr)
-	require.NoError(t, err)
-	require.Equal(t, expected, w)
-}
-
-func TestOverride(t *testing.T) {
-	aexpr := "p99(phcoffset)"
-	cexpr := "p99(oscillatorclass)"
-	expected := &ptp.ClockQuality{ClockClass: ptp.ClockClass52, ClockAccuracy: ptp.ClockAccuracyUnknown}
-
-	dp := &DataPoint{OscillatorClockClass: ClockClassUncalibrated, PHCOffset: 80 * time.Nanosecond}
-	w, err := Worst([]*DataPoint{dp}, aexpr, cexpr)
-	require.NoError(t, err)
-	require.Equal(t, expected, w)
-
-	expected = &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyMicrosecond1}
-	dp = &DataPoint{OscillatorClockClass: ClockClassHoldover, PHCOffset: 80 * time.Nanosecond}
-	w, err = Worst([]*DataPoint{dp}, aexpr, cexpr)
-	require.NoError(t, err)
-	require.Equal(t, expected, w)
-
-	expected = &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyMicrosecond2point5}
-	dp = &DataPoint{OscillatorClockClass: ClockClassHoldover, PHCOffset: 2 * time.Microsecond}
-	w, err = Worst([]*DataPoint{dp}, aexpr, cexpr)
 	require.NoError(t, err)
 	require.Equal(t, expected, w)
 }

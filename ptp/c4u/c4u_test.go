@@ -65,3 +65,47 @@ func TestRun(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expected, dc)
 }
+
+func TestEvaluateClockQuality(t *testing.T) {
+	c := &Config{
+		LockBaseLine:        ptp.ClockAccuracyMicrosecond1,
+		HoldoverBaseLine:    ptp.ClockAccuracyMicrosecond2point5,
+		CalibratingBaseLine: ptp.ClockAccuracyMicrosecond25,
+	}
+
+	expected := &ptp.ClockQuality{ClockClass: clock.ClockClassUncalibrated, ClockAccuracy: ptp.ClockAccuracyUnknown}
+	q := evaluateClockQuality(c, nil)
+	require.Equal(t, expected, q)
+
+	// Lock
+	expected = &ptp.ClockQuality{ClockClass: clock.ClockClassLock, ClockAccuracy: ptp.ClockAccuracyMicrosecond1}
+	q = evaluateClockQuality(c, &ptp.ClockQuality{ClockClass: clock.ClockClassLock, ClockAccuracy: ptp.ClockAccuracyNanosecond100})
+	require.Equal(t, expected, q)
+
+	expected = &ptp.ClockQuality{ClockClass: clock.ClockClassLock, ClockAccuracy: ptp.ClockAccuracyMicrosecond2point5}
+	q = evaluateClockQuality(c, &ptp.ClockQuality{ClockClass: clock.ClockClassLock, ClockAccuracy: ptp.ClockAccuracyMicrosecond2point5})
+	require.Equal(t, expected, q)
+
+	// Holdover
+	expected = &ptp.ClockQuality{ClockClass: clock.ClockClassHoldover, ClockAccuracy: ptp.ClockAccuracyMicrosecond2point5}
+	q = evaluateClockQuality(c, &ptp.ClockQuality{ClockClass: clock.ClockClassHoldover, ClockAccuracy: ptp.ClockAccuracyNanosecond250})
+	require.Equal(t, expected, q)
+
+	expected = &ptp.ClockQuality{ClockClass: clock.ClockClassHoldover, ClockAccuracy: ptp.ClockAccuracyMicrosecond25}
+	q = evaluateClockQuality(c, &ptp.ClockQuality{ClockClass: clock.ClockClassHoldover, ClockAccuracy: ptp.ClockAccuracyMicrosecond25})
+	require.Equal(t, expected, q)
+
+	// Calibrating
+	expected = &ptp.ClockQuality{ClockClass: clock.ClockClassCalibrating, ClockAccuracy: ptp.ClockAccuracyMicrosecond25}
+	q = evaluateClockQuality(c, &ptp.ClockQuality{ClockClass: clock.ClockClassCalibrating, ClockAccuracy: ptp.ClockAccuracyMicrosecond1})
+	require.Equal(t, expected, q)
+
+	expected = &ptp.ClockQuality{ClockClass: clock.ClockClassCalibrating, ClockAccuracy: ptp.ClockAccuracyMicrosecond100}
+	q = evaluateClockQuality(c, &ptp.ClockQuality{ClockClass: clock.ClockClassCalibrating, ClockAccuracy: ptp.ClockAccuracyMicrosecond100})
+	require.Equal(t, expected, q)
+
+	// Uncalibrated
+	expected = &ptp.ClockQuality{ClockClass: clock.ClockClassUncalibrated, ClockAccuracy: ptp.ClockAccuracyUnknown}
+	q = evaluateClockQuality(c, &ptp.ClockQuality{ClockClass: clock.ClockClassUncalibrated, ClockAccuracy: ptp.ClockAccuracyNanosecond25})
+	require.Equal(t, expected, q)
+}
