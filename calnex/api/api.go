@@ -386,7 +386,7 @@ func (p Probe) CalnexName() string {
 const (
 	// measureURL is a base URL for to the measurement API
 	measureURL = "https://%s/api/get/measure/%s"
-	dataURL    = "https://%s/api/getdata?channel=%s&datatype=%s&reset=true"
+	dataURL    = "https://%s/api/getdata?channel=%s&datatype=%s&reset=false"
 
 	startMeasure = "https://%s/api/startmeasurement"
 	stopMeasure  = "https://%s/api/stopmeasurement"
