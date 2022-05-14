@@ -41,8 +41,7 @@ func oscillatorStateFromStatus(status *osc.Status) *oscillatorState {
 	}
 
 	// Safety check in case oscillatord returns an empty struct
-	// + Oscillatord being Unlock means we are Uncalibrated anyway.
-	if status.Oscillator.Lock {
+	if status.Clock.Class > 0 {
 		c.ClockClass = ptp.ClockClass(status.Clock.Class)
 		c.Offset = status.Clock.Offset
 	}

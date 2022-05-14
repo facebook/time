@@ -67,7 +67,7 @@ func TestOscillatorStateFromStatus(t *testing.T) {
 	status.Clock.Class = osc.ClockClass(ptp.ClockClass52)
 	require.Equal(t, expectedUncalibrated, oscillatorStateFromStatus(status))
 
-	status.Oscillator.Lock = false
+	status.Clock.Class = 0
 	require.Equal(t, expectedFailed, oscillatorStateFromStatus(status))
 }
 
