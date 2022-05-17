@@ -130,6 +130,8 @@ func TestClockIdentity(t *testing.T) {
 	assert.Equal(t, want, got)
 	wantStr := "0c42a1.fffe.6d7ca6"
 	assert.Equal(t, wantStr, got.String())
+	back := got.MAC()
+	assert.Equal(t, mac, back)
 }
 
 func TestPTPText(t *testing.T) {
