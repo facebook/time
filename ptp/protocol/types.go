@@ -213,6 +213,20 @@ func (c ClockIdentity) String() string {
 	)
 }
 
+// MAC turns ClockIdentity into the MAC address it was based upon. EUI-48 is assumed.
+func (c ClockIdentity) MAC() net.HardwareAddr {
+	asBytes := [8]byte{}
+	binary.BigEndian.PutUint64(asBytes[:], uint64(c))
+	mac := make(net.HardwareAddr, 6)
+	mac[0] = asBytes[0]
+	mac[1] = asBytes[1]
+	mac[2] = asBytes[2]
+	mac[3] = asBytes[5]
+	mac[4] = asBytes[6]
+	mac[5] = asBytes[7]
+	return mac
+}
+
 // NewClockIdentity creates new ClockIdentity from MAC address
 func NewClockIdentity(mac net.HardwareAddr) (ClockIdentity, error) {
 	b := [8]byte{}
