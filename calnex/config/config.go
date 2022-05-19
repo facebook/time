@@ -31,6 +31,7 @@ type CalnexConfig map[api.Channel]MeasureConfig
 type MeasureConfig struct {
 	Target string    `json:"target"`
 	Probe  api.Probe `json:"probe"`
+	Name   string    `json:"name"`
 }
 
 type config struct {
