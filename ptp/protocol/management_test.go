@@ -17,6 +17,7 @@ limitations under the License.
 package protocol
 
 import (
+	"encoding/binary"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,31 +82,57 @@ func Test_parseMsgErrorStatus(t *testing.T) {
 }
 
 func Test_parseClockAccuracyTLV(t *testing.T) {
-	raw := []uint8{0x0d, 0x02, 0x00, 0x3c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	raw := []uint8{0x0d, 0x02, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x48, 0x57, 0xdd, 0xff, 0xfe, 0x08, 0x64, 0x88, 0x00, 0x00,
 		0x00, 0x01, 0x04, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0xdc, 0x6c, 0x00, 0x00, 0x02, 0x00, 0x00, 0x02,
-		0x00, 0x08, 0x00, 0x06, 0x20, 0x01, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00,
+		0x00, 0x00, 0xdc, 0x6c, 0x00, 0x00, 0x02, 0x00, 0x00, 0x01,
+		0x00, 0x04, 0x20, 0x10, 0x21, 0x00,
 	}
-	packet := new(ClockAccuracyTLV)
+	tlvHeadSize := uint16(binary.Size(TLVHead{}))
+	size := uint16(binary.Size(ClockAccuracyTLV{}))
+	packet := new(Management)
 	err := FromBytes(raw, packet)
 	require.Nil(t, err)
-	want := ClockAccuracyTLV{
-		ManagementTLVHead: ManagementTLVHead{
-			TLVHead: TLVHead{
-				TLVType:     TLVManagement,
-				LengthField: size - tlvHeadSize,
+	want := Management{
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:             MajorVersion,
+				MessageLength:       uint16(size),
+				DomainNumber:        0,
+				MinorSdoID:          0,
+				FlagField:           0,
+				CorrectionField:     0,
+				MessageTypeSpecific: 0,
+				SourcePortIdentity: PortIdentity{
+					PortNumber:    0,
+					ClockIdentity: 5212879185253000328,
+				},
+				SequenceID:         1,
+				ControlField:       4,
+				LogMessageInterval: 0x7f,
 			},
-			ManagementID: IDClockAccuracy,
+			TargetPortIdentity: PortIdentity{
+				PortNumber:    56428,
+				ClockIdentity: 0,
+			},
+			ActionField: RESPONSE,
 		},
-		ClockAccuracy: ClockAccuracyNanosecond100,
-		Reserved:      0,
+		TLV: &ClockAccuracyTLV{
+			ManagementTLVHead: ManagementTLVHead{
+				TLVHead: TLVHead{
+					TLVType:     TLVManagement,
+					LengthField: size - tlvHeadSize,
+				},
+				ManagementID: IDClockAccuracy,
+			},
+			ClockAccuracy: ClockAccuracyNanosecond100,
+			Reserved:      0,
+		},
 	}
-	print([]uint8(want))
-	require.Equal(t, want, *packet)
-	b, err := Bytes(packet)
+
+	b, err := want.MarshalBinary()
 	require.Nil(t, err)
 	assert.Equal(t, raw, b)
 
