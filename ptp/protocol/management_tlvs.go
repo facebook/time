@@ -41,6 +41,7 @@ const (
 	IDParentDataSet         ManagementID = 0x2002
 	IDTimePropertiesDataSet ManagementID = 0x2003
 	IDPortDataSet           ManagementID = 0x2004
+	IDClockAccuracy         ManagementID = 0x2010
 	// rest of Management IDs that we don't implement yet
 )
 
@@ -163,6 +164,21 @@ var mgmtTLVDecoder = map[ManagementID]MgmtTLVDecoderFunc{
 
 		return tlv, nil
 	},
+	IDClockAccuracy: func(data []byte) (ManagementTLV, error) {
+		r := bytes.NewReader(data)
+		tlv := &ClockAccuracyTLV{}
+
+		if err := binary.Read(r, binary.BigEndian, &tlv.ManagementTLVHead); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(r, binary.BigEndian, &tlv.ClockAccuracy); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(r, binary.BigEndian, &tlv.Reserved); err != nil {
+			return nil, err
+		}
+		return tlv, nil
+	},
 }
 
 // RegisterMgmtTLVDecoder registers function we'll use to decode particular custom management TLV.
@@ -209,6 +225,14 @@ type ParentDataSetTLV struct {
 	GrandmasterClockQuality               ClockQuality
 	GrandmasterPriority2                  uint8
 	GrandmasterIdentity                   ClockIdentity
+}
+
+// ClockAccuracyTLV
+type ClockAccuracyTLV struct {
+	ManagementTLVHead
+
+	ClockAccuracy ClockAccuracy
+	Reserved      uint8
 }
 
 // CurrentDataSetRequest prepares request packet for CURRENT_DATA_SET request
@@ -299,6 +323,37 @@ func ParentDataSetRequest() *Management {
 					LengthField: size - tlvHeadSize,
 				},
 				ManagementID: IDParentDataSet,
+			},
+		},
+	}
+}
+
+// ClockAccuracyRequest prepares request packet for CLOCK_ACCURACY request
+func ClockAccuracyRequest() *Management {
+	headerSize := uint16(binary.Size(ManagementMsgHead{}))
+	size := uint16(binary.Size(ClockAccuracyTLV{}))
+	tlvHeadSize := uint16(binary.Size(TLVHead{}))
+	return &Management{
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + size,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
+		TLV: &ClockAccuracyTLV{
+			ManagementTLVHead: ManagementTLVHead{
+				TLVHead: TLVHead{
+					TLVType:     TLVManagement,
+					LengthField: size - tlvHeadSize,
+				},
+				ManagementID: IDClockAccuracy,
 			},
 		},
 	}

@@ -109,3 +109,17 @@ func (c *MgmtClient) CurrentDataSet() (*CurrentDataSetTLV, error) {
 	}
 	return tlv, nil
 }
+
+// ClockAccuracy sends CLOCK_ACCURACY request and returns response
+func (c *MgmtClient) ClockAccuracy() (*ClockAccuracyTLV, error) {
+	req := ClockAccuracyRequest()
+	p, err := c.Communicate(req)
+	if err != nil {
+		return nil, err
+	}
+	tlv, ok := p.TLV.(*ClockAccuracyTLV)
+	if !ok {
+		return nil, fmt.Errorf("got unexpected management TLV %T, wanted %T", p.TLV, tlv)
+	}
+	return tlv, nil
+}
