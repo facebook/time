@@ -30,8 +30,8 @@ func TestOscillatordRead(t *testing.T) {
 	defer client.Close()
 	defer server.Close()
 	go func() {
-		// read newline
-		b := make([]byte, 1)
+		// read empty json
+		b := make([]byte, 2)
 		_, err := server.Read(b)
 		require.Nil(t, err)
 		// write response
@@ -70,8 +70,8 @@ func TestOscillatordReadFail(t *testing.T) {
 	client, server := net.Pipe()
 	defer client.Close()
 	go func() {
-		// read newline
-		b := make([]byte, 1)
+		// read empty json
+		b := make([]byte, 2)
 		_, err := server.Read(b)
 		require.Nil(t, err)
 		server.Close()
@@ -85,8 +85,8 @@ func TestOscillatordReadGarbage(t *testing.T) {
 	defer client.Close()
 	defer server.Close()
 	go func() {
-		// read newline
-		b := make([]byte, 1)
+		// read empty json
+		b := make([]byte, 2)
 		_, err := server.Read(b)
 		require.Nil(t, err)
 		// write response
