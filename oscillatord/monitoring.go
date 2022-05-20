@@ -264,7 +264,7 @@ func bool2int(b bool) int64 {
 // ReadStatus talks to oscillatord via monitoring port connection and reads reported Status
 func ReadStatus(conn io.ReadWriter) (*Status, error) {
 	// send newline to make oscillatord send us data
-	_, err := conn.Write([]byte{'\n'})
+	_, err := conn.Write([]byte(`{}`))
 	if err != nil {
 		return nil, fmt.Errorf("writing to oscillatord conn: %w", err)
 	}
