@@ -599,7 +599,7 @@ func TestConfigFail(t *testing.T) {
 }
 
 func TestJSONExport(t *testing.T) {
-	expected := `{"0":{"target":"1 PPS","probe":3},"30":{"target":"fd00:3016:3109:face:0:1:0","probe":0},"9":{"target":"fd00:3226:301b::3f","probe":2}}`
+	expected := `{"0":{"target":"1 PPS","probe":3,"name":""},"30":{"target":"fd00:3016:3109:face:0:1:0","probe":0,"name":""},"9":{"target":"fd00:3226:301b::3f","probe":2,"name":""}}`
 	mc := map[api.Channel]MeasureConfig{
 		api.ChannelA: {
 			Target: "1 PPS",
