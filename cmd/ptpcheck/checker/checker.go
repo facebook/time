@@ -39,6 +39,7 @@ type PTPCheckResult struct {
 	IngressTimeNS       int64
 	PortStatsTX         map[string]uint64
 	PortStatsRX         map[string]uint64
+	PortServiceStats    *ptp.PortServiceStats
 }
 
 // Run will talk over conn and return PTPCheckResult
@@ -101,6 +102,15 @@ func Run(c *ptp.MgmtClient) (*PTPCheckResult, error) {
 	} else {
 		log.Debugf("TimeStatusNP: %+v", timeStatus)
 		result.IngressTimeNS = timeStatus.IngressTimeNS
+	}
+
+	portServiceStats, err := c.PortServiceStatsNP()
+	// it's a non-standard ptp4l thing, might be missing
+	if err != nil {
+		log.Warningf("couldn't get PortServiceStatsNP: %v", err)
+	} else {
+		log.Debugf("PortServiceStatsNP: %+v", portServiceStats)
+		result.PortServiceStats = &portServiceStats.PortServiceStats
 	}
 	return result, nil
 }

@@ -25,6 +25,7 @@ import (
 	"github.com/fatih/color"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/constraints"
 
 	"github.com/facebook/time/cmd/ptpcheck/checker"
 	"github.com/facebook/time/phc"
@@ -53,34 +54,34 @@ var failString = color.RedString("[FAIL]")
 var statusToColor = []string{okString, warnString, failString}
 
 // generic function to check value against some thresholds
-func checkAgainstThreshold(name string, value, warnThreshold, failThreshold float64, explanation string, failOnZero bool) (status, string) {
+func checkAgainstThreshold[T constraints.Ordered](name string, value, warnThreshold, failThreshold T, explanation string, failOnZero bool) (status, string) {
 	msgTemplate := "%s is %s, we expect it to be within %s%s"
-	absValue := math.Abs(value)
-	thresholdStr := color.BlueString("%v", time.Duration(warnThreshold))
+	var zero T // can't use 0 as untyped const, so use zero value for each type
+	thresholdStr := color.BlueString("%v", warnThreshold)
 
-	if failOnZero && absValue == 0 {
+	if failOnZero && value == zero {
 		return FAIL, fmt.Sprintf(
 			"%s is %s, we expect it to be non-zero and within %s%s",
 			name,
-			color.RedString("%v", time.Duration(value)),
+			color.RedString("%v", value),
 			thresholdStr,
 			". "+explanation,
 		)
 	}
-	if absValue > failThreshold {
+	if value > failThreshold {
 		return FAIL, fmt.Sprintf(
 			msgTemplate,
 			name,
-			color.RedString("%v", time.Duration(value)),
+			color.RedString("%v", value),
 			thresholdStr,
 			". "+explanation,
 		)
 	}
-	if absValue > warnThreshold {
+	if value > warnThreshold {
 		return WARN, fmt.Sprintf(
 			msgTemplate,
 			name,
-			color.YellowString("%v", time.Duration(value)),
+			color.YellowString("%v", value),
 			thresholdStr,
 			". "+explanation,
 		)
@@ -88,7 +89,7 @@ func checkAgainstThreshold(name string, value, warnThreshold, failThreshold floa
 	return OK, fmt.Sprintf(
 		msgTemplate,
 		name,
-		color.GreenString("%v", time.Duration(value)),
+		color.GreenString("%v", value),
 		thresholdStr,
 		"",
 	)
@@ -111,13 +112,16 @@ func checkSyncActive(r *checker.PTPCheckResult) (status, string) {
 		return WARN, fmt.Sprintf("No PHC time data available: %v", err)
 	}
 	// We expect to get sync messages at least every second
-	const warnThreshold = float64(time.Second)
-	const failThreshold = float64(5 * time.Second)
+	const warnThreshold = time.Second
+	const failThreshold = 5 * time.Second
 	lastSync := time.Unix(0, r.IngressTimeNS)
 	since := phcTime.Sub(lastSync)
+	if since < 0 {
+		return FAIL, fmt.Sprintf("Last synchronization (%v) happened in the future compared to now (%v)", lastSync, phcTime)
+	}
 	return checkAgainstThreshold(
 		"Period since last ingress",
-		float64(since),
+		since,
 		warnThreshold,
 		failThreshold,
 		"We expect to receive SYNC messages from GM very often",
@@ -127,12 +131,12 @@ func checkSyncActive(r *checker.PTPCheckResult) (status, string) {
 
 func checkOffset(r *checker.PTPCheckResult) (status, string) {
 	// We expect our clock difference from server to be no more than 250us.
-	const warnThreshold = float64(250 * time.Microsecond)
+	const warnThreshold = 250 * time.Microsecond
 	// If offset is > 1ms something is very very wrong
-	const failThreshold = float64(time.Millisecond)
+	const failThreshold = time.Millisecond
 	return checkAgainstThreshold(
 		"GM offset",
-		r.OffsetFromMasterNS,
+		time.Duration(math.Abs(r.OffsetFromMasterNS)),
 		warnThreshold,
 		failThreshold,
 		"Offset is the difference between our clock and remote server (time error).",
@@ -141,17 +145,82 @@ func checkOffset(r *checker.PTPCheckResult) (status, string) {
 }
 func checkPathDelay(r *checker.PTPCheckResult) (status, string) {
 	// We expect GM to be within same region, so path delay should be relatively small
-	const warnThreshold = float64(100 * time.Millisecond)
+	const warnThreshold = 100 * time.Millisecond
 	// If path delay is > 250ms it's really weird
-	const failThreshold = float64(250 * time.Millisecond)
+	const failThreshold = 250 * time.Millisecond
 	return checkAgainstThreshold(
 		"GM mean path delay",
-		r.MeanPathDelayNS,
+		time.Duration(math.Abs(r.MeanPathDelayNS)),
 		warnThreshold,
 		failThreshold,
 		"Mean path delay is measured network delay between us and GM",
 		true,
 	)
+}
+
+func portServiceStatsDiagnosers(r *checker.PTPCheckResult) []diagnoser {
+	result := []diagnoser{}
+	// counters are reset on ptp4l restart
+	var maxPacketsLoss uint64 = 100
+
+	type l struct {
+		name        string
+		value       uint64
+		threshold   uint64
+		explanation string
+	}
+	checks := []l{
+		{
+			name:        "Sync timeout count",
+			value:       r.PortServiceStats.SyncTimeout,
+			threshold:   maxPacketsLoss,
+			explanation: "We expect to not skip sync packets",
+		},
+		{
+			name:        "Announce timeout count",
+			value:       r.PortServiceStats.AnnounceTimeout,
+			threshold:   maxPacketsLoss,
+			explanation: "We expect to not skip announce packets",
+		},
+		{
+			name:        "Sync mismatch count",
+			value:       r.PortServiceStats.SyncMismatch,
+			threshold:   maxPacketsLoss,
+			explanation: "We expect sync packets to arrive in correct order",
+		},
+		{
+			name:        "FollowUp mismatch count",
+			value:       r.PortServiceStats.FollowupMismatch,
+			threshold:   maxPacketsLoss,
+			explanation: "We expect FollowUp packets to arrive in correct order",
+		},
+	}
+	for _, check := range checks {
+		var f diagnoser
+		check := check // capture loop variable
+		f = func(r *checker.PTPCheckResult) (status, string) {
+			return checkAgainstThreshold(
+				check.name,
+				check.value,
+				check.threshold,
+				10*check.threshold,
+				check.explanation,
+				false,
+			)
+		}
+		result = append(result, f)
+	}
+	return result
+}
+
+// expandDiagnosers returns extra diagnosers based on the checker.PTPCheckResult content.
+// For example, if PORT_SERVICE_STATS_NP TLV is supported by ptp4l, we run tests against it.
+func expandDiagnosers(r *checker.PTPCheckResult) []diagnoser {
+	extra := []diagnoser{}
+	if r.PortServiceStats == nil {
+		return extra
+	}
+	return portServiceStatsDiagnosers(r)
 }
 
 var diagnosers = []diagnoser{
@@ -162,7 +231,9 @@ var diagnosers = []diagnoser{
 }
 
 func runDiagnosers(r *checker.PTPCheckResult) {
-	for _, check := range diagnosers {
+	extra := expandDiagnosers(r)
+	toRun := append(diagnosers, extra...)
+	for _, check := range toRun {
 		status, msg := check(r)
 		switch status {
 		case CRITICAL:
