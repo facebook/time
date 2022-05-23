@@ -384,6 +384,47 @@ func ClockAccuracyFromOffset(offset time.Duration) ClockAccuracy {
 	return ClockAccuracySecondGreater10
 }
 
+// ClockAccuracyFromOffset returns PTP Clock Accuracy covering the time.Duration
+func AccuracyNSFromClockQuality(cq ClockQuality) time.Duration {
+	switch cq.ClockAccuracy {
+	case ClockAccuracyNanosecond25:
+		return 25 * time.Nanosecond
+	case ClockAccuracyNanosecond100:
+		return 100 * time.Nanosecond
+	case ClockAccuracyNanosecond250:
+		return 250 * time.Nanosecond
+	case ClockAccuracyMicrosecond1:
+		return 1000 * time.Nanosecond
+	case ClockAccuracyMicrosecond2point5:
+		return 2500 * time.Nanosecond
+	case ClockAccuracyMicrosecond10:
+		return 10 * time.Microsecond
+	case ClockAccuracyMicrosecond25:
+		return 25 * time.Microsecond
+	case ClockAccuracyMicrosecond100:
+		return 100 * time.Microsecond
+	case ClockAccuracyMicrosecond250:
+		return 250 * time.Microsecond
+	case ClockAccuracyMillisecond1:
+		return 1 * time.Millisecond
+	case ClockAccuracyMillisecond2point5:
+		return 2500 * time.Microsecond
+	case ClockAccuracyMillisecond10:
+		return 10 * time.Millisecond
+	case ClockAccuracyMillisecond25:
+		return 25 * time.Millisecond
+	case ClockAccuracyMillisecond100:
+		return 100 * time.Millisecond
+	case ClockAccuracyMillisecond250:
+		return 250 * time.Millisecond
+	case ClockAccuracySecond1:
+		return 1 * time.Second
+	case ClockAccuracySecond10:
+		return 10 * time.Second
+	}
+	return 25 * time.Second
+}
+
 // ClockQuality represents the quality of a clock.
 type ClockQuality struct {
 	ClockClass              ClockClass
