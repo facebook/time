@@ -281,3 +281,24 @@ func TestClockAccuracyFromOffset(t *testing.T) {
 	require.Equal(t, ClockAccuracySecond10, ClockAccuracyFromOffset(10*time.Second))
 	require.Equal(t, ClockAccuracySecondGreater10, ClockAccuracyFromOffset(9*time.Minute))
 }
+
+func TestAccuracyNSFromClockQuality(t *testing.T) {
+	require.Equal(t, time.Nanosecond*25, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyNanosecond25, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Nanosecond*100, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyNanosecond100, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Nanosecond*250, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyNanosecond250, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Microsecond, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMicrosecond1, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Nanosecond*2500, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMicrosecond2point5, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Microsecond*10, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMicrosecond10, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Microsecond*25, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMicrosecond25, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Microsecond*100, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMicrosecond100, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Microsecond*250, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMicrosecond250, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Millisecond, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMillisecond1, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Microsecond*2500, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMillisecond2point5, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Millisecond*10, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMillisecond10, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Millisecond*25, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMillisecond25, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Millisecond*100, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMillisecond100, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Millisecond*250, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracyMillisecond250, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Second, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracySecond1, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Second*10, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracySecond10, OffsetScaledLogVariance: 0}))
+	require.Equal(t, time.Second*25, AccuracyNSFromClockQuality(ClockQuality{ClockClass: ClockClass6, ClockAccuracy: ClockAccuracySecondGreater10, OffsetScaledLogVariance: 0}))
+}
