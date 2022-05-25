@@ -236,8 +236,8 @@ func (s *Status) MonitoringJSON(prefix string) ([]byte, error) {
 		prefix = fmt.Sprintf("%s.", prefix)
 	}
 
-	output := map[string]int64{
-		fmt.Sprintf("%soscillator.temperature", prefix):  int64(s.Oscillator.Temperature),
+	output := map[string]any{
+		fmt.Sprintf("%soscillator.temperature", prefix):  s.Oscillator.Temperature,
 		fmt.Sprintf("%soscillator.fine_ctrl", prefix):    int64(s.Oscillator.FineCtrl),
 		fmt.Sprintf("%soscillator.coarse_ctrl", prefix):  int64(s.Oscillator.CoarseCtrl),
 		fmt.Sprintf("%soscillator.lock", prefix):         bool2int(s.Oscillator.Lock),

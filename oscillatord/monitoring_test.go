@@ -183,7 +183,7 @@ func TestClockClassUnmarshalText(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	expected := `{"ptp.timecard.clock.class":7,"ptp.timecard.clock.offset":-265095,"ptp.timecard.gnss.antenna_power":1,"ptp.timecard.gnss.antenna_status":4,"ptp.timecard.gnss.fix_num":5,"ptp.timecard.gnss.fix_ok":1,"ptp.timecard.gnss.leap_second_change":0,"ptp.timecard.gnss.leap_seconds":18,"ptp.timecard.gnss.satellites_count":10,"ptp.timecard.oscillator.coarse_ctrl":42,"ptp.timecard.oscillator.fine_ctrl":4242,"ptp.timecard.oscillator.lock":0,"ptp.timecard.oscillator.temperature":45}`
+	expected := `{"ptp.timecard.clock.class":7,"ptp.timecard.clock.offset":-265095,"ptp.timecard.gnss.antenna_power":1,"ptp.timecard.gnss.antenna_status":4,"ptp.timecard.gnss.fix_num":5,"ptp.timecard.gnss.fix_ok":1,"ptp.timecard.gnss.leap_second_change":0,"ptp.timecard.gnss.leap_seconds":18,"ptp.timecard.gnss.satellites_count":10,"ptp.timecard.oscillator.coarse_ctrl":42,"ptp.timecard.oscillator.fine_ctrl":4242,"ptp.timecard.oscillator.lock":0,"ptp.timecard.oscillator.temperature":45.944}`
 	s := &Status{
 		Oscillator: Oscillator{
 			Model:       "sa5x",
