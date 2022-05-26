@@ -384,9 +384,9 @@ func ClockAccuracyFromOffset(offset time.Duration) ClockAccuracy {
 	return ClockAccuracySecondGreater10
 }
 
-// ClockAccuracyFromOffset returns PTP Clock Accuracy covering the time.Duration
-func AccuracyNSFromClockQuality(cq ClockQuality) time.Duration {
-	switch cq.ClockAccuracy {
+// Duration returns matching time.Duration of PTP Clock Accuracy
+func (c ClockAccuracy) Duration() time.Duration {
+	switch c {
 	case ClockAccuracyNanosecond25:
 		return 25 * time.Nanosecond
 	case ClockAccuracyNanosecond100:
