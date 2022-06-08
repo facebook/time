@@ -80,15 +80,15 @@ func TestExport(t *testing.T) {
 		fmt.Sprintf("{\"float\":{\"value\":-2.50504e-7},\"int\":{\"time\":1607961194},\"normal\":{\"channel\":\"VP1\",\"target\":\"127.0.0.1\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host),
 		fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"a\",\"target\":\"127.0.0.1\",\"protocol\":\"pps\",\"source\":\"%s\"}}\n", parsed.Host),
 	}
-	err := Export(parsed.Host, true, []api.Channel{}, l)
+	err := Export(parsed.Host, true, true, []api.Channel{}, l)
 	require.NoError(t, err)
 	require.ElementsMatch(t, expected, w.data)
 }
 
 func TestExportFail(t *testing.T) {
-	err := Export("localhost", true, []api.Channel{}, nil)
+	err := Export("localhost", true, true, []api.Channel{}, nil)
 	require.ErrorIs(t, errNoUsedChannels, err)
 
-	err = Export("localhost", true, []api.Channel{api.ChannelONE}, nil)
+	err = Export("localhost", true, true, []api.Channel{api.ChannelONE}, nil)
 	require.ErrorIs(t, errNoTarget, err)
 }

@@ -147,7 +147,7 @@ func TestFetchCsv(t *testing.T) {
 	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 	for _, channel := range legitChannelNames {
-		lines, err := calnexAPI.FetchCsv(channel)
+		lines, err := calnexAPI.FetchCsv(channel, true)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(lines))
 		require.Equal(t, sampleResp, strings.Join(lines[0], ","))
@@ -164,7 +164,7 @@ func TestFetchCsvNoData(t *testing.T) {
 	parsed, _ := url.Parse(ts.URL)
 	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
-	lines, err := calnexAPI.FetchCsv(ChannelVP22)
+	lines, err := calnexAPI.FetchCsv(ChannelVP22, true)
 	require.Error(t, err)
 	require.Nil(t, lines)
 }
