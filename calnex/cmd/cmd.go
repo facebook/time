@@ -28,10 +28,11 @@ var RootCmd = &cobra.Command{
 }
 
 var (
+	allData     bool
 	apply       bool
-	insecureTLS bool
 	channels    []string
 	dir         string
+	insecureTLS bool
 	source      string
 	target      string
 )

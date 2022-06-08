@@ -386,7 +386,7 @@ func (p Probe) CalnexName() string {
 const (
 	// measureURL is a base URL for to the measurement API
 	measureURL = "https://%s/api/get/measure/%s"
-	dataURL    = "https://%s/api/getdata?channel=%s&datatype=%s&reset=false"
+	dataURL    = "https://%s/api/getdata?channel=%s&datatype=%s&reset=%t"
 
 	startMeasure = "https://%s/api/startmeasurement"
 	stopMeasure  = "https://%s/api/stopmeasurement"
@@ -436,8 +436,8 @@ func NewAPI(source string, insecureTLS bool) *API {
 
 // FetchCsv takes channel name (like 1, 2, c, d)
 // it returns list of CSV lines which is []string
-func (a *API) FetchCsv(channel Channel) ([][]string, error) {
-	url := fmt.Sprintf(dataURL, a.source, channel, MeasureChannelDatatypeMap[channel])
+func (a *API) FetchCsv(channel Channel, allData bool) ([][]string, error) {
+	url := fmt.Sprintf(dataURL, a.source, channel, MeasureChannelDatatypeMap[channel], allData)
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return nil, err

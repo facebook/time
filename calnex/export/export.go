@@ -27,7 +27,7 @@ var errNoUsedChannels = errors.New("no used channels")
 var errNoTarget = errors.New("no target succeeds")
 
 // Export data from the device about specified channels to the specified output
-func Export(source string, insecureTLS bool, channels []api.Channel, l Logger) (err error) {
+func Export(source string, insecureTLS bool, allData bool, channels []api.Channel, l Logger) (err error) {
 	var success bool
 	calnexAPI := api.NewAPI(source, insecureTLS)
 
@@ -53,7 +53,7 @@ func Export(source string, insecureTLS bool, channels []api.Channel, l Logger) (
 			success = success || false
 			continue
 		}
-		csvLines, err := calnexAPI.FetchCsv(channel)
+		csvLines, err := calnexAPI.FetchCsv(channel, allData)
 		if err != nil {
 			log.Errorf("Failed to fetch data from channel %s: %v", channel, err)
 			success = success || false
