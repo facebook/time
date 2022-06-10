@@ -11,6 +11,12 @@ CLI and library to perform various NTP-related tasks, including:
 go get github.com/facebook/time/cmd/ntpcheck
 ```
 
+If you are using Go 1.18, please run:
+
+```console
+go install github.com/facebook/time/cmd/ntpcheck@latest
+```
+
 ## NTPResponder
 Simple NTP server implementation with kernel timestamps support
 
