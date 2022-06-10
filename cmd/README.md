@@ -8,12 +8,6 @@ CLI and library to perform various NTP-related tasks, including:
 
 ### Quick Installation
 ```console
-go get github.com/facebook/time/cmd/ntpcheck
-```
-
-If you are using Go 1.18, please run:
-
-```console
 go install github.com/facebook/time/cmd/ntpcheck@latest
 ```
 
@@ -40,7 +34,7 @@ CLI and library to perform various PTP-related tasks, including:
 
 ### Quick Installation
 ```console
-go get github.com/facebook/time/cmd/ptpcheck
+go install github.com/facebook/time/cmd/ptpcheck@latest
 ```
 
 ## ptp4u
@@ -51,7 +45,7 @@ Config generator for ptp4u.
 
 ### Quick Installation
 ```console
-go get github.com/facebook/time/cmd/ptp4u
+go install github.com/facebook/time/cmd/ptp4u@latest
 ```
 
 # Calnex
