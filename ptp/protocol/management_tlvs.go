@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+
+	"github.com/facebook/time/hostendian"
 )
 
 // ManagementID is type for Management IDs
@@ -89,8 +91,8 @@ var mgmtTLVDecoder = map[ManagementID]MgmtTLVDecoderFunc{
 		if err := binary.Read(r, binary.BigEndian, &tlv.PortIdentity); err != nil {
 			return nil, err
 		}
-		// fun part that cost me few hours, this is sent over wire as LittlEndian, while EVERYTHING ELSE is BigEndian.
-		if err := binary.Read(r, binary.LittleEndian, &tlv.PortStats); err != nil {
+		// fun part that cost me few hours, this is sent over wire as host endian (which typically is LittlEndian), while EVERYTHING ELSE is BigEndian.
+		if err := binary.Read(r, hostendian.Order, &tlv.PortStats); err != nil {
 			return nil, err
 		}
 		return tlv, nil
@@ -112,8 +114,8 @@ var mgmtTLVDecoder = map[ManagementID]MgmtTLVDecoderFunc{
 		if err := binary.Read(r, binary.BigEndian, &tlv.PortIdentity); err != nil {
 			return nil, err
 		}
-		// LittlEndian, just like with PortStatsNP
-		if err := binary.Read(r, binary.LittleEndian, &tlv.PortServiceStats); err != nil {
+		// host endian, just like with PortStatsNP
+		if err := binary.Read(r, hostendian.Order, &tlv.PortServiceStats); err != nil {
 			return nil, err
 		}
 		return tlv, nil

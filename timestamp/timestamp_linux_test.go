@@ -23,12 +23,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebook/time/hostendian"
+
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 )
 
+func reverse(s []byte) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+}
+
 func Test_byteToTime(t *testing.T) {
 	timeb := []byte{63, 155, 21, 96, 0, 0, 0, 0, 52, 156, 191, 42, 0, 0, 0, 0}
+	if hostendian.IsBigEndian {
+		// reverse two int64 individually
+		reverse(timeb[0:8])
+		reverse(timeb[8:16])
+	}
 	res, err := byteToTime(timeb)
 	require.Nil(t, err)
 
@@ -43,13 +56,13 @@ func Test_ReadTXtimestamp(t *testing.T) {
 	connFd, err := ConnFd(conn)
 	require.Nil(t, err)
 
+	err = EnableSWTimestamps(connFd)
+	require.Nil(t, err)
+
 	txts, attempts, err := ReadTXtimestamp(connFd)
 	require.Equal(t, time.Time{}, txts)
 	require.Equal(t, maxTXTS, attempts)
 	require.Equal(t, fmt.Errorf("no TX timestamp found after %d tries", maxTXTS), err)
-
-	err = EnableSWTimestamps(connFd)
-	require.Nil(t, err)
 
 	addr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 12345}
 	_, err = conn.WriteTo([]byte{}, addr)
@@ -76,6 +89,15 @@ func Test_scmDataToTime(t *testing.T) {
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	}
+
+	if hostendian.IsBigEndian {
+		// make two int64 BigEndian
+		reverse(hwData[32:40])
+		reverse(hwData[40:48])
+		// ditto, but different position of int64s
+		reverse(swData[0:8])
+		reverse(swData[8:16])
 	}
 
 	tests := []struct {

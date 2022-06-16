@@ -24,6 +24,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+
+	"github.com/facebook/time/hostendian"
 )
 
 // ptp4l-specific management TLV ids
@@ -92,7 +94,7 @@ func (p *PortStatsNPTLV) MarshalBinary() ([]byte, error) {
 	if err := binary.Write(&bytes, binary.BigEndian, p.PortIdentity); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(&bytes, binary.LittleEndian, p.PortStats); err != nil {
+	if err := binary.Write(&bytes, hostendian.Order, p.PortStats); err != nil {
 		return nil, err
 	}
 	return bytes.Bytes(), nil
@@ -137,17 +139,17 @@ func (p *PortPropertiesNPTLV) MarshalBinary() ([]byte, error) {
 	if err := binary.Write(&bytes, binary.BigEndian, p.PortIdentity); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(&bytes, binary.LittleEndian, p.PortState); err != nil {
+	if err := binary.Write(&bytes, hostendian.Order, p.PortState); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(&bytes, binary.LittleEndian, p.Timestamping); err != nil {
+	if err := binary.Write(&bytes, hostendian.Order, p.Timestamping); err != nil {
 		return nil, err
 	}
 	interfaceBytes, err := p.Interface.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
-	if err := binary.Write(&bytes, binary.LittleEndian, interfaceBytes); err != nil {
+	if err := binary.Write(&bytes, hostendian.Order, interfaceBytes); err != nil {
 		return nil, err
 	}
 	return bytes.Bytes(), nil
@@ -184,7 +186,7 @@ func (p *PortServiceStatsNPTLV) MarshalBinary() ([]byte, error) {
 	if err := binary.Write(&bytes, binary.BigEndian, p.PortIdentity); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(&bytes, binary.LittleEndian, p.PortServiceStats); err != nil {
+	if err := binary.Write(&bytes, hostendian.Order, p.PortServiceStats); err != nil {
 		return nil, err
 	}
 	return bytes.Bytes(), nil

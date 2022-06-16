@@ -71,12 +71,12 @@ func scmDataToTime(data []byte) (ts time.Time, err error) {
 	return ts, nil
 }
 
-// byteToTime converts LittleEndian bytes into a timestamp
+// byteToTime converts bytes into a timestamp
 func byteToTime(data []byte) (time.Time, error) {
 	// __kernel_timespec from linux/time_types.h
 	// can't use unix.Timespec which is old timespec that uses 32bit ints on 386 platform.
-	sec := int64(binary.LittleEndian.Uint64(data[0:8]))
-	nsec := int64(binary.LittleEndian.Uint64(data[8:]))
+	sec := *(*int64)(unsafe.Pointer(&data[0]))
+	nsec := *(*int64)(unsafe.Pointer(&data[8]))
 	return time.Unix(sec, nsec), nil
 }
 
