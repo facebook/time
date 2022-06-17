@@ -32,7 +32,7 @@ var timestamping = unix.SO_TIMESTAMP
 
 // Here we have basic HW and SW timestamping support
 
-// byteToTime converts LittleEndian bytes into a timestamp
+// byteToTime converts bytes into a timestamp
 func byteToTime(data []byte) (time.Time, error) {
 	// freebsd supports only SO_TIMESTAMP mode, which returns timeval
 	timeval := (*unix.Timeval)(unsafe.Pointer(&data[0]))

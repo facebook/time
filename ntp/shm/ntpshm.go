@@ -23,6 +23,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/facebook/time/hostendian"
+
 	"golang.org/x/sys/unix"
 )
 
@@ -78,7 +80,7 @@ func ptrToNTPSHM(shmptr uintptr) (*NTPSHM, error) {
 	b := ptrToBytes(shmptr)
 	s := &NTPSHM{}
 	r := bytes.NewReader(b)
-	err := binary.Read(r, binary.LittleEndian, s)
+	err := binary.Read(r, hostendian.Order, s)
 	return s, err
 }
 
