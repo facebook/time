@@ -17,21 +17,21 @@ jobs:
   trigger: commit
   metadata:
     targets:
-      - fedora-all-aarch64
+      - fedora-latest-stable-aarch64
       # https://github.com/facebook/time/pull/101#issuecomment-1062295307
-      # - fedora-all-armhfp
-      - fedora-all-i386
-      - fedora-all-ppc64le
-      - fedora-all-s390x
-      - fedora-all-x86_64
+      # - fedora-latest-stable-armhfp
+      - fedora-latest-stable-i386
+      - fedora-latest-stable-ppc64le
+      - fedora-latest-stable-s390x
+      - fedora-latest-stable-x86_64
 - job: copr_build
   trigger: pull_request
   metadata:
     targets:
-      - fedora-all-aarch64
+      - fedora-latest-stable-aarch64
       # https://github.com/facebook/time/pull/101#issuecomment-1062295307
-      # - fedora-all-armhfp
-      - fedora-all-i386
-      - fedora-all-ppc64le
-      - fedora-all-s390x
-      - fedora-all-x86_64
+      # - fedora-latest-stable-armhfp
+      - fedora-latest-stable-i386
+      - fedora-latest-stable-ppc64le
+      - fedora-latest-stable-s390x
+      - fedora-latest-stable-x86_64
