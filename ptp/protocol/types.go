@@ -163,7 +163,7 @@ func (t TimeInterval) Nanoseconds() float64 {
 }
 
 func (t TimeInterval) String() string {
-	return fmt.Sprintf("TimeInterval(%fns)", t.Nanoseconds())
+	return fmt.Sprintf("TimeInterval(%.3fns)", t.Nanoseconds())
 }
 
 // NewTimeInterval returns TimeInterval built from Nanoseconds
@@ -180,6 +180,9 @@ type Correction IntFloat
 
 // Nanoseconds decodes Correction to human-understandable nanoseconds
 func (t Correction) Nanoseconds() float64 {
+	if t.TooBig() {
+		return math.Inf(1)
+	}
 	return IntFloat(t).Value()
 }
 
@@ -187,7 +190,7 @@ func (t Correction) String() string {
 	if t.TooBig() {
 		return "Correction(Too big)"
 	}
-	return fmt.Sprintf("Correction(%fns)", t.Nanoseconds())
+	return fmt.Sprintf("Correction(%.3fns)", t.Nanoseconds())
 }
 
 // TooBig means correction is too big to be represented.
@@ -197,6 +200,10 @@ func (t Correction) TooBig() bool {
 
 // NewCorrection returns Correction built from Nanoseconds
 func NewCorrection(ns float64) Correction {
+	t := ns * twoPow16
+	if t > 0x7fffffffffffffff {
+		return Correction(0x7fffffffffffffff)
+	}
 	return Correction(ns * twoPow16)
 }
 
@@ -274,13 +281,20 @@ type Timestamp struct {
 
 // Time turns Timestamp into normal Go time.Time
 func (t Timestamp) Time() time.Time {
+	if t.Empty() {
+		return time.Time{}
+	}
 	b := append([]byte{0x0, 0x0}, t.Seconds[:]...)
 	secs := binary.BigEndian.Uint64(b)
 	return time.Unix(int64(secs), int64(t.Nanoseconds))
 }
 
+func (t Timestamp) Empty() bool {
+	return t.Nanoseconds == 0 && t.Seconds == [6]uint8{0, 0, 0, 0, 0, 0}
+}
+
 func (t Timestamp) String() string {
-	if t.Nanoseconds == 0 && t.Seconds == [6]uint8{0, 0, 0, 0, 0, 0} {
+	if t.Empty() {
 		return "Timestamp(empty)"
 	}
 	return fmt.Sprintf("Timestamp(%s)", t.Time())
@@ -288,6 +302,9 @@ func (t Timestamp) String() string {
 
 // NewTimestamp allows to create Timestamp from time.Time
 func NewTimestamp(t time.Time) Timestamp {
+	if t.IsZero() {
+		return Timestamp{}
+	}
 	ts := Timestamp{
 		Nanoseconds: uint32(t.Nanosecond()),
 	}
@@ -304,11 +321,12 @@ type ClockClass uint8
 // Available Clock Classes
 // https://datatracker.ietf.org/doc/html/rfc8173#section-7.6.2.4
 const (
-	ClockClass6  ClockClass = 6
-	ClockClass7  ClockClass = 7
-	ClockClass13 ClockClass = 13
-	ClockClass52 ClockClass = 52
-	Clockclass58 ClockClass = 58
+	ClockClass6         ClockClass = 6
+	ClockClass7         ClockClass = 7
+	ClockClass13        ClockClass = 13
+	ClockClass52        ClockClass = 52
+	ClockClass58        ClockClass = 58
+	ClockClassSlaveOnly ClockClass = 255
 )
 
 // ClockAccuracy represents a PTP clock accuracy
@@ -512,6 +530,7 @@ func (p *PTPText) UnmarshalBinary(rawBytes []byte) error {
 		// can be zero len, just empty string
 		return nil
 	}
+
 	if len(rawBytes) < int(length+1) {
 		return fmt.Errorf("text field is too short, need %d got %d", len(rawBytes), length+1)
 	}
@@ -627,8 +646,8 @@ func (p *PortAddress) UnmarshalBinary(b []byte) error {
 	if len(b) < 4+int(p.AddressLength) {
 		return fmt.Errorf("not enough data to decode PortAddress address")
 	}
-
-	p.AddressField = net.IP(b[4 : 4+p.AddressLength])
+	p.AddressField = make([]byte, p.AddressLength)
+	copy(p.AddressField, b[4:4+p.AddressLength])
 	return nil
 }
 
@@ -636,10 +655,16 @@ func (p *PortAddress) IP() (net.IP, error) {
 	if p.NetworkProtocol != TransportTypeUDPIPV4 && p.NetworkProtocol != TransportTypeUDPIPV6 {
 		return nil, fmt.Errorf("unsupported network protocol %s (%d)", p.NetworkProtocol, p.NetworkProtocol)
 	}
+	if p.NetworkProtocol == TransportTypeUDPIPV4 && (p.AddressLength != 4 || len(p.AddressField) != 4) {
+		return nil, fmt.Errorf("unexpected length of IPv4: %d", len(p.AddressField))
+	}
+	if p.NetworkProtocol == TransportTypeUDPIPV6 && (p.AddressLength != 16 || len(p.AddressField) != 16) {
+		return nil, fmt.Errorf("unexpected length of IPv6: %d", len(p.AddressField))
+	}
 	return net.IP(p.AddressField), nil
 }
 
-// MarshalBinary converts ptptext to []bytes
+// MarshalBinary converts PortAddress to []bytes
 func (p *PortAddress) MarshalBinary() ([]byte, error) {
 	var bytes bytes.Buffer
 	if err := binary.Write(&bytes, binary.BigEndian, p.NetworkProtocol); err != nil {

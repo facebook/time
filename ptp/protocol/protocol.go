@@ -100,6 +100,13 @@ func (p *Header) SetSequence(sequence uint16) {
 	p.SequenceID = sequence
 }
 
+func checkPacketLength(p *Header, l int) error {
+	if int(p.MessageLength) > l {
+		return fmt.Errorf("cannot decode message of length %d from %d bytes", p.MessageLength, l)
+	}
+	return nil
+}
+
 // headerMarshalBinaryTo is not a Header.MarshalBinaryTo to prevent all packets
 // from having default (and incomplete) MarshalBinaryTo implementation through embedding
 func headerMarshalBinaryTo(p *Header, b []byte) int {
@@ -229,6 +236,9 @@ func (p *SyncDelayReq) UnmarshalBinary(b []byte) error {
 		return fmt.Errorf("not enough data to decode SyncDelayReq")
 	}
 	unmarshalHeader(&p.Header, b)
+	if err := checkPacketLength(&p.Header, len(b)); err != nil {
+		return err
+	}
 	copy(p.OriginTimestamp.Seconds[:], b[headerSize:]) //uint48
 	p.OriginTimestamp.Nanoseconds = binary.BigEndian.Uint32(b[headerSize+6:])
 	return nil
@@ -269,6 +279,9 @@ func (p *FollowUp) UnmarshalBinary(b []byte) error {
 		return fmt.Errorf("not enough data to decode FollowUp")
 	}
 	unmarshalHeader(&p.Header, b)
+	if err := checkPacketLength(&p.Header, len(b)); err != nil {
+		return err
+	}
 	copy(p.PreciseOriginTimestamp.Seconds[:], b[headerSize:]) //uint48
 	p.PreciseOriginTimestamp.Nanoseconds = binary.BigEndian.Uint32(b[headerSize+6:])
 	return nil
@@ -312,6 +325,9 @@ func (p *DelayResp) UnmarshalBinary(b []byte) error {
 		return fmt.Errorf("not enough data to decode DelayResp")
 	}
 	unmarshalHeader(&p.Header, b)
+	if err := checkPacketLength(&p.Header, len(b)); err != nil {
+		return err
+	}
 	copy(p.ReceiveTimestamp.Seconds[:], b[headerSize:]) //uint48
 	p.ReceiveTimestamp.Nanoseconds = binary.BigEndian.Uint32(b[headerSize+6:])
 	p.RequestingPortIdentity.ClockIdentity = ClockIdentity(binary.BigEndian.Uint64(b[headerSize+10:]))
