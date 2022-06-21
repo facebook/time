@@ -74,7 +74,7 @@ ch8\used=No
 	expectedConfig := `[measure]
 continuous=On
 meas_time=1 days 1 hours
-tie_mode=TIE + 1 PPS TE
+tie_mode=TIE + 1 PPS Alignment
 ch8\used=Yes
 ch6\synce_enabled=Off
 ch7\synce_enabled=Off
@@ -406,7 +406,7 @@ func TestConfig(t *testing.T) {
 	expectedConfig := `[measure]
 continuous=On
 meas_time=1 days 1 hours
-tie_mode=TIE + 1 PPS TE
+tie_mode=TIE + 1 PPS Alignment
 ch0\used=Yes
 ch1\used=No
 ch2\used=No

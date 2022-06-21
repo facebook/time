@@ -138,8 +138,8 @@ func (c *config) baseConfig(s *ini.Section) {
 	// 25h measurement
 	c.set(s, "meas_time", "1 days 1 hours")
 
-	// tie_mode=TIE + 1 PPS TE
-	c.set(s, "tie_mode", "TIE + 1 PPS TE")
+	// tie_mode=TIE + 1 PPS Alignment
+	c.set(s, "tie_mode", "TIE + 1 PPS Alignment")
 
 	// ch8 is a ref channel. Always ON
 	c.set(s, "ch8\\used", api.YES)
