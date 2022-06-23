@@ -88,15 +88,31 @@ func unmarshalTLVHeader(p *TLVHead, b []byte) error {
 	return nil
 }
 
+func checkTLVLength(p *TLVHead, l, want int) error {
+	if int(p.LengthField) != want {
+		return fmt.Errorf("expected TLV of type %s (%d) to have length of %d, got %d in the header", p.TLVType, p.TLVType, want, p.LengthField)
+	}
+	if tlvHeadSize+int(p.LengthField) > l {
+		return fmt.Errorf("cannot decode TLV of length %d from %d bytes", tlvHeadSize+int(p.LengthField)+want, l)
+	}
+	return nil
+}
+
 // UnmarshalBinary parses []byte and populates struct fields
 func (p *Signaling) UnmarshalBinary(b []byte) error {
 	if len(b) < headerSize+10+tlvHeadSize {
 		return fmt.Errorf("not enough data to decode Signaling")
 	}
+
 	unmarshalHeader(&p.Header, b)
+	if err := checkPacketLength(&p.Header, len(b)); err != nil {
+		return err
+	}
+
 	if p.SdoIDAndMsgType.MsgType() != MessageSignaling {
 		return fmt.Errorf("not a signaling message %v", b)
 	}
+
 	p.TargetPortIdentity.ClockIdentity = ClockIdentity(binary.BigEndian.Uint64(b[headerSize:]))
 	p.TargetPortIdentity.PortNumber = binary.BigEndian.Uint16(b[headerSize+8:])
 
@@ -175,6 +191,9 @@ func (t *RequestUnicastTransmissionTLV) UnmarshalBinary(b []byte) error {
 	if err := unmarshalTLVHeader(&t.TLVHead, b); err != nil {
 		return err
 	}
+	if err := checkTLVLength(&t.TLVHead, len(b), 6); err != nil {
+		return err
+	}
 	t.MsgTypeAndReserved = UnicastMsgTypeAndFlags(b[4])
 	t.LogInterMessagePeriod = LogInterval(b[5])
 	t.DurationField = binary.BigEndian.Uint32(b[6:])
@@ -207,6 +226,9 @@ func (t *GrantUnicastTransmissionTLV) UnmarshalBinary(b []byte) error {
 	if err := unmarshalTLVHeader(&t.TLVHead, b); err != nil {
 		return err
 	}
+	if err := checkTLVLength(&t.TLVHead, len(b), 8); err != nil {
+		return err
+	}
 	t.MsgTypeAndReserved = UnicastMsgTypeAndFlags(b[4])
 	t.LogInterMessagePeriod = LogInterval(b[5])
 	t.DurationField = binary.BigEndian.Uint32(b[6:])
@@ -235,6 +257,9 @@ func (t *CancelUnicastTransmissionTLV) UnmarshalBinary(b []byte) error {
 	if err := unmarshalTLVHeader(&t.TLVHead, b); err != nil {
 		return err
 	}
+	if err := checkTLVLength(&t.TLVHead, len(b), 2); err != nil {
+		return err
+	}
 	t.MsgTypeAndFlags = UnicastMsgTypeAndFlags(b[4])
 	t.Reserved = b[5]
 	return nil
@@ -258,6 +283,9 @@ func (t *AcknowledgeCancelUnicastTransmissionTLV) MarshalBinaryTo(b []byte) (int
 // UnmarshalBinary parses []byte and populates struct fields
 func (t *AcknowledgeCancelUnicastTransmissionTLV) UnmarshalBinary(b []byte) error {
 	if err := unmarshalTLVHeader(&t.TLVHead, b); err != nil {
+		return err
+	}
+	if err := checkTLVLength(&t.TLVHead, len(b), 2); err != nil {
 		return err
 	}
 	t.MsgTypeAndFlags = UnicastMsgTypeAndFlags(b[4])

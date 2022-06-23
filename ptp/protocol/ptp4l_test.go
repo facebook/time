@@ -26,6 +26,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestUnicastMasterStateString(t *testing.T) {
+	require.Equal(t, "WAIT", UnicastMasterStateWait.String())
+	require.Equal(t, "HAVE_ANN", UnicastMasterStateHaveAnnounce.String())
+	require.Equal(t, "NEED_SYDY", UnicastMasterStateNeedSYDY.String())
+	require.Equal(t, "HAVE_SYDY", UnicastMasterStateHaveSYDY.String())
+}
+
 func TestParseTimeStatusNP(t *testing.T) {
 	raw := []uint8{
 		13, 2, 0, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

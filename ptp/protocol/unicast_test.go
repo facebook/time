@@ -23,7 +23,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_parseRequestUnicastTransmissionMultiTLV(t *testing.T) {
+func TestMsgTypeAndFlags(t *testing.T) {
+	msgTypeAndFlags := NewUnicastMsgTypeAndFlags(MessageSignaling, 123)
+	require.Equal(t, MessageSignaling, msgTypeAndFlags.MsgType())
+}
+
+func TestParseRequestUnicastTransmissionMultiTLV(t *testing.T) {
 	raw := []uint8{0x0c, 0x02, 0x00, 0x4a, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb8, 0x59, 0x9f, 0xff, 0xfe, 0x55, 0xaf, 0x4e, 0x00, 0x01, 0x00, 0x00, 0x05, 0x7f, 0xff, 0xff,
 		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 		0x00, 0x04, 0x00, 0x06, 0xb0, 0x01, 0x00, 0x00, 0x00, 0x3c, // first TLV
@@ -97,7 +102,7 @@ func Test_parseRequestUnicastTransmissionMultiTLV(t *testing.T) {
 	assert.Equal(t, &want, pp)
 }
 
-func Test_parseRequestUnicastTransmissionExtraBytes(t *testing.T) {
+func TestParseRequestUnicastTransmissionExtraBytes(t *testing.T) {
 	raw := []uint8{0x0c, 0x02, 0x00, 0x40, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb8, 0x59, 0x9f, 0xff, 0xfe, 0x55, 0xaf, 0x4e, 0x00, 0x01, 0x00, 0x00, 0x05, 0x7f, 0xff, 0xff,
 		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 		0x00, 0x04, 0x00, 0x06, 0xb0, 0x01, 0x00, 0x00, 0x00, 0x3c, // first TLV
@@ -165,7 +170,7 @@ func Test_parseRequestUnicastTransmissionExtraBytes(t *testing.T) {
 	assert.Equal(t, &want, pp)
 }
 
-func Test_parseGrantUnicastTransmission(t *testing.T) {
+func TestParseGrantUnicastTransmission(t *testing.T) {
 	raw := []uint8{0x0c, 0x02, 0x00, 0x38, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0xe4, 0x1d, 0x2d, 0xff, 0xfe, 0xbb, 0x64, 0x60, 0x00,
@@ -209,6 +214,114 @@ func Test_parseGrantUnicastTransmission(t *testing.T) {
 				LogInterMessagePeriod: 1,
 				DurationField:         60,
 				Renewal:               1,
+			},
+		},
+	}
+	require.Equal(t, want, *packet)
+	b, err := Bytes(packet)
+	require.Nil(t, err)
+	assert.Equal(t, raw, b)
+
+	// test generic DecodePacket as well
+	pp, err := DecodePacket(raw)
+	require.Nil(t, err)
+	assert.Equal(t, &want, pp)
+}
+
+func TestParseCancelUnicastTransmission(t *testing.T) {
+	raw := []uint8{0x0c, 0x02, 0x00, 0x32, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0xe4, 0x1d, 0x2d, 0xff, 0xfe, 0xbb, 0x64, 0x60, 0x00,
+		0x01, 0x1d, 0xc4, 0x05, 0x7f, 0x48, 0x57, 0xdd, 0xff,
+		0xfe, 0x08, 0x64, 0x88, 0x00, 0x01, 0x00, 0x06, 0x00,
+		0x02, 0xb0, 0x00, 0x00, 0x00,
+	}
+	packet := new(Signaling)
+	err := FromBytes(raw, packet)
+	require.Nil(t, err)
+	want := Signaling{
+		Header: Header{
+			SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageSignaling, 0),
+			Version:             2,
+			MessageLength:       uint16(len(raw) - 2),
+			DomainNumber:        0,
+			MinorSdoID:          0,
+			FlagField:           FlagUnicast,
+			CorrectionField:     0,
+			MessageTypeSpecific: 0,
+			SourcePortIdentity: PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: 16437344792485782624,
+			},
+			SequenceID:         7620,
+			ControlField:       5,
+			LogMessageInterval: 0x7f,
+		},
+		TargetPortIdentity: PortIdentity{
+			PortNumber:    1,
+			ClockIdentity: 5212879185253000328,
+		},
+		TLVs: []TLV{
+			&CancelUnicastTransmissionTLV{
+				TLVHead: TLVHead{
+					TLVType:     TLVCancelUnicastTransmission,
+					LengthField: 2,
+				},
+				MsgTypeAndFlags: NewUnicastMsgTypeAndFlags(MessageAnnounce, 0),
+			},
+		},
+	}
+	require.Equal(t, want, *packet)
+	b, err := Bytes(packet)
+	require.Nil(t, err)
+	assert.Equal(t, raw, b)
+
+	// test generic DecodePacket as well
+	pp, err := DecodePacket(raw)
+	require.Nil(t, err)
+	assert.Equal(t, &want, pp)
+}
+
+func TestParseAcknowledgeCancelUnicastTransmission(t *testing.T) {
+	raw := []uint8{0x0c, 0x02, 0x00, 0x32, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0xe4, 0x1d, 0x2d, 0xff, 0xfe, 0xbb, 0x64, 0x60, 0x00,
+		0x01, 0x1d, 0xc4, 0x05, 0x7f, 0x48, 0x57, 0xdd, 0xff,
+		0xfe, 0x08, 0x64, 0x88, 0x00, 0x01, 0x00, 0x07, 0x00,
+		0x02, 0xb0, 0x00, 0x00, 0x00,
+	}
+	packet := new(Signaling)
+	err := FromBytes(raw, packet)
+	require.Nil(t, err)
+	want := Signaling{
+		Header: Header{
+			SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageSignaling, 0),
+			Version:             2,
+			MessageLength:       uint16(len(raw) - 2),
+			DomainNumber:        0,
+			MinorSdoID:          0,
+			FlagField:           FlagUnicast,
+			CorrectionField:     0,
+			MessageTypeSpecific: 0,
+			SourcePortIdentity: PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: 16437344792485782624,
+			},
+			SequenceID:         7620,
+			ControlField:       5,
+			LogMessageInterval: 0x7f,
+		},
+		TargetPortIdentity: PortIdentity{
+			PortNumber:    1,
+			ClockIdentity: 5212879185253000328,
+		},
+		TLVs: []TLV{
+			&AcknowledgeCancelUnicastTransmissionTLV{
+				TLVHead: TLVHead{
+					TLVType:     TLVAcknowledgeCancelUnicastTransmission,
+					LengthField: 2,
+				},
+				MsgTypeAndFlags: NewUnicastMsgTypeAndFlags(MessageAnnounce, 0),
 			},
 		},
 	}
