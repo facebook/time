@@ -375,3 +375,18 @@ func TestWriteWrongVersion(t *testing.T) {
 	err := Write(&b, '4', []LeapSecond{}, "UTC")
 	require.ErrorIs(t, errUnsupportedVersion, err)
 }
+
+func FuzzParse(f *testing.F) {
+	tzx2 := append(tz, tz...)
+	tzV2x2 := append(tzV2, tzV2...)
+	for _, seed := range [][]byte{{}, {0}, {9}, tz, tzV2, tzx2, tzV2x2} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		r := bytes.NewReader(b)
+		ls, err := parseVx(r)
+		if err != nil {
+			require.Equal(t, 0, len(ls))
+		}
+	})
+}

@@ -387,3 +387,17 @@ func Benchmark_ServerWithKernelTimestampsRead(b *testing.B) {
 		_, _, _, _ = timestamp.ReadPacketWithRXTimestamp(connFd)
 	}
 }
+
+func FuzzBytesToPacket(f *testing.F) {
+	for _, seed := range [][]byte{{}, {0}, {9}, ntpResponseBytes, ntpRequestBytes} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		packet, err := BytesToPacket(b)
+		if err == nil {
+			bb, err := packet.Bytes()
+			require.NoError(t, err)
+			require.Equal(t, b[:len(bb)], bb)
+		}
+	})
+}
