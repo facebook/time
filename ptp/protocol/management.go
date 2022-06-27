@@ -99,7 +99,7 @@ func (p *Management) UnmarshalBinary(rawBytes []byte) error {
 		return ErrManagementMsgErrorStatus
 	}
 	if tlvHead.TLVType != TLVManagement {
-		return fmt.Errorf("got TLV type 0x%x instead of 0x%x", tlvHead.TLVType, TLVManagement)
+		return fmt.Errorf("got TLV type %q (0x%02X) instead of %q (0x%02X)", tlvHead.TLVType.String(), int(tlvHead.TLVType), TLVManagement.String(), int(TLVManagement))
 	}
 
 	if err = binary.Read(r, binary.BigEndian, &tlvHead.ManagementID); err != nil {
@@ -127,8 +127,8 @@ func (p *Management) UnmarshalBinary(rawBytes []byte) error {
 	return nil
 }
 
-// MarshalBinaryTo converts packet to bytes and writes those into provided buffer
-func (p *Management) MarshalBinaryTo(bytes io.Writer) error {
+// MarshalBinaryToBuf converts packet to bytes and writes those into provided buffer
+func (p *Management) MarshalBinaryToBuf(bytes io.Writer) error {
 	if err := binary.Write(bytes, binary.BigEndian, p.ManagementMsgHead); err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func (p *Management) MarshalBinaryTo(bytes io.Writer) error {
 // MarshalBinary converts packet to []bytes
 func (p *Management) MarshalBinary() ([]byte, error) {
 	var bytes bytes.Buffer
-	err := p.MarshalBinaryTo(&bytes)
+	err := p.MarshalBinaryToBuf(&bytes)
 	return bytes.Bytes(), err
 }
 
@@ -210,8 +210,8 @@ func (p *ManagementMsgErrorStatus) UnmarshalBinary(rawBytes []byte) error {
 	return nil
 }
 
-// MarshalBinaryTo converts packet to bytes and writes those into provided buffer
-func (p *ManagementMsgErrorStatus) MarshalBinaryTo(bytes io.Writer) error {
+// MarshalBinaryToBuf converts packet to bytes and writes those into provided buffer
+func (p *ManagementMsgErrorStatus) MarshalBinaryToBuf(bytes io.Writer) error {
 	be := binary.BigEndian
 	if err := binary.Write(bytes, be, &p.ManagementMsgHead); err != nil {
 		return fmt.Errorf("writing ManagementMsgErrorStatus ManagementMsgHead: %w", err)
@@ -243,7 +243,7 @@ func (p *ManagementMsgErrorStatus) MarshalBinaryTo(bytes io.Writer) error {
 // MarshalBinary converts packet to []bytes
 func (p *ManagementMsgErrorStatus) MarshalBinary() ([]byte, error) {
 	var bytes bytes.Buffer
-	err := p.MarshalBinaryTo(&bytes)
+	err := p.MarshalBinaryToBuf(&bytes)
 	return bytes.Bytes(), err
 }
 
