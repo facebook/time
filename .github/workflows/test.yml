@@ -11,6 +11,8 @@ jobs:
       - run: sudo apt-get install libpcap-dev
       - run: go build -v ./...
       - run: go test -v -race -coverprofile=coverage.txt ./...
-      # fuzzing for ptp/protocol, can't use it with multiple packages
-      - run: go test -v -fuzz='.*' -fuzztime=1m ./ptp/protocol/
+      # fuzzing, need to specify each package separately
+      - run: go test -v -fuzz='.*' -fuzztime=10s ./ptp/protocol/
+      - run: go test -v -fuzz='.*' -fuzztime=10s ./ntp/protocol/
+      - run: go test -v -fuzz='.*' -fuzztime=10s ./ntp/chrony/
       - uses: codecov/codecov-action@v2
