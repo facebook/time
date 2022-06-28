@@ -26,12 +26,12 @@ import (
 )
 
 // NewNTPPeerStats constructs NTPStats from NTPCheckResult
-func NewNTPPeerStats(r *NTPCheckResult) (map[string]interface{}, error) {
+func NewNTPPeerStats(r *NTPCheckResult) (map[string]any, error) {
 	if r.SysVars == nil {
 		return nil, errors.New("no system variables to output stats")
 	}
 
-	result := make(map[string]interface{}, len(r.Peers))
+	result := make(map[string]any, len(r.Peers))
 
 	// Then add stats for all the peers
 	for _, peer := range r.Peers {

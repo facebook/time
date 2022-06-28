@@ -19,12 +19,12 @@ package checker
 import (
 	"testing"
 
-	"github.com/facebook/time/ntp/control"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/facebook/time/ntp/control"
 )
 
-func TestNTPStatsNoSysVars(t *testing.T) {
+func TestNTPPeerStatsNoSysVars(t *testing.T) {
 	// Check that no sysvars triggers exit code
 	r := &NTPCheckResult{
 		SysVars: nil,
@@ -37,76 +37,29 @@ func TestNTPStatsNoSysVars(t *testing.T) {
 			},
 		},
 	}
-	_, err := NewNTPStats(r)
+	_, err := NewNTPPeerStats(r)
 	require.EqualError(t, err, "no system variables to output stats")
 }
 
-func TestNTPStatsNoPeers(t *testing.T) {
+func TestNTPPeerStatsNoPeers(t *testing.T) {
 	s := SystemVariables{}
 	r := &NTPCheckResult{
 		SysVars: &s,
 		Peers:   map[uint16]*Peer{},
 	}
-	_, err := NewNTPStats(r)
-	require.EqualError(t, err, "no peers detected to output stats")
-}
-
-func TestNTPStatsNoGoodPeer(t *testing.T) {
-	// Check that no "good" pier triggers exit code
-	s := SystemVariables{}
-	r := &NTPCheckResult{
-		SysVars: &s,
-		Peers: map[uint16]*Peer{
-			0: &Peer{},
-		},
-	}
-	_, err := NewNTPStats(r)
-	require.EqualError(t, err, "nothing to calculate stats from: no good peers present")
-}
-
-func TestNTPStatsNoSysPeer(t *testing.T) {
-	s := SystemVariables{}
-	r := &NTPCheckResult{
-		SysVars: &s,
-		Peers: map[uint16]*Peer{
-			0: &Peer{
-				Selection: control.SelCandidate,
-				Offset:    0.01,
-				Delay:     2.01,
-				Stratum:   3,
-				HPoll:     10,
-				PPoll:     9,
-				Jitter:    3.1,
-			},
-			1: &Peer{
-				Selection: control.SelBackup,
-				Offset:    0.045,
-				Delay:     3.21,
-				Stratum:   4,
-				HPoll:     10,
-				PPoll:     4,
-				Jitter:    4,
-			},
-		},
-	}
-	stats, err := NewNTPStats(r)
+	peerStats, err := NewNTPPeerStats(r)
 	require.NoError(t, err)
-	want := &NTPStats{
-		PeerDelay:   2.61,
-		PeerOffset:  0.0275,
-		PeerPoll:    1 << 4,
-		PeerStratum: 3,
-		PeerJitter:  3.55,
-	}
-	require.Equal(t, want, stats)
+	want := map[string]any{}
+	require.Equal(t, want, peerStats)
 }
 
-func TestNTPStatsWithSysPeer(t *testing.T) {
+func TestNTPPeerStatsWithSysPeer(t *testing.T) {
 	s := SystemVariables{}
 	r := &NTPCheckResult{
 		SysVars: &s,
 		Peers: map[uint16]*Peer{
 			0: &Peer{
+				SRCAdr:    "192.168.0.2",
 				Selection: control.SelCandidate,
 				Offset:    0.01,
 				Delay:     2.01,
@@ -116,6 +69,7 @@ func TestNTPStatsWithSysPeer(t *testing.T) {
 				Jitter:    3.1,
 			},
 			1: &Peer{
+				SRCAdr:    "192.168.0.3",
 				Selection: control.SelSYSPeer,
 				Offset:    0.045,
 				Delay:     3.21,
@@ -124,16 +78,25 @@ func TestNTPStatsWithSysPeer(t *testing.T) {
 				PPoll:     4,
 				Jitter:    4,
 			},
+			// no ips, skip
+			2: &Peer{
+				Selection: control.SelReject,
+			},
 		},
 	}
-	stats, err := NewNTPStats(r)
+	peerStats, err := NewNTPPeerStats(r)
 	require.NoError(t, err)
-	want := &NTPStats{
-		PeerDelay:   3.21,
-		PeerOffset:  0.045,
-		PeerPoll:    1 << 4,
-		PeerStratum: 4,
-		PeerJitter:  4,
+	want := map[string]any{
+		"ntp.peers.192_168_0_2.delay":   2.01,
+		"ntp.peers.192_168_0_2.jitter":  3.1,
+		"ntp.peers.192_168_0_2.offset":  0.01,
+		"ntp.peers.192_168_0_2.poll":    512,
+		"ntp.peers.192_168_0_2.stratum": 3,
+		"ntp.peers.192_168_0_3.delay":   3.21,
+		"ntp.peers.192_168_0_3.jitter":  4.0,
+		"ntp.peers.192_168_0_3.offset":  0.045,
+		"ntp.peers.192_168_0_3.poll":    16,
+		"ntp.peers.192_168_0_3.stratum": 4,
 	}
-	require.Equal(t, want, stats)
+	require.Equal(t, want, peerStats)
 }
