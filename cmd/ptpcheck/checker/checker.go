@@ -47,17 +47,17 @@ func Run(c *ptp.MgmtClient) (*PTPCheckResult, error) {
 	var err error
 	currentDataSet, err := c.CurrentDataSet()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting CURRENT_DATA_SET management TLV: %w", err)
 	}
 	log.Debugf("CurrentDataSet: %+v", currentDataSet)
 	defaultDataSet, err := c.DefaultDataSet()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting DEFAULT_DATA_SET management TLV: %w", err)
 	}
 	log.Debugf("DefaultDataSet: %+v", defaultDataSet)
 	parentDataSet, err := c.ParentDataSet()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting PARENT_DATA_SET management TLV: %w", err)
 	}
 	log.Debugf("ParentDataSet: %+v", parentDataSet)
 
@@ -115,11 +115,12 @@ func Run(c *ptp.MgmtClient) (*PTPCheckResult, error) {
 	return result, nil
 }
 
-// PrepareClient creates a ptp.MgmtClient with connection to ptp4l over unix socket
-func PrepareClient(address string) (c *ptp.MgmtClient, cleanup func(), err error) {
-	timeout := 5 * time.Second
+func prepareConn(address string) (conn *net.UnixConn, cleanup func(), err error) {
+	if address == "" {
+		cleanup = func() {}
+		return nil, cleanup, fmt.Errorf("preparing ptp4l connection: target address is empty")
+	}
 	base, _ := path.Split(address)
-	var conn *net.UnixConn
 	local := path.Join(base, fmt.Sprintf("ptpcheck.%d.sock", os.Getpid()))
 	// cleanup
 	cleanup = func() {
@@ -132,8 +133,6 @@ func PrepareClient(address string) (c *ptp.MgmtClient, cleanup func(), err error
 			log.Warningf("removing socket: %v", err)
 		}
 	}
-	deadline := time.Now().Add(timeout)
-
 	addr, err := net.ResolveUnixAddr("unixgram", address)
 	if err != nil {
 		return nil, cleanup, err
@@ -147,6 +146,19 @@ func PrepareClient(address string) (c *ptp.MgmtClient, cleanup func(), err error
 	if err := os.Chmod(local, 0666); err != nil {
 		return nil, cleanup, err
 	}
+	return
+}
+
+// PrepareClient creates a ptp.MgmtClient with connection to ptp4l over unix socket
+func PrepareClient(address string) (c *ptp.MgmtClient, cleanup func(), err error) {
+	timeout := 5 * time.Second
+	deadline := time.Now().Add(timeout)
+	var conn *net.UnixConn
+	conn, cleanup, err = prepareConn(address)
+	if err != nil {
+		return nil, cleanup, err
+	}
+
 	if err := conn.SetReadDeadline(deadline); err != nil {
 		return nil, cleanup, err
 	}
