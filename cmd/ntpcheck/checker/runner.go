@@ -56,10 +56,10 @@ func getPrivateServer(f flavour) string {
 	return "[::1]:123"
 }
 
-func getFlavour() flavour {
-	f, err := os.Open(netFile)
+func isChronyListening(netFilePath string) bool {
+	f, err := os.Open(netFilePath)
 	if err != nil {
-		return flavourNTPD
+		return false
 	}
 	defer f.Close()
 
@@ -67,9 +67,16 @@ func getFlavour() flavour {
 	r := regexp.MustCompile(chrony.ChronyPortV6Regexp)
 	for scanner.Scan() {
 		if r.MatchString(scanner.Text()) {
-			log.Debug("Will use chrony protocol")
-			return flavourChrony
+			return true
 		}
+	}
+	return false
+}
+
+func getFlavour() flavour {
+	if isChronyListening(netFile) {
+		log.Debug("Will use chrony protocol")
+		return flavourChrony
 	}
 	log.Debug("Will use ntp control protocol")
 	return flavourNTPD

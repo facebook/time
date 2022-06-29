@@ -68,7 +68,8 @@ type chronyClient interface {
 
 // ChronyCheck gathers NTP stats using chronyc/chronyd protocol client
 type ChronyCheck struct {
-	Client chronyClient
+	Client   chronyClient
+	unixConn bool
 }
 
 // chrony reports all float measures in seconds, while NTP and this tool operate ms
@@ -178,18 +179,17 @@ func (n *ChronyCheck) ServerStats() (*ServerStats, error) {
 
 // Unix returns true if connected via a unix socket
 func (n *ChronyCheck) Unix() bool {
-	// it could be a mock, so verify type assertion
-	if client, ok := n.Client.(*chrony.Client); ok {
-		if _, ok := client.Connection.(*chronyConn); ok {
-			return true
-		}
-	}
-	return false
+	return n.unixConn
 }
 
 // NewChronyCheck is a constructor for ChronyCheck
 func NewChronyCheck(conn io.ReadWriter) *ChronyCheck {
+	unixConn := false
+	if _, ok := conn.(*chronyConn); ok {
+		unixConn = true
+	}
 	return &ChronyCheck{
-		Client: &chrony.Client{Sequence: 1, Connection: conn},
+		Client:   &chrony.Client{Sequence: 1, Connection: conn},
+		unixConn: unixConn,
 	}
 }

@@ -65,13 +65,13 @@ func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 			totalDelay += p.Delay
 			totalJitter += p.Jitter
 			totalOffset += p.Offset
-			if bestPPoll != 0 && p.PPoll < bestPPoll {
+			if bestPPoll == 0 || p.PPoll < bestPPoll {
 				bestPPoll = p.PPoll
 			}
-			if bestHPoll != 0 && p.HPoll < bestHPoll {
+			if bestHPoll == 0 || p.HPoll < bestHPoll {
 				bestHPoll = p.HPoll
 			}
-			if bestStratum != 0 && p.Stratum < bestStratum {
+			if bestStratum == 0 || p.Stratum < bestStratum {
 				bestStratum = p.Stratum
 			}
 		}
