@@ -22,8 +22,46 @@ Implementation is focused on unicast communications over IPv6 and is sufficient 
 This package also contains basic management client that can be used to exchange Management Packets
 with ptp server.
 
-Additionally it has helpers to work with NIC hardware and software timestamps.
-
 All references throughout the code relate to the IEEE 1588-2019 Standard.
+
+Implemented protocol parts include:
+
+Marshalling and unmarshalling of defined PTP messages
+
+    Sync
+    Delay_Req
+    Pdelay_Req
+    Pdelay_Resp
+    Follow_Up
+    Delay_Resp
+    Pdelay_Resp_Follow_Up
+    Announce
+    Signaling
+    Management
+
+TLVs
+
+    MANAGEMENT
+    MANAGEMENT_ERROR_STATUS
+    REQUEST_UNICAST_TRANSMISSION
+    GRANT_UNICAST_TRANSMISSION
+    CANCEL_UNICAST_TRANSMISSION
+    ACKNOWLEDGE_CANCEL_UNICAST_TRANSMISSION
+    PATH_TRACE
+    ALTERNATE_TIME_OFFSET_INDICATOR
+
+Management TLVs
+
+    DEFAULT_DATA_SET
+    CURRENT_DATA_SET
+    PARENT_DATA_SET
+
+Non-portable ptp4l-specific Management TLVs
+
+    TIME_STATUS_NP
+    PORT_PROPERTIES_NP
+    PORT_STATS_NP
+    PORT_SERVICE_STATS_NP
+    UNICAST_MASTER_TABLE_NP
 */
 package protocol
