@@ -244,7 +244,7 @@ func (sc *SubscriptionClient) initAnnounce() {
 		Header: ptp.Header{
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageAnnounce, 0),
 			Version:         ptp.Version,
-			MessageLength:   uint16(binary.Size(ptp.Announce{}) + binary.Size(ptp.AnnounceBody{})),
+			MessageLength:   uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.AnnounceBody{})),
 			DomainNumber:    0,
 			FlagField:       ptp.FlagUnicast | ptp.FlagPTPTimescale,
 			SequenceID:      0,
