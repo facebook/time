@@ -234,7 +234,7 @@ func TestParseAnnounce(t *testing.T) {
 		Header: Header{
 			SdoIDAndMsgType: NewSdoIDAndMsgType(MessageAnnounce, 0),
 			Version:         MajorVersion,
-			MessageLength:   uint16(binary.Size(Announce{})),
+			MessageLength:   64,
 			DomainNumber:    0,
 			FlagField:       FlagUnicast | FlagPTPTimescale,
 			SequenceID:      0,
@@ -370,6 +370,68 @@ func BenchmarkWriteSync(b *testing.B) {
 	}
 }
 
+func BenchmarkReadAnnounce(b *testing.B) {
+	raw := []uint8{
+		0xb, 0x2, 0x0, 0x40, 0x0, 0x0, 0x4, 0x8, 0x0,
+		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+		0x0, 0x0, 0x0, 0x80, 0x63, 0xff, 0xff, 0x0,
+		0x9, 0xba, 0x0, 0x1, 0x0, 0x0, 0x5, 0x0, 0x0,
+		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+		0x0, 0x0, 0x0, 0x80, 0x6, 0x21, 0x59, 0xe0,
+		0x80, 0x0, 0x80, 0x63, 0xff, 0xff, 0x0,
+		0x9, 0xba, 0x0, 0x0, 0x20, 0x0, 0x0,
+	}
+	p := &Announce{}
+	for n := 0; n < b.N; n++ {
+		_ = p.UnmarshalBinary(raw)
+	}
+}
+
+func BenchmarkReadAnnouncePathTrace(b *testing.B) {
+	raw := []uint8("\x0b\x12\x00\x4c\x00\x00\x04\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\xc0\xeb\xff\xfe\x63\x7a\x4e\x00\x01\x00\x00\x05\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x25\x00\x80\xf8\xfe\xff\xff\x80\x08\xc0\xeb\xff\xfe\x63\x7a\x4e\x00\x00\xa0\x00\x08\x00\x08\x08\xc0\xeb\xff\xfe\x63\x7a\x4e\x00\x00")
+	p := &Announce{}
+	for n := 0; n < b.N; n++ {
+		_ = p.UnmarshalBinary(raw)
+	}
+}
+
+func BenchmarkWriteAnnounce(b *testing.B) {
+	p := &Announce{
+		Header: Header{
+			SdoIDAndMsgType: NewSdoIDAndMsgType(MessageAnnounce, 0),
+			Version:         MajorVersion,
+			MessageLength:   64,
+			DomainNumber:    0,
+			FlagField:       FlagUnicast | FlagPTPTimescale,
+			SequenceID:      0,
+			SourcePortIdentity: PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: 36138748164966842,
+			},
+			LogMessageInterval: 0,
+			ControlField:       5,
+		},
+		AnnounceBody: AnnounceBody{
+			CurrentUTCOffset:     0,
+			Reserved:             0,
+			GrandmasterPriority1: 128,
+			GrandmasterClockQuality: ClockQuality{
+				ClockClass:              6,
+				ClockAccuracy:           33, // 0x21 - Time Accurate within 100ns
+				OffsetScaledLogVariance: 23008,
+			},
+			GrandmasterPriority2: 128,
+			GrandmasterIdentity:  36138748164966842,
+			StepsRemoved:         0,
+			TimeSource:           TimeSourceGNSS,
+		},
+	}
+	buf := make([]byte, 66)
+	for n := 0; n < b.N; n++ {
+		_, _ = BytesTo(p, buf)
+	}
+}
+
 func BenchmarkWriteFollowup(b *testing.B) {
 	p := &FollowUp{
 		Header: Header{
@@ -442,9 +504,10 @@ func FuzzDecodePacket(f *testing.F) {
 		packet, err := DecodePacket(b)
 		// check that marshalling works
 		if err == nil {
-			// special case for packets that have PTPText
-			// which requires padding and marshalling produces different results
-			if packet.MessageType() == MessageManagement {
+			// special case for TLVs that have variable length
+			// which may have padding and thus marshalling produces different results
+			switch packet.MessageType() {
+			case MessageManagement:
 				// ignore ManagementMsgErrorStatus
 				_, ok := packet.(*ManagementMsgErrorStatus)
 				if ok {
@@ -457,12 +520,35 @@ func FuzzDecodePacket(f *testing.F) {
 				if ok {
 					return
 				}
+			case MessageSignaling:
+				m := packet.(*Signaling)
+				// ignore Signaling with PathTrace or AlternateTimeOffsetIndicator TLVs
+				for _, tlv := range m.TLVs {
+					if tlv.Type() == TLVPathTrace {
+						return
+					}
+					if tlv.Type() == TLVAlternateTimeOffsetIndicator {
+						return
+					}
+				}
+			// Announce msg can have TracePath TLV which also has PTPText
+			case MessageAnnounce:
+				m := packet.(*Announce)
+				// ignore Announce with PathTrace or AlternateTimeOffsetIndicator TLVs
+				for _, tlv := range m.TLVs {
+					if tlv.Type() == TLVPathTrace {
+						return
+					}
+					if tlv.Type() == TLVAlternateTimeOffsetIndicator {
+						return
+					}
+				}
 			}
 			bb, err := Bytes(packet)
 			require.NoError(t, err)
 			// ignore last 2 bytes as they are only for ipv6 checksums
 			l := len(bb)
-			require.Equal(t, b[:l-2], bb[:l-2])
+			require.Equal(t, b[:l-2], bb[:l-2], "we expect binary form of packet %v %+v to be equal to original", packet.MessageType(), packet)
 		} else {
 			require.Nil(t, packet)
 		}

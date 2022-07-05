@@ -87,29 +87,6 @@ func ProbeMsgType(data []byte) (msg MessageType, err error) {
 // TLVType is type for TLV types
 type TLVType uint16
 
-// TLV abstracts away any TLV
-type TLV interface {
-	Type() TLVType
-}
-
-const tlvHeadSize = 4
-
-// TLVHead is a common part of all TLVs
-type TLVHead struct {
-	TLVType     TLVType
-	LengthField uint16 // The length of all TLVs shall be an even number of octets
-}
-
-// Type implements TLV interface
-func (t TLVHead) Type() TLVType {
-	return t.TLVType
-}
-
-func tlvHeadMarshalBinaryTo(t *TLVHead, b []byte) {
-	binary.BigEndian.PutUint16(b, uint16(t.TLVType))
-	binary.BigEndian.PutUint16(b[2:], t.LengthField)
-}
-
 // As per Table 52 tlvType values
 const (
 	TLVManagement                           TLVType = 0x0001
@@ -266,6 +243,43 @@ func (p PortIdentity) String() string {
 	return fmt.Sprintf("%s-%d", p.ClockIdentity, p.PortNumber)
 }
 
+type PTPSeconds [6]uint8 // uint48
+
+func (s PTPSeconds) Empty() bool {
+	return s == [6]uint8{0, 0, 0, 0, 0, 0}
+}
+
+func (s PTPSeconds) Seconds() uint64 {
+	b := append([]byte{0x0, 0x0}, s[:]...)
+	return binary.BigEndian.Uint64(b)
+}
+
+func (s PTPSeconds) Time() time.Time {
+	if s.Empty() {
+		return time.Time{}
+	}
+	return time.Unix(int64(s.Seconds()), 0)
+}
+
+func (s PTPSeconds) String() string {
+	if s.Empty() {
+		return "PTPSeconds(empty)"
+	}
+	return fmt.Sprintf("PTPSeconds(%s)", s.Time())
+}
+
+func NewPTPSeconds(t time.Time) PTPSeconds {
+	if t.IsZero() {
+		return PTPSeconds{}
+	}
+	b := [8]byte{}
+	s := PTPSeconds{}
+	binary.BigEndian.PutUint64(b[:], uint64(t.Unix()))
+	// take last 6 bytes from 8 bytes of int64
+	copy(s[:], b[2:])
+	return s
+}
+
 /*
 Timestamp type represents a positive time with respect to the epoch.
 The secondsField member is the integer portion of the timestamp in units of seconds.
@@ -275,7 +289,7 @@ For example:
 +2.000000001 seconds is represented by secondsField = 0000 0000 0002 base 16 and nanosecondsField= 0000 0001 base 16.
 */
 type Timestamp struct {
-	Seconds     [6]uint8 // uint48
+	Seconds     PTPSeconds
 	Nanoseconds uint32
 }
 
@@ -284,13 +298,11 @@ func (t Timestamp) Time() time.Time {
 	if t.Empty() {
 		return time.Time{}
 	}
-	b := append([]byte{0x0, 0x0}, t.Seconds[:]...)
-	secs := binary.BigEndian.Uint64(b)
-	return time.Unix(int64(secs), int64(t.Nanoseconds))
+	return time.Unix(int64(t.Seconds.Seconds()), int64(t.Nanoseconds))
 }
 
 func (t Timestamp) Empty() bool {
-	return t.Nanoseconds == 0 && t.Seconds == [6]uint8{0, 0, 0, 0, 0, 0}
+	return t.Nanoseconds == 0 && t.Seconds.Empty()
 }
 
 func (t Timestamp) String() string {

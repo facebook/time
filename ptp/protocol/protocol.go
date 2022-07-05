@@ -146,13 +146,8 @@ const (
 
 // General PTP messages
 
-// All packets are split in two parts: Header (which is common) and body that is unique
-// for most packets (both in length and structure).
-// The idea is that anything using this library to read packets will have to do roughly this:
-// * receive raw packets as bytes, create bytes.Reader from it
-// * use binary.Read to parse Header from this reader
-// * analyze header fields and switch on MessageType
-// * parse rest of the data into one of Body structs, with exact struct being chosen according to header MessageType.
+// All packets are split in three parts: Header (which is common), body that is unique
+// for most packets (both in length and structure), and finally a suffix of zero or more TLVs
 
 // AnnounceBody Table 43 Announce message fields
 type AnnounceBody struct {
@@ -171,6 +166,7 @@ type AnnounceBody struct {
 type Announce struct {
 	Header
 	AnnounceBody
+	TLVs []TLV
 }
 
 // MarshalBinaryTo marshals bytes to Announce
@@ -191,12 +187,47 @@ func (p *Announce) MarshalBinaryTo(b []byte) (int, error) {
 	binary.BigEndian.PutUint64(b[n+19:], uint64(p.GrandmasterIdentity))
 	binary.BigEndian.PutUint16(b[n+27:], p.StepsRemoved)
 	b[n+29] = byte(p.TimeSource)
-	return n + 30, nil
+	// marshal TLVs if present
+	pos := n + 30
+	tlvLen, err := writeTLVs(p.TLVs, b[pos:])
+	return pos + tlvLen, err
+}
+
+// UnmarshalBinary unmarshals bytes to Announce
+func (p *Announce) UnmarshalBinary(b []byte) error {
+	if len(b) < headerSize+30 {
+		return fmt.Errorf("not enough data to decode Announce")
+	}
+	unmarshalHeader(&p.Header, b)
+	if err := checkPacketLength(&p.Header, len(b)); err != nil {
+		return err
+	}
+	n := headerSize
+	copy(p.OriginTimestamp.Seconds[:], b[n:]) //uint48
+	p.OriginTimestamp.Nanoseconds = binary.BigEndian.Uint32(b[n+6:])
+	p.CurrentUTCOffset = int16(binary.BigEndian.Uint16(b[n+10:]))
+	p.Reserved = b[n+12]
+	p.GrandmasterPriority1 = b[n+13]
+	p.GrandmasterClockQuality.ClockClass = ClockClass(b[n+14])
+	p.GrandmasterClockQuality.ClockAccuracy = ClockAccuracy(b[n+15])
+	p.GrandmasterClockQuality.OffsetScaledLogVariance = binary.BigEndian.Uint16(b[n+16:])
+	p.GrandmasterPriority2 = b[n+18]
+	p.GrandmasterIdentity = ClockIdentity(binary.BigEndian.Uint64(b[n+19:]))
+	p.StepsRemoved = binary.BigEndian.Uint16(b[n+27:])
+	p.TimeSource = TimeSource(b[n+29])
+	pos := n + 30
+	// unmarshal TLVs if present
+	var err error
+	p.TLVs, err = readTLVs(p.TLVs, int(p.MessageLength)-pos, b[pos:])
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // MarshalBinary converts packet to []bytes
 func (p *Announce) MarshalBinary() ([]byte, error) {
-	buf := make([]byte, 64)
+	buf := make([]byte, 508)
 	n, err := p.MarshalBinaryTo(buf)
 	return buf[:n], err
 }

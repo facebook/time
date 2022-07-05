@@ -68,14 +68,6 @@ func TestProbeMsgType(t *testing.T) {
 	}
 }
 
-func TestTLVHeadType(t *testing.T) {
-	head := &TLVHead{
-		TLVType:     TLVRequestUnicastTransmission,
-		LengthField: 10,
-	}
-	require.Equal(t, TLVRequestUnicastTransmission, head.Type())
-}
-
 func TestMessageTypeString(t *testing.T) {
 	require.Equal(t, "SYNC", MessageSync.String())
 	require.Equal(t, "DELAY_REQ", MessageDelayReq.String())
@@ -167,6 +159,36 @@ func TestTimeIntervalNanoseconds(t *testing.T) {
 			// then convert time.Time we just got back to Timestamp
 			gotTI := NewTimeInterval(got)
 			assert.Equal(t, tt.in, gotTI)
+		})
+	}
+}
+
+func TestPTPSeconds(t *testing.T) {
+	tests := []struct {
+		in      PTPSeconds
+		want    time.Time
+		wantStr string
+	}{
+		{
+			in:      [6]byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x02},
+			want:    time.Unix(2, 0),
+			wantStr: fmt.Sprintf("PTPSeconds(%s)", time.Unix(2, 0)),
+		},
+		{
+			in:      [6]byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
+			want:    time.Time{},
+			wantStr: "PTPSeconds(empty)",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("PTPSeconds t=%d", tt.in), func(t *testing.T) {
+			// first, convert from PTPSeconds to time.Time
+			got := tt.in.Time()
+			require.Equal(t, tt.want, got)
+			require.Equal(t, tt.wantStr, tt.in.String())
+			// then convert time.Time we just got back to PTPSeconds
+			gotTS := NewPTPSeconds(got)
+			assert.Equal(t, tt.in, gotTS)
 		})
 	}
 }
