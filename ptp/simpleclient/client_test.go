@@ -88,7 +88,7 @@ func cancelUnicastPkt(seq int, clockID ptp.ClockIdentity, what ptp.MessageType) 
 }
 
 func announcePkt(seq int) *ptp.Announce {
-	l := binary.Size(ptp.Announce{}) + binary.Size(ptp.AnnounceBody{})
+	l := binary.Size(ptp.Header{}) + binary.Size(ptp.AnnounceBody{})
 	return &ptp.Announce{
 		Header: ptp.Header{
 			SdoIDAndMsgType:    ptp.NewSdoIDAndMsgType(ptp.MessageAnnounce, 0),

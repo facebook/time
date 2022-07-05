@@ -140,6 +140,7 @@ func TestSyncPacket(t *testing.T) {
 	sc.initSync()
 	sc.IncSequenceID()
 	sc.UpdateSync()
+	require.Equal(t, uint16(44), sc.Sync().Header.MessageLength) // check packet length
 	require.Equal(t, uint16(sequenceID+1), sc.Sync().Header.SequenceID)
 }
 
@@ -161,6 +162,7 @@ func TestFollowupPacket(t *testing.T) {
 	sc.initFollowup()
 	sc.IncSequenceID()
 	sc.UpdateFollowup(now)
+	require.Equal(t, uint16(44), sc.Followup().Header.MessageLength) // check packet length
 	require.Equal(t, sequenceID+1, sc.Followup().Header.SequenceID)
 	require.Equal(t, i, sc.Followup().Header.LogMessageInterval)
 	require.Equal(t, now.Unix(), sc.Followup().FollowUpBody.PreciseOriginTimestamp.Time().Unix())
@@ -191,6 +193,7 @@ func TestAnnouncePacket(t *testing.T) {
 	sc.initAnnounce()
 	sc.IncSequenceID()
 	sc.UpdateAnnounce()
+	require.Equal(t, uint16(64), sc.Announce().Header.MessageLength) // check packet length
 	require.Equal(t, sequenceID+1, sc.Announce().Header.SequenceID)
 	require.Equal(t, sp, sc.Announce().Header.SourcePortIdentity)
 	require.Equal(t, i, sc.Announce().Header.LogMessageInterval)
@@ -220,6 +223,7 @@ func TestDelayRespPacket(t *testing.T) {
 
 	sc.initDelayResp()
 	sc.UpdateDelayResp(h, now)
+	require.Equal(t, uint16(54), sc.DelayResp().Header.MessageLength) // check packet length
 	require.Equal(t, sequenceID, sc.DelayResp().Header.SequenceID)
 	require.Equal(t, 100500, int(sc.DelayResp().Header.CorrectionField.Nanoseconds()))
 	require.Equal(t, sp, sc.DelayResp().Header.SourcePortIdentity)
@@ -256,6 +260,7 @@ func TestGrantPacket(t *testing.T) {
 	sc.initGrant()
 	sc.UpdateGrant(sg, mt, i, duration)
 
+	require.Equal(t, uint16(56), sc.Grant().Header.MessageLength) // check packet length
 	require.Equal(t, tlv, sc.Grant().TLVs[0])
 
 }
