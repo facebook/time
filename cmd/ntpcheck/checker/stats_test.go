@@ -97,6 +97,7 @@ func TestNTPStatsNoSysPeer(t *testing.T) {
 		PeerPoll:    1 << 4,
 		PeerStratum: 3,
 		PeerJitter:  3.55,
+		PeerCount:   2,
 	}
 	require.Equal(t, want, stats)
 }
@@ -134,6 +135,7 @@ func TestNTPStatsWithSysPeer(t *testing.T) {
 		PeerPoll:    1 << 4,
 		PeerStratum: 4,
 		PeerJitter:  4,
+		PeerCount:   2,
 	}
 	require.Equal(t, want, stats)
 }

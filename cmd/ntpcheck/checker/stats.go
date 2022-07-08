@@ -23,7 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// NTPStats is what we want to report as stats for FBAgent to put into ODS
+// NTPStats are metrics for upstream reporting
 type NTPStats struct {
 	PeerDelay   float64 `json:"ntp.peer.delay"`    // sys.peer delay in ms
 	PeerPoll    int     `json:"ntp.peer.poll"`     // sys.peer poll in seconds
@@ -33,6 +33,7 @@ type NTPStats struct {
 	Frequency   float64 `json:"ntp.sys.frequency"` // clock frequency in PPM
 	StatError   bool    `json:"ntp.stat.error"`    // error reported in Leap Status
 	Correction  float64 `json:"ntp.correction"`    // current correction
+	PeerCount   int     `json:"ntp.peer.count"`    // number of upstream peers
 }
 
 // NewNTPStats constructs NTPStats from NTPCheckResult
@@ -97,6 +98,7 @@ func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 		Correction:  r.Correction,
 		// that's how ntpstat defines unsynchronized
 		StatError: r.LI == 3,
+		PeerCount: len(r.Peers),
 	}
 	return &output, nil
 }
