@@ -21,7 +21,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// NTPCheckResult represents result of NTPCheck run polulated with information about server and it's peers.
+// NTPCheckResult represents result of NTPCheck run populated with information about the server and its peers.
 type NTPCheckResult struct {
 	// parsed from SystemStatusWord
 	LI          uint8
