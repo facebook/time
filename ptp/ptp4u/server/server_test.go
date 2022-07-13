@@ -174,11 +174,30 @@ func TestHandleSighup(t *testing.T) {
 		},
 	}
 
-	c := &Config{}
+	c := &Config{
+		StaticConfig: StaticConfig{
+			SendWorkers: 1,
+			QueueSize:   10,
+		},
+	}
 	s := Server{
 		Config: c,
 		Stats:  stats.NewJSONStats(),
+		sw:     make([]*sendWorker, c.SendWorkers),
 	}
+	clipi := ptp.PortIdentity{
+		PortNumber:    1,
+		ClockIdentity: ptp.ClockIdentity(1234),
+	}
+
+	s.sw[0] = newSendWorker(0, s.Config, s.Stats)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	scA := NewSubscriptionClient(s.sw[0].queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	scS := NewSubscriptionClient(s.sw[0].queue, sa, sa, ptp.MessageSync, c, time.Second, time.Time{})
+	s.sw[0].RegisterSubscription(clipi, ptp.MessageAnnounce, scA)
+	s.sw[0].RegisterSubscription(clipi, ptp.MessageSync, scS)
+	require.Equal(t, 0, len(scA.queue))
+	require.Equal(t, 0, len(scS.queue))
 
 	cfg, err := ioutil.TempFile("", "ptp4u")
 	require.NoError(t, err)
@@ -207,6 +226,10 @@ utcoffset: "37s"
 	dcMux.Lock()
 	require.Equal(t, expected.DynamicConfig, c.DynamicConfig)
 	dcMux.Unlock()
+
+	// Make sure after we send SIGHUP we get the event in the Announce queue only
+	require.Equal(t, 1, len(scA.queue))
+	require.Equal(t, 1, len(scS.queue))
 }
 
 func TestHandleSigterm(t *testing.T) {

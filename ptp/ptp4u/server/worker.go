@@ -265,6 +265,17 @@ func (s *sendWorker) FindSubscription(clientID ptp.PortIdentity, st ptp.MessageT
 	return sub
 }
 
+// FindClients retrieves all clients for a particular subscription type
+func (s *sendWorker) FindClients(st ptp.MessageType) map[ptp.PortIdentity]*SubscriptionClient {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	m, ok := s.clients[st]
+	if !ok {
+		return nil
+	}
+	return m
+}
+
 // RegisterSubscription will overwrite an existing subscription.
 // Make sure you call findSubscription before this
 func (s *sendWorker) RegisterSubscription(clientID ptp.PortIdentity, st ptp.MessageType, sc *SubscriptionClient) {
