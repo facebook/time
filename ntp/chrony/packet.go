@@ -68,12 +68,13 @@ func (t PacketType) String() string {
 	}
 }
 
-// request types. Only those we suppor, there are more
+// request types. Only those we support, there are more
 const (
 	reqNSources    CommandType = 14
 	reqSourceData  CommandType = 15
 	reqTracking    CommandType = 33
 	reqSourceStats CommandType = 34
+	reqActivity    CommandType = 44
 	reqServerStats CommandType = 54
 	reqNTPData     CommandType = 57
 )
@@ -84,6 +85,7 @@ const (
 	rpySourceData   ReplyType = 3
 	rpyTracking     ReplyType = 5
 	rpySourceStats  ReplyType = 6
+	rpyActivity     ReplyType = 12
 	rpyServerStats  ReplyType = 14
 	rpyNTPData      ReplyType = 16
 	rpyServerStats2 ReplyType = 22
@@ -292,6 +294,13 @@ type RequestSourceStats struct {
 	EOR   int32
 	// we pass i32 - 4 bytes
 	data [maxDataLen - 4]uint8 //nolint:unused,structcheck
+}
+
+// RequestActivity - packet to request 'activity' data
+type RequestActivity struct {
+	RequestHead
+	// we actually need this to send proper packet
+	data [maxDataLen]uint8 //nolint:unused,structcheck
 }
 
 // ReplyHead is the first (common) part of the reply packet,
@@ -620,6 +629,21 @@ type ReplyServerStats2 struct {
 	ServerStats2
 }
 
+// Activity contains parsed version of 'activity' reply
+type Activity struct {
+	Online       int32
+	Offline      int32
+	BurstOnline  int32
+	BurstOffline int32
+	Unresolved   int32
+}
+
+// ReplyActivity is a usable version of 'activity' response
+type ReplyActivity struct {
+	ReplyHead
+	Activity
+}
+
 // here go request constuctors
 
 // NewSourcesPacket creates new packet to request number of sources (peers)
@@ -687,6 +711,17 @@ func NewServerStatsPacket() *RequestServerStats {
 			Version: protoVersionNumber,
 			PKTType: pktTypeCmdRequest,
 			Command: reqServerStats,
+		},
+	}
+}
+
+// NewActivityPacket creates new packet to request 'activity' information
+func NewActivityPacket() *RequestActivity {
+	return &RequestActivity{
+		RequestHead: RequestHead{
+			Version: protoVersionNumber,
+			PKTType: pktTypeCmdRequest,
+			Command: reqActivity,
 		},
 	}
 }
@@ -773,6 +808,16 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		return &ReplyServerStats2{
 			ReplyHead:    *head,
 			ServerStats2: *data,
+		}, nil
+	case rpyActivity:
+		data := new(Activity)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplyActivity{
+			ReplyHead: *head,
+			Activity:  *data,
 		}, nil
 	default:
 		return nil, fmt.Errorf("not implemented reply type %d from %+v", head.Reply, head)

@@ -327,6 +327,38 @@ func TestDecodeNTPData(t *testing.T) {
 	require.Equal(t, want, packet)
 }
 
+func TestDecodeActivity(t *testing.T) {
+	raw := []uint8{
+		0x06, 0x02, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x0c, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa7, 0xa8, 0x73, 0x83,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	}
+	packet, err := decodePacket(raw)
+	require.Nil(t, err)
+	want := &ReplyActivity{
+		ReplyHead: ReplyHead{
+			Version:  protoVersionNumber,
+			PKTType:  pktTypeCmdReply,
+			Res1:     0,
+			Res2:     0,
+			Command:  reqActivity,
+			Reply:    rpyActivity,
+			Status:   sttSuccess,
+			Sequence: 2812834691,
+		},
+		Activity: Activity{
+			Online:       4,
+			Offline:      0,
+			BurstOnline:  0,
+			BurstOffline: 0,
+			Unresolved:   0,
+		},
+	}
+	require.Equal(t, want, packet)
+}
+
 func TestSourceStateTypeToString(t *testing.T) {
 	v := SourceStateUnreach
 	got := v.String()
