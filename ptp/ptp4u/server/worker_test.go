@@ -102,7 +102,36 @@ func TestFindSubscription(t *testing.T) {
 	w.RegisterSubscription(sp, ptp.MessageAnnounce, sc)
 
 	sub := w.FindSubscription(sp, ptp.MessageAnnounce)
-	require.NotNil(t, sub)
+	require.Equal(t, sc, sub)
+}
+
+func TestFindClients(t *testing.T) {
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		StaticConfig: StaticConfig{
+			TimestampType: timestamp.SWTIMESTAMP,
+		},
+	}
+
+	w := &sendWorker{
+		id:      0,
+		queue:   make(chan *SubscriptionClient),
+		clients: make(map[ptp.MessageType]map[ptp.PortIdentity]*SubscriptionClient),
+	}
+
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Millisecond, time.Now().Add(time.Second))
+
+	sp := ptp.PortIdentity{
+		PortNumber:    1,
+		ClockIdentity: ptp.ClockIdentity(1234),
+	}
+
+	w.RegisterSubscription(sp, ptp.MessageAnnounce, sc)
+
+	cli := w.FindClients(ptp.MessageAnnounce)
+
+	require.Equal(t, sc, cli[sp])
 }
 
 func TestInventoryClients(t *testing.T) {
