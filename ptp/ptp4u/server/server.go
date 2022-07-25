@@ -370,12 +370,21 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 							continue
 						}
 
+						// Send confirmation grant
+						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
+
 						if !sc.Running() {
 							go sc.Start(s.ctx)
 						}
-
-						// Send confirmation grant
-						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
+						// Send 3 announce messages to allow quick restart of ptp4l
+						// https://sourceforge.net/p/linuxptp/mailman/message/37685839/
+						// https://github.com/richardcochran/linuxptp/blob/ef9ba9489c2f664ea34e5e4dbddbb76cddef5254/foreign.h#L28
+						// https://github.com/richardcochran/linuxptp/blob/33ac7d25cd9212e79be6f7023ba18cfa5020e35b/port.c#L2546
+						if signaling.Header.SequenceID == 0 && grantType == ptp.MessageAnnounce {
+							for i := 0; i < 3; i++ {
+								sc.Once()
+							}
+						}
 					default:
 						log.Errorf("Got unsupported grant type %s", grantType)
 					}
