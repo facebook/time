@@ -83,7 +83,7 @@ func (s *sendWorker) listen() (eventFD, generalFD int, err error) {
 		return -1, -1, fmt.Errorf("failed to set SO_REUSEPORT on event socket: %w", err)
 	}
 	// bind to any ephemeral port
-	if err := unix.Bind(eventFD, sockAddrAnyPort); err != nil {
+	if err = unix.Bind(eventFD, sockAddrAnyPort); err != nil {
 		return -1, -1, fmt.Errorf("unable to bind event socket connection: %w", err)
 	}
 
@@ -108,11 +108,11 @@ func (s *sendWorker) listen() (eventFD, generalFD int, err error) {
 	// Syncs sent from event port, so need to turn on timestamping here
 	switch s.config.TimestampType {
 	case timestamp.HWTIMESTAMP:
-		if err := timestamp.EnableHWTimestamps(eventFD, s.config.Interface); err != nil {
+		if err = timestamp.EnableHWTimestamps(eventFD, s.config.Interface); err != nil {
 			return -1, -1, fmt.Errorf("failed to enable RX hardware timestamps: %w", err)
 		}
 	case timestamp.SWTIMESTAMP:
-		if err := timestamp.EnableSWTimestamps(eventFD); err != nil {
+		if err = timestamp.EnableSWTimestamps(eventFD); err != nil {
 			return -1, -1, fmt.Errorf("unable to enable RX software timestamps: %w", err)
 		}
 	default:
@@ -130,7 +130,7 @@ func (s *sendWorker) listen() (eventFD, generalFD int, err error) {
 		return -1, -1, fmt.Errorf("failed to set SO_REUSEPORT on general socket: %w", err)
 	}
 	// bind to any ephemeral port
-	if err := unix.Bind(generalFD, sockAddrAnyPort); err != nil {
+	if err = unix.Bind(generalFD, sockAddrAnyPort); err != nil {
 		return -1, -1, fmt.Errorf("binding event socket connection: %w", err)
 	}
 	// enable DSCP

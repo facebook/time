@@ -67,8 +67,8 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	c.subscriptions.store(1, 1)
 	c.rx.store(1, 1)
 	c.tx.store(1, 1)
-	c.rxSignaling.store(1, 1)
-	c.txSignaling.store(1, 1)
+	c.rxSignalingGrant.store(1, 1)
+	c.txSignalingCancel.store(1, 1)
 	c.workerQueue.store(1, 1)
 	c.workerSubs.store(1, 1)
 	c.txtsattempts.store(1, 1)
@@ -81,8 +81,8 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	require.Equal(t, int64(1), c.subscriptions.load(1))
 	require.Equal(t, int64(1), c.rx.load(1))
 	require.Equal(t, int64(1), c.tx.load(1))
-	require.Equal(t, int64(1), c.rxSignaling.load(1))
-	require.Equal(t, int64(1), c.txSignaling.load(1))
+	require.Equal(t, int64(1), c.rxSignalingGrant.load(1))
+	require.Equal(t, int64(1), c.txSignalingCancel.load(1))
 	require.Equal(t, int64(1), c.workerQueue.load(1))
 	require.Equal(t, int64(1), c.workerSubs.load(1))
 	require.Equal(t, int64(1), c.txtsattempts.load(1))
@@ -97,8 +97,8 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	require.Equal(t, int64(0), c.subscriptions.load(1))
 	require.Equal(t, int64(0), c.rx.load(1))
 	require.Equal(t, int64(0), c.tx.load(1))
-	require.Equal(t, int64(0), c.rxSignaling.load(1))
-	require.Equal(t, int64(0), c.txSignaling.load(1))
+	require.Equal(t, int64(0), c.rxSignalingGrant.load(1))
+	require.Equal(t, int64(0), c.txSignalingCancel.load(1))
 	require.Equal(t, int64(0), c.workerQueue.load(1))
 	require.Equal(t, int64(0), c.workerSubs.load(1))
 	require.Equal(t, int64(0), c.txtsattempts.load(1))
@@ -115,7 +115,8 @@ func TestCountersToMap(t *testing.T) {
 
 	c.subscriptions.store(int(ptp.MessageAnnounce), 1)
 	c.tx.store(int(ptp.MessageSync), 2)
-	c.rxSignaling.store(int(ptp.MessageDelayResp), 3)
+	c.rxSignalingGrant.store(int(ptp.MessageDelayResp), 3)
+	c.rxSignalingCancel.store(int(ptp.MessageSync), 1)
 	c.utcoffsetSec = 1
 	c.clockaccuracy = 42
 	c.clockclass = 6
@@ -127,7 +128,8 @@ func TestCountersToMap(t *testing.T) {
 	expectedMap := make(map[string]int64)
 	expectedMap["subscriptions.announce"] = 1
 	expectedMap["tx.sync"] = 2
-	expectedMap["rx.signaling.delay_resp"] = 3
+	expectedMap["rx.signaling.grant.delay_resp"] = 3
+	expectedMap["rx.signaling.cancel.sync"] = 1
 	expectedMap["utcoffset_sec"] = 1
 	expectedMap["clockaccuracy"] = 42
 	expectedMap["clockclass"] = 6

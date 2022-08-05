@@ -182,12 +182,12 @@ func TestInventoryClients(t *testing.T) {
 	require.Equal(t, 2, len(w.clients[ptp.MessageSync]))
 
 	// Shutting down
-	scS1.setExpire(time.Now())
+	scS1.SetExpire(time.Now())
 	time.Sleep(50 * time.Millisecond)
 	w.inventoryClients()
 	require.Equal(t, 1, len(w.clients[ptp.MessageSync]))
 
-	scA1.setExpire(time.Now())
+	scA1.SetExpire(time.Now())
 	time.Sleep(50 * time.Millisecond)
 	w.inventoryClients()
 	require.Equal(t, 0, len(w.clients[ptp.MessageAnnounce]))

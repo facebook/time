@@ -174,11 +174,11 @@ func (s *Server) startEventListener() {
 	// Enable RX timestamps. Delay requests need to be timestamped by ptp4u on receipt
 	switch s.Config.TimestampType {
 	case timestamp.HWTIMESTAMP:
-		if err := timestamp.EnableHWTimestamps(s.eFd, s.Config.Interface); err != nil {
+		if err = timestamp.EnableHWTimestamps(s.eFd, s.Config.Interface); err != nil {
 			log.Fatalf("Cannot enable hardware RX timestamps: %v", err)
 		}
 	case timestamp.SWTIMESTAMP:
-		if err := timestamp.EnableSWTimestamps(s.eFd); err != nil {
+		if err = timestamp.EnableSWTimestamps(s.eFd); err != nil {
 			log.Fatalf("Cannot enable software RX timestamps: %v", err)
 		}
 	default:
@@ -350,18 +350,18 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 					case ptp.MessageAnnounce, ptp.MessageSync, ptp.MessageDelayResp:
 						worker = s.findWorker(signaling.SourcePortIdentity, r)
 						sc = worker.FindSubscription(signaling.SourcePortIdentity, grantType)
-						if sc == nil {
+						if sc == nil || !sc.Running() {
 							ip := timestamp.SockaddrToIP(gclisa)
 							eclisa := timestamp.IPToSockaddr(ip, ptp.PortEvent)
 							sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
 							worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
 						} else {
 							// Update existing subscription data
-							sc.expire = expire
-							sc.interval = intervalt
+							sc.SetExpire(expire)
+							sc.SetInterval(intervalt)
 							// Update gclisa in case of renewal. This is against the standard,
 							// but we want to be able to respond to DelayResps coming from ephemeral ports
-							sc.gclisa = gclisa
+							sc.SetGclisa(gclisa)
 						}
 
 						// Reject queries out of limit
@@ -376,19 +376,10 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 						if !sc.Running() {
 							go sc.Start(s.ctx)
 						}
-						// Send 2 announce messages to allow quick restart of ptp4l
-						// https://sourceforge.net/p/linuxptp/mailman/message/37685839/
-						// https://github.com/richardcochran/linuxptp/blob/ef9ba9489c2f664ea34e5e4dbddbb76cddef5254/foreign.h#L28
-						// https://github.com/richardcochran/linuxptp/blob/33ac7d25cd9212e79be6f7023ba18cfa5020e35b/port.c#L2546
-						if signaling.Header.SequenceID == 0 && grantType == ptp.MessageAnnounce {
-							for i := 0; i < 2; i++ {
-								sc.Once()
-							}
-						}
 					default:
 						log.Errorf("Got unsupported grant type %s", grantType)
 					}
-					s.Stats.IncRXSignaling(grantType)
+					s.Stats.IncRXSignalingGrant(grantType)
 				case *ptp.CancelUnicastTransmissionTLV:
 					grantType = v.MsgTypeAndFlags.MsgType()
 					log.Debugf("Got %s cancel request", grantType)
@@ -397,6 +388,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 					if sc != nil {
 						sc.Stop()
 					}
+					s.Stats.IncRXSignalingCancel(grantType)
 				default:
 					log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)
 				}
@@ -425,7 +417,7 @@ func (s *Server) sendGrant(sc *SubscriptionClient, sg *ptp.Signaling, mt ptp.Uni
 		return
 	}
 	log.Debugf("Sent unicast grant")
-	s.Stats.IncTXSignaling(sc.subscriptionType)
+	s.Stats.IncTXSignalingGrant(sc.subscriptionType)
 }
 
 // Drain traffic
@@ -463,7 +455,7 @@ func (s *Server) handleSighup() {
 		for _, worker := range s.sw {
 			clients := worker.FindClients(ptp.MessageAnnounce)
 			for _, sc := range clients {
-				sc.Once()
+				sc.Reload()
 			}
 		}
 		s.Stats.IncReload()

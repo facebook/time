@@ -30,16 +30,19 @@ import (
 func TestJSONStatsReset(t *testing.T) {
 	stats := JSONStats{}
 	stats.subscriptions.init()
-	stats.rxSignaling.init()
+	stats.rxSignalingGrant.init()
+	stats.rxSignalingCancel.init()
 	stats.workerQueue.init()
 
 	stats.IncSubscription(ptp.MessageAnnounce)
-	stats.IncRXSignaling(ptp.MessageSync)
+	stats.IncRXSignalingGrant(ptp.MessageSync)
+	stats.IncRXSignalingCancel(ptp.MessageSync)
 	stats.SetMaxWorkerQueue(10, 42)
 
 	stats.Reset()
 	require.Equal(t, int64(0), stats.subscriptions.load(int(ptp.MessageAnnounce)))
-	require.Equal(t, int64(0), stats.rxSignaling.load(int(ptp.MessageSync)))
+	require.Equal(t, int64(0), stats.rxSignalingGrant.load(int(ptp.MessageSync)))
+	require.Equal(t, int64(0), stats.rxSignalingCancel.load(int(ptp.MessageSync)))
 	require.Equal(t, int64(0), stats.workerQueue.load(10))
 }
 
@@ -86,21 +89,29 @@ func TestJSONStatsTX(t *testing.T) {
 func TestJSONStatsRXSignaling(t *testing.T) {
 	stats := NewJSONStats()
 
-	stats.IncRXSignaling(ptp.MessageSync)
-	require.Equal(t, int64(1), stats.rxSignaling.load(int(ptp.MessageSync)))
+	stats.IncRXSignalingGrant(ptp.MessageSync)
+	stats.IncRXSignalingCancel(ptp.MessageSync)
+	require.Equal(t, int64(1), stats.rxSignalingGrant.load(int(ptp.MessageSync)))
+	require.Equal(t, int64(1), stats.rxSignalingCancel.load(int(ptp.MessageSync)))
 
-	stats.DecRXSignaling(ptp.MessageSync)
-	require.Equal(t, int64(0), stats.rxSignaling.load(int(ptp.MessageSync)))
+	stats.DecRXSignalingGrant(ptp.MessageSync)
+	stats.DecRXSignalingCancel(ptp.MessageSync)
+	require.Equal(t, int64(0), stats.rxSignalingGrant.load(int(ptp.MessageSync)))
+	require.Equal(t, int64(0), stats.rxSignalingCancel.load(int(ptp.MessageSync)))
 }
 
 func TestJSONStatsTXSignaling(t *testing.T) {
 	stats := NewJSONStats()
 
-	stats.IncTXSignaling(ptp.MessageSync)
-	require.Equal(t, int64(1), stats.txSignaling.load(int(ptp.MessageSync)))
+	stats.IncTXSignalingGrant(ptp.MessageSync)
+	stats.IncTXSignalingCancel(ptp.MessageSync)
+	require.Equal(t, int64(1), stats.txSignalingGrant.load(int(ptp.MessageSync)))
+	require.Equal(t, int64(1), stats.txSignalingCancel.load(int(ptp.MessageSync)))
 
-	stats.DecTXSignaling(ptp.MessageSync)
-	require.Equal(t, int64(0), stats.txSignaling.load(int(ptp.MessageSync)))
+	stats.DecTXSignalingGrant(ptp.MessageSync)
+	stats.DecTXSignalingCancel(ptp.MessageSync)
+	require.Equal(t, int64(0), stats.txSignalingGrant.load(int(ptp.MessageSync)))
+	require.Equal(t, int64(0), stats.txSignalingCancel.load(int(ptp.MessageSync)))
 }
 
 func TestJSONStatsSetMaxWorkerQueue(t *testing.T) {
@@ -164,9 +175,9 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	stats.IncSubscription(ptp.MessageAnnounce)
 	stats.IncTX(ptp.MessageSync)
 	stats.IncTX(ptp.MessageSync)
-	stats.IncRXSignaling(ptp.MessageDelayResp)
-	stats.IncRXSignaling(ptp.MessageDelayResp)
-	stats.IncRXSignaling(ptp.MessageDelayResp)
+	stats.IncRXSignalingGrant(ptp.MessageDelayResp)
+	stats.IncRXSignalingGrant(ptp.MessageDelayResp)
+	stats.IncRXSignalingGrant(ptp.MessageDelayResp)
 	stats.SetClockAccuracy(1)
 	stats.SetClockClass(1)
 	stats.SetUTCOffsetSec(1)
@@ -179,7 +190,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	expectedStats.init()
 	expectedStats.subscriptions.store(int(ptp.MessageAnnounce), 1)
 	expectedStats.tx.store(int(ptp.MessageSync), 2)
-	expectedStats.rxSignaling.store(int(ptp.MessageDelayResp), 3)
+	expectedStats.rxSignalingGrant.store(int(ptp.MessageDelayResp), 3)
 	expectedStats.utcoffsetSec = 1
 	expectedStats.clockaccuracy = 1
 	expectedStats.clockclass = 1
@@ -188,7 +199,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 
 	require.Equal(t, expectedStats.subscriptions.m, stats.report.subscriptions.m)
 	require.Equal(t, expectedStats.tx.m, stats.report.tx.m)
-	require.Equal(t, expectedStats.rxSignaling.m, stats.report.rxSignaling.m)
+	require.Equal(t, expectedStats.rxSignalingGrant.m, stats.report.rxSignalingGrant.m)
 	require.Equal(t, expectedStats.utcoffsetSec, stats.report.utcoffsetSec)
 	require.Equal(t, expectedStats.clockaccuracy, stats.report.clockaccuracy)
 	require.Equal(t, expectedStats.clockclass, stats.report.clockclass)
@@ -205,9 +216,11 @@ func TestJSONExport(t *testing.T) {
 	stats.IncSubscription(ptp.MessageAnnounce)
 	stats.IncTX(ptp.MessageSync)
 	stats.IncTX(ptp.MessageSync)
-	stats.IncRXSignaling(ptp.MessageDelayResp)
-	stats.IncRXSignaling(ptp.MessageDelayResp)
-	stats.IncRXSignaling(ptp.MessageDelayResp)
+	stats.IncRXSignalingGrant(ptp.MessageDelayResp)
+	stats.IncRXSignalingGrant(ptp.MessageDelayResp)
+	stats.IncRXSignalingGrant(ptp.MessageDelayResp)
+	stats.IncRXSignalingCancel(ptp.MessageSync)
+	stats.IncRXSignalingCancel(ptp.MessageSync)
 	stats.SetUTCOffsetSec(1)
 	stats.SetClockAccuracy(1)
 	stats.SetClockClass(1)
@@ -230,7 +243,8 @@ func TestJSONExport(t *testing.T) {
 	expectedMap := make(map[string]int64)
 	expectedMap["subscriptions.announce"] = 1
 	expectedMap["tx.sync"] = 2
-	expectedMap["rx.signaling.delay_resp"] = 3
+	expectedMap["rx.signaling.grant.delay_resp"] = 3
+	expectedMap["rx.signaling.cancel.sync"] = 2
 	expectedMap["utcoffset_sec"] = 1
 	expectedMap["clockaccuracy"] = 1
 	expectedMap["clockclass"] = 1
