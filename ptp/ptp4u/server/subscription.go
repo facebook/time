@@ -45,6 +45,10 @@ type SubscriptionClient struct {
 	expire     time.Time
 	sequenceID uint16
 	running    bool
+	reload     chan bool
+
+	runningInterval time.Duration
+	intervalTicker  *time.Ticker
 
 	// socket addresses
 	eclisa unix.Sockaddr
@@ -68,8 +72,8 @@ func NewSubscriptionClient(q chan *SubscriptionClient, eclisa, gclisa unix.Socka
 		expire:           e,
 		queue:            q,
 		serverConfig:     sc,
+		reload:           make(chan bool, 10),
 	}
-
 	s.initSync()
 	s.initFollowup()
 	s.initAnnounce()
@@ -83,17 +87,25 @@ func NewSubscriptionClient(q chan *SubscriptionClient, eclisa, gclisa unix.Socka
 func (sc *SubscriptionClient) Start(ctx context.Context) {
 	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa))
 	sc.setRunning(true)
-
 	over := fmt.Sprintf("Subscription %s is over for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa))
+
 	// Send first message right away
-	if sc.subscriptionType != ptp.MessageDelayResp {
-		sc.Once()
+	sc.reload <- true
+
+	// Send 2 announce additional messages to allow quick restart of ptp4l
+	// https://sourceforge.net/p/linuxptp/mailman/message/37685839/
+	// https://github.com/richardcochran/linuxptp/blob/ef9ba9489c2f664ea34e5e4dbddbb76cddef5254/foreign.h#L28
+	// https://github.com/richardcochran/linuxptp/blob/33ac7d25cd9212e79be6f7023ba18cfa5020e35b/port.c#L2546
+	if sc.subscriptionType == ptp.MessageAnnounce {
+		for i := 0; i < 2; i++ {
+			sc.reload <- true
+		}
 	}
 
-	intervalTicker := time.NewTicker(sc.interval)
-	oldInterval := sc.interval
+	sc.runningInterval = sc.interval
+	sc.intervalTicker = time.NewTicker(sc.runningInterval)
 
-	defer intervalTicker.Stop()
+	defer sc.intervalTicker.Stop()
 	defer sc.setRunning(false)
 
 	for {
@@ -102,29 +114,51 @@ func (sc *SubscriptionClient) Start(ctx context.Context) {
 			log.Infof(over)
 			// TODO send cancellation
 			return
-
-		case <-intervalTicker.C:
-			if sc.Expired() {
+		case <-sc.reload:
+			if !sc.run() {
 				log.Infof(over)
-				// TODO send cancellation
 				return
 			}
-			// check if interval changed, maybe update our ticker
-			if oldInterval != sc.interval {
-				intervalTicker.Reset(sc.interval)
-				oldInterval = sc.interval
-			}
-			if sc.subscriptionType != ptp.MessageDelayResp {
-				// Add myself to the worker queue
-				sc.Once()
+		case <-sc.intervalTicker.C:
+			if !sc.run() {
+				log.Infof(over)
+				return
 			}
 		}
 	}
 }
 
+// run validates the subsciption and executes it
+func (sc *SubscriptionClient) run() bool {
+	if sc.Expired() {
+		// TODO send cancellation
+		return false
+	}
+	// check if interval changed, maybe update our ticker
+	if sc.runningInterval != sc.interval {
+		sc.runningInterval = sc.interval
+		sc.intervalTicker.Reset(sc.runningInterval)
+	}
+	if sc.subscriptionType != ptp.MessageDelayResp {
+		// Add myself to the worker queue
+		sc.Once()
+	}
+	return true
+}
+
 // Once adds itself to the worker queue once
 func (sc *SubscriptionClient) Once() {
 	sc.queue <- sc
+}
+
+// Once adds itself to the worker queue once
+func (sc *SubscriptionClient) Reload() {
+	sc.Lock()
+	defer sc.Unlock()
+
+	if sc.running {
+		sc.reload <- true
+	}
 }
 
 // Expired checks if the subscription expired or not
@@ -140,6 +174,10 @@ func (sc *SubscriptionClient) Stop() {
 	defer sc.Unlock()
 	// Simply set the expiration time and subscription will be stopped
 	sc.expire = time.Now()
+	// And demand subscription reload
+	if sc.running {
+		sc.reload <- true
+	}
 }
 
 // setRunning atomically sets running
@@ -149,18 +187,25 @@ func (sc *SubscriptionClient) setRunning(running bool) {
 	sc.running = running
 }
 
-// setExpire atomically sets expire
-func (sc *SubscriptionClient) setExpire(expire time.Time) {
+// SetExpire atomically sets expire
+func (sc *SubscriptionClient) SetExpire(expire time.Time) {
 	sc.Lock()
 	defer sc.Unlock()
 	sc.expire = expire
 }
 
-// setInterval atomically sets interval
-func (sc *SubscriptionClient) setInterval(interval time.Duration) {
+// SetInterval atomically sets interval
+func (sc *SubscriptionClient) SetInterval(interval time.Duration) {
 	sc.Lock()
 	defer sc.Unlock()
 	sc.interval = interval
+}
+
+// SetGclisa atomically sets gclisa
+func (sc *SubscriptionClient) SetGclisa(gclisa unix.Sockaddr) {
+	sc.Lock()
+	defer sc.Unlock()
+	sc.gclisa = gclisa
 }
 
 // Running returns the running bool

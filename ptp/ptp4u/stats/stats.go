@@ -50,11 +50,17 @@ type Stats interface {
 	// IncTX atomically add 1 to the counter
 	IncTX(t ptp.MessageType)
 
-	// IncRXSignaling atomically add 1 to the counter
-	IncRXSignaling(t ptp.MessageType)
+	// IncRXSignalingGrant atomically add 1 to the counter
+	IncRXSignalingGrant(t ptp.MessageType)
 
-	// IncTXSignaling atomically add 1 to the counter
-	IncTXSignaling(t ptp.MessageType)
+	// IncRXSignalingCancel atomically add 1 to the counter
+	IncRXSignalingCancel(t ptp.MessageType)
+
+	// IncTXSignalingGrant atomically add 1 to the counter
+	IncTXSignalingGrant(t ptp.MessageType)
+
+	// IncTXSignalingCancel atomically add 1 to the counter
+	IncTXSignalingCancel(t ptp.MessageType)
 
 	// IncWorkerSubs atomically add 1 to the counter
 	IncWorkerSubs(workerid int)
@@ -71,11 +77,17 @@ type Stats interface {
 	// DecTX atomically removes 1 from the counter
 	DecTX(t ptp.MessageType)
 
-	// DecRXSignaling atomically removes 1 from the counter
-	DecRXSignaling(t ptp.MessageType)
+	// DecRXSignalingGrant atomically removes 1 from the counter
+	DecRXSignalingGrant(t ptp.MessageType)
 
-	// DecTXSignaling atomically removes 1 from the counter
-	DecTXSignaling(t ptp.MessageType)
+	// DecRXSignalingCancel atomically removes 1 from the counter
+	DecRXSignalingCancel(t ptp.MessageType)
+
+	// DecTXSignalingGrant atomically removes 1 from the counter
+	DecTXSignalingGrant(t ptp.MessageType)
+
+	// DecTXSignalingCancel atomically removes 1 from the counter
+	DecTXSignalingCancel(t ptp.MessageType)
 
 	// DecWorkerSubs atomically removes 1 from the counter
 	DecWorkerSubs(workerid int)
@@ -167,27 +179,31 @@ func (s *syncMapInt64) reset() {
 }
 
 type counters struct {
-	rx            syncMapInt64
-	rxSignaling   syncMapInt64
-	subscriptions syncMapInt64
-	tx            syncMapInt64
-	txSignaling   syncMapInt64
-	txtsattempts  syncMapInt64
-	workerQueue   syncMapInt64
-	workerSubs    syncMapInt64
-	utcoffsetSec  int64
-	clockaccuracy int64
-	clockclass    int64
-	drain         int64
-	reload        int64
+	rx                syncMapInt64
+	rxSignalingGrant  syncMapInt64
+	rxSignalingCancel syncMapInt64
+	subscriptions     syncMapInt64
+	tx                syncMapInt64
+	txSignalingGrant  syncMapInt64
+	txSignalingCancel syncMapInt64
+	txtsattempts      syncMapInt64
+	workerQueue       syncMapInt64
+	workerSubs        syncMapInt64
+	utcoffsetSec      int64
+	clockaccuracy     int64
+	clockclass        int64
+	drain             int64
+	reload            int64
 }
 
 func (c *counters) init() {
 	c.subscriptions.init()
 	c.rx.init()
 	c.tx.init()
-	c.rxSignaling.init()
-	c.txSignaling.init()
+	c.rxSignalingGrant.init()
+	c.rxSignalingCancel.init()
+	c.txSignalingGrant.init()
+	c.txSignalingCancel.init()
 	c.workerQueue.init()
 	c.workerSubs.init()
 	c.txtsattempts.init()
@@ -197,8 +213,10 @@ func (c *counters) reset() {
 	c.subscriptions.reset()
 	c.rx.reset()
 	c.tx.reset()
-	c.rxSignaling.reset()
-	c.txSignaling.reset()
+	c.rxSignalingGrant.reset()
+	c.rxSignalingCancel.reset()
+	c.txSignalingGrant.reset()
+	c.txSignalingCancel.reset()
 	c.workerQueue.reset()
 	c.workerSubs.reset()
 	c.txtsattempts.reset()
@@ -231,16 +249,28 @@ func (c *counters) toMap() (export map[string]int64) {
 		res[fmt.Sprintf("tx.%s", mt)] = c
 	}
 
-	for _, t := range c.rxSignaling.keys() {
-		c := c.rxSignaling.load(t)
+	for _, t := range c.rxSignalingGrant.keys() {
+		c := c.rxSignalingGrant.load(t)
 		mt := strings.ToLower(ptp.MessageType(t).String())
-		res[fmt.Sprintf("rx.signaling.%s", mt)] = c
+		res[fmt.Sprintf("rx.signaling.grant.%s", mt)] = c
 	}
 
-	for _, t := range c.txSignaling.keys() {
-		c := c.txSignaling.load(t)
+	for _, t := range c.rxSignalingCancel.keys() {
+		c := c.rxSignalingCancel.load(t)
 		mt := strings.ToLower(ptp.MessageType(t).String())
-		res[fmt.Sprintf("tx.signaling.%s", mt)] = c
+		res[fmt.Sprintf("rx.signaling.cancel.%s", mt)] = c
+	}
+
+	for _, t := range c.txSignalingGrant.keys() {
+		c := c.txSignalingGrant.load(t)
+		mt := strings.ToLower(ptp.MessageType(t).String())
+		res[fmt.Sprintf("tx.signaling.grant.%s", mt)] = c
+	}
+
+	for _, t := range c.txSignalingCancel.keys() {
+		c := c.txSignalingCancel.load(t)
+		mt := strings.ToLower(ptp.MessageType(t).String())
+		res[fmt.Sprintf("tx.signaling.cancel.%s", mt)] = c
 	}
 
 	for _, t := range c.workerQueue.keys() {

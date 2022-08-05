@@ -60,8 +60,10 @@ func (s *JSONStats) Snapshot() {
 	s.subscriptions.copy(&s.report.subscriptions)
 	s.rx.copy(&s.report.rx)
 	s.tx.copy(&s.report.tx)
-	s.rxSignaling.copy(&s.report.rxSignaling)
-	s.txSignaling.copy(&s.report.txSignaling)
+	s.rxSignalingGrant.copy(&s.report.rxSignalingGrant)
+	s.rxSignalingCancel.copy(&s.report.rxSignalingCancel)
+	s.txSignalingGrant.copy(&s.report.txSignalingGrant)
+	s.txSignalingCancel.copy(&s.report.txSignalingCancel)
 	s.workerQueue.copy(&s.report.workerQueue)
 	s.workerSubs.copy(&s.report.workerSubs)
 	s.txtsattempts.copy(&s.report.txtsattempts)
@@ -105,14 +107,24 @@ func (s *JSONStats) IncTX(t ptp.MessageType) {
 	s.tx.inc(int(t))
 }
 
-// IncRXSignaling atomically add 1 to the counter
-func (s *JSONStats) IncRXSignaling(t ptp.MessageType) {
-	s.rxSignaling.inc(int(t))
+// IncRXSignalingGrant atomically add 1 to the counter
+func (s *JSONStats) IncRXSignalingGrant(t ptp.MessageType) {
+	s.rxSignalingGrant.inc(int(t))
 }
 
-// IncTXSignaling atomically add 1 to the counter
-func (s *JSONStats) IncTXSignaling(t ptp.MessageType) {
-	s.txSignaling.inc(int(t))
+// IncRXSignalingCancel atomically add 1 to the counter
+func (s *JSONStats) IncRXSignalingCancel(t ptp.MessageType) {
+	s.rxSignalingCancel.inc(int(t))
+}
+
+// IncTXSignalingGrant atomically add 1 to the counter
+func (s *JSONStats) IncTXSignalingGrant(t ptp.MessageType) {
+	s.txSignalingGrant.inc(int(t))
+}
+
+// IncTXSignalingCancel atomically add 1 to the counter
+func (s *JSONStats) IncTXSignalingCancel(t ptp.MessageType) {
+	s.txSignalingCancel.inc(int(t))
 }
 
 // IncWorkerSubs atomically add 1 to the counter
@@ -140,14 +152,24 @@ func (s *JSONStats) DecTX(t ptp.MessageType) {
 	s.tx.dec(int(t))
 }
 
-// DecRXSignaling atomically removes 1 from the counter
-func (s *JSONStats) DecRXSignaling(t ptp.MessageType) {
-	s.rxSignaling.dec(int(t))
+// DecRXSignalingGrant atomically removes 1 from the counter
+func (s *JSONStats) DecRXSignalingGrant(t ptp.MessageType) {
+	s.rxSignalingGrant.dec(int(t))
 }
 
-// DecTXSignaling atomically removes 1 from the counter
-func (s *JSONStats) DecTXSignaling(t ptp.MessageType) {
-	s.txSignaling.dec(int(t))
+// DecRXSignalingCancel atomically removes 1 from the counter
+func (s *JSONStats) DecRXSignalingCancel(t ptp.MessageType) {
+	s.rxSignalingCancel.dec(int(t))
+}
+
+// DecTXSignalingGrant atomically removes 1 from the counter
+func (s *JSONStats) DecTXSignalingGrant(t ptp.MessageType) {
+	s.txSignalingGrant.dec(int(t))
+}
+
+// DecTXSignalingCancel atomically removes 1 from the counter
+func (s *JSONStats) DecTXSignalingCancel(t ptp.MessageType) {
+	s.txSignalingCancel.dec(int(t))
 }
 
 // DecWorkerSubs atomically removes 1 from the counter
