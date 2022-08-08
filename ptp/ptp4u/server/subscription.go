@@ -15,8 +15,7 @@ limitations under the License.
 */
 
 /*
-Package server implements simple UDP server to work with NTP packets.
-In addition, it run checker, announce and stats implementations
+Package server implements simple Unicast PTP UDP server.
 */
 package server
 
@@ -38,6 +37,7 @@ type SubscriptionClient struct {
 	sync.Mutex
 
 	queue            chan *SubscriptionClient
+	grantQueue       chan *SubscriptionClient
 	subscriptionType ptp.MessageType
 	serverConfig     *Config
 
@@ -63,7 +63,7 @@ type SubscriptionClient struct {
 }
 
 // NewSubscriptionClient gets minimal required arguments to create a subscription
-func NewSubscriptionClient(q chan *SubscriptionClient, eclisa, gclisa unix.Sockaddr, st ptp.MessageType, sc *Config, i time.Duration, e time.Time) *SubscriptionClient {
+func NewSubscriptionClient(q chan *SubscriptionClient, gq chan *SubscriptionClient, eclisa, gclisa unix.Sockaddr, st ptp.MessageType, sc *Config, i time.Duration, e time.Time) *SubscriptionClient {
 	s := &SubscriptionClient{
 		eclisa:           eclisa,
 		gclisa:           gclisa,
@@ -71,6 +71,7 @@ func NewSubscriptionClient(q chan *SubscriptionClient, eclisa, gclisa unix.Socka
 		interval:         i,
 		expire:           e,
 		queue:            q,
+		grantQueue:       gq,
 		serverConfig:     sc,
 		reload:           make(chan bool, 10),
 	}
@@ -92,14 +93,12 @@ func (sc *SubscriptionClient) Start(ctx context.Context) {
 	// Send first message right away
 	sc.reload <- true
 
-	// Send 2 announce additional messages to allow quick restart of ptp4l
+	// Send 1 announce additional messages to allow quicker restart of ptp4l
 	// https://sourceforge.net/p/linuxptp/mailman/message/37685839/
 	// https://github.com/richardcochran/linuxptp/blob/ef9ba9489c2f664ea34e5e4dbddbb76cddef5254/foreign.h#L28
 	// https://github.com/richardcochran/linuxptp/blob/33ac7d25cd9212e79be6f7023ba18cfa5020e35b/port.c#L2546
 	if sc.subscriptionType == ptp.MessageAnnounce {
-		for i := 0; i < 2; i++ {
-			sc.reload <- true
-		}
+		sc.reload <- true
 	}
 
 	sc.runningInterval = sc.interval
@@ -149,6 +148,11 @@ func (sc *SubscriptionClient) run() bool {
 // Once adds itself to the worker queue once
 func (sc *SubscriptionClient) Once() {
 	sc.queue <- sc
+}
+
+// OnceGrant adds itself to the worker grant queue once
+func (sc *SubscriptionClient) OnceGrant() {
+	sc.grantQueue <- sc
 }
 
 // Once adds itself to the worker queue once

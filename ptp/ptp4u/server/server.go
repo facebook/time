@@ -15,8 +15,7 @@ limitations under the License.
 */
 
 /*
-Package server implements simple UDP server to work with NTP packets.
-In addition, it run checker, announce and stats implementations
+Package server implements simple Unicast PTP UDP server.
 */
 package server
 
@@ -353,7 +352,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 						if sc == nil || !sc.Running() {
 							ip := timestamp.SockaddrToIP(gclisa)
 							eclisa := timestamp.IPToSockaddr(ip, ptp.PortEvent)
-							sc = NewSubscriptionClient(worker.queue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
+							sc = NewSubscriptionClient(worker.queue, worker.grantQueue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
 							worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
 						} else {
 							// Update existing subscription data
@@ -366,12 +365,12 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 
 						// Reject queries out of limit
 						if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration || s.ctx.Err() != nil {
-							s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0, gclisa)
+							s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0)
 							continue
 						}
 
 						// Send confirmation grant
-						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField, gclisa)
+						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField)
 
 						if !sc.Running() {
 							go sc.Start(s.ctx)
@@ -404,20 +403,9 @@ func (s *Server) findWorker(clientID ptp.PortIdentity, r *rand.Rand) *sendWorker
 }
 
 // sendGrant sends a Unicast Grant message
-func (s *Server) sendGrant(sc *SubscriptionClient, sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32, sa unix.Sockaddr) {
+func (s *Server) sendGrant(sc *SubscriptionClient, sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32) {
 	sc.UpdateGrant(sg, mt, interval, duration)
-	grantb, err := ptp.Bytes(sc.Grant())
-	if err != nil {
-		log.Errorf("Failed to prepare the unicast grant: %v", err)
-		return
-	}
-	err = unix.Sendto(s.gFd, grantb, 0, sa)
-	if err != nil {
-		log.Errorf("Failed to send the unicast grant: %v", err)
-		return
-	}
-	log.Debugf("Sent unicast grant")
-	s.Stats.IncTXSignalingGrant(sc.subscriptionType)
+	sc.OnceGrant()
 }
 
 // Drain traffic
