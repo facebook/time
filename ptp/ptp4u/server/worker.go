@@ -254,12 +254,12 @@ func (s *sendWorker) Start() {
 			c.IncSequenceID()
 			s.stats.SetMaxWorkerQueue(s.id, int64(len(s.queue)))
 		case c = <-s.grantQueue:
-			grantb, err := ptp.Bytes(c.Grant())
+			n, err = ptp.BytesTo(c.Grant(), buf)
 			if err != nil {
 				log.Errorf("Failed to prepare the unicast grant: %v", err)
 				continue
 			}
-			err = unix.Sendto(gFd, grantb, 0, c.gclisa)
+			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 			if err != nil {
 				log.Errorf("Failed to send the unicast grant: %v", err)
 				continue
