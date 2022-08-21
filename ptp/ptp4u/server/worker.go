@@ -14,6 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package server implements simple Unicast PTP UDP server.
+*/
 package server
 
 import (
@@ -44,11 +47,12 @@ func enableDSCP(fd int, localAddr net.IP, dscp int) error {
 
 // sendWorker monitors the queue of jobs
 type sendWorker struct {
-	mux    sync.Mutex
-	id     int
-	queue  chan *SubscriptionClient
-	config *Config
-	stats  stats.Stats
+	mux        sync.Mutex
+	id         int
+	queue      chan *SubscriptionClient
+	grantQueue chan *SubscriptionClient
+	config     *Config
+	stats      stats.Stats
 
 	clients map[ptp.MessageType]map[ptp.PortIdentity]*SubscriptionClient
 }
@@ -61,6 +65,7 @@ func newSendWorker(i int, c *Config, st stats.Stats) *sendWorker {
 	}
 	s.clients = make(map[ptp.MessageType]map[ptp.PortIdentity]*SubscriptionClient)
 	s.queue = make(chan *SubscriptionClient, c.QueueSize)
+	s.grantQueue = make(chan *SubscriptionClient, c.QueueSize)
 	return s
 }
 
@@ -163,90 +168,105 @@ func (s *sendWorker) Start() {
 		c        *SubscriptionClient
 	)
 
-	for c = range s.queue {
-		switch c.subscriptionType {
-		case ptp.MessageSync:
-			// send sync
-			c.UpdateSync()
-			n, err = ptp.BytesTo(c.Sync(), buf)
-			if err != nil {
-				log.Errorf("Failed to generate the sync packet: %v", err)
-				continue
-			}
-			log.Debugf("Sending sync")
+	for {
+		select {
+		case c = <-s.queue:
+			switch c.subscriptionType {
+			case ptp.MessageSync:
+				// send sync
+				c.UpdateSync()
+				n, err = ptp.BytesTo(c.Sync(), buf)
+				if err != nil {
+					log.Errorf("Failed to generate the sync packet: %v", err)
+					continue
+				}
+				log.Debugf("Sending sync")
 
-			err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
-			if err != nil {
-				log.Errorf("Failed to send the sync packet: %v", err)
-				continue
-			}
-			s.stats.IncTX(c.subscriptionType)
+				err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
+				if err != nil {
+					log.Errorf("Failed to send the sync packet: %v", err)
+					continue
+				}
+				s.stats.IncTX(c.subscriptionType)
 
-			txTS, attempts, err = timestamp.ReadTXtimestampBuf(eFd, oob, toob)
-			s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
-			if err != nil {
-				log.Warningf("Failed to read TX timestamp: %v", err)
-				continue
-			}
-			if s.config.TimestampType != timestamp.HWTIMESTAMP {
-				txTS = txTS.Add(s.config.UTCOffset)
-			}
+				txTS, attempts, err = timestamp.ReadTXtimestampBuf(eFd, oob, toob)
+				s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
+				if err != nil {
+					log.Warningf("Failed to read TX timestamp: %v", err)
+					continue
+				}
+				if s.config.TimestampType != timestamp.HWTIMESTAMP {
+					txTS = txTS.Add(s.config.UTCOffset)
+				}
 
-			// send followup
-			c.UpdateFollowup(txTS)
-			n, err = ptp.BytesTo(c.Followup(), buf)
-			if err != nil {
-				log.Errorf("Failed to generate the followup packet: %v", err)
-				continue
-			}
-			log.Debugf("Sending followup")
+				// send followup
+				c.UpdateFollowup(txTS)
+				n, err = ptp.BytesTo(c.Followup(), buf)
+				if err != nil {
+					log.Errorf("Failed to generate the followup packet: %v", err)
+					continue
+				}
+				log.Debugf("Sending followup")
 
-			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
-			if err != nil {
-				log.Errorf("Failed to send the followup packet: %v", err)
-				continue
-			}
-			s.stats.IncTX(ptp.MessageFollowUp)
-		case ptp.MessageAnnounce:
-			// send announce
-			c.UpdateAnnounce()
-			n, err = ptp.BytesTo(c.Announce(), buf)
-			if err != nil {
-				log.Errorf("Failed to prepare the announce packet: %v", err)
-				continue
-			}
-			log.Debugf("Sending announce")
+				err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
+				if err != nil {
+					log.Errorf("Failed to send the followup packet: %v", err)
+					continue
+				}
+				s.stats.IncTX(ptp.MessageFollowUp)
+			case ptp.MessageAnnounce:
+				// send announce
+				c.UpdateAnnounce()
+				n, err = ptp.BytesTo(c.Announce(), buf)
+				if err != nil {
+					log.Errorf("Failed to prepare the announce packet: %v", err)
+					continue
+				}
+				log.Debugf("Sending announce")
 
-			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
-			if err != nil {
-				log.Errorf("Failed to send the announce packet: %v", err)
+				err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
+				if err != nil {
+					log.Errorf("Failed to send the announce packet: %v", err)
+					continue
+				}
+				s.stats.IncTX(c.subscriptionType)
+
+			case ptp.MessageDelayResp:
+				// send delay response
+				n, err = ptp.BytesTo(c.DelayResp(), buf)
+				if err != nil {
+					log.Errorf("Failed to prepare the delay response packet: %v", err)
+					continue
+				}
+				log.Debugf("Sending delay response")
+
+				err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
+				if err != nil {
+					log.Errorf("Failed to send the delay response: %v", err)
+					continue
+				}
+				s.stats.IncTX(c.subscriptionType)
+
+			default:
+				log.Errorf("Unknown subscription type: %v", c.subscriptionType)
 				continue
 			}
-			s.stats.IncTX(c.subscriptionType)
-
-		case ptp.MessageDelayResp:
-			// send delay response
-			n, err = ptp.BytesTo(c.DelayResp(), buf)
+			c.IncSequenceID()
+			s.stats.SetMaxWorkerQueue(s.id, int64(len(s.queue)))
+		case c = <-s.grantQueue:
+			grantb, err := ptp.Bytes(c.Grant())
 			if err != nil {
-				log.Errorf("Failed to prepare the delay response packet: %v", err)
+				log.Errorf("Failed to prepare the unicast grant: %v", err)
 				continue
 			}
-			log.Debugf("Sending delay response")
-
-			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
+			err = unix.Sendto(gFd, grantb, 0, c.gclisa)
 			if err != nil {
-				log.Errorf("Failed to send the delay response: %v", err)
+				log.Errorf("Failed to send the unicast grant: %v", err)
 				continue
 			}
-			s.stats.IncTX(c.subscriptionType)
-
-		default:
-			log.Errorf("Unknown subscription type: %v", c.subscriptionType)
-			continue
+			log.Debugf("Sent unicast grant")
+			s.stats.IncTXSignalingGrant(c.subscriptionType)
 		}
-
-		c.IncSequenceID()
-		s.stats.SetMaxWorkerQueue(s.id, int64(len(s.queue)))
 	}
 }
 

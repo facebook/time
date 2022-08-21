@@ -54,22 +54,22 @@ func TestWorkerQueue(t *testing.T) {
 	expire := time.Now().Add(time.Millisecond)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 
-	scA := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
+	scA := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 	for i := 0; i < 10; i++ {
 		w.queue <- scA
 	}
 
-	scS := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, interval, expire)
+	scS := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageSync, c, interval, expire)
 	for i := 0; i < 10; i++ {
 		w.queue <- scS
 	}
 
-	scDR := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
+	scDR := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
 	for i := 0; i < 10; i++ {
 		w.queue <- scDR
 	}
 
-	scSig := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSignaling, c, interval, expire)
+	scSig := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageSignaling, c, interval, expire)
 	for i := 0; i < 10; i++ {
 		w.queue <- scSig
 	}
@@ -92,7 +92,7 @@ func TestFindSubscription(t *testing.T) {
 	}
 
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Millisecond, time.Now().Add(time.Second))
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Millisecond, time.Now().Add(time.Second))
 
 	sp := ptp.PortIdentity{
 		PortNumber:    1,
@@ -120,7 +120,7 @@ func TestFindClients(t *testing.T) {
 	}
 
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Millisecond, time.Now().Add(time.Second))
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Millisecond, time.Now().Add(time.Second))
 
 	sp := ptp.PortIdentity{
 		PortNumber:    1,
@@ -157,7 +157,7 @@ func TestInventoryClients(t *testing.T) {
 	w := newSendWorker(0, c, st)
 
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	scS1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, 10*time.Millisecond, time.Now().Add(time.Minute))
+	scS1 := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageSync, c, 10*time.Millisecond, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi1, ptp.MessageSync, scS1)
 	go scS1.Start(context.Background())
 	time.Sleep(10 * time.Millisecond)
@@ -165,7 +165,7 @@ func TestInventoryClients(t *testing.T) {
 	w.inventoryClients()
 	require.Equal(t, 1, len(w.clients))
 
-	scA1 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, 10*time.Millisecond, time.Now().Add(time.Minute))
+	scA1 := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, 10*time.Millisecond, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi1, ptp.MessageAnnounce, scA1)
 	go scA1.Start(context.Background())
 	time.Sleep(10 * time.Millisecond)
@@ -173,7 +173,7 @@ func TestInventoryClients(t *testing.T) {
 	w.inventoryClients()
 	require.Equal(t, 2, len(w.clients))
 
-	scS2 := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageSync, c, 10*time.Millisecond, time.Now().Add(time.Minute))
+	scS2 := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageSync, c, 10*time.Millisecond, time.Now().Add(time.Minute))
 	w.RegisterSubscription(clipi2, ptp.MessageSync, scS2)
 	go scS2.Start(context.Background())
 	time.Sleep(10 * time.Millisecond)

@@ -50,7 +50,7 @@ func TestSubscriptionStart(t *testing.T) {
 	interval := 1 * time.Minute
 	expire := time.Now().Add(1 * time.Minute)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, nil, ptp.MessageAnnounce, c, interval, expire)
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, nil, ptp.MessageAnnounce, c, interval, expire)
 	sc.SetGclisa(sa)
 
 	go sc.Start(context.Background())
@@ -65,7 +65,7 @@ func TestSubscriptionExpire(t *testing.T) {
 	interval := 10 * time.Millisecond
 	expire := time.Now().Add(200 * time.Millisecond)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
 
 	go sc.Start(context.Background())
 	time.Sleep(100 * time.Millisecond)
@@ -87,7 +87,7 @@ func TestSubscriptionStop(t *testing.T) {
 	interval := 32 * time.Second
 	expire := time.Now().Add(1 * time.Minute)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
 	go sc.Start(context.Background())
 	time.Sleep(100 * time.Millisecond)
@@ -102,7 +102,7 @@ func TestSubscriptionEnd(t *testing.T) {
 	interval := 10 * time.Millisecond
 	expire := time.Now().Add(300 * time.Millisecond)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go sc.Start(ctx)
@@ -119,7 +119,7 @@ func TestSubscriptionflags(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
 	sc.UpdateSync()
 	sc.UpdateFollowup(time.Now())
@@ -135,7 +135,7 @@ func TestSyncPacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 
 	sc.initSync()
@@ -153,7 +153,7 @@ func TestFollowupPacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 	sc.SetInterval(interval)
 
@@ -179,7 +179,7 @@ func TestAnnouncePacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234), DynamicConfig: DynamicConfig{ClockClass: clockClass, ClockAccuracy: clockAccuracy, UTCOffset: UTCOffset}}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 	sc.SetInterval(interval)
 
@@ -210,7 +210,7 @@ func TestDelayRespPacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
 	sp := ptp.PortIdentity{
 		PortNumber:    1,
@@ -238,7 +238,7 @@ func TestGrantPacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sg := &ptp.Signaling{}
 
 	mt := ptp.NewUnicastMsgTypeAndFlags(ptp.MessageAnnounce, 0)
