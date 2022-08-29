@@ -20,7 +20,6 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net"
 	"os"
@@ -77,7 +76,7 @@ func fakeSeconds(secondsCount int) {
 
 // signFile generates hash for leap Second hashfile and prints is on stdout
 func signFile(fileName string) {
-	data, err := ioutil.ReadFile(fileName)
+	data, err := os.ReadFile(fileName)
 	if err != nil {
 		fmt.Printf("Error opening %q: %s\n", fileName, err)
 	}

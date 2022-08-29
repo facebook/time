@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -377,7 +376,7 @@ func TestPushVersion(t *testing.T) {
 		Message: "Installing firmware Version: 2.13.1.0.5583D-20210924",
 	}
 	// Firmware file itself
-	fw, err := ioutil.TempFile("/tmp", "calnex")
+	fw, err := os.CreateTemp("/tmp", "calnex")
 	require.NoError(t, err)
 	defer fw.Close()
 	defer os.Remove(fw.Name())
@@ -385,7 +384,7 @@ func TestPushVersion(t *testing.T) {
 	require.NoError(t, err)
 
 	// Firmware file saved via http
-	fwres, err := ioutil.TempFile("/tmp", "calnex")
+	fwres, err := os.CreateTemp("/tmp", "calnex")
 	require.NoError(t, err)
 	defer os.Remove(fwres.Name())
 
@@ -408,10 +407,10 @@ func TestPushVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expected, r)
 
-	originalFW, err := ioutil.ReadFile(fw.Name())
+	originalFW, err := os.ReadFile(fw.Name())
 	require.NoError(t, err)
 
-	uploadedFW, err := ioutil.ReadFile(fwres.Name())
+	uploadedFW, err := os.ReadFile(fwres.Name())
 	require.NoError(t, err)
 
 	require.Equal(t, originalFW, uploadedFW)
@@ -503,7 +502,7 @@ func TestFetchProblemReport(t *testing.T) {
 	calnexAPI := NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
-	dir, err := ioutil.TempDir("/tmp", "calnex")
+	dir, err := os.MkdirTemp("/tmp", "calnex")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
@@ -532,7 +531,7 @@ func TestPushCert(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		defer r.Body.Close()
-		body, err := ioutil.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 		require.Equal(t, cert, body)
 		fmt.Fprintln(w, sampleResp)

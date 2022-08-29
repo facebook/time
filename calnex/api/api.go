@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -448,7 +447,7 @@ func (a *API) FetchCsv(channel Channel, allData bool) ([][]string, error) {
 		return nil, errors.New(http.StatusText(resp.StatusCode))
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +493,7 @@ func (a *API) FetchChannelProbe(channel Channel) (*Probe, error) {
 		return nil, errors.New(http.StatusText(resp.StatusCode))
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -524,7 +523,7 @@ func (a *API) FetchChannelTarget(channel Channel, probe Probe) (string, error) {
 		return "", errors.New(http.StatusText(resp.StatusCode))
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}

@@ -87,9 +87,11 @@ func (t *timeSpec) ToTime() time.Time {
 	return time.Unix(int64(highU64<<32|lowU64), int64(t.Nsec))
 }
 
-/* 32-bit floating-point format consisting of 7-bit signed exponent
-   and 25-bit signed coefficient without hidden bit.
-   The result is calculated as: 2^(exp - 25) * coef */
+/*
+32-bit floating-point format consisting of 7-bit signed exponent
+and 25-bit signed coefficient without hidden bit.
+The result is calculated as: 2^(exp - 25) * coef
+*/
 type chronyFloat int32
 
 // ToFloat does magic to decode float from int32.

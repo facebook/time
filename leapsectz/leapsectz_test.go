@@ -19,7 +19,6 @@ package leapsectz
 import (
 	"bytes"
 	"encoding/binary"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -148,7 +147,7 @@ func TestParse(t *testing.T) {
 		LeapSecond{78796800, 1},
 		LeapSecond{94694401, 2},
 	}
-	f, err := ioutil.TempFile(os.TempDir(), "leaptest-")
+	f, err := os.CreateTemp(os.TempDir(), "leaptest-")
 	require.NoError(t, err)
 	defer os.Remove(f.Name())
 
@@ -165,7 +164,7 @@ func TestParse(t *testing.T) {
 
 func TestLatest(t *testing.T) {
 	expected := &LeapSecond{94694401, 2}
-	f, err := ioutil.TempFile(os.TempDir(), "leaptest-")
+	f, err := os.CreateTemp(os.TempDir(), "leaptest-")
 	require.NoError(t, err)
 	defer os.Remove(f.Name())
 
@@ -188,7 +187,7 @@ func TestLatestFuture(t *testing.T) {
 		{2649346018, 3},
 	}
 
-	f, err := ioutil.TempFile(os.TempDir(), "leaptest-")
+	f, err := os.CreateTemp(os.TempDir(), "leaptest-")
 	require.NoError(t, err)
 	defer os.Remove(f.Name())
 

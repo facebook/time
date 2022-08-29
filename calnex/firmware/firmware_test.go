@@ -18,7 +18,6 @@ package firmware
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -32,7 +31,7 @@ import (
 )
 
 func TestFirmware(t *testing.T) {
-	dir, err := ioutil.TempDir("/tmp", "calnex")
+	dir, err := os.MkdirTemp("/tmp", "calnex")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 

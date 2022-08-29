@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -209,7 +208,7 @@ func TestHandleSighup(t *testing.T) {
 	require.Equal(t, 2, len(s.sw[0].queue))
 	require.Equal(t, 1, len(s.sw[1].queue))
 
-	cfg, err := ioutil.TempFile("", "ptp4u")
+	cfg, err := os.CreateTemp("", "ptp4u")
 	require.NoError(t, err)
 	defer os.Remove(cfg.Name())
 
@@ -243,7 +242,7 @@ utcoffset: "37s"
 }
 
 func TestHandleSigterm(t *testing.T) {
-	cfg, err := ioutil.TempFile("", "ptp4u")
+	cfg, err := os.CreateTemp("", "ptp4u")
 	require.NoError(t, err)
 	os.Remove(cfg.Name())
 	require.NoFileExists(t, cfg.Name())

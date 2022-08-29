@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 
 	"github.com/facebook/time/calnex/config"
@@ -51,7 +51,7 @@ var configCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 		defer configFile.Close()
-		b, err := ioutil.ReadAll(configFile)
+		b, err := io.ReadAll(configFile)
 		if err != nil {
 			log.Fatal(err)
 		}

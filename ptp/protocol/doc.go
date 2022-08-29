@@ -28,40 +28,40 @@ Implemented protocol parts include:
 
 Marshalling and unmarshalling of defined PTP messages
 
-    Sync
-    Delay_Req
-    Pdelay_Req
-    Pdelay_Resp
-    Follow_Up
-    Delay_Resp
-    Pdelay_Resp_Follow_Up
-    Announce
-    Signaling
-    Management
+	Sync
+	Delay_Req
+	Pdelay_Req
+	Pdelay_Resp
+	Follow_Up
+	Delay_Resp
+	Pdelay_Resp_Follow_Up
+	Announce
+	Signaling
+	Management
 
 TLVs
 
-    MANAGEMENT
-    MANAGEMENT_ERROR_STATUS
-    REQUEST_UNICAST_TRANSMISSION
-    GRANT_UNICAST_TRANSMISSION
-    CANCEL_UNICAST_TRANSMISSION
-    ACKNOWLEDGE_CANCEL_UNICAST_TRANSMISSION
-    PATH_TRACE
-    ALTERNATE_TIME_OFFSET_INDICATOR
+	MANAGEMENT
+	MANAGEMENT_ERROR_STATUS
+	REQUEST_UNICAST_TRANSMISSION
+	GRANT_UNICAST_TRANSMISSION
+	CANCEL_UNICAST_TRANSMISSION
+	ACKNOWLEDGE_CANCEL_UNICAST_TRANSMISSION
+	PATH_TRACE
+	ALTERNATE_TIME_OFFSET_INDICATOR
 
 Management TLVs
 
-    DEFAULT_DATA_SET
-    CURRENT_DATA_SET
-    PARENT_DATA_SET
+	DEFAULT_DATA_SET
+	CURRENT_DATA_SET
+	PARENT_DATA_SET
 
 Non-portable ptp4l-specific Management TLVs
 
-    TIME_STATUS_NP
-    PORT_PROPERTIES_NP
-    PORT_STATS_NP
-    PORT_SERVICE_STATS_NP
-    UNICAST_MASTER_TABLE_NP
+	TIME_STATUS_NP
+	PORT_PROPERTIES_NP
+	PORT_STATS_NP
+	PORT_SERVICE_STATS_NP
+	UNICAST_MASTER_TABLE_NP
 */
 package protocol

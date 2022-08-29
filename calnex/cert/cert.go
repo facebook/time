@@ -164,10 +164,11 @@ func (b *Bundle) Equals(other *Bundle) bool {
 }
 
 // Verify verifies the supplied bundle checking that:
-//  * We have a private key
-//  * We have a cert
-//  * One of the cert CNs matches the supplied hostname
-//  * The cert validity date before and ends after the supplied time.
+//   - We have a private key
+//   - We have a cert
+//   - One of the cert CNs matches the supplied hostname
+//   - The cert validity date before and ends after the supplied time.
+//
 // Returns an error if any of these are not satisfied.
 func (b *Bundle) Verify(hostname string, t time.Time) error {
 	if b == nil {

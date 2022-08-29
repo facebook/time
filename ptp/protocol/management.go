@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 )
 
@@ -114,7 +113,7 @@ func (p *Management) UnmarshalBinary(rawBytes []byte) error {
 	if !found {
 		return fmt.Errorf("unsupported management TLV 0x%x", tlvHead.ManagementID)
 	}
-	tlvData, err := ioutil.ReadAll(r)
+	tlvData, err := io.ReadAll(r)
 	if err != nil {
 		return err
 	}
