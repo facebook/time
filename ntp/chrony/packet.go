@@ -124,6 +124,7 @@ const (
 )
 
 // response status codes
+//
 //nolint:varcheck,deadcode,unused
 const (
 	sttSuccess            ResponseStatusType = 0

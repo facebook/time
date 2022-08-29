@@ -33,7 +33,8 @@ const (
 	MajorVersionMask uint8 = 0x0f
 )
 
-/* UDP port numbers
+/*
+UDP port numbers:
 The UDP destination port of a PTP event message shall be 319.
 The UDP destination port of a multicast PTP general message shall be 320.
 The UDP destination port of a unicast PTP general message that is addressed to a PTP Instance shall be 320.

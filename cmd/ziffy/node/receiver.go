@@ -120,7 +120,7 @@ func (r *Receiver) handlePacket(rawPacket gopacket.Packet) {
 	}
 }
 
-//sendResponse sends ICMPTypeTimeExceeded to sender
+// sendResponse sends ICMPTypeTimeExceeded to sender
 func (r *Receiver) sendResponse(packet *ptp.SyncDelayReq, sourceIP string, rawPacket gopacket.Packet) error {
 	dst, err := net.ResolveIPAddr("ip6:ipv6-icmp", sourceIP)
 	if err != nil {

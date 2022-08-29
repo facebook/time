@@ -524,10 +524,11 @@ PTPText data type is used to represent textual material in PTP messages.
 TextField is encoded as UTF-8.
 The most significant byte of the leading text symbol shall be the element of the array with index 0.
 UTF-8 encoding has variable length, thus LengthField can be larger than number of characters.
-type PTPText struct {
-	LengthField uint8
-	TextField   []byte
-}
+
+	type PTPText struct {
+		LengthField uint8
+		TextField   []byte
+	}
 */
 type PTPText string
 

@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"time"
 )
@@ -147,7 +146,7 @@ func parseVx(r io.Reader) ([]LeapSecond, error) {
 			skip += int(hdr.LeapCnt)*8 + int(hdr.IsUtcCnt) + int(hdr.IsStdCnt)
 		}
 
-		if n, _ := io.CopyN(ioutil.Discard, r, int64(skip)); n != int64(skip) {
+		if n, _ := io.CopyN(io.Discard, r, int64(skip)); n != int64(skip) {
 			return nil, errBadData
 		}
 
@@ -177,7 +176,7 @@ func parseVx(r io.Reader) ([]LeapSecond, error) {
 			ret = append(ret, l)
 		}
 		// we need to skip the rest of the data
-		_, _ = io.CopyN(ioutil.Discard, r, int64(skip))
+		_, _ = io.CopyN(io.Discard, r, int64(skip))
 		break
 	}
 	if len(ret) == 0 {

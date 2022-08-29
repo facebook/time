@@ -17,7 +17,6 @@ limitations under the License.
 package drain
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -25,7 +24,7 @@ import (
 )
 
 func TestCheck(t *testing.T) {
-	file, err := ioutil.TempFile("", "")
+	file, err := os.CreateTemp("", "")
 	require.NoError(t, err)
 
 	check := &FileDrain{FileName: file.Name()}

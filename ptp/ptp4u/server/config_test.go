@@ -17,7 +17,6 @@ limitations under the License.
 package server
 
 import (
-	"io/ioutil"
 	"net"
 	"os"
 	"testing"
@@ -79,7 +78,7 @@ func TestReadDynamicConfigOk(t *testing.T) {
 	dc, err := ReadDynamicConfig("")
 	require.Error(t, err)
 	require.Nil(t, dc)
-	cfg, err := ioutil.TempFile("", "ptp4u")
+	cfg, err := os.CreateTemp("", "ptp4u")
 	require.NoError(t, err)
 	defer os.Remove(cfg.Name())
 
@@ -108,7 +107,7 @@ metricinterval: "5m"
 minsubinterval: "6s"
 utcoffset: "7s"
 `
-	cfg, err := ioutil.TempFile("", "ptp4u")
+	cfg, err := os.CreateTemp("", "ptp4u")
 	require.NoError(t, err)
 	defer os.Remove(cfg.Name())
 
@@ -122,7 +121,7 @@ utcoffset: "7s"
 
 func TestReadDynamicConfigDamaged(t *testing.T) {
 	config := "Random stuff"
-	cfg, err := ioutil.TempFile("", "ptp4u")
+	cfg, err := os.CreateTemp("", "ptp4u")
 	require.NoError(t, err)
 	defer os.Remove(cfg.Name())
 
@@ -153,7 +152,7 @@ utcoffset: 37s
 		UTCOffset:      37 * time.Second,
 	}
 
-	cfg, err := ioutil.TempFile("", "ptp4u")
+	cfg, err := os.CreateTemp("", "ptp4u")
 	require.NoError(t, err)
 	os.Remove(cfg.Name())
 	require.NoFileExists(t, cfg.Name())
@@ -178,7 +177,7 @@ func TestUTCOffsetSanity(t *testing.T) {
 }
 
 func TestPidFile(t *testing.T) {
-	cfg, err := ioutil.TempFile("", "ptp4u")
+	cfg, err := os.CreateTemp("", "ptp4u")
 	require.NoError(t, err)
 	defer os.Remove(cfg.Name())
 	c := &Config{StaticConfig: StaticConfig{PidFile: cfg.Name()}}

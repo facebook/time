@@ -17,7 +17,6 @@ limitations under the License.
 package c4u
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -44,7 +43,7 @@ func TestRun(t *testing.T) {
 		UTCOffset:      utcoffset,
 	}
 
-	cfg, err := ioutil.TempFile("", "c4u")
+	cfg, err := os.CreateTemp("", "c4u")
 	require.NoError(t, err)
 	defer os.Remove(cfg.Name())
 
