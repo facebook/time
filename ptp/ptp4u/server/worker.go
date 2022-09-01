@@ -47,12 +47,12 @@ func enableDSCP(fd int, localAddr net.IP, dscp int) error {
 
 // sendWorker monitors the queue of jobs
 type sendWorker struct {
-	mux        sync.Mutex
-	id         int
-	queue      chan *SubscriptionClient
-	grantQueue chan *SubscriptionClient
-	config     *Config
-	stats      stats.Stats
+	mux            sync.Mutex
+	id             int
+	queue          chan *SubscriptionClient
+	signalingQueue chan *SubscriptionClient
+	config         *Config
+	stats          stats.Stats
 
 	clients map[ptp.MessageType]map[ptp.PortIdentity]*SubscriptionClient
 }
@@ -65,7 +65,7 @@ func newSendWorker(i int, c *Config, st stats.Stats) *sendWorker {
 	}
 	s.clients = make(map[ptp.MessageType]map[ptp.PortIdentity]*SubscriptionClient)
 	s.queue = make(chan *SubscriptionClient, c.QueueSize)
-	s.grantQueue = make(chan *SubscriptionClient, c.QueueSize)
+	s.signalingQueue = make(chan *SubscriptionClient, c.QueueSize)
 	return s
 }
 
@@ -206,7 +206,7 @@ func (s *sendWorker) Start() {
 					log.Errorf("Failed to generate the followup packet: %v", err)
 					continue
 				}
-				log.Debugf("Sending followup")
+				log.Debug("Sending followup")
 
 				err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 				if err != nil {
@@ -222,7 +222,7 @@ func (s *sendWorker) Start() {
 					log.Errorf("Failed to prepare the announce packet: %v", err)
 					continue
 				}
-				log.Debugf("Sending announce")
+				log.Debug("Sending announce")
 
 				err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 				if err != nil {
@@ -238,7 +238,7 @@ func (s *sendWorker) Start() {
 					log.Errorf("Failed to prepare the delay response packet: %v", err)
 					continue
 				}
-				log.Debugf("Sending delay response")
+				log.Debug("Sending delay response")
 
 				err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 				if err != nil {
@@ -253,19 +253,26 @@ func (s *sendWorker) Start() {
 			}
 			c.IncSequenceID()
 			s.stats.SetMaxWorkerQueue(s.id, int64(len(s.queue)))
-		case c = <-s.grantQueue:
-			n, err = ptp.BytesTo(c.Grant(), buf)
+		case c = <-s.signalingQueue:
+			n, err = ptp.BytesTo(c.Signaling(), buf)
 			if err != nil {
-				log.Errorf("Failed to prepare the unicast grant: %v", err)
+				log.Errorf("Failed to prepare the unicast signaling: %v", err)
 				continue
 			}
 			err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
 			if err != nil {
-				log.Errorf("Failed to send the unicast grant: %v", err)
+				log.Errorf("Failed to send the unicast signaling: %v", err)
 				continue
 			}
-			log.Debugf("Sent unicast grant")
-			s.stats.IncTXSignalingGrant(c.subscriptionType)
+			log.Debug("Sent unicast signaling")
+			for _, tlv := range c.Signaling().TLVs {
+				switch tlv.(type) {
+				case *ptp.GrantUnicastTransmissionTLV:
+					s.stats.IncTXSignalingGrant(c.subscriptionType)
+				case *ptp.CancelUnicastTransmissionTLV:
+					s.stats.IncTXSignalingCancel(c.subscriptionType)
+				}
+			}
 		}
 	}
 }

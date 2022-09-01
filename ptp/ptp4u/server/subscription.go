@@ -37,7 +37,7 @@ type SubscriptionClient struct {
 	sync.Mutex
 
 	queue            chan *SubscriptionClient
-	grantQueue       chan *SubscriptionClient
+	signalingQueue   chan *SubscriptionClient
 	subscriptionType ptp.MessageType
 	serverConfig     *Config
 
@@ -59,7 +59,7 @@ type SubscriptionClient struct {
 	followupP  *ptp.FollowUp
 	announceP  *ptp.Announce
 	delayRespP *ptp.DelayResp
-	grant      *ptp.Signaling
+	signaling  *ptp.Signaling
 }
 
 // NewSubscriptionClient gets minimal required arguments to create a subscription
@@ -71,7 +71,7 @@ func NewSubscriptionClient(q chan *SubscriptionClient, gq chan *SubscriptionClie
 		interval:         i,
 		expire:           e,
 		queue:            q,
-		grantQueue:       gq,
+		signalingQueue:   gq,
 		serverConfig:     sc,
 		reload:           make(chan bool, 10),
 	}
@@ -79,7 +79,7 @@ func NewSubscriptionClient(q chan *SubscriptionClient, gq chan *SubscriptionClie
 	s.initFollowup()
 	s.initAnnounce()
 	s.initDelayResp()
-	s.initGrant()
+	s.initSignaling()
 
 	return s
 }
@@ -104,6 +104,7 @@ func (sc *SubscriptionClient) Start(ctx context.Context) {
 	sc.runningInterval = sc.interval
 	sc.intervalTicker = time.NewTicker(sc.runningInterval)
 
+	defer sc.sendSignalingCancel()
 	defer sc.intervalTicker.Stop()
 	defer sc.setRunning(false)
 
@@ -111,7 +112,6 @@ func (sc *SubscriptionClient) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Infof(over)
-			// TODO send cancellation
 			return
 		case <-sc.reload:
 			if !sc.run() {
@@ -130,7 +130,6 @@ func (sc *SubscriptionClient) Start(ctx context.Context) {
 // run validates the subsciption and executes it
 func (sc *SubscriptionClient) run() bool {
 	if sc.Expired() {
-		// TODO send cancellation
 		return false
 	}
 	// check if interval changed, maybe update our ticker
@@ -150,9 +149,9 @@ func (sc *SubscriptionClient) Once() {
 	sc.queue <- sc
 }
 
-// OnceGrant adds itself to the worker grant queue once
-func (sc *SubscriptionClient) OnceGrant() {
-	sc.grantQueue <- sc
+// OnceSignaling adds itself to the worker signaling queue once
+func (sc *SubscriptionClient) OnceSignaling() {
+	sc.signalingQueue <- sc
 }
 
 // Once adds itself to the worker queue once
@@ -372,8 +371,8 @@ func (sc *SubscriptionClient) DelayResp() *ptp.DelayResp {
 	return sc.delayRespP
 }
 
-func (sc *SubscriptionClient) initGrant() {
-	sc.grant = &ptp.Signaling{
+func (sc *SubscriptionClient) initSignaling() {
+	sc.signaling = &ptp.Signaling{
 		Header: ptp.Header{
 			Version:       ptp.Version,
 			MessageLength: uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{})),
@@ -384,38 +383,60 @@ func (sc *SubscriptionClient) initGrant() {
 			},
 		},
 		TargetPortIdentity: ptp.PortIdentity{},
-		TLVs: []ptp.TLV{
-			&ptp.GrantUnicastTransmissionTLV{
-				TLVHead:  ptp.TLVHead{TLVType: ptp.TLVGrantUnicastTransmission, LengthField: uint16(binary.Size(ptp.GrantUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{}))},
-				Reserved: 0,
-				Renewal:  1,
-			},
+		TLVs:               []ptp.TLV{},
+	}
+}
+
+// UpdateSignalingGrant updates ptp Signaling packet granting the requested subscription
+func (sc *SubscriptionClient) UpdateSignalingGrant(sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32) {
+	sc.signaling.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{}))
+	sc.signaling.Header.SdoIDAndMsgType = sg.Header.SdoIDAndMsgType
+	sc.signaling.Header.DomainNumber = sg.Header.DomainNumber
+	sc.signaling.Header.MinorSdoID = sg.Header.MinorSdoID
+	sc.signaling.Header.CorrectionField = sg.Header.CorrectionField
+	sc.signaling.Header.MessageTypeSpecific = sg.Header.MessageTypeSpecific
+	sc.signaling.Header.SequenceID = sg.Header.SequenceID
+	sc.signaling.Header.ControlField = sg.Header.ControlField
+	sc.signaling.Header.LogMessageInterval = sg.Header.LogMessageInterval
+
+	sc.signaling.TargetPortIdentity = sg.SourcePortIdentity
+	sc.signaling.TLVs = []ptp.TLV{
+		&ptp.GrantUnicastTransmissionTLV{
+			TLVHead:               ptp.TLVHead{TLVType: ptp.TLVGrantUnicastTransmission, LengthField: uint16(binary.Size(ptp.GrantUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{}))},
+			Reserved:              0,
+			Renewal:               1,
+			MsgTypeAndReserved:    mt,
+			LogInterMessagePeriod: interval,
+			DurationField:         duration,
 		},
 	}
 }
 
-// UpdateGrant updates ptp Signaling packet granting the requested subscription
-func (sc *SubscriptionClient) UpdateGrant(sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32) {
-	sc.grant.Header.SdoIDAndMsgType = sg.Header.SdoIDAndMsgType
-	sc.grant.Header.DomainNumber = sg.Header.DomainNumber
-	sc.grant.Header.MinorSdoID = sg.Header.MinorSdoID
-	sc.grant.Header.CorrectionField = sg.Header.CorrectionField
-	sc.grant.Header.MessageTypeSpecific = sg.Header.MessageTypeSpecific
-	sc.grant.Header.SequenceID = sg.Header.SequenceID
-	sc.grant.Header.ControlField = sg.Header.ControlField
-	sc.grant.Header.LogMessageInterval = sg.Header.LogMessageInterval
-
-	sc.grant.TargetPortIdentity = sg.SourcePortIdentity
-	tlv := sc.grant.TLVs[0].(*ptp.GrantUnicastTransmissionTLV)
-
-	tlv.MsgTypeAndReserved = mt
-	tlv.LogInterMessagePeriod = interval
-	tlv.DurationField = duration
-
-	sc.grant.TLVs[0] = tlv
+// UpdateSignalingCancel updates ptp Signaling packet canceling the requested subscription
+func (sc *SubscriptionClient) UpdateSignalingCancel() {
+	sc.signaling.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.CancelUnicastTransmissionTLV{}))
+	sc.signaling.TLVs = []ptp.TLV{
+		&ptp.CancelUnicastTransmissionTLV{
+			TLVHead:         ptp.TLVHead{TLVType: ptp.TLVCancelUnicastTransmission, LengthField: uint16(binary.Size(ptp.CancelUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{}))},
+			Reserved:        0,
+			MsgTypeAndFlags: ptp.NewUnicastMsgTypeAndFlags(sc.subscriptionType, 0),
+		},
+	}
 }
 
 // Grant returns ptp Signaling packet granting the requested subscription
-func (sc *SubscriptionClient) Grant() *ptp.Signaling {
-	return sc.grant
+func (sc *SubscriptionClient) Signaling() *ptp.Signaling {
+	return sc.signaling
+}
+
+// sendSignalingGrant sends a Unicast Grant message
+func (sc *SubscriptionClient) sendSignalingGrant(sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32) {
+	sc.UpdateSignalingGrant(sg, mt, interval, duration)
+	sc.OnceSignaling()
+}
+
+// sendSignalingCancel sends a Unicast Cancel message
+func (sc *SubscriptionClient) sendSignalingCancel() {
+	sc.UpdateSignalingCancel()
+	sc.OnceSignaling()
 }
