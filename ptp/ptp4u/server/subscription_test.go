@@ -50,7 +50,7 @@ func TestSubscriptionStart(t *testing.T) {
 	interval := 1 * time.Minute
 	expire := time.Now().Add(1 * time.Minute)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, nil, ptp.MessageAnnounce, c, interval, expire)
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, nil, ptp.MessageAnnounce, c, interval, expire)
 	sc.SetGclisa(sa)
 
 	go sc.Start(context.Background())
@@ -60,12 +60,14 @@ func TestSubscriptionStart(t *testing.T) {
 }
 
 func TestSubscriptionExpire(t *testing.T) {
-	w := &sendWorker{}
+	w := &sendWorker{
+		signalingQueue: make(chan *SubscriptionClient, 100),
+	}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 10 * time.Millisecond
 	expire := time.Now().Add(200 * time.Millisecond)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
 
 	go sc.Start(context.Background())
 	time.Sleep(100 * time.Millisecond)
@@ -81,28 +83,41 @@ func TestSubscriptionExpire(t *testing.T) {
 
 func TestSubscriptionStop(t *testing.T) {
 	w := &sendWorker{
-		queue: make(chan *SubscriptionClient, 100),
+		queue:          make(chan *SubscriptionClient, 100),
+		signalingQueue: make(chan *SubscriptionClient, 100),
 	}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 32 * time.Second
 	expire := time.Now().Add(1 * time.Minute)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
 
 	go sc.Start(context.Background())
 	time.Sleep(100 * time.Millisecond)
 	require.False(t, sc.Expired())
+	require.True(t, sc.Running())
+
 	sc.Stop()
+	time.Sleep(100 * time.Millisecond)
+
 	require.True(t, sc.Expired())
+	require.False(t, sc.Running())
+
+	require.Equal(t, 1, len(w.signalingQueue))
+	s := <-w.signalingQueue
+	require.Equal(t, ptp.TLVCancelUnicastTransmission, s.signaling.TLVs[0].(*ptp.CancelUnicastTransmissionTLV).TLVHead.TLVType)
+	require.Equal(t, uint16(binary.Size(ptp.Header{})+binary.Size(ptp.PortIdentity{})+binary.Size(ptp.CancelUnicastTransmissionTLV{})), s.signaling.Header.MessageLength)
 }
 
 func TestSubscriptionEnd(t *testing.T) {
-	w := &sendWorker{}
+	w := &sendWorker{
+		signalingQueue: make(chan *SubscriptionClient, 100),
+	}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	interval := 10 * time.Millisecond
 	expire := time.Now().Add(300 * time.Millisecond)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go sc.Start(ctx)
@@ -119,7 +134,7 @@ func TestSubscriptionflags(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
 	sc.UpdateSync()
 	sc.UpdateFollowup(time.Now())
@@ -135,7 +150,7 @@ func TestSyncPacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 
 	sc.initSync()
@@ -153,7 +168,7 @@ func TestFollowupPacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 	sc.SetInterval(interval)
 
@@ -179,7 +194,7 @@ func TestAnnouncePacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234), DynamicConfig: DynamicConfig{ClockClass: clockClass, ClockAccuracy: clockAccuracy, UTCOffset: UTCOffset}}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
 	sc.SetInterval(interval)
 
@@ -210,7 +225,7 @@ func TestDelayRespPacket(t *testing.T) {
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
 	sp := ptp.PortIdentity{
 		PortNumber:    1,
@@ -232,13 +247,13 @@ func TestDelayRespPacket(t *testing.T) {
 	require.Equal(t, ptp.FlagUnicast, sc.DelayResp().Header.FlagField)
 }
 
-func TestGrantPacket(t *testing.T) {
+func TestSignalingGrantPacket(t *testing.T) {
 	interval := 3 * time.Second
 
 	w := &sendWorker{}
 	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sg := &ptp.Signaling{}
 
 	mt := ptp.NewUnicastMsgTypeAndFlags(ptp.MessageAnnounce, 0)
@@ -258,10 +273,75 @@ func TestGrantPacket(t *testing.T) {
 		Renewal:               1,
 	}
 
-	sc.initGrant()
-	sc.UpdateGrant(sg, mt, i, duration)
+	sc.initSignaling()
+	sc.UpdateSignalingGrant(sg, mt, i, duration)
 
-	require.Equal(t, uint16(56), sc.Grant().Header.MessageLength) // check packet length
-	require.Equal(t, tlv, sc.Grant().TLVs[0])
+	require.Equal(t, uint16(56), sc.Signaling().Header.MessageLength) // check packet length
+	require.Equal(t, tlv, sc.Signaling().TLVs[0])
+}
 
+func TestSignalingCancelPacket(t *testing.T) {
+	w := &sendWorker{}
+	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+
+	sc.signaling.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.CancelUnicastTransmissionTLV{}))
+	tlv := &ptp.CancelUnicastTransmissionTLV{
+		TLVHead:         ptp.TLVHead{TLVType: ptp.TLVCancelUnicastTransmission, LengthField: uint16(binary.Size(ptp.CancelUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{}))},
+		Reserved:        0,
+		MsgTypeAndFlags: ptp.NewUnicastMsgTypeAndFlags(ptp.MessageAnnounce, 0),
+	}
+
+	sc.initSignaling()
+	sc.UpdateSignalingCancel()
+
+	require.Equal(t, uint16(50), sc.Signaling().Header.MessageLength) // check packet length
+	require.Equal(t, tlv, sc.Signaling().TLVs[0])
+}
+
+func TestSendSignalingGrant(t *testing.T) {
+	w := &sendWorker{
+		signalingQueue: make(chan *SubscriptionClient, 10),
+	}
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		StaticConfig: StaticConfig{
+			SendWorkers: 10,
+		},
+	}
+
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+
+	require.Equal(t, 0, len(w.signalingQueue))
+	sc.sendSignalingGrant(&ptp.Signaling{}, 0, 0, 0)
+	require.Equal(t, 1, len(w.signalingQueue))
+
+	s := <-w.signalingQueue
+	require.Equal(t, ptp.TLVGrantUnicastTransmission, s.signaling.TLVs[0].(*ptp.GrantUnicastTransmissionTLV).TLVHead.TLVType)
+	require.Equal(t, uint16(binary.Size(ptp.Header{})+binary.Size(ptp.PortIdentity{})+binary.Size(ptp.GrantUnicastTransmissionTLV{})), s.signaling.Header.MessageLength)
+}
+
+func TestSendSignalingCancel(t *testing.T) {
+	w := &sendWorker{
+		signalingQueue: make(chan *SubscriptionClient, 10),
+	}
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		StaticConfig: StaticConfig{
+			SendWorkers: 10,
+		},
+	}
+
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
+
+	require.Equal(t, 0, len(w.signalingQueue))
+	sc.sendSignalingCancel()
+	require.Equal(t, 1, len(w.signalingQueue))
+
+	s := <-w.signalingQueue
+	require.Equal(t, ptp.TLVCancelUnicastTransmission, s.signaling.TLVs[0].(*ptp.CancelUnicastTransmissionTLV).TLVHead.TLVType)
+	require.Equal(t, uint16(binary.Size(ptp.Header{})+binary.Size(ptp.PortIdentity{})+binary.Size(ptp.CancelUnicastTransmissionTLV{})), s.signaling.Header.MessageLength)
 }

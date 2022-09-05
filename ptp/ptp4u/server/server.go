@@ -308,7 +308,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 	// Initialize the new random. We will re-seed it every time in findWorker
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	var grantType ptp.MessageType
+	var signalingType ptp.MessageType
 	var durationt time.Duration
 	var intervalt time.Duration
 	var expire time.Time
@@ -339,21 +339,22 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 			for _, tlv := range signaling.TLVs {
 				switch v := tlv.(type) {
 				case *ptp.RequestUnicastTransmissionTLV:
-					grantType = v.MsgTypeAndReserved.MsgType()
-					log.Debugf("Got %s grant request", grantType)
+					signalingType = v.MsgTypeAndReserved.MsgType()
+					s.Stats.IncRXSignalingGrant(signalingType)
+					log.Debugf("Got %s grant request", signalingType)
 					durationt = time.Duration(v.DurationField) * time.Second
 					expire = time.Now().Add(durationt)
 					intervalt = v.LogInterMessagePeriod.Duration()
 
-					switch grantType {
+					switch signalingType {
 					case ptp.MessageAnnounce, ptp.MessageSync, ptp.MessageDelayResp:
 						worker = s.findWorker(signaling.SourcePortIdentity, r)
-						sc = worker.FindSubscription(signaling.SourcePortIdentity, grantType)
+						sc = worker.FindSubscription(signaling.SourcePortIdentity, signalingType)
 						if sc == nil || !sc.Running() {
 							ip := timestamp.SockaddrToIP(gclisa)
 							eclisa := timestamp.IPToSockaddr(ip, ptp.PortEvent)
-							sc = NewSubscriptionClient(worker.queue, worker.grantQueue, eclisa, gclisa, grantType, s.Config, intervalt, expire)
-							worker.RegisterSubscription(signaling.SourcePortIdentity, grantType, sc)
+							sc = NewSubscriptionClient(worker.queue, worker.signalingQueue, eclisa, gclisa, signalingType, s.Config, intervalt, expire)
+							worker.RegisterSubscription(signaling.SourcePortIdentity, signalingType, sc)
 						} else {
 							// Update existing subscription data
 							sc.SetExpire(expire)
@@ -365,29 +366,30 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 
 						// Reject queries out of limit
 						if intervalt < s.Config.MinSubInterval || durationt > s.Config.MaxSubDuration || s.ctx.Err() != nil {
-							s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0)
+							sc.sendSignalingGrant(signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, 0)
 							continue
 						}
 
 						// Send confirmation grant
-						s.sendGrant(sc, signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField)
+						sc.sendSignalingGrant(signaling, v.MsgTypeAndReserved, v.LogInterMessagePeriod, v.DurationField)
 
 						if !sc.Running() {
 							go sc.Start(s.ctx)
 						}
 					default:
-						log.Errorf("Got unsupported grant type %s", grantType)
+						log.Errorf("Got unsupported grant type %s", signalingType)
 					}
-					s.Stats.IncRXSignalingGrant(grantType)
 				case *ptp.CancelUnicastTransmissionTLV:
-					grantType = v.MsgTypeAndFlags.MsgType()
-					log.Debugf("Got %s cancel request", grantType)
+					signalingType = v.MsgTypeAndFlags.MsgType()
+					s.Stats.IncRXSignalingCancel(signalingType)
+					log.Debugf("Got %s cancel request", signalingType)
 					worker = s.findWorker(signaling.SourcePortIdentity, r)
-					sc = worker.FindSubscription(signaling.SourcePortIdentity, grantType)
+					sc = worker.FindSubscription(signaling.SourcePortIdentity, signalingType)
 					if sc != nil {
 						sc.Stop()
 					}
-					s.Stats.IncRXSignalingCancel(grantType)
+				case *ptp.AcknowledgeCancelUnicastTransmissionTLV:
+					log.Debugf("Got %s acknowledge cancel request", signalingType)
 				default:
 					log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)
 				}
@@ -402,16 +404,25 @@ func (s *Server) findWorker(clientID ptp.PortIdentity, r *rand.Rand) *sendWorker
 	return s.sw[r.Intn(s.Config.SendWorkers)]
 }
 
-// sendGrant sends a Unicast Grant message
-func (s *Server) sendGrant(sc *SubscriptionClient, sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32) {
-	sc.UpdateGrant(sg, mt, interval, duration)
-	sc.OnceGrant()
-}
-
 // Drain traffic
 func (s *Server) Drain() {
 	if s.ctx != nil && s.ctx.Err() == nil {
 		s.cancel()
+	}
+
+	// Wait for drain to complete for up to 10 seconds
+	for i := 0; i < 10; i++ {
+		// Verifying all subscriptions are over
+		for _, w := range s.sw {
+			w.inventoryClients()
+			for _, subs := range w.clients {
+				if len(subs) != 0 {
+					log.Warningf("Still waiting for %d subscriptions on worker %d to finish...", len(subs), w.id)
+					time.Sleep(time.Second)
+					break
+				}
+			}
+		}
 	}
 }
 
@@ -457,6 +468,11 @@ func (s *Server) handleSigterm() {
 	signal.Notify(sigchan, unix.SIGTERM, unix.SIGINT)
 	<-sigchan
 	log.Warning("Shutting down ptp4u")
+
+	log.Info("Initiating drain")
+	s.Drain()
+
+	log.Info("Removing pid")
 	if err := s.Config.DeletePidFile(); err != nil {
 		log.Fatalf("Failed to remove pid file: %v", err)
 	}

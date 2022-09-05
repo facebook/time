@@ -114,29 +114,6 @@ func TestStartGeneralListener(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 }
 
-func TestSendGrant(t *testing.T) {
-	w := &sendWorker{
-		grantQueue: make(chan *SubscriptionClient, 10),
-	}
-	c := &Config{
-		clockIdentity: ptp.ClockIdentity(1234),
-		StaticConfig: StaticConfig{
-			SendWorkers: 10,
-		},
-	}
-	s := Server{
-		Config: c,
-		Stats:  stats.NewJSONStats(),
-		sw:     make([]*sendWorker, c.SendWorkers),
-	}
-	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	sc := NewSubscriptionClient(w.queue, w.grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
-
-	require.Equal(t, 0, len(w.grantQueue))
-	s.sendGrant(sc, &ptp.Signaling{}, 0, 0, 0)
-	require.Equal(t, 1, len(w.grantQueue))
-}
-
 func TestDrain(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := Server{
@@ -196,8 +173,8 @@ func TestHandleSighup(t *testing.T) {
 	s.sw[0] = newSendWorker(0, s.Config, s.Stats)
 	s.sw[1] = newSendWorker(0, s.Config, s.Stats)
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
-	scA := NewSubscriptionClient(s.sw[0].queue, s.sw[0].grantQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Now().Add(time.Minute))
-	scS := NewSubscriptionClient(s.sw[1].queue, s.sw[1].grantQueue, sa, sa, ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
+	scA := NewSubscriptionClient(s.sw[0].queue, s.sw[0].signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Now().Add(time.Minute))
+	scS := NewSubscriptionClient(s.sw[1].queue, s.sw[1].signalingQueue, sa, sa, ptp.MessageSync, c, time.Second, time.Now().Add(time.Minute))
 	s.sw[0].RegisterSubscription(clipi, ptp.MessageAnnounce, scA)
 	s.sw[1].RegisterSubscription(clipi, ptp.MessageSync, scS)
 
