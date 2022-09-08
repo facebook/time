@@ -230,19 +230,28 @@ var diagnosers = []diagnoser{
 	checkPathDelay,
 }
 
-func runDiagnosers(r *checker.PTPCheckResult) {
-	extra := expandDiagnosers(r)
-	toRun := append(diagnosers, extra...)
+func runDiagnosers(r *checker.PTPCheckResult, toRun []diagnoser) int {
+	failed := 0
 	for _, check := range toRun {
 		status, msg := check(r)
+		if status != OK {
+			failed++
+		}
 		switch status {
 		case CRITICAL:
 			fmt.Printf("%s %s\n", failString, msg)
-			os.Exit(1)
+			return 127
 		default:
 			fmt.Printf("%s %s\n", statusToColor[status], msg)
 		}
 	}
+	return failed
+}
+
+func runAllDiagnosers(r *checker.PTPCheckResult) int {
+	extra := expandDiagnosers(r)
+	toRun := append(diagnosers, extra...)
+	return runDiagnosers(r, toRun)
 }
 
 func init() {
@@ -254,6 +263,10 @@ func init() {
 var diagCmd = &cobra.Command{
 	Use:   "diag",
 	Short: "Perform basic PTP diagnosis, report in human-readable form.",
+	Long: `Perform basic PTP diagnosis, report in human-readable form.
+Runs a set of checks against the PTP client, and prints the results.
+Exit code will be equal to sum of failed check, or 127 in case of critical problem.
+`,
 	Run: func(cmd *cobra.Command, args []string) {
 		ConfigureVerbosity()
 
@@ -261,6 +274,7 @@ var diagCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		runDiagnosers(result)
+		exitCode := runAllDiagnosers(result)
+		os.Exit(exitCode)
 	},
 }
