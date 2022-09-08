@@ -212,5 +212,23 @@ func TestPortServiceStatsDiagnosers(t *testing.T) {
 	status, msg = diagnosers[3](r)
 	assert.Equal(t, FAIL, status)
 	assert.Equal(t, "FollowUp mismatch count is 2000, we expect it to be within 100. We expect FollowUp packets to arrive in correct order", msg)
+}
 
+func TestRunDiagnosers(t *testing.T) {
+	toRun := []diagnoser{
+		checkGMPresent,
+		checkOffset,
+		checkPathDelay,
+	}
+	r := &checker.PTPCheckResult{
+		MeanPathDelayNS: 100.0,
+	}
+	exitCode := runDiagnosers(r, toRun)
+	require.Equal(t, 2, exitCode)
+	r.GrandmasterPresent = true
+	exitCode = runDiagnosers(r, toRun)
+	require.Equal(t, 1, exitCode)
+	r.OffsetFromMasterNS = 100.0
+	exitCode = runDiagnosers(r, toRun)
+	require.Equal(t, 0, exitCode)
 }
