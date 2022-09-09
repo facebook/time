@@ -93,14 +93,6 @@ func (sc *SubscriptionClient) Start(ctx context.Context) {
 	// Send first message right away
 	sc.reload <- true
 
-	// Send 1 announce additional messages to allow quicker restart of ptp4l
-	// https://sourceforge.net/p/linuxptp/mailman/message/37685839/
-	// https://github.com/richardcochran/linuxptp/blob/ef9ba9489c2f664ea34e5e4dbddbb76cddef5254/foreign.h#L28
-	// https://github.com/richardcochran/linuxptp/blob/33ac7d25cd9212e79be6f7023ba18cfa5020e35b/port.c#L2546
-	if sc.subscriptionType == ptp.MessageAnnounce {
-		sc.reload <- true
-	}
-
 	sc.runningInterval = sc.interval
 	sc.intervalTicker = time.NewTicker(sc.runningInterval)
 
