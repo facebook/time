@@ -182,7 +182,7 @@ func TestHandleSighup(t *testing.T) {
 	go scS.Start(context.Background())
 	time.Sleep(100 * time.Millisecond)
 
-	require.Equal(t, 2, len(s.sw[0].queue))
+	require.Equal(t, 1, len(s.sw[0].queue))
 	require.Equal(t, 1, len(s.sw[1].queue))
 
 	cfg, err := os.CreateTemp("", "ptp4u")
@@ -214,7 +214,7 @@ utcoffset: "37s"
 	dcMux.Unlock()
 
 	// Make sure after we send SIGHUP we get the event in the Announce queue only
-	require.Equal(t, 3, len(s.sw[0].queue))
+	require.Equal(t, 2, len(s.sw[0].queue))
 	require.Equal(t, 1, len(s.sw[1].queue))
 }
 
