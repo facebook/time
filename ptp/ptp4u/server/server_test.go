@@ -213,8 +213,7 @@ utcoffset: "37s"
 	require.Equal(t, expected.DynamicConfig, c.DynamicConfig)
 	dcMux.Unlock()
 
-	// Make sure after we send SIGHUP we get the event in the Announce queue only
-	require.Equal(t, 2, len(s.sw[0].queue))
+	require.Equal(t, 1, len(s.sw[0].queue))
 	require.Equal(t, 1, len(s.sw[1].queue))
 }
 

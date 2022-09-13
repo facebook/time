@@ -449,14 +449,6 @@ func (s *Server) handleSighup() {
 		s.Config.DynamicConfig = *dc
 		dcMux.Unlock()
 
-		// Sending announces
-		log.Info("Sending announces")
-		for _, worker := range s.sw {
-			clients := worker.FindClients(ptp.MessageAnnounce)
-			for _, sc := range clients {
-				sc.Reload()
-			}
-		}
 		s.Stats.IncReload()
 	}
 }
