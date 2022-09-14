@@ -45,7 +45,7 @@ type SubscriptionClient struct {
 	expire     time.Time
 	sequenceID uint16
 	running    bool
-	reload     chan bool
+	stop       chan bool
 
 	runningInterval time.Duration
 	intervalTicker  *time.Ticker
@@ -73,7 +73,7 @@ func NewSubscriptionClient(q chan *SubscriptionClient, gq chan *SubscriptionClie
 		queue:            q,
 		signalingQueue:   gq,
 		serverConfig:     sc,
-		reload:           make(chan bool, 10),
+		stop:             make(chan bool, 1),
 	}
 	s.initSync()
 	s.initFollowup()
@@ -91,11 +91,14 @@ func (sc *SubscriptionClient) Start(ctx context.Context) {
 	over := fmt.Sprintf("Subscription %s is over for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa))
 
 	// Send first message right away
-	sc.reload <- true
+	if sc.subscriptionType != ptp.MessageDelayResp {
+		sc.Once()
+	}
 
 	sc.runningInterval = sc.interval
 	sc.intervalTicker = time.NewTicker(sc.runningInterval)
 
+	defer log.Infof(over)
 	defer sc.sendSignalingCancel()
 	defer sc.intervalTicker.Stop()
 	defer sc.setRunning(false)
@@ -103,37 +106,25 @@ func (sc *SubscriptionClient) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof(over)
 			return
-		case <-sc.reload:
-			if !sc.run() {
-				log.Infof(over)
+		case <-sc.stop:
+			return
+		case <-sc.intervalTicker.C:
+			if sc.Expired() {
 				return
 			}
-		case <-sc.intervalTicker.C:
-			if !sc.run() {
-				log.Infof(over)
-				return
+
+			// check if interval changed, maybe update our ticker
+			if sc.runningInterval != sc.interval {
+				sc.runningInterval = sc.interval
+				sc.intervalTicker.Reset(sc.runningInterval)
+			}
+			if sc.subscriptionType != ptp.MessageDelayResp {
+				// Add myself to the worker queue
+				sc.Once()
 			}
 		}
 	}
-}
-
-// run validates the subsciption and executes it
-func (sc *SubscriptionClient) run() bool {
-	if sc.Expired() {
-		return false
-	}
-	// check if interval changed, maybe update our ticker
-	if sc.runningInterval != sc.interval {
-		sc.runningInterval = sc.interval
-		sc.intervalTicker.Reset(sc.runningInterval)
-	}
-	if sc.subscriptionType != ptp.MessageDelayResp {
-		// Add myself to the worker queue
-		sc.Once()
-	}
-	return true
 }
 
 // Once adds itself to the worker queue once
@@ -144,16 +135,6 @@ func (sc *SubscriptionClient) Once() {
 // OnceSignaling adds itself to the worker signaling queue once
 func (sc *SubscriptionClient) OnceSignaling() {
 	sc.signalingQueue <- sc
-}
-
-// Once adds itself to the worker queue once
-func (sc *SubscriptionClient) Reload() {
-	sc.Lock()
-	defer sc.Unlock()
-
-	if sc.running {
-		sc.reload <- true
-	}
 }
 
 // Expired checks if the subscription expired or not
@@ -167,11 +148,11 @@ func (sc *SubscriptionClient) Expired() bool {
 func (sc *SubscriptionClient) Stop() {
 	sc.Lock()
 	defer sc.Unlock()
-	// Simply set the expiration time and subscription will be stopped
+	// Make sure we mark subscription as expired
 	sc.expire = time.Now()
-	// And demand subscription reload
+	// And demand subscription stop
 	if sc.running {
-		sc.reload <- true
+		sc.stop <- true
 	}
 }
 

@@ -103,6 +103,11 @@ func TestSubscriptionStop(t *testing.T) {
 	require.True(t, sc.Expired())
 	require.False(t, sc.Running())
 
+	// No matter how many times we run stop we should not lock
+	sc.Stop()
+	sc.Stop()
+	sc.Stop()
+
 	require.Equal(t, 1, len(w.signalingQueue))
 	s := <-w.signalingQueue
 	require.Equal(t, ptp.TLVCancelUnicastTransmission, s.signaling.TLVs[0].(*ptp.CancelUnicastTransmissionTLV).TLVHead.TLVType)
