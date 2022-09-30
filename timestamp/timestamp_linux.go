@@ -18,7 +18,9 @@ package timestamp
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -81,17 +83,28 @@ func byteToTime(data []byte) (time.Time, error) {
 }
 
 func ioctlTimestamp(fd int, ifname string, filter int32) error {
-	hw := &hwtstampСonfig{
+	// empty config, will be populated after we call SIOCGHWTSTAMP
+	hw := &hwtstampConfig{
 		flags:    0,
-		txType:   hwtstampTXON,
-		rxFilter: filter,
+		txType:   0,
+		rxFilter: 0,
 	}
 
 	i := &ifreq{data: uintptr(unsafe.Pointer(hw))}
 	copy(i.name[:unix.IFNAMSIZ-1], ifname)
+	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SIOCGHWTSTAMP, uintptr(unsafe.Pointer(i))); errno != 0 {
+		return fmt.Errorf("failed to run ioctl SIOCGHWTSTAMP to see what is enabled: %s (%w)", unix.ErrnoName(errno), errno)
+	}
 
+	// now check if it matches what we want
+	if hw.txType == hwtstampTXON && hw.rxFilter == filter {
+		return nil
+	}
+	// set to desired values
+	hw.txType = hwtstampTXON
+	hw.rxFilter = filter
 	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SIOCSHWTSTAMP, uintptr(unsafe.Pointer(i))); errno != 0 {
-		return fmt.Errorf("failed to run ioctl SIOCSHWTSTAMP: %s (%d)", unix.ErrnoName(errno), errno)
+		return fmt.Errorf("failed to run ioctl SIOCSHWTSTAMP to set timestamps enabled: %s (%w)", unix.ErrnoName(errno), errno)
 	}
 	return nil
 }
@@ -128,6 +141,11 @@ func EnableSWTimestamps(connFd int) error {
 // EnableHWTimestamps enables HW timestamps (TX and RX) on the socket
 func EnableHWTimestamps(connFd int, iface string) error {
 	if err := ioctlTimestamp(connFd, iface, hwtstampFilterAll); err != nil {
+		// no permissions - we are done here
+		if errors.Is(err, syscall.EPERM) {
+			return err
+		}
+		// try again with more narrow filter
 		if err := ioctlTimestamp(connFd, iface, hwtstampFilterPTPv2Event); err != nil {
 			return err
 		}

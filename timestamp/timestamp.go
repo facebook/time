@@ -62,7 +62,7 @@ type ifreq struct {
 }
 
 // from include/uapi/linux/net_tstamp.h
-type hwtstampСonfig struct {
+type hwtstampConfig struct {
 	flags    int32
 	txType   int32
 	rxFilter int32
