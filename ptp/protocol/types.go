@@ -336,6 +336,7 @@ const (
 	ClockClass6         ClockClass = 6
 	ClockClass7         ClockClass = 7
 	ClockClass13        ClockClass = 13
+	ClockClass14        ClockClass = 14
 	ClockClass52        ClockClass = 52
 	ClockClass58        ClockClass = 58
 	ClockClassSlaveOnly ClockClass = 255
