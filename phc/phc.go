@@ -37,8 +37,9 @@ func (t PTPClockTime) Time() time.Time {
 	return time.Unix(t.Sec, int64(t.NSec))
 }
 
-// file descriptor number to clockID
-func fdToClockID(fd uintptr) int32 {
+// FDToClockID converts file descriptor number to clockID.
+// see man(3) clock_gettime, FD_TO_CLOCKID macros
+func FDToClockID(fd uintptr) int32 {
 	return int32((int(^fd) << 3) | 3)
 }
 
@@ -54,16 +55,24 @@ const (
 // SupportedMethods is a list of supported TimeMethods
 var SupportedMethods = []TimeMethod{MethodSyscallClockGettime, MethodIoctlSysOffsetExtended}
 
-// Time returns time we got from network card
-func Time(iface string, method TimeMethod) (time.Time, error) {
+// IfaceToPHCDevice returns path to PHC device associated with given network card iface
+func IfaceToPHCDevice(iface string) (string, error) {
 	info, err := IfaceInfo(iface)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("getting interface info: %w", err)
+		return "", fmt.Errorf("getting interface info: %w", err)
 	}
 	if info.PHCIndex < 0 {
-		return time.Time{}, fmt.Errorf("%s doesn't support PHC", iface)
+		return "", fmt.Errorf("%s doesn't support PHC", iface)
 	}
-	device := fmt.Sprintf("/dev/ptp%d", info.PHCIndex)
+	return fmt.Sprintf("/dev/ptp%d", info.PHCIndex), nil
+}
+
+// Time returns time we got from network card
+func Time(iface string, method TimeMethod) (time.Time, error) {
+	device, err := IfaceToPHCDevice(iface)
+	if err != nil {
+		return time.Time{}, err
+	}
 	switch method {
 	case MethodSyscallClockGettime:
 		return TimeFromDevice(device)
@@ -87,7 +96,7 @@ func TimeFromDevice(device string) (time.Time, error) {
 	}
 	defer f.Close()
 	var ts unix.Timespec
-	if err := unix.ClockGettime(fdToClockID(f.Fd()), &ts); err != nil {
+	if err := unix.ClockGettime(FDToClockID(f.Fd()), &ts); err != nil {
 		return time.Time{}, fmt.Errorf("failed clock_gettime: %w", err)
 	}
 	return time.Unix(ts.Unix()), nil
@@ -112,4 +121,42 @@ func ReadPTPSysOffsetExtended(device string, nsamples int) (*PTPSysOffsetExtende
 		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_EXTENDED %s (%d)", unix.ErrnoName(errno), errno)
 	}
 	return res, nil
+}
+
+// ClockAdjtime issues CLOCK_ADJTIME syscall to either adjust the parameters of given clock,
+// or read them if buf is empty.  man(2) clock_adjtime
+func ClockAdjtime(clockid int32, buf *unix.Timex) (state int, err error) {
+	r0, _, errno := unix.Syscall(unix.SYS_CLOCK_ADJTIME, uintptr(clockid), uintptr(unsafe.Pointer(buf)), 0)
+	state = int(r0)
+	if errno != 0 {
+		err = errno
+	}
+	return state, err
+}
+
+// FrequencyPPBFromDevice reads PHC device frequency in PPB
+func FrequencyPPBFromDevice(device string) (freqPPB float64, err error) {
+	// we need RW permissions to issue CLOCK_ADJTIME on the device, even with empty struct
+	f, err := os.OpenFile(device, os.O_RDWR, 0)
+	if err != nil {
+		return freqPPB, fmt.Errorf("opening device %q to read frequency: %w", device, err)
+	}
+	defer f.Close()
+	tx := &unix.Timex{}
+	state, err := ClockAdjtime(FDToClockID(f.Fd()), tx)
+	// man(2) clock_adjtime
+	freqPPB = float64(tx.Freq) / 65.536
+	if err == nil && state != unix.TIME_OK {
+		return freqPPB, fmt.Errorf("clock %q state %d is not TIME_OK", device, state)
+	}
+	return freqPPB, err
+}
+
+// FrequencyPPB reads network card PHC device frequency in PPB
+func FrequencyPPB(iface string) (float64, error) {
+	device, err := IfaceToPHCDevice(iface)
+	if err != nil {
+		return 0.0, err
+	}
+	return FrequencyPPBFromDevice(device)
 }

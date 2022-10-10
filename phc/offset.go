@@ -100,7 +100,7 @@ func TimeAndOffsetFromDevice(device string, method TimeMethod) (SysoffResult, er
 		defer f.Close()
 		var ts unix.Timespec
 		ts1 := time.Now()
-		err = unix.ClockGettime(fdToClockID(f.Fd()), &ts)
+		err = unix.ClockGettime(FDToClockID(f.Fd()), &ts)
 		ts2 := time.Now()
 		if err != nil {
 			return SysoffResult{}, fmt.Errorf("failed clock_gettime: %w", err)
