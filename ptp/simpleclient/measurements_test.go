@@ -36,15 +36,15 @@ func TestMeasurementsFullRun(t *testing.T) {
 		require.Nil(t, err)
 
 		// time when we received SYNC
-		m.addSync(syncSeq, timeSync)
+		m.addSync(syncSeq, timeSync, 0)
 		// time when SYNC was actually sent by GM
-		m.addFollowUp(syncSeq, timeSync.Add(-netDelay))
+		m.addFollowUp(syncSeq, timeSync.Add(-netDelay), 0)
 		// time when we sent out DELAY_REQ
 		timeDelaySent := timeSync.Add(10 * time.Millisecond)
 		m.addDelayReq(delaySeq, timeDelaySent)
 		// time when DELAY_REQ was received by GM
 		timeLastPacket := timeDelaySent.Add(netDelayBack)
-		m.addDelayResp(delaySeq, timeLastPacket)
+		m.addDelayResp(delaySeq, timeLastPacket, 0)
 
 		got, err := m.latest()
 		require.Nil(t, err)
@@ -67,15 +67,15 @@ func TestMeasurementsFullRun(t *testing.T) {
 		require.Nil(t, err)
 
 		// time when we received SYNC
-		m.addSync(syncSeq, timeSync)
+		m.addSync(syncSeq, timeSync, 0)
 		// time when SYNC was actually sent by GM
-		m.addFollowUp(syncSeq, timeSync.Add(-netDelay))
+		m.addFollowUp(syncSeq, timeSync.Add(-netDelay), 0)
 		// time when we sent out DELAY_REQ
 		timeDelaySent := timeSync.Add(10 * time.Millisecond)
 		m.addDelayReq(delaySeq, timeDelaySent)
 		// time when DELAY_REQ was received by GM
 		timeLastPacket := timeDelaySent.Add(netDelayBack)
-		m.addDelayResp(delaySeq, timeLastPacket)
+		m.addDelayResp(delaySeq, timeLastPacket, 0)
 
 		got, err := m.latest()
 		require.Nil(t, err)
@@ -84,6 +84,38 @@ func TestMeasurementsFullRun(t *testing.T) {
 			ServerToClientDiff: netDelay,
 			ClientToServerDiff: netDelayBack,
 			Offset:             -100 * time.Millisecond,
+			Timestamp:          timeLastPacket,
+		}
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("asymmetrical delay, some offset and correction", func(t *testing.T) {
+		netDelay := 200 * time.Millisecond
+		netDelayBack := 2 * netDelay
+		netCorrection := 6 * time.Microsecond
+		netCorrectionBack := 4 * time.Microsecond
+
+		timeSync, err := time.Parse(time.RFC3339, "2021-05-21T13:32:05+01:00")
+		require.Nil(t, err)
+
+		// time when we received SYNC
+		m.addSync(syncSeq, timeSync, netCorrection)
+		// time when SYNC was actually sent by GM
+		m.addFollowUp(syncSeq, timeSync.Add(-netDelay), 0)
+		// time when we sent out DELAY_REQ
+		timeDelaySent := timeSync.Add(10 * time.Millisecond)
+		m.addDelayReq(delaySeq, timeDelaySent)
+		// time when DELAY_REQ was received by GM
+		timeLastPacket := timeDelaySent.Add(netDelayBack)
+		m.addDelayResp(delaySeq, timeLastPacket, netCorrectionBack)
+
+		got, err := m.latest()
+		require.Nil(t, err)
+		want := &MeasurementResult{
+			Delay:              299995 * time.Microsecond,
+			ServerToClientDiff: netDelay - netCorrection,
+			ClientToServerDiff: netDelayBack - netCorrectionBack,
+			Offset:             -100001 * time.Microsecond,
 			Timestamp:          timeLastPacket,
 		}
 		assert.Equal(t, want, got)
