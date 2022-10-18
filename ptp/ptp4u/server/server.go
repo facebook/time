@@ -51,6 +51,9 @@ type Server struct {
 	// drain logic
 	cancel context.CancelFunc
 	ctx    context.Context
+
+	// graceful shutdown
+	stop bool
 }
 
 // Start the workers send bind to event and general UDP ports
@@ -151,6 +154,12 @@ func (s *Server) Start() error {
 
 	// Wait for ANY gorouine to finish
 	wg.Wait()
+
+	// graceful shutdown
+	if s.stop {
+		return nil
+	}
+
 	return fmt.Errorf("one of server routines finished")
 }
 
@@ -468,4 +477,7 @@ func (s *Server) handleSigterm() {
 	if err := s.Config.DeletePidFile(); err != nil {
 		log.Fatalf("Failed to remove pid file: %v", err)
 	}
+
+	// graceful shutdown
+	s.stop = true
 }
