@@ -49,7 +49,6 @@ func TestChannel(t *testing.T) {
 		err = c.UnmarshalText([]byte(channelS))
 		require.NoError(t, err)
 		require.Equal(t, channel, *c)
-
 	}
 
 	wrongChannelNames := []string{"", "?", "z", "foo"}

@@ -29,10 +29,10 @@ func TestNTPPeerStatsNoSysVars(t *testing.T) {
 	r := &NTPCheckResult{
 		SysVars: nil,
 		Peers: map[uint16]*Peer{
-			0: &Peer{
+			0: {
 				Selection: control.SelCandidate,
 			},
-			1: &Peer{
+			1: {
 				Selection: control.SelBackup,
 			},
 		},
@@ -58,7 +58,7 @@ func TestNTPPeerStatsWithSysPeer(t *testing.T) {
 	r := &NTPCheckResult{
 		SysVars: &s,
 		Peers: map[uint16]*Peer{
-			0: &Peer{
+			0: {
 				SRCAdr:    "192.168.0.2",
 				Selection: control.SelCandidate,
 				Offset:    0.01,
@@ -68,7 +68,7 @@ func TestNTPPeerStatsWithSysPeer(t *testing.T) {
 				PPoll:     9,
 				Jitter:    3.1,
 			},
-			1: &Peer{
+			1: {
 				SRCAdr:    "192.168.0.3",
 				Selection: control.SelSYSPeer,
 				Offset:    0.045,
@@ -79,7 +79,7 @@ func TestNTPPeerStatsWithSysPeer(t *testing.T) {
 				Jitter:    4,
 			},
 			// no ips, skip
-			2: &Peer{
+			2: {
 				Selection: control.SelReject,
 			},
 		},

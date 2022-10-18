@@ -43,7 +43,6 @@ func NewNTPPeerStats(r *NTPCheckResult) (map[string]any, error) {
 		hostnames, err := net.LookupAddr(peer.SRCAdr)
 		if err != nil || len(hostnames) == 0 {
 			hostnames = []string{peer.SRCAdr}
-
 		}
 		// Replace "." and ":" for "_"
 		hostname := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSuffix(hostnames[0], "."), ".", "_"), ":", "_")

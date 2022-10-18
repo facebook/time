@@ -115,7 +115,7 @@ func debugPrint(routes []PathInfo) {
 	}
 
 	log.Debugf("TESTED:")
-	var aux []string
+	aux := make([]string, 0, len(tested))
 	for key := range tested {
 		aux = append(aux, getLookUpName(key))
 	}
@@ -156,7 +156,7 @@ func computeInfo(routes []PathInfo, cfThreshold ptp.Correction) map[keyPair]*Swi
 
 			pair := keyPair{
 				host: host,
-				hop:  int(swh.hop),
+				hop:  swh.hop,
 			}
 			if discovered[pair] == nil {
 				discovered[pair] = &SwitchPrintInfo{
@@ -165,7 +165,7 @@ func computeInfo(routes []PathInfo, cfThreshold ptp.Correction) map[keyPair]*Swi
 					interf:    intf,
 					totalCF:   corrField,
 					routes:    1,
-					hop:       int(swh.hop),
+					hop:       swh.hop,
 					last:      last,
 					maxCF:     corrField,
 					minCF:     corrField,
@@ -206,7 +206,7 @@ func computeInfo(routes []PathInfo, cfThreshold ptp.Correction) map[keyPair]*Swi
 }
 
 func parseSwitchMap(info map[keyPair]*SwitchPrintInfo) []SwitchPrintInfo {
-	var aux []SwitchPrintInfo
+	aux := make([]SwitchPrintInfo, 0, len(info))
 	for _, val := range info {
 		aux = append(aux, *val)
 	}
@@ -236,8 +236,9 @@ func colNumber(header []string, colName string) (int, error) {
 }
 
 func computePrintData(sw []SwitchPrintInfo) [][]string {
-	var ret [][]string
-	ret = append(ret, []string{"uniq", "width", "hop", "ip_address", "intf", "hostname", "flows", "TC", "avg_CF(ns)", "max_CF(ns)", "min_CF(ns)"})
+	ret := [][]string{
+		{"uniq", "width", "hop", "ip_address", "intf", "hostname", "flows", "TC", "avg_CF(ns)", "max_CF(ns)", "min_CF(ns)"},
+	}
 
 	// unique counts number of devices discovered
 	unique := 1

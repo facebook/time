@@ -162,7 +162,7 @@ func TestSyncPacket(t *testing.T) {
 	sc.IncSequenceID()
 	sc.UpdateSync()
 	require.Equal(t, uint16(44), sc.Sync().Header.MessageLength) // check packet length
-	require.Equal(t, uint16(sequenceID+1), sc.Sync().Header.SequenceID)
+	require.Equal(t, sequenceID+1, sc.Sync().Header.SequenceID)
 }
 
 func TestFollowupPacket(t *testing.T) {

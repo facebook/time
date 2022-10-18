@@ -372,7 +372,7 @@ func (c *fakeConn) Write(p []byte) (n int, err error) {
 	return 0, nil
 }
 
-func prepareTestClient(t *testing.T, packets ...ptp.Packet) (*fakeConn, *ptp.MgmtClient) {
+func prepareTestClient(t *testing.T, packets ...ptp.Packet) *ptp.MgmtClient {
 	outputs := []*bytes.Buffer{}
 	for _, packet := range packets {
 		buf := &bytes.Buffer{}
@@ -383,35 +383,35 @@ func prepareTestClient(t *testing.T, packets ...ptp.Packet) (*fakeConn, *ptp.Mgm
 		outputs = append(outputs, buf)
 	}
 	conn := newConn(outputs)
-	return conn, &ptp.MgmtClient{Sequence: 1, Connection: conn}
+	return &ptp.MgmtClient{Sequence: 1, Connection: conn}
 }
 
 func TestCheckerRunEmpty(t *testing.T) {
-	_, client := prepareTestClient(t)
+	client := prepareTestClient(t)
 	res, err := Run(client)
 	require.EqualError(t, err, "getting CURRENT_DATA_SET management TLV: EOF")
 	require.Nil(t, res)
 }
 
 func TestCheckerRunErrorMsg(t *testing.T) {
-	_, client := prepareTestClient(t, managementError)
+	client := prepareTestClient(t, managementError)
 	res, err := Run(client)
 	require.EqualError(t, err, "getting CURRENT_DATA_SET management TLV: got Management Error in response: NOT_SUPPORTED")
 	require.Nil(t, res)
 
-	_, client = prepareTestClient(t, currentDataSet, managementError)
+	client = prepareTestClient(t, currentDataSet, managementError)
 	res, err = Run(client)
 	require.EqualError(t, err, "getting DEFAULT_DATA_SET management TLV: got Management Error in response: NOT_SUPPORTED")
 	require.Nil(t, res)
 
-	_, client = prepareTestClient(t, currentDataSet, defaultDataSet, managementError)
+	client = prepareTestClient(t, currentDataSet, defaultDataSet, managementError)
 	res, err = Run(client)
 	require.EqualError(t, err, "getting PARENT_DATA_SET management TLV: got Management Error in response: NOT_SUPPORTED")
 	require.Nil(t, res)
 }
 
 func TestCheckerRunWithoutNP(t *testing.T) {
-	_, client := prepareTestClient(t, currentDataSet, defaultDataSet, parentDataSet, managementError)
+	client := prepareTestClient(t, currentDataSet, defaultDataSet, parentDataSet, managementError)
 	res, err := Run(client)
 	require.NoError(t, err)
 
@@ -429,7 +429,7 @@ func TestCheckerRunWithoutNP(t *testing.T) {
 }
 
 func TestCheckerRunWithPortStats(t *testing.T) {
-	_, client := prepareTestClient(t, currentDataSet, defaultDataSet, parentDataSet, portStatsNP, managementError)
+	client := prepareTestClient(t, currentDataSet, defaultDataSet, parentDataSet, portStatsNP, managementError)
 	res, err := Run(client)
 	require.NoError(t, err)
 
@@ -469,7 +469,7 @@ func TestCheckerRunWithPortStats(t *testing.T) {
 }
 
 func TestCheckerRunFull(t *testing.T) {
-	_, client := prepareTestClient(t, currentDataSet, defaultDataSet, parentDataSet, portStatsNP, timeStatusNP, portServiceStatsNP)
+	client := prepareTestClient(t, currentDataSet, defaultDataSet, parentDataSet, portStatsNP, timeStatusNP, portServiceStatsNP)
 	res, err := Run(client)
 	require.NoError(t, err)
 

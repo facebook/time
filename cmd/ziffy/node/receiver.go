@@ -114,14 +114,14 @@ func (r *Receiver) handlePacket(rawPacket gopacket.Packet) {
 	log.Debugf("Type=%v, CF=%v, sPort=%v, sPort2=%v, sIP=%v", ptpSync.Header.MessageType().String(),
 		ptpSync.Header.CorrectionField, ptpSync.Header.SourcePortIdentity.PortNumber, srcPort, srcIP)
 
-	if err := r.sendResponse(ptpSync, srcIP, rawPacket); err != nil {
+	if err := r.sendResponse(srcIP, rawPacket); err != nil {
 		log.Tracef("unable to send response: %v", err)
 		return
 	}
 }
 
 // sendResponse sends ICMPTypeTimeExceeded to sender
-func (r *Receiver) sendResponse(packet *ptp.SyncDelayReq, sourceIP string, rawPacket gopacket.Packet) error {
+func (r *Receiver) sendResponse(sourceIP string, rawPacket gopacket.Packet) error {
 	dst, err := net.ResolveIPAddr("ip6:ipv6-icmp", sourceIP)
 	if err != nil {
 		return fmt.Errorf("unable to resolve sender address: %w", err)

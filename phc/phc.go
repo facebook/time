@@ -83,7 +83,6 @@ func Time(iface string, method TimeMethod) (time.Time, error) {
 		}
 		latest := extended.TS[extended.NSamples-1]
 		return latest[1].Time(), nil
-
 	}
 	return time.Time{}, fmt.Errorf("unknown method to get PHC time %q", method)
 }
@@ -113,12 +112,12 @@ func ReadPTPSysOffsetExtended(device string, nsamples int) (*PTPSysOffsetExtende
 		NSamples: uint32(nsamples),
 	}
 	_, _, errno := unix.Syscall(
-		unix.SYS_IOCTL, uintptr(f.Fd()),
-		uintptr(ioctlPTPSysOffsetExtended),
+		unix.SYS_IOCTL, f.Fd(),
+		ioctlPTPSysOffsetExtended,
 		uintptr(unsafe.Pointer(res)),
 	)
 	if errno != 0 {
-		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_EXTENDED %s (%d)", unix.ErrnoName(errno), errno)
+		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_EXTENDED: %w", errno)
 	}
 	return res, nil
 }

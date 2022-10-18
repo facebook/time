@@ -30,7 +30,7 @@ import (
 // should be only used to verify the integrity of an official leap-second.list
 // document.
 func Compute(data string) string {
-	lines := strings.Split(string(data), "\n")
+	lines := strings.Split(data, "\n")
 
 	var filtered string
 	filterBlanks := func(r rune) rune {

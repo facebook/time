@@ -115,7 +115,7 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 	log.Debugf("Got %d sources", sources.NSources)
 
 	// per-source data
-	for i := 0; i < int(sources.NSources); i++ {
+	for i := 0; i < sources.NSources; i++ {
 		log.Debugf("Fetching source #%d info", i)
 		sourceDataReq := chrony.NewSourceDataPacket(int32(i))
 		packet, err = n.Client.Communicate(sourceDataReq)

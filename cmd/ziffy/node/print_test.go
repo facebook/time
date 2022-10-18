@@ -89,16 +89,16 @@ func TestGetHostIfPrefix(t *testing.T) {
 
 func TestHopCount(t *testing.T) {
 	swInfo := []SwitchPrintInfo{
-		SwitchPrintInfo{hop: 1},
-		SwitchPrintInfo{hop: 1},
-		SwitchPrintInfo{hop: 2},
-		SwitchPrintInfo{hop: 2},
-		SwitchPrintInfo{hop: 2},
-		SwitchPrintInfo{hop: 3},
-		SwitchPrintInfo{hop: 4},
-		SwitchPrintInfo{hop: 4},
-		SwitchPrintInfo{hop: 4},
-		SwitchPrintInfo{hop: 4},
+		{hop: 1},
+		{hop: 1},
+		{hop: 2},
+		{hop: 2},
+		{hop: 2},
+		{hop: 3},
+		{hop: 4},
+		{hop: 4},
+		{hop: 4},
+		{hop: 4},
 	}
 
 	cnt := hopCount(swInfo, 1)

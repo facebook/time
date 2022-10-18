@@ -321,7 +321,7 @@ func (n NTPControlMsgHead) HasMore() bool {
 
 // GetOperation returns int operation extracted from REMOp 8bit word
 func (n NTPControlMsgHead) GetOperation() uint8 {
-	return uint8(n.REMOp & 0x1f) // last 5 bits
+	return n.REMOp & 0x1f // last 5 bits
 }
 
 // GetSystemStatus returns parsed SystemStatusWord struct if present

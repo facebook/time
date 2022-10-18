@@ -90,8 +90,7 @@ func (s *Sender) Start() ([]PathInfo, error) {
 
 	for i := 0; i < s.Config.PortCount; i++ {
 		s.routes = append(s.routes, PathInfo{switches: nil, rackSwHostname: s.rackSwHostname})
-		_, err := s.traceRoute(s.Config.DestinationAddress, s.Config.SourcePort+i, false)
-		if err != nil {
+		if err := s.traceRoute(s.Config.DestinationAddress, s.Config.SourcePort+i, false); err != nil {
 			log.Errorf("traceRoute failed: %v", err)
 			continue
 		}
@@ -128,7 +127,7 @@ func sortSwitchesByHop(swArray []SwitchTrafficInfo) {
 
 // clearPaths fixes corner case scenarios
 func (s *Sender) clearPaths() []PathInfo {
-	var retPaths []PathInfo
+	retPaths := make([]PathInfo, 0, len(s.routes))
 	idx := 0
 	for _, route := range s.routes {
 		retPaths = append(retPaths, PathInfo{switches: nil, rackSwHostname: s.rackSwHostname})
@@ -157,7 +156,7 @@ func (s *Sender) sweepRackPrefix() {
 		for j := 0; j < s.Config.PortCount; j++ {
 			s.routes = append(s.routes, PathInfo{rackSwHostname: s.rackSwHostname})
 
-			if _, err := s.traceRoute(newIP.String(), s.Config.SourcePort+j, true); err != nil {
+			if err := s.traceRoute(newIP.String(), s.Config.SourcePort+j, true); err != nil {
 				log.Errorf("sweepRackPrefix traceRoute failed: %v", err)
 				continue
 			}
@@ -170,11 +169,10 @@ func (s *Sender) sweepRackPrefix() {
 	fmt.Printf("\n\n")
 }
 
-func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) ([]SwitchTrafficInfo, error) {
-	var route []SwitchTrafficInfo
+func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) error {
 	ptpUDPAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(destinationIP, fmt.Sprint(s.Config.DestinationPort)))
 	if err != nil {
-		return nil, fmt.Errorf("traceRoute unable to resolve UDPAddr: %w", err)
+		return fmt.Errorf("traceRoute unable to resolve UDPAddr: %w", err)
 	}
 	ptpAddr := timestamp.IPToSockaddr(ptpUDPAddr.IP, s.Config.DestinationPort)
 	domain := unix.AF_INET6
@@ -183,16 +181,16 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) (
 	}
 	connFd, err := unix.Socket(domain, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
 	if err != nil {
-		return nil, fmt.Errorf("traceRoute unable to create connection: %w", err)
+		return fmt.Errorf("traceRoute unable to create connection: %w", err)
 	}
 	defer unix.Close(connFd)
 	// set SO_REUSEPORT so we can trace network path from same source port that ptp4u uses
 	if err = unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
-		return nil, fmt.Errorf("setting SO_REUSEPORT on sender socket: %s", err)
+		return fmt.Errorf("setting SO_REUSEPORT on sender socket: %w", err)
 	}
 	localAddr := timestamp.IPToSockaddr(net.IPv6zero, sendingPort)
 	if err := unix.Bind(connFd, localAddr); err != nil {
-		return nil, fmt.Errorf("traceRoute unable to bind %v connection: %w", localAddr, err)
+		return fmt.Errorf("traceRoute unable to bind %v connection: %w", localAddr, err)
 	}
 
 	destReached := false
@@ -206,11 +204,11 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) (
 	// the destination has responded unless continue is specified
 	for hop := s.Config.HopMin; hop <= hopMax && (!destReached || s.Config.ContReached); hop++ {
 		if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_UNICAST_HOPS, hop); err != nil {
-			return route, err
+			return err
 		}
 		// First 2 bits from Traffic Class are unused, so we shift the value 2 bits
 		if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, s.Config.DSCP<<2); err != nil {
-			return route, err
+			return err
 		}
 		var p ptp.Packet
 		switch s.Config.MessageType {
@@ -219,11 +217,11 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) (
 		case ptp.MessageSignaling:
 			p = formSignalingPacket(hop, s.currentRoute)
 		default:
-			return route, fmt.Errorf("unsupported packet type %v", s.Config.MessageType)
+			return fmt.Errorf("unsupported packet type %v", s.Config.MessageType)
 		}
 
 		if err := s.sendEventMsg(p, connFd, ptpAddr); err != nil {
-			return route, err
+			return err
 		}
 
 		select {
@@ -237,7 +235,7 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) (
 			continue
 		}
 	}
-	return route, nil
+	return nil
 }
 
 func (s *Sender) sendEventMsg(p ptp.Packet, ptpConn int, ptpAddr unix.Sockaddr) error {
@@ -269,18 +267,18 @@ func (s *Sender) monitorIcmp(conn net.PacketConn) {
 }
 
 // handleIcmpPacket is a handler which gets called every time icmp packets arrive
-func (s *Sender) handleIcmpPacket(rawPacket []byte, len int, rAddr net.Addr) {
+func (s *Sender) handleIcmpPacket(rawPacket []byte, l int, rAddr net.Addr) {
 	icmpType := rawPacket[0]
 	if ipv6.ICMPType(icmpType) != ipv6.ICMPTypeTimeExceeded {
 		log.Tracef("not ipv6 timeexceeded packet")
 		return
 	}
 	ptpOffset := Ipv6HeaderSize + UDPHeaderSize + ICMPHeaderSize
-	if ptpOffset > len {
+	if ptpOffset > l {
 		log.Tracef("packet too short")
 		return
 	}
-	ptpPacket, err := ptp.DecodePacket(rawPacket[ptpOffset:len])
+	ptpPacket, err := ptp.DecodePacket(rawPacket[ptpOffset:l])
 	if err != nil {
 		log.Tracef("PTP not contained in ICMP")
 		return
@@ -335,7 +333,7 @@ func (s *Sender) formNewDest(i int) net.IP {
 	ip[len(ip)-2] += byte(i >> 8)
 	// if rack switch /64 is 2401:db00:251c:2608:: and i is 4
 	// resulting ip is 2401:db00:251c:2608:face:face:0:4
-	return net.IP(ip)
+	return ip
 }
 
 // rackSwHostname listens to lldp packets from rack switch

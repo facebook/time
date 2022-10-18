@@ -99,7 +99,7 @@ func ReadPacketWithRXTimestamp(connFd int) ([]byte, unix.Sockaddr, time.Time, er
 func ReadPacketWithRXTimestampBuf(connFd int, buf, oob []byte) (int, unix.Sockaddr, time.Time, error) {
 	bbuf, boob, _, saddr, err := unix.Recvmsg(connFd, buf, oob, 0)
 	if err != nil {
-		return 0, nil, time.Time{}, fmt.Errorf("failed to read timestamp: %v", err)
+		return 0, nil, time.Time{}, fmt.Errorf("failed to read timestamp: %w", err)
 	}
 
 	timestamp, err := socketControlMessageTimestamp(oob[:boob])

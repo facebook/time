@@ -58,16 +58,16 @@ func TestClearPaths(t *testing.T) {
 	}
 	noOrderIndex := 0
 	noOrderPath := []SwitchTrafficInfo{
-		SwitchTrafficInfo{hop: 1, routeIdx: 1},
-		SwitchTrafficInfo{hop: 4, routeIdx: 1},
-		SwitchTrafficInfo{hop: 2, routeIdx: 1},
+		{hop: 1, routeIdx: 1},
+		{hop: 4, routeIdx: 1},
+		{hop: 2, routeIdx: 1},
 	}
 	duplicateIndex := 1
 	duplicatePath := []SwitchTrafficInfo{
-		SwitchTrafficInfo{hop: 1, routeIdx: 1},
-		SwitchTrafficInfo{hop: 2, routeIdx: 1},
-		SwitchTrafficInfo{hop: 2, routeIdx: 1},
-		SwitchTrafficInfo{hop: 3, routeIdx: 1},
+		{hop: 1, routeIdx: 1},
+		{hop: 2, routeIdx: 1},
+		{hop: 2, routeIdx: 1},
+		{hop: 3, routeIdx: 1},
 	}
 	s.routes = append(s.routes, PathInfo{switches: noOrderPath})
 	s.routes = append(s.routes, PathInfo{switches: duplicatePath})

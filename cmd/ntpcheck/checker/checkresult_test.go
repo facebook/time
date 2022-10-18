@@ -40,7 +40,7 @@ func TestNTPCheckResult_FindSysPeer(t *testing.T) {
 			name: "no sys peer",
 			r: &NTPCheckResult{
 				Peers: map[uint16]*Peer{
-					0: &Peer{
+					0: {
 						Selection: control.SelCandidate,
 					},
 				},
@@ -52,10 +52,10 @@ func TestNTPCheckResult_FindSysPeer(t *testing.T) {
 			name: "found sys peer",
 			r: &NTPCheckResult{
 				Peers: map[uint16]*Peer{
-					0: &Peer{
+					0: {
 						Selection: control.SelCandidate,
 					},
-					1: &Peer{
+					1: {
 						Selection: control.SelSYSPeer,
 					},
 				},
@@ -95,10 +95,10 @@ func TestNTPCheckResult_FindGoodPeers(t *testing.T) {
 			name: "no good peers",
 			r: &NTPCheckResult{
 				Peers: map[uint16]*Peer{
-					0: &Peer{
+					0: {
 						Selection: control.SelOutlier,
 					},
-					1: &Peer{
+					1: {
 						Selection: control.SelReject,
 					},
 				},
@@ -110,25 +110,25 @@ func TestNTPCheckResult_FindGoodPeers(t *testing.T) {
 			name: "some good peers",
 			r: &NTPCheckResult{
 				Peers: map[uint16]*Peer{
-					0: &Peer{
+					0: {
 						Selection: control.SelOutlier,
 					},
-					1: &Peer{
+					1: {
 						Selection: control.SelReject,
 					},
-					2: &Peer{
+					2: {
 						Selection: control.SelCandidate,
 					},
-					3: &Peer{
+					3: {
 						Selection: control.SelBackup,
 					},
 				},
 			},
 			want: []*Peer{
-				&Peer{
+				{
 					Selection: control.SelCandidate,
 				},
-				&Peer{
+				{
 					Selection: control.SelBackup,
 				},
 			},

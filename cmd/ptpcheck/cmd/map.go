@@ -78,7 +78,6 @@ func getDevice(iface string) error {
 		printIfaceData(d, false)
 	}
 	return nil
-
 }
 
 func getIface(ptpDevice int) error {

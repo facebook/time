@@ -21,8 +21,6 @@ requests and responses.
 */
 package stats
 
-import ()
-
 // Stats is a metric collection interface
 type Stats interface {
 	// Start starts a stat reporter

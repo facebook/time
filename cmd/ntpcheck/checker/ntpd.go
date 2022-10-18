@@ -155,7 +155,6 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 			return nil, errors.Wrapf(err, "failed to create Peer structure from response packet for associationID=%x", id)
 		}
 		result.Peers[id] = peer
-
 	}
 	return result, nil
 }

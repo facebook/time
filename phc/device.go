@@ -90,7 +90,7 @@ func IfaceInfo(iface string) (*EthtoolTSinfo, error) {
 		uintptr(unsafe.Pointer(ifreq)),
 	)
 	if errno != 0 {
-		return nil, fmt.Errorf("failed get phc ID: %s (%d)", unix.ErrnoName(errno), errno)
+		return nil, fmt.Errorf("failed get phc ID: %w", errno)
 	}
 	return data, nil
 }
