@@ -144,8 +144,8 @@ func TestParseV2Fail(t *testing.T) {
 
 func TestParse(t *testing.T) {
 	expected := []LeapSecond{
-		LeapSecond{78796800, 1},
-		LeapSecond{94694401, 2},
+		{78796800, 1},
+		{94694401, 2},
 	}
 	f, err := os.CreateTemp(os.TempDir(), "leaptest-")
 	require.NoError(t, err)

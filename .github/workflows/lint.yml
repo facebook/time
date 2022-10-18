@@ -10,10 +10,6 @@ jobs:
           go-version: 1.18
       - run: sudo apt-get install libpcap-dev
       - uses: golangci/golangci-lint-action@v3
-      - run: if [ "$(go fmt ./... | wc -l)" -gt 0 ]; then exit 1; fi
       - run: |
           go get -v -u github.com/u-root/u-root/tools/checklicenses
           go run github.com/u-root/u-root/tools/checklicenses -c .github/workflows/config.json
-      - run: |
-          go get -v -u github.com/client9/misspell
-          go run github.com/client9/misspell/cmd/misspell -error ./

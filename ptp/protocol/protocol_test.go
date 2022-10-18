@@ -72,7 +72,6 @@ func TestBytesTo(t *testing.T) {
 		require.Equal(t, len(b), l)
 		require.Equal(t, b, buf[:l])
 	})
-
 }
 
 func TestParseSync(t *testing.T) {

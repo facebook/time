@@ -113,7 +113,6 @@ func TimeAndOffsetFromDevice(device string, method TimeMethod) (SysoffResult, er
 			return SysoffResult{}, err
 		}
 		return sysoffEstimateExtended(extended), nil
-
 	}
 	return SysoffResult{}, fmt.Errorf("unknown method to get PHC time %q", method)
 }

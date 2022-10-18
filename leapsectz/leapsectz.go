@@ -73,7 +73,6 @@ func Parse(srcfile string) ([]LeapSecond, error) {
 	defer f.Close()
 
 	return parseVx(f)
-
 }
 
 // Latest returns the latest leap second from srcfile. Pass "" to use default file

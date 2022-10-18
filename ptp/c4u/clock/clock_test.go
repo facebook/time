@@ -30,17 +30,17 @@ func TestWorst(t *testing.T) {
 	expected := &ptp.ClockQuality{ClockClass: ptp.ClockClass6, ClockAccuracy: ptp.ClockAccuracyMicrosecond1}
 
 	clocks := []*DataPoint{
-		&DataPoint{
+		{
 			PHCOffset:            100 * time.Nanosecond,
 			OscillatorOffset:     100 * time.Nanosecond,
 			OscillatorClockClass: ClockClassLock,
 		},
-		&DataPoint{
+		{
 			PHCOffset:            time.Microsecond,
 			OscillatorOffset:     100 * time.Nanosecond,
 			OscillatorClockClass: ClockClassLock,
 		},
-		&DataPoint{
+		{
 			PHCOffset:            250 * time.Nanosecond,
 			OscillatorOffset:     100 * time.Nanosecond,
 			OscillatorClockClass: ClockClassLock,
@@ -53,12 +53,12 @@ func TestWorst(t *testing.T) {
 
 	expected = &ptp.ClockQuality{ClockClass: ptp.ClockClass7, ClockAccuracy: ptp.ClockAccuracyMicrosecond25}
 	clocks = []*DataPoint{
-		&DataPoint{
+		{
 			PHCOffset:            12 * time.Microsecond,
 			OscillatorOffset:     time.Microsecond,
 			OscillatorClockClass: ClockClassHoldover,
 		},
-		&DataPoint{
+		{
 			PHCOffset:            10 * time.Nanosecond,
 			OscillatorOffset:     100 * time.Nanosecond,
 			OscillatorClockClass: ClockClassLock,

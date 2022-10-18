@@ -112,17 +112,17 @@ func checkPacketLength(p *Header, l int) error {
 // from having default (and incomplete) MarshalBinaryTo implementation through embedding
 func headerMarshalBinaryTo(p *Header, b []byte) int {
 	b[0] = byte(p.SdoIDAndMsgType)
-	b[1] = byte(p.Version)
+	b[1] = p.Version
 	binary.BigEndian.PutUint16(b[2:], p.MessageLength)
-	b[4] = byte(p.DomainNumber)
-	b[5] = byte(p.MinorSdoID)
+	b[4] = p.DomainNumber
+	b[5] = p.MinorSdoID
 	binary.BigEndian.PutUint16(b[6:], p.FlagField)
 	binary.BigEndian.PutUint64(b[8:], uint64(p.CorrectionField))
 	binary.BigEndian.PutUint32(b[16:], p.MessageTypeSpecific)
 	binary.BigEndian.PutUint64(b[20:], uint64(p.SourcePortIdentity.ClockIdentity))
 	binary.BigEndian.PutUint16(b[28:], p.SourcePortIdentity.PortNumber)
 	binary.BigEndian.PutUint16(b[30:], p.SequenceID)
-	b[32] = byte(p.ControlField)
+	b[32] = p.ControlField
 	b[33] = byte(p.LogMessageInterval)
 	return headerSize
 }
@@ -179,12 +179,12 @@ func (p *Announce) MarshalBinaryTo(b []byte) (int, error) {
 	copy(b[n:], p.OriginTimestamp.Seconds[:]) //uint48
 	binary.BigEndian.PutUint32(b[n+6:], p.OriginTimestamp.Nanoseconds)
 	binary.BigEndian.PutUint16(b[n+10:], uint16(p.CurrentUTCOffset))
-	b[n+12] = byte(p.Reserved)
-	b[n+13] = byte(p.GrandmasterPriority1)
+	b[n+12] = p.Reserved
+	b[n+13] = p.GrandmasterPriority1
 	b[n+14] = byte(p.GrandmasterClockQuality.ClockClass)
 	b[n+15] = byte(p.GrandmasterClockQuality.ClockAccuracy)
 	binary.BigEndian.PutUint16(b[n+16:], p.GrandmasterClockQuality.OffsetScaledLogVariance)
-	b[n+18] = byte(p.GrandmasterPriority2)
+	b[n+18] = p.GrandmasterPriority2
 	binary.BigEndian.PutUint64(b[n+19:], uint64(p.GrandmasterIdentity))
 	binary.BigEndian.PutUint16(b[n+27:], p.StepsRemoved)
 	b[n+29] = byte(p.TimeSource)

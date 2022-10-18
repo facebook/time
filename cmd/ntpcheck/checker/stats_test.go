@@ -29,10 +29,10 @@ func TestNTPStatsNoSysVars(t *testing.T) {
 	r := &NTPCheckResult{
 		SysVars: nil,
 		Peers: map[uint16]*Peer{
-			0: &Peer{
+			0: {
 				Selection: control.SelCandidate,
 			},
-			1: &Peer{
+			1: {
 				Selection: control.SelBackup,
 			},
 		},
@@ -57,7 +57,7 @@ func TestNTPStatsNoGoodPeer(t *testing.T) {
 	r := &NTPCheckResult{
 		SysVars: &s,
 		Peers: map[uint16]*Peer{
-			0: &Peer{},
+			0: {},
 		},
 	}
 	_, err := NewNTPStats(r)
@@ -69,7 +69,7 @@ func TestNTPStatsNoSysPeer(t *testing.T) {
 	r := &NTPCheckResult{
 		SysVars: &s,
 		Peers: map[uint16]*Peer{
-			0: &Peer{
+			0: {
 				Selection: control.SelCandidate,
 				Offset:    0.01,
 				Delay:     2.01,
@@ -78,7 +78,7 @@ func TestNTPStatsNoSysPeer(t *testing.T) {
 				PPoll:     9,
 				Jitter:    3.1,
 			},
-			1: &Peer{
+			1: {
 				Selection: control.SelBackup,
 				Offset:    0.045,
 				Delay:     3.21,
@@ -107,7 +107,7 @@ func TestNTPStatsWithSysPeer(t *testing.T) {
 	r := &NTPCheckResult{
 		SysVars: &s,
 		Peers: map[uint16]*Peer{
-			0: &Peer{
+			0: {
 				Selection: control.SelCandidate,
 				Offset:    0.01,
 				Delay:     2.01,
@@ -116,7 +116,7 @@ func TestNTPStatsWithSysPeer(t *testing.T) {
 				PPoll:     9,
 				Jitter:    3.1,
 			},
-			1: &Peer{
+			1: {
 				Selection: control.SelSYSPeer,
 				Offset:    0.045,
 				Delay:     3.21,

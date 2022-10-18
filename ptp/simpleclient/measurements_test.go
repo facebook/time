@@ -56,7 +56,6 @@ func TestMeasurementsFullRun(t *testing.T) {
 			Timestamp:          timeLastPacket,
 		}
 		assert.Equal(t, want, got)
-
 	})
 
 	t.Run("asymmetrical delay, some offset", func(t *testing.T) {

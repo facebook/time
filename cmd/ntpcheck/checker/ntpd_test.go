@@ -71,7 +71,7 @@ var assocData = assocIDpair(2, psWordBinary)
 func TestNTPCheckRun(t *testing.T) {
 	prepdOutputs := []*control.NTPControlMsg{
 		// system status
-		&control.NTPControlMsg{
+		{
 			NTPControlMsgHead: control.NTPControlMsgHead{
 				VnMode: vnMode,
 				REMOp:  control.MakeREMOp(true, false, false, control.OpReadStatus),
@@ -86,7 +86,7 @@ func TestNTPCheckRun(t *testing.T) {
 			Data: assocData,
 		},
 		// read system variables
-		&control.NTPControlMsg{
+		{
 			NTPControlMsgHead: control.NTPControlMsgHead{
 				VnMode:        vnMode,
 				REMOp:         control.MakeREMOp(true, false, false, control.OpReadVariables),
@@ -95,7 +95,7 @@ func TestNTPCheckRun(t *testing.T) {
 			Data: []uint8("stratum=3,offset=0.1,hpoll=1024,ppoll=10,refid=0001E240,reftime=0x01"),
 		},
 		// read peer variables
-		&control.NTPControlMsg{
+		{
 			NTPControlMsgHead: control.NTPControlMsgHead{
 				VnMode:        vnMode,
 				REMOp:         control.MakeREMOp(true, false, false, control.OpReadVariables),
@@ -118,7 +118,7 @@ func TestNTPCheckRun(t *testing.T) {
 			Offset:  0.1,
 		},
 		Peers: map[uint16]*Peer{
-			2: &Peer{
+			2: {
 				Configured: true,
 				Reachable:  true,
 				Selection:  control.SelSYSPeer,
@@ -149,7 +149,7 @@ func TestNTPCheckRun(t *testing.T) {
 func TestNTPCheckServerStats(t *testing.T) {
 	prepdOutputs := []*control.NTPControlMsg{
 		// read server variables
-		&control.NTPControlMsg{
+		{
 			NTPControlMsgHead: control.NTPControlMsgHead{
 				VnMode:        vnMode,
 				REMOp:         control.MakeREMOp(true, false, false, control.OpReadVariables),

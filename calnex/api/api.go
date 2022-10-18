@@ -467,7 +467,7 @@ func (a *API) FetchCsv(channel Channel, allData bool) ([][]string, error) {
 			if errors.Is(err, io.EOF) {
 				break
 			} else {
-				return nil, fmt.Errorf("failed to parse csv for data from channel %s: %v", channel.String(), err)
+				return nil, fmt.Errorf("failed to parse csv for data from channel %s: %w", channel.String(), err)
 			}
 		}
 		res = append(res, csvLine)

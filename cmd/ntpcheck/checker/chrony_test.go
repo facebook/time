@@ -142,7 +142,7 @@ func TestChronyCheckRun(t *testing.T) {
 			Offset:  1,
 		},
 		Peers: map[uint16]*Peer{
-			0: &Peer{
+			0: {
 				Configured: true,
 				Reachable:  true,
 				Selection:  6,
@@ -155,7 +155,7 @@ func TestChronyCheckRun(t *testing.T) {
 				Offset:     30,
 				Flashers:   []string{},
 			},
-			1: &Peer{
+			1: {
 				Configured: true,
 				Reachable:  false,
 				Selection:  4,
@@ -206,7 +206,7 @@ func TestChronyCheckRunUnix(t *testing.T) {
 			Offset:  1,
 		},
 		Peers: map[uint16]*Peer{
-			0: &Peer{
+			0: {
 				RefID:      "0001E240",
 				RefTime:    refTime.String(),
 				Configured: true,
@@ -224,7 +224,7 @@ func TestChronyCheckRunUnix(t *testing.T) {
 				Jitter:     10,
 				Flashers:   []string{},
 			},
-			1: &Peer{
+			1: {
 				RefID:      "0009FBF1",
 				RefTime:    refTime.String(),
 				Configured: true,

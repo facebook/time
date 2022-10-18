@@ -245,7 +245,7 @@ func (e *UnicastMasterEntry) MarshalBinary() ([]byte, error) {
 	if err := binary.Write(&bytes, binary.BigEndian, e.ClockQuality); err != nil {
 		return nil, err
 	}
-	var selectedBin uint8 = 0
+	var selectedBin uint8
 	if e.Selected {
 		selectedBin = 1
 	}

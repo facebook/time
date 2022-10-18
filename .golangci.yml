@@ -1,0 +1,18 @@
+linters:
+  # extra linters to enable with default set:
+  # https://golangci-lint.run/usage/linters/#enabled-by-default
+  enable:
+    - revive # replacement of golint
+    - asciicheck # code does not contain non-ASCII identifiers
+    - contextcheck # check when function use a non-inherited context
+    - errorlint # error wrapping
+    - gofmt # formatting
+    - misspell # commonly misspelled English words in comments
+    - prealloc # slice declarations that could potentially be pre-allocated
+    - nilerr # code that returns nil even if it checks that the error is not nil
+    - predeclared # code that shadows one of Go's predeclared identifiers
+    - reassign # package variables are not reassigned
+    - unconvert # unnecessary type conversions
+    - unparam # unused function parameters
+    - usestdlibvars # possibility to use variables/constants from the Go standard library
+    - whitespace # leading and trailing whitespace

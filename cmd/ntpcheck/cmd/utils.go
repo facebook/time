@@ -91,7 +91,6 @@ func stripZeroes(num float64) string {
 
 // ntpDate prints data similar to 'ntptime' command output
 func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) error {
-
 	timeout := 5 * time.Second
 	addr := net.JoinHostPort(remoteServerAddr, remoteServerPort)
 	conn, err := net.DialTimeout("udp", addr, timeout)

@@ -88,11 +88,11 @@ func (c *udpConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, erro
 	// get FD of the connection. Can be optimized by doing this when connection is created
 	connFd, err := timestamp.ConnFd(c.UDPConn)
 	if err != nil {
-		return 0, time.Time{}, fmt.Errorf("failed to get conn fd udp connection: %v", err)
+		return 0, time.Time{}, fmt.Errorf("failed to get conn fd udp connection: %w", err)
 	}
 	hwts, _, err := timestamp.ReadTXtimestamp(connFd)
 	if err != nil {
-		return 0, time.Time{}, fmt.Errorf("failed to get timestamp of last packet: %v", err)
+		return 0, time.Time{}, fmt.Errorf("failed to get timestamp of last packet: %w", err)
 	}
 	return n, hwts, nil
 }
@@ -243,7 +243,7 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 	case "": // auto-detection
 		if err := timestamp.EnableHWTimestamps(connFd, c.cfg.Iface); err != nil {
 			if err := timestamp.EnableSWTimestamps(connFd); err != nil {
-				return fmt.Errorf("failed to enable timestamps on port %d: %v", ptp.PortEvent, err)
+				return fmt.Errorf("failed to enable timestamps on port %d: %w", ptp.PortEvent, err)
 			}
 			log.Warningf("Failed to enable hardware timestamps on port %d, falling back to software timestamps", ptp.PortEvent)
 		} else {
@@ -251,11 +251,11 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 		}
 	case HWTIMESTAMP:
 		if err := timestamp.EnableHWTimestamps(connFd, c.cfg.Iface); err != nil {
-			return fmt.Errorf("failed to enable hardware timestamps on port %d: %v", ptp.PortEvent, err)
+			return fmt.Errorf("failed to enable hardware timestamps on port %d: %w", ptp.PortEvent, err)
 		}
 	case SWTIMESTAMP:
 		if err := timestamp.EnableSWTimestamps(connFd); err != nil {
-			return fmt.Errorf("failed to enable software timestamps on port %d: %v", ptp.PortEvent, err)
+			return fmt.Errorf("failed to enable software timestamps on port %d: %w", ptp.PortEvent, err)
 		}
 	default:
 		return fmt.Errorf("unknown type of typestamping: %q", c.cfg.Timestamping)

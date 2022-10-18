@@ -161,9 +161,9 @@ utcoffset: 37s
 	defer os.Remove(cfg.Name())
 	require.NoError(t, err)
 
-	real, err := os.ReadFile(cfg.Name())
+	rl, err := os.ReadFile(cfg.Name())
 	require.NoError(t, err)
-	require.Equal(t, expected, string(real))
+	require.Equal(t, expected, string(rl))
 }
 
 func TestUTCOffsetSanity(t *testing.T) {

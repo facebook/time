@@ -234,7 +234,7 @@ type CancelUnicastTransmissionTLV struct {
 func (t *CancelUnicastTransmissionTLV) MarshalBinaryTo(b []byte) (int, error) {
 	tlvHeadMarshalBinaryTo(&t.TLVHead, b)
 	b[tlvHeadSize] = byte(t.MsgTypeAndFlags)
-	b[tlvHeadSize+1] = byte(t.Reserved)
+	b[tlvHeadSize+1] = t.Reserved
 	return tlvHeadSize + 2, nil
 }
 
@@ -262,7 +262,7 @@ type AcknowledgeCancelUnicastTransmissionTLV struct {
 func (t *AcknowledgeCancelUnicastTransmissionTLV) MarshalBinaryTo(b []byte) (int, error) {
 	tlvHeadMarshalBinaryTo(&t.TLVHead, b)
 	b[tlvHeadSize] = byte(t.MsgTypeAndFlags)
-	b[tlvHeadSize+1] = byte(t.Reserved)
+	b[tlvHeadSize+1] = t.Reserved
 	return tlvHeadSize + 2, nil
 }
 
@@ -332,7 +332,7 @@ type AlternateTimeOffsetIndicatorTLV struct {
 // MarshalBinaryTo marshals bytes to AlternateTimeOffsetIndicatorTLV
 func (t *AlternateTimeOffsetIndicatorTLV) MarshalBinaryTo(b []byte) (int, error) {
 	tlvHeadMarshalBinaryTo(&t.TLVHead, b)
-	b[tlvHeadSize] = byte(t.KeyField)
+	b[tlvHeadSize] = t.KeyField
 	binary.BigEndian.PutUint32(b[tlvHeadSize+1:], uint32(t.CurrentOffset))
 	binary.BigEndian.PutUint32(b[tlvHeadSize+5:], uint32(t.JumpSeconds))
 	copy(b[tlvHeadSize+9:], t.TimeOfNextJump[:]) //uint48
@@ -356,7 +356,7 @@ func (t *AlternateTimeOffsetIndicatorTLV) UnmarshalBinary(b []byte) error {
 	if err := checkTLVLength(&t.TLVHead, len(b), 20, false); err != nil {
 		return err
 	}
-	t.KeyField = uint8(b[tlvHeadSize])
+	t.KeyField = b[tlvHeadSize]
 	t.CurrentOffset = int32(binary.BigEndian.Uint32(b[tlvHeadSize+1:]))
 	t.JumpSeconds = int32(binary.BigEndian.Uint32(b[tlvHeadSize+5:]))
 	copy(t.TimeOfNextJump[:], b[tlvHeadSize+9:]) // uint48

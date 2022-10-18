@@ -98,7 +98,7 @@ func TestJSONExport(t *testing.T) {
 	require.NoError(t, err)
 
 	var data map[string]int64
-	err = json.Unmarshal([]byte(body), &data)
+	err = json.Unmarshal(body, &data)
 	require.NoError(t, err)
 
 	expectedMap := map[string]int64{
