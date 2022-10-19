@@ -26,7 +26,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"sync"
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -51,9 +50,6 @@ type Server struct {
 	// drain logic
 	cancel context.CancelFunc
 	ctx    context.Context
-
-	// graceful shutdown
-	stop bool
 }
 
 // Start the workers send bind to event and general UDP ports
@@ -75,11 +71,10 @@ func (s *Server) Start() error {
 	// initialize the context for the subscriptions
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 
-	// Call wg.Add(1) ONLY once
-	// If ANY goroutine finishes no matter how many of them we run
-	// wg.Done will unblock
-	var wg sync.WaitGroup
-	wg.Add(1)
+	// Done channel signals the graceful shutdown
+	done := make(chan bool)
+	// Fail channel signals the failure and shutdown
+	fail := make(chan bool)
 
 	// start X workers
 	s.sw = make([]*sendWorker, s.Config.SendWorkers)
@@ -87,23 +82,22 @@ func (s *Server) Start() error {
 		// Each worker to monitor own queue
 		s.sw[i] = newSendWorker(i, s.Config, s.Stats)
 		go func(i int) {
-			defer wg.Done()
 			s.sw[i].Start()
+			fail <- true
 		}(i)
 	}
 
 	go func() {
-		defer wg.Done()
 		s.startGeneralListener()
+		fail <- true
 	}()
 	go func() {
-		defer wg.Done()
 		s.startEventListener()
+		fail <- true
 	}()
 
 	// Drain check
 	go func() {
-		defer wg.Done()
 		for ; true; <-time.After(s.Config.DrainInterval) {
 			var drain bool
 			for _, check := range s.Checks {
@@ -122,23 +116,23 @@ func (s *Server) Start() error {
 				s.Stats.SetDrain(0)
 			}
 		}
+		fail <- true
 	}()
 
 	// Watch for SIGHUP and reload dynamic config
 	go func() {
-		defer wg.Done()
 		s.handleSighup()
+		fail <- true
 	}()
 
 	// Watch for SIGTERM and remove pid file
 	go func() {
-		defer wg.Done()
 		s.handleSigterm()
+		done <- true
 	}()
 
 	// Run active metric reporting
 	go func() {
-		defer wg.Done()
 		for ; true; <-time.After(s.Config.MetricInterval) {
 			for _, w := range s.sw {
 				w.inventoryClients()
@@ -150,17 +144,16 @@ func (s *Server) Start() error {
 			s.Stats.Snapshot()
 			s.Stats.Reset()
 		}
+		fail <- true
 	}()
 
 	// Wait for ANY gorouine to finish
-	wg.Wait()
-
-	// graceful shutdown
-	if s.stop {
+	select {
+	case <-done:
 		return nil
+	case <-fail:
+		return fmt.Errorf("one of server routines finished")
 	}
-
-	return fmt.Errorf("one of server routines finished")
 }
 
 // startEventListener launches the listener which listens to subscription requests
@@ -198,19 +191,14 @@ func (s *Server) startEventListener() {
 		log.Fatalf("Failed to set socket to blocking: %s", err)
 	}
 
-	// Call wg.Add(1) ONLY once
-	// If ANY goroutine finishes no matter how many of them we run
-	// wg.Done will unblock
-	var wg sync.WaitGroup
-	wg.Add(1)
-
+	fail := make(chan bool)
 	for i := 0; i < s.Config.RecvWorkers; i++ {
 		go func() {
-			defer wg.Done()
 			s.handleEventMessages(eventConn)
+			fail <- true
 		}()
 	}
-	wg.Wait()
+	<-fail
 }
 
 // startGeneralListener launches the listener which listens to announces
@@ -234,19 +222,14 @@ func (s *Server) startGeneralListener() {
 		log.Fatalf("Failed to set socket to blocking: %s", err)
 	}
 
-	// Call wg.Add(1) ONLY once
-	// If ANY goroutine finishes no matter how many of them we run
-	// wg.Done will unblock
-	var wg sync.WaitGroup
-	wg.Add(1)
-
+	fail := make(chan bool)
 	for i := 0; i < s.Config.RecvWorkers; i++ {
 		go func() {
-			defer wg.Done()
 			s.handleGeneralMessages(generalConn)
+			fail <- true
 		}()
 	}
-	wg.Wait()
+	<-fail
 }
 
 func readPacketBuf(connFd int, buf []byte) (int, unix.Sockaddr, error) {
@@ -477,7 +460,4 @@ func (s *Server) handleSigterm() {
 	if err := s.Config.DeletePidFile(); err != nil {
 		log.Fatalf("Failed to remove pid file: %v", err)
 	}
-
-	// graceful shutdown
-	s.stop = true
 }
