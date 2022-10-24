@@ -251,7 +251,7 @@ func (s *Status) MonitoringJSON(prefix string) ([]byte, error) {
 		fmt.Sprintf("%sgnss.satellites_count", prefix):         int64(s.GNSS.SatellitesCount),
 		fmt.Sprintf("%sgnss.survey_in_position_error", prefix): int64(s.GNSS.SurveyInPositionError),
 		fmt.Sprintf("%sclock.class", prefix):                   int64(s.Clock.Class),
-		fmt.Sprintf("%sclock.offset", prefix):                  int64(s.Clock.Offset),
+		fmt.Sprintf("%sclock.offset_ns", prefix):               int64(s.Clock.Offset),
 	}
 	return json.Marshal(output)
 }
