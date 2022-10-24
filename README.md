@@ -43,6 +43,9 @@ Implementation of monitoring protocol used by Orolia [oscillatord](https://githu
 ### Calnex
 Command line tool and library for a Calnex Sentinel device.
 
+### fbclock
+Client C library and Go daemon to provide TrueTime API based on PTP time.
+
 # License
 time is licensed under Apache 2.0 as found in the [LICENSE file](LICENSE).
 

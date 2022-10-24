@@ -57,3 +57,21 @@ Cli Supports several basic commands such as:
 * Device reboot
 * Device clear
 * Device problem report export
+
+# fbclock
+## fbclock-daemon
+Stateful part of fbclock (TrueTime service).
+
+### Quick Installation
+```console
+go install github.com/facebook/time/cmd/fbclock-daemon@latest
+```
+
+## fbclock-bin
+Simple binary written in C that uses client part of fbclock service.
+
+### Quick Installation
+```console
+cd cmd/fbclock-bin
+make
+```
