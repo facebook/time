@@ -20,3 +20,6 @@ go get github.com/facebook/time/cmd/ptp4u
 
 ## Simpleclient
 Basic PTPv2.1 two-step unicast client implementation.
+
+## linearizability
+Library to perform 'linearizability tests' - when we talk to remote GM using DelayRequest packets and compare clocks.
