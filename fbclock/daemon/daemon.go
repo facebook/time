@@ -133,6 +133,7 @@ func New(cfg *Config, stats StatsServer, l Logger) (*Daemon, error) {
 	// calculated values
 	s.stats.SetCounter("m_ns", 0)
 	s.stats.SetCounter("w_ns", 0)
+	s.stats.SetCounter("drift_ppb", 0)
 	s.stats.SetCounter("time_since_ingress_ns", 0)
 	// error counters
 	s.stats.SetCounter("data_error", 0)
@@ -336,8 +337,7 @@ func (s *Daemon) calculateSHMData(data *dataPoint) (*fbclock.Data, error) {
 	if err != nil {
 		return nil, fmt.Errorf("calculating drift: %w", err)
 	}
-	// increase the hValue by 50% to be conservative
-	hValue *= 1.5
+	s.stats.SetCounter("drift_ppb", int64(hValue))
 	return &fbclock.Data{
 		IngressTimeNS:        data.ingressTimeNS,
 		ErrorBoundNS:         wUint,
