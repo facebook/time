@@ -369,7 +369,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		Math: Math{
 			M:     "mean(clockaccuracy, 30) + abs(mean(offset, 30)) + 1.0 * stddev(offset, 30)",
 			W:     "mean(m, 30) + 4.0 * stddev(m, 30)",
-			Drift: "mean(freqchangeabs, 29)",
+			Drift: "1.5 * mean(freqchangeabs, 29)",
 		},
 	}
 	err := cfg.Math.Prepare()
@@ -459,7 +459,7 @@ func TestDaemonDoWork(t *testing.T) {
 		Math: Math{
 			M:     "mean(clockaccuracy, 30) + abs(mean(offset, 30)) + 1.0 * stddev(offset, 30)",
 			W:     "mean(m, 30) + 4.0 * stddev(m, 30)",
-			Drift: "mean(freqchangeabs, 29)",
+			Drift: "1.5 * mean(freqchangeabs, 29)",
 		},
 	}
 	err := cfg.Math.Prepare()
@@ -497,6 +497,7 @@ func TestDaemonDoWork(t *testing.T) {
 		require.Equal(t, int64(0), stats.counters["master_offset_ns"])
 		require.Equal(t, int64(0), stats.counters["path_delay_ns"])
 		require.Equal(t, int64(0), stats.counters["freq_adj_ppb"])
+		require.Equal(t, int64(0), stats.counters["dift_ppb"])
 		require.Equal(t, int64(0), stats.counters["master_offset_ns.60.abs_max"])
 		require.Equal(t, int64(0), stats.counters["path_delay_ns.60.abs_max"])
 		require.Equal(t, int64(0), stats.counters["freq_adj_ppb.60.abs_max"])
@@ -536,6 +537,7 @@ func TestDaemonDoWork(t *testing.T) {
 		}
 		require.Equal(t, int64(0), stats.counters["w_ns"])
 		// not enough data for those
+		require.Equal(t, int64(0), stats.counters["dift_ppb"])
 		require.Equal(t, int64(0), stats.counters["master_offset_ns.60.abs_max"])
 		require.Equal(t, int64(0), stats.counters["path_delay_ns.60.abs_max"])
 		require.Equal(t, int64(0), stats.counters["freq_adj_ppb.60.abs_max"])
@@ -561,6 +563,7 @@ func TestDaemonDoWork(t *testing.T) {
 	require.Equal(t, int64(d.freqAdjustmentPPB), stats.counters["freq_adj_ppb"], "freq_adj_ppb after good data")
 	require.Equal(t, int64(48), stats.counters["m_ns"], "m_ns after good data")
 	require.Equal(t, int64(48), stats.counters["w_ns"], "w_ns after good data")
+	require.Equal(t, int64(64), stats.counters["drift_ppb"], "drift_ppb after good data")
 	require.Equal(t, int64(23), stats.counters["master_offset_ns.60.abs_max"], "master_offset_ns.60.abs_max after good data")
 	require.Equal(t, int64(213), stats.counters["path_delay_ns.60.abs_max"], "path_delay_ns.60.abs_max after good data")
 	require.Equal(t, int64(212159), stats.counters["freq_adj_ppb.60.abs_max"], "freq_adj_ppb.60.abs_max after good data")
@@ -599,6 +602,7 @@ func TestDaemonDoWork(t *testing.T) {
 	require.Equal(t, int64(d.freqAdjustmentPPB), stats.counters["freq_adj_ppb"], "freq_adj_ppb after bad data")
 	require.Equal(t, int64(48), stats.counters["m_ns"], "m_ns after bad data")
 	require.Equal(t, int64(48), stats.counters["w_ns"], "w_ns after bad data")
+	require.Equal(t, int64(64), stats.counters["drift_ppb"], "w_ns after bad data")
 	require.Equal(t, int64(23), stats.counters["master_offset_ns.60.abs_max"], "master_offset_ns.60.abs_max after bad data")
 	require.Equal(t, int64(213), stats.counters["path_delay_ns.60.abs_max"], "path_delay_ns.60.abs_max after bad data")
 	require.Equal(t, int64(212159), stats.counters["freq_adj_ppb.60.abs_max"], "freq_adj_ppb.60.abs_max after bad data")

@@ -40,6 +40,13 @@ supported functions:
   variance(values, number) - variance of list of 'number' values, for example variance(offset, 10) will take 10 elements from array 'offset' and return variance for those values
   stddev(values, number) - standard deviation of list of 'number' values, for example stddev(offset, 10) will take 10 elements from array 'offset' and return standard deviation for those values`
 
+const (
+	MathDefaultHistory = 100
+	MathDefaultM       = "mean(clockaccuracy, 100) + abs(mean(offset, 100)) + 1.0 * stddev(offset, 100)"
+	MathDefaultW       = "mean(m, 100) + 4.0 * stddev(m, 100)"
+	MathDefaultDrift   = "1.5 * mean(freqchangeabs, 99)"
+)
+
 // Math stores our math expressions for M ans W values in two forms: string and parsed
 type Math struct {
 	M         string // Measurement, our value for clock quality

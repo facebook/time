@@ -34,6 +34,16 @@ As a preprequisite, you need working PTP client set up with [**ptp4l**](https://
 
 C API can be used to build a client in any language. Clients don't need special permissions except for read access to SHM path and PHC device.
 
+## Math
+
+*fbclock-daemon* uses 3 formulas to provide accurate [Earliest, Latest] values.
+
+* **M** is the *measurement*, based on N recent values we obtain from ptp4l, such as offset, path delay, or GM clock accuracy
+* **W** is the *error bound* before it's adjusted for holdover, based on recent values of `M`
+* **Drift** is the estimation of local oscillator drift during the holdover, based on changes in PHC frequency andjustments.
+
+This all comes together when real WOU is calculated for each API call, when client part of the code uses *W* and *Drift* values received from fbclock-daemon and adjusts W based on how far in the past the latest synchronization with GM happened.
+
 ## Architecture
 
 ![fbclock architecture](architecture.png)
