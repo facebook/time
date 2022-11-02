@@ -89,6 +89,7 @@ const (
 	rpyServerStats  ReplyType = 14
 	rpyNTPData      ReplyType = 16
 	rpyServerStats2 ReplyType = 22
+	rpyServerStats3 ReplyType = 24
 )
 
 // source modes
@@ -597,6 +598,21 @@ type ReplyNTPData struct {
 	NTPData
 }
 
+// Activity contains parsed version of 'activity' reply
+type Activity struct {
+	Online       int32
+	Offline      int32
+	BurstOnline  int32
+	BurstOffline int32
+	Unresolved   int32
+}
+
+// ReplyActivity is a usable version of 'activity' response
+type ReplyActivity struct {
+	ReplyHead
+	Activity
+}
+
 // ServerStats contains parsed version of 'serverstats' reply
 type ServerStats struct {
 	NTPHits  uint32
@@ -630,19 +646,25 @@ type ReplyServerStats2 struct {
 	ServerStats2
 }
 
-// Activity contains parsed version of 'activity' reply
-type Activity struct {
-	Online       int32
-	Offline      int32
-	BurstOnline  int32
-	BurstOffline int32
-	Unresolved   int32
+// ServerStats3 contains parsed version of 'serverstats3' reply
+type ServerStats3 struct {
+	NTPHits            uint32
+	NKEHits            uint32
+	CMDHits            uint32
+	NTPDrops           uint32
+	NKEDrops           uint32
+	CMDDrops           uint32
+	LogDrops           uint32
+	NTPAuthHits        uint32
+	NTPInterleavedHits uint32
+	NTPTimestamps      uint32
+	NTPSpanSeconds     uint32
 }
 
-// ReplyActivity is a usable version of 'activity' response
-type ReplyActivity struct {
+// ReplyServerStats3 is a usable version of 'serverstats3' response
+type ReplyServerStats3 struct {
 	ReplyHead
-	Activity
+	ServerStats3
 }
 
 // here go request constuctors
@@ -780,6 +802,16 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead:   *head,
 			SourceStats: *newSourceStats(data),
 		}, nil
+	case rpyActivity:
+		data := new(Activity)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplyActivity{
+			ReplyHead: *head,
+			Activity:  *data,
+		}, nil
 	case rpyServerStats:
 		data := new(ServerStats)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
@@ -810,15 +842,15 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead:    *head,
 			ServerStats2: *data,
 		}, nil
-	case rpyActivity:
-		data := new(Activity)
+	case rpyServerStats3:
+		data := new(ServerStats3)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
 		log.Debugf("response data: %+v", data)
-		return &ReplyActivity{
-			ReplyHead: *head,
-			Activity:  *data,
+		return &ReplyServerStats3{
+			ReplyHead:    *head,
+			ServerStats3: *data,
 		}, nil
 	default:
 		return nil, fmt.Errorf("not implemented reply type %d from %+v", head.Reply, head)
