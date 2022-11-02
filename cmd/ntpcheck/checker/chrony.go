@@ -170,6 +170,8 @@ func (n *ChronyCheck) ServerStats() (*ServerStats, error) {
 		serverStats = NewServerStatsFromChrony(stats)
 	case *chrony.ReplyServerStats2:
 		serverStats = NewServerStatsFromChrony2(stats)
+	case *chrony.ReplyServerStats3:
+		serverStats = NewServerStatsFromChrony3(stats)
 	default:
 		return nil, errors.Errorf("Got wrong 'serverstats' response %+v", packet)
 	}
