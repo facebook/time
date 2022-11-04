@@ -46,7 +46,7 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	flag.StringVar(&cfg.Device, "ptpdevice", "/dev/ptp0", "Path to original PTP device we need to copy if -manage is true")
+	flag.StringVar(&cfg.Iface, "iface", "eth0", "Network interface to use PHC device from. Used for linearizability tests as well. Must match what ptp4l is configured to use")
 	flag.StringVar(&cfg.PTP4Lsock, "ptp4lsock", "/var/run/ptp4l", "Path to ptp4l unix socket")
 	flag.IntVar(&monitoringPort, "monitoringport", 21039, "Port to run monitoring server on")
 	flag.IntVar(&cfg.RingSize, "buffer", daemon.MathDefaultHistory, "Size of ring buffers, must be at least size of largest num of samples used in M and W formulas")
@@ -57,7 +57,7 @@ func main() {
 	flag.DurationVar(&cfg.LinearizabilityTestInterval, "I", time.Minute, "Interval at which we run linearizability tests. 0 means disabled.")
 
 	flag.StringVar(&cfgPath, "cfg", "", "Path to config")
-	flag.BoolVar(&manageDevice, "manage", true, "Manage devices")
+	flag.BoolVar(&manageDevice, "manage", true, fmt.Sprintf("Manage device. This will setup %q as a copy of PHC device associated with given network interface", daemon.ManagedPTPDevicePath))
 	flag.BoolVar(&csvLog, "csvlog", true, "Log all the metrics as CSV to log")
 	flag.StringVar(&csvPath, "csvpath", "", "write CSV log into this file")
 	flag.BoolVar(&verbose, "verbose", false, "Verbose logging")
@@ -82,7 +82,7 @@ func main() {
 		log.Fatal(err)
 	}
 	if manageDevice {
-		if err := daemon.SetupDeviceDir(cfg.Device); err != nil {
+		if err := daemon.SetupDeviceDir(cfg.Iface); err != nil {
 			log.Fatal(err)
 		}
 	}
