@@ -78,14 +78,10 @@ func sysoffEstimateExtended(extended *PTPSysOffsetExtended) SysoffResult {
 
 // TimeAndOffset returns time we got from network card + offset
 func TimeAndOffset(iface string, method TimeMethod) (SysoffResult, error) {
-	info, err := IfaceInfo(iface)
+	device, err := IfaceToPHCDevice(iface)
 	if err != nil {
-		return SysoffResult{}, fmt.Errorf("getting interface info: %w", err)
+		return SysoffResult{}, err
 	}
-	if info.PHCIndex < 0 {
-		return SysoffResult{}, fmt.Errorf("%s doesn't support PHC", iface)
-	}
-	device := fmt.Sprintf("/dev/ptp%d", info.PHCIndex)
 	return TimeAndOffsetFromDevice(device, method)
 }
 

@@ -30,7 +30,7 @@ type Config struct {
 	RingSize                    int           // must be at least the size of N samples we use in expressions
 	Math                        Math          // configuration for calculation we'll be doing
 	Interval                    time.Duration // how often do we poll ptp4l and update data in shm
-	Device                      string        // path to ptp device
+	Iface                       string        // network interface to use
 	LinearizabilityTestInterval time.Duration // perform the linearizability test every so often
 }
 

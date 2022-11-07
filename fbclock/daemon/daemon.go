@@ -77,9 +77,17 @@ func (d *dataPoint) SanityCheck() error {
 	if d.ingressTimeNS == 0 {
 		return fmt.Errorf("ingress time is 0")
 	}
-
-	if d.masterOffsetNS == 0 || d.pathDelayNS == 0 || d.freqAdjustmentPPB == 0 || d.clockAccuracyNS == 0 {
-		return fmt.Errorf("some of the data point values are 0")
+	if d.masterOffsetNS == 0 {
+		return fmt.Errorf("master offset is 0")
+	}
+	if d.pathDelayNS == 0 {
+		return fmt.Errorf("path dealy is 0")
+	}
+	if d.freqAdjustmentPPB == 0 {
+		return fmt.Errorf("frequency adjustment is 0")
+	}
+	if d.clockAccuracyNS == 0 {
+		return fmt.Errorf("clock accuracy is 0")
 	}
 	if time.Duration(d.clockAccuracyNS) >= ptp.ClockAccuracyUnknown.Duration() {
 		return fmt.Errorf("clock accuracy is unknown")
@@ -127,9 +135,13 @@ func New(cfg *Config, stats StatsServer, l Logger) (*Daemon, error) {
 		cfg:   cfg,
 		l:     l,
 	}
+	phcDevice, err := phc.IfaceToPHCDevice(cfg.Iface)
+	if err != nil {
+		return nil, fmt.Errorf("finding PHC device for %q: %w", cfg.Iface, err)
+	}
 	// function to get time from phc
-	s.getPHCTime = func() (time.Time, error) { return phc.TimeFromDevice(s.cfg.Device) }
-	s.getPHCFreqPPB = func() (float64, error) { return phc.FrequencyPPBFromDevice(s.cfg.Device) }
+	s.getPHCTime = func() (time.Time, error) { return phc.TimeFromDevice(phcDevice) }
+	s.getPHCFreqPPB = func() (float64, error) { return phc.FrequencyPPBFromDevice(phcDevice) }
 	// calculated values
 	s.stats.SetCounter("m_ns", 0)
 	s.stats.SetCounter("w_ns", 0)
@@ -220,7 +232,7 @@ func (s *Daemon) calcDriftPPB() (float64, error) {
 	return drift, nil
 }
 
-func (s *Daemon) gmDataFromSocket(local string) (targets []string, iface string, err error) {
+func (s *Daemon) gmDataFromSocket(local string) (targets []string, err error) {
 	timeout := s.cfg.Interval / 2
 	conn, err := connect(s.cfg.PTP4Lsock, local, timeout)
 	defer func() {
@@ -234,21 +246,15 @@ func (s *Daemon) gmDataFromSocket(local string) (targets []string, iface string,
 		os.RemoveAll(local)
 	}()
 	if err != nil {
-		return targets, iface, fmt.Errorf("failed to connect to ptp4l: %w", err)
+		return targets, fmt.Errorf("failed to connect to ptp4l: %w", err)
 	}
 
 	c := &ptp.MgmtClient{
 		Connection: conn,
 	}
-	ppn, err := c.PortPropertiesNP()
-	if err != nil {
-		return targets, iface, fmt.Errorf("getting PORT_PROPERTIES_NP from ptp4l: %w", err)
-	}
-	log.Debugf("working with interface %s", ppn.Interface)
-	iface = string(ppn.Interface)
 	tlv, err := c.UnicastMasterTableNP()
 	if err != nil {
-		return targets, iface, fmt.Errorf("getting UNICAST_MASTER_TABLE_NP from ptp4l: %w", err)
+		return targets, fmt.Errorf("getting UNICAST_MASTER_TABLE_NP from ptp4l: %w", err)
 	}
 
 	for _, entry := range tlv.UnicastMasterTable.UnicastMasters {
@@ -355,7 +361,7 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *dataPoint) error {
 	// try and calculate how long ago was the ingress time
 	// use clock_gettime as the fastest and widely available method
 	if phcTime, err := s.getPHCTime(); err != nil {
-		log.Warningf("Failed to get PHC time from %s: %v", s.cfg.Device, err)
+		log.Warningf("Failed to get PHC time from %s: %v", s.cfg.Iface, err)
 	} else {
 		if data.ingressTimeNS > 0 {
 			s.state.updateIngressTimeNS(data.ingressTimeNS)
@@ -422,12 +428,12 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 		eg := new(errgroup.Group)
 		currentResults := map[string]*linearizability.TestResult{}
 
-		targets, iface, err := s.gmDataFromSocket(local)
+		targets, err := s.gmDataFromSocket(local)
 		if err != nil {
 			log.Errorf("getting linearizability test targets from ptp4l: %v", err)
 			continue
 		}
-		log.Debugf("targets: %v, iface: %q, err: %v", targets, iface, err)
+		log.Debugf("targets: %v, err: %v", targets, err)
 		// log when set of targets changes
 		added, removed := targetsDiff(oldTargets, targets)
 		if len(added) > 0 || len(removed) > 0 {
@@ -444,7 +450,7 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 				cfg := &linearizability.TestConfig{
 					Timeout:   time.Second,
 					Server:    server,
-					Interface: iface,
+					Interface: s.cfg.Iface,
 				}
 				lt, err = linearizability.NewTester(cfg)
 				if err != nil {

@@ -55,16 +55,20 @@ const (
 // SupportedMethods is a list of supported TimeMethods
 var SupportedMethods = []TimeMethod{MethodSyscallClockGettime, MethodIoctlSysOffsetExtended}
 
+func ifaceInfoToPHCDevice(info *EthtoolTSinfo) (string, error) {
+	if info.PHCIndex < 0 {
+		return "", fmt.Errorf("interface doesn't support PHC")
+	}
+	return fmt.Sprintf("/dev/ptp%d", info.PHCIndex), nil
+}
+
 // IfaceToPHCDevice returns path to PHC device associated with given network card iface
 func IfaceToPHCDevice(iface string) (string, error) {
 	info, err := IfaceInfo(iface)
 	if err != nil {
-		return "", fmt.Errorf("getting interface info: %w", err)
+		return "", fmt.Errorf("getting interface %s info: %w", iface, err)
 	}
-	if info.PHCIndex < 0 {
-		return "", fmt.Errorf("%s doesn't support PHC", iface)
-	}
-	return fmt.Sprintf("/dev/ptp%d", info.PHCIndex), nil
+	return ifaceInfoToPHCDevice(info)
 }
 
 // Time returns time we got from network card

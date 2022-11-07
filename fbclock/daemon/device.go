@@ -22,15 +22,26 @@ import (
 	"path/filepath"
 
 	"github.com/facebook/time/fbclock"
+	"github.com/facebook/time/phc"
 
 	log "github.com/sirupsen/logrus"
 )
 
-func SetupDeviceDir(device string) error {
-	// explicitly conver to string to prevent GOPLS from panicing here
-	target := string(fbclock.PTPPath)
+// ManagedPTPDevicePath is the path we will set up a copy of iface's PHC device,
+// so that fbclock clients can access it without explicit configuration.
+const ManagedPTPDevicePath = string(fbclock.PTPPath)
+
+func SetupDeviceDir(iface string) error {
+	// explicitly conver to string to prevent GOPLS from panicking here
+	target := ManagedPTPDevicePath
 	dir := filepath.Dir(target)
 	wantMode := os.ModeCharDevice | os.ModeDevice | 0644
+
+	device, err := phc.IfaceToPHCDevice(iface)
+	if err != nil {
+		return fmt.Errorf("getting PHC device from iface %q: %w", iface, err)
+	}
+
 	devInfo, err := os.Stat(device)
 	if err != nil {
 		return fmt.Errorf("getting PTP device %q info: %w", device, err)
