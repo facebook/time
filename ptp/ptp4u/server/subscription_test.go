@@ -151,9 +151,15 @@ func TestSubscriptionflags(t *testing.T) {
 
 func TestSyncPacket(t *testing.T) {
 	sequenceID := uint16(42)
+	domainNumber := uint8(13)
 
 	w := &sendWorker{}
-	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		StaticConfig: StaticConfig{
+			DomainNumber: uint(domainNumber),
+		},
+	}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
@@ -163,15 +169,23 @@ func TestSyncPacket(t *testing.T) {
 	sc.UpdateSync()
 	require.Equal(t, uint16(44), sc.Sync().Header.MessageLength) // check packet length
 	require.Equal(t, sequenceID+1, sc.Sync().Header.SequenceID)
+	require.Equal(t, domainNumber, sc.Sync().Header.DomainNumber)
 }
 
 func TestFollowupPacket(t *testing.T) {
 	sequenceID := uint16(42)
 	now := time.Now()
 	interval := 3 * time.Second
+	domainNumber := uint8(13)
 
 	w := &sendWorker{}
-	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
+
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		StaticConfig: StaticConfig{
+			DomainNumber: uint(domainNumber),
+		},
+	}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
@@ -187,6 +201,7 @@ func TestFollowupPacket(t *testing.T) {
 	require.Equal(t, sequenceID+1, sc.Followup().Header.SequenceID)
 	require.Equal(t, i, sc.Followup().Header.LogMessageInterval)
 	require.Equal(t, now.Unix(), sc.Followup().FollowUpBody.PreciseOriginTimestamp.Time().Unix())
+	require.Equal(t, domainNumber, sc.Followup().Header.DomainNumber)
 }
 
 func TestAnnouncePacket(t *testing.T) {
@@ -195,9 +210,20 @@ func TestAnnouncePacket(t *testing.T) {
 	interval := 3 * time.Second
 	clockClass := ptp.ClockClass7
 	clockAccuracy := ptp.ClockAccuracyMicrosecond1
+	domainNumber := uint8(13)
 
 	w := &sendWorker{}
-	c := &Config{clockIdentity: ptp.ClockIdentity(1234), DynamicConfig: DynamicConfig{ClockClass: clockClass, ClockAccuracy: clockAccuracy, UTCOffset: UTCOffset}}
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		DynamicConfig: DynamicConfig{
+			ClockClass:    clockClass,
+			ClockAccuracy: clockAccuracy,
+			UTCOffset:     UTCOffset,
+		},
+		StaticConfig: StaticConfig{
+			DomainNumber: uint(domainNumber),
+		},
+	}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 	sc.sequenceID = sequenceID
@@ -221,14 +247,21 @@ func TestAnnouncePacket(t *testing.T) {
 	require.Equal(t, ptp.ClockClass7, sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockClass)
 	require.Equal(t, ptp.ClockAccuracyMicrosecond1, sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockAccuracy)
 	require.Equal(t, int16(UTCOffset.Seconds()), sc.Announce().AnnounceBody.CurrentUTCOffset)
+	require.Equal(t, domainNumber, sc.Announce().Header.DomainNumber)
 }
 
 func TestDelayRespPacket(t *testing.T) {
 	sequenceID := uint16(42)
 	now := time.Now()
+	domainNumber := uint8(13)
 
 	w := &sendWorker{}
-	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		StaticConfig: StaticConfig{
+			DomainNumber: uint(domainNumber),
+		},
+	}
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
@@ -250,6 +283,7 @@ func TestDelayRespPacket(t *testing.T) {
 	require.Equal(t, sp, sc.DelayResp().Header.SourcePortIdentity)
 	require.Equal(t, now.Unix(), sc.DelayResp().DelayRespBody.ReceiveTimestamp.Time().Unix())
 	require.Equal(t, ptp.FlagUnicast, sc.DelayResp().Header.FlagField)
+	require.Equal(t, domainNumber, sc.DelayResp().Header.DomainNumber)
 }
 
 func TestSignalingGrantPacket(t *testing.T) {
