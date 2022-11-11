@@ -52,6 +52,7 @@ func main() {
 	flag.IntVar(&c.QueueSize, "queue", 0, "Size of the queue to send out packets")
 	flag.IntVar(&c.RecvWorkers, "recvworkers", 10, "Set the number of receive workers")
 	flag.IntVar(&c.SendWorkers, "workers", 100, "Set the number of send workers")
+	flag.UintVar(&c.DomainNumber, "domainnumber", 0, "Set the PTP domain by its number. Valid values are [0-255]")
 	flag.StringVar(&c.ConfigFile, "config", "", "Path to a config with dynamic settings")
 	flag.StringVar(&c.DebugAddr, "pprofaddr", "", "host:port for the pprof to bind")
 	flag.StringVar(&c.Interface, "iface", "eth0", "Set the interface")
@@ -84,6 +85,10 @@ func main() {
 
 	if c.DSCP < 0 || c.DSCP > 63 {
 		log.Fatalf("Unsupported DSCP value %v", c.DSCP)
+	}
+
+	if c.DomainNumber > 255 {
+		log.Fatalf("Unsupported DomainNumber value %v", c.DomainNumber)
 	}
 
 	switch c.TimestampType {

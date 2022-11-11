@@ -202,7 +202,7 @@ func (sc *SubscriptionClient) initSync() {
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageSync, 0),
 			Version:         ptp.Version,
 			MessageLength:   uint16(binary.Size(ptp.SyncDelayReq{})),
-			DomainNumber:    0,
+			DomainNumber:    uint8(sc.serverConfig.DomainNumber),
 			FlagField:       ptp.FlagUnicast | ptp.FlagTwoStep,
 			SequenceID:      0,
 			SourcePortIdentity: ptp.PortIdentity{
@@ -231,7 +231,7 @@ func (sc *SubscriptionClient) initFollowup() {
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageFollowUp, 0),
 			Version:         ptp.Version,
 			MessageLength:   uint16(binary.Size(ptp.FollowUp{})),
-			DomainNumber:    0,
+			DomainNumber:    uint8(sc.serverConfig.DomainNumber),
 			FlagField:       ptp.FlagUnicast,
 			SequenceID:      0,
 			SourcePortIdentity: ptp.PortIdentity{
@@ -266,7 +266,7 @@ func (sc *SubscriptionClient) initAnnounce() {
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageAnnounce, 0),
 			Version:         ptp.Version,
 			MessageLength:   uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.AnnounceBody{})),
-			DomainNumber:    0,
+			DomainNumber:    uint8(sc.serverConfig.DomainNumber),
 			FlagField:       ptp.FlagUnicast | ptp.FlagPTPTimescale,
 			SequenceID:      0,
 			SourcePortIdentity: ptp.PortIdentity{
@@ -314,7 +314,7 @@ func (sc *SubscriptionClient) initDelayResp() {
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageDelayResp, 0),
 			Version:         ptp.Version,
 			MessageLength:   uint16(binary.Size(ptp.DelayResp{})),
-			DomainNumber:    0,
+			DomainNumber:    uint8(sc.serverConfig.DomainNumber),
 			FlagField:       ptp.FlagUnicast,
 			SequenceID:      0,
 			SourcePortIdentity: ptp.PortIdentity{

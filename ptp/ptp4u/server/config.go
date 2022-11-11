@@ -48,6 +48,7 @@ type StaticConfig struct {
 	IP             net.IP
 	LogLevel       string
 	MonitoringPort int
+	DomainNumber   uint
 	PidFile        string
 	QueueSize      int
 	RecvWorkers    int
