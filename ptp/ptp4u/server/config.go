@@ -43,12 +43,12 @@ var dcMux = sync.Mutex{}
 type StaticConfig struct {
 	ConfigFile     string
 	DebugAddr      string
+	DomainNumber   uint
 	DSCP           int
 	Interface      string
 	IP             net.IP
 	LogLevel       string
 	MonitoringPort int
-	DomainNumber   uint
 	PidFile        string
 	QueueSize      int
 	RecvWorkers    int
