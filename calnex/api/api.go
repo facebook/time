@@ -81,6 +81,7 @@ const (
 	DHCP     = "DHCP"
 	TE       = "te"
 	TWOWAYTE = "2wayte"
+	RSFEC    = "RS-FEC"
 )
 
 // Available Calnex channels

@@ -154,6 +154,9 @@ func (c *config) baseConfig(s *ini.Section) {
 	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v6", api.DHCP)
 	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v4", api.DISABLED)
 
+	// enable QSFP FEC for 100G links (first channel only)
+	c.chSet(s, api.ChannelONE, api.ChannelONE, "%s\\ptp_synce\\ethernet\\qsfp_fec", api.RSFEC)
+
 	// Disable 2nd Physical channel
 	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\used", api.NO)
 	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\protocol_enabled", api.OFF)
