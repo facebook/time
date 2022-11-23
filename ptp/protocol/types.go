@@ -98,7 +98,7 @@ const (
 	TLVAcknowledgeCancelUnicastTransmission TLVType = 0x0007
 	TLVPathTrace                            TLVType = 0x0008
 	TLVAlternateTimeOffsetIndicator         TLVType = 0x0009
-	// Remaining 52tlvType TLVs not implemented
+	// Remaining 52 tlvType TLVs not implemented
 )
 
 // TLVTypeToString is a map from TLVType to string
