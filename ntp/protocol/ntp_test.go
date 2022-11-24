@@ -231,7 +231,7 @@ func TestOffsetSymmetricNetwork(t *testing.T) {
 
 func TestOffsetAsymmetricNetwork(t *testing.T) {
 	// Assuming time on client is = time on server
-	// Asymetric network latency (one way delay in not the same in both directions)
+	// Asymmetric network latency (one way delay in not the same in both directions)
 
 	originTime := time.Now()
 	// Network delay client -> server 10ms

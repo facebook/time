@@ -176,7 +176,7 @@ func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.ReplyNTPData) (*Peer
 	if s == nil {
 		return nil, fmt.Errorf("no ReplySourceData to create Peer")
 	}
-	// clear auth and interlieved flag
+	// clear auth and interleaved flag
 	flash := s.Flags & chrony.NTPFlagsTests
 	// don't report all flashers if peer is unreachable
 	if flash > 0 {

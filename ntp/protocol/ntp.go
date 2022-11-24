@@ -31,7 +31,7 @@ import (
 const NanosecondsToUnix = int64(2_208_988_800_000_000_000)
 
 // Time is converting Unix time to sec and frac NTP format
-func Time(t time.Time) (seconds uint32, fracions uint32) {
+func Time(t time.Time) (seconds uint32, fractions uint32) {
 	nsec := t.UnixNano() + NanosecondsToUnix
 	sec := nsec / time.Second.Nanoseconds()
 	return uint32(sec), uint32((nsec - sec*time.Second.Nanoseconds()) << 32 / time.Second.Nanoseconds())

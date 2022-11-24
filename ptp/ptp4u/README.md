@@ -36,7 +36,7 @@ This returns manu useful metrics such as number of active subscriptions, tx/rx s
 ## Performance
 We were able to generate and consistently support over 1M clients with synchronization frequency of 1Hz.
 
-We used a follwing setup:
+We used a following setup:
 * HPE DL380 G10 single CPU system.
 * Arista 7010 network switch with 2 VLANs.
 * Calnex Sentinel to monitor the precision over the PTP compared to the GPS source.

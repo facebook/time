@@ -32,7 +32,7 @@ import (
 const ManagedPTPDevicePath = string(fbclock.PTPPath)
 
 func SetupDeviceDir(iface string) error {
-	// explicitly conver to string to prevent GOPLS from panicking here
+	// explicitly convert to string to prevent GOPLS from panicking here
 	target := ManagedPTPDevicePath
 	dir := filepath.Dir(target)
 	wantMode := os.ModeCharDevice | os.ModeDevice | 0644

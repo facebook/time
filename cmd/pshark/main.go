@@ -127,7 +127,7 @@ type packetHandle interface {
 }
 
 func run(input string, filter []ptp.MessageType) error {
-	// register mapping betwenn ports and our custom PTP layer
+	// register mapping between ports and our custom PTP layer
 	layers.RegisterUDPPortLayerType(layers.UDPPort(ptp.PortEvent), LayerTypePTP)
 	layers.RegisterUDPPortLayerType(layers.UDPPort(ptp.PortGeneral), LayerTypePTP)
 
@@ -168,7 +168,7 @@ func run(input string, filter []ptp.MessageType) error {
 			if !filterMap[ptpContent.Packet.MessageType()] {
 				continue
 			}
-			// decode src and dst adddress and port
+			// decode src and dst address and port
 			var srcIP, dstIP net.IP
 			var srcPort, dstPort layers.UDPPort
 			ip6Layer := packet.Layer(layers.LayerTypeIPv6)
