@@ -236,7 +236,7 @@ func (r *RequestHead) SetSequence(n uint32) {
 	r.Sequence = n
 }
 
-// RequestPacket is an iterface to abstract all different outgoing packets
+// RequestPacket is an interface to abstract all different outgoing packets
 type RequestPacket interface {
 	GetCommand() CommandType
 	SetSequence(n uint32)
@@ -667,7 +667,7 @@ type ReplyServerStats3 struct {
 	ServerStats3
 }
 
-// here go request constuctors
+// here go request constructors
 
 // NewSourcesPacket creates new packet to request number of sources (peers)
 func NewSourcesPacket() *RequestSources {

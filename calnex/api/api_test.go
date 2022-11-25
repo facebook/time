@@ -118,7 +118,7 @@ func TestCalnexName(t *testing.T) {
 
 func TestTLSSetting(t *testing.T) {
 	calnexAPI := NewAPI("localhost", false)
-	// Never ever ever allow insucure over https
+	// Never ever ever allow insecure over https
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
 	}

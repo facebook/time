@@ -147,7 +147,7 @@ func (s *Server) Start() error {
 		fail <- true
 	}()
 
-	// Wait for ANY gorouine to finish
+	// Wait for ANY goroutine to finish
 	select {
 	case <-done:
 		return nil

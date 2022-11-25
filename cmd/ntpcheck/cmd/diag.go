@@ -92,7 +92,7 @@ func checkSync(r *checker.NTPCheckResult) (status, string) {
 		return CRITICAL, "No sys peer, clock is not syncing"
 	}
 	if r.LI == 3 {
-		return FAIL, "Clock is not fully syncronized, leap indicator is set to 'alarm'"
+		return FAIL, "Clock is not fully synchronized, leap indicator is set to 'alarm'"
 	}
 	return OK, fmt.Sprintf("Clock is syncing to %s", color.BlueString(syspeer.SRCAdr))
 }

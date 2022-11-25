@@ -131,7 +131,7 @@ TEST(fbclock_test, test_concurrent) {
 
   int tries = 10000;
 
-  // spawn two functions asynchronously, make sure there is no incosistent data
+  // spawn two functions asynchronously, make sure there is no inconsistent data
   auto future_writer =
       std::async(std::launch::async, writer_thread, sfd_rw, tries);
   auto future_reader =

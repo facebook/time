@@ -58,7 +58,7 @@ type StaticConfig struct {
 
 // DynamicConfig is a set of dynamic options which don't need a server restart
 type DynamicConfig struct {
-	// ClockCccuracy to report via announce messages. Time Accurate within 100ns
+	// ClockAccuracy to report via announce messages. Time Accurate within 100ns
 	ClockAccuracy ptp.ClockAccuracy
 	// ClockClass to report via announce messages. 6 - Locked with Primary Reference Clock
 	ClockClass ptp.ClockClass

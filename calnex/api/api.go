@@ -69,7 +69,7 @@ type GNSS struct {
 // Channel is a Calnex channel object
 type Channel int
 
-// Calnex Status contants
+// Calnex Status constants
 const (
 	ON       = "On"
 	OFF      = "Off"

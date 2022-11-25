@@ -403,7 +403,7 @@ type PDelayRespFollowUp struct {
 	PDelayRespFollowUpBody
 }
 
-// Packet is an iterface to abstract all different packets
+// Packet is an interface to abstract all different packets
 type Packet interface {
 	MessageType() MessageType
 	SetSequence(uint16)
@@ -414,7 +414,7 @@ type BinaryMarshalerTo interface {
 	MarshalBinaryTo([]byte) (int, error)
 }
 
-// BytesTo marhals packets that support this optimized marshalling into []byte
+// BytesTo marshalls packets that support this optimized marshalling into []byte
 func BytesTo(p BinaryMarshalerTo, buf []byte) (int, error) {
 	n, err := p.MarshalBinaryTo(buf)
 	if err != nil {

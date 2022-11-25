@@ -186,7 +186,7 @@ func (n *NTPCheck) ServerStats() (*ServerStats, error) {
 	return serverStats, nil
 }
 
-// NewNTPCheck is a contructor for NTPCheck
+// NewNTPCheck is a constructor for NTPCheck
 func NewNTPCheck(conn io.ReadWriter) *NTPCheck {
 	return &NTPCheck{
 		Client: &control.NTPClient{Sequence: 1, Connection: conn},
