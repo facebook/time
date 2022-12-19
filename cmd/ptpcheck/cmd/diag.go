@@ -53,21 +53,43 @@ var failString = color.RedString("[FAIL]")
 
 var statusToColor = []string{okString, warnString, failString}
 
-// generic function to check value against some thresholds
-func checkAgainstThreshold[T constraints.Ordered](name string, value, warnThreshold, failThreshold T, explanation string, failOnZero bool) (status, string) {
-	msgTemplate := "%s is %s, we expect it to be within %s%s"
-	var zero T // can't use 0 as untyped const, so use zero value for each type
-	thresholdStr := color.BlueString("%v", warnThreshold)
+func fmtThreshold(warnThreshold any) string {
+	return color.BlueString("%v", warnThreshold)
+}
 
-	if failOnZero && value == zero {
+func checkAgainstThresholdPositive[T constraints.Signed](name string, value, warnThreshold, failThreshold T, explanation string) (status, string) {
+	var zero T // can't use 0 as untyped const, so use zero value for each type
+	if value <= zero {
+		return FAIL, fmt.Sprintf(
+			"%s is %s, we expect it to be positive and within %s%s",
+			name,
+			color.RedString("%v", value),
+			fmtThreshold(warnThreshold),
+			". "+explanation,
+		)
+	}
+	return checkAgainstThreshold(name, value, warnThreshold, failThreshold, explanation)
+}
+
+func checkAgainstThresholdNonZero[T constraints.Ordered](name string, value, warnThreshold, failThreshold T, explanation string) (status, string) {
+	var zero T // can't use 0 as untyped const, so use zero value for each type
+	if value == zero {
 		return FAIL, fmt.Sprintf(
 			"%s is %s, we expect it to be non-zero and within %s%s",
 			name,
 			color.RedString("%v", value),
-			thresholdStr,
+			fmtThreshold(warnThreshold),
 			". "+explanation,
 		)
 	}
+	return checkAgainstThreshold(name, value, warnThreshold, failThreshold, explanation)
+}
+
+// generic function to check value against some thresholds
+func checkAgainstThreshold[T constraints.Ordered](name string, value, warnThreshold, failThreshold T, explanation string) (status, string) {
+	msgTemplate := "%s is %s, we expect it to be within %s%s"
+	thresholdStr := fmtThreshold(warnThreshold)
+
 	if value > failThreshold {
 		return FAIL, fmt.Sprintf(
 			msgTemplate,
@@ -125,7 +147,6 @@ func checkSyncActive(r *checker.PTPCheckResult) (status, string) {
 		warnThreshold,
 		failThreshold,
 		"We expect to receive SYNC messages from GM very often",
-		false,
 	)
 }
 
@@ -134,13 +155,12 @@ func checkOffset(r *checker.PTPCheckResult) (status, string) {
 	const warnThreshold = 250 * time.Microsecond
 	// If offset is > 1ms something is very very wrong
 	const failThreshold = time.Millisecond
-	return checkAgainstThreshold(
+	return checkAgainstThresholdNonZero(
 		"GM offset",
 		time.Duration(math.Abs(r.OffsetFromMasterNS)),
 		warnThreshold,
 		failThreshold,
 		"Offset is the difference between our clock and remote server (time error).",
-		true,
 	)
 }
 func checkPathDelay(r *checker.PTPCheckResult) (status, string) {
@@ -148,13 +168,12 @@ func checkPathDelay(r *checker.PTPCheckResult) (status, string) {
 	const warnThreshold = 100 * time.Millisecond
 	// If path delay is > 250ms it's really weird
 	const failThreshold = 250 * time.Millisecond
-	return checkAgainstThreshold(
+	return checkAgainstThresholdPositive(
 		"GM mean path delay",
-		time.Duration(math.Abs(r.MeanPathDelayNS)),
+		time.Duration(r.MeanPathDelayNS),
 		warnThreshold,
 		failThreshold,
 		"Mean path delay is measured network delay between us and GM",
-		true,
 	)
 }
 
@@ -205,7 +224,6 @@ func portServiceStatsDiagnosers(r *checker.PTPCheckResult) []diagnoser {
 				check.threshold,
 				10*check.threshold,
 				check.explanation,
-				false,
 			)
 		}
 		result = append(result, f)
