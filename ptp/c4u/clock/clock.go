@@ -95,6 +95,9 @@ func Worst(points []*DataPoint, accuracyExpr, classExpr string) (*ptp.ClockQuali
 		return nil, nil
 	}
 
+	log.Debugf("phcOffsets = %v", phcOffsets)
+	log.Debugf("oscillatorOffsets = %v", oscillatorOffsets)
+
 	offsets := map[string]interface{}{
 		"phcoffset":        phcOffsets,
 		"oscillatoroffset": oscillatorOffsets,
