@@ -86,14 +86,27 @@ func TestCheckAgainstThreshold(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			status, msg := checkAgainstThreshold(
-				tt.name,
-				tt.value,
-				tt.warnThreshold,
-				tt.failThreshold,
-				tt.explanation,
-				tt.failOnZero,
+			var (
+				status status
+				msg    string
 			)
+			if tt.failOnZero {
+				status, msg = checkAgainstThresholdNonZero(
+					tt.name,
+					tt.value,
+					tt.warnThreshold,
+					tt.failThreshold,
+					tt.explanation,
+				)
+			} else {
+				status, msg = checkAgainstThreshold(
+					tt.name,
+					tt.value,
+					tt.warnThreshold,
+					tt.failThreshold,
+					tt.explanation,
+				)
+			}
 			require.Equal(t, tt.wantStatus, status)
 			require.Equal(t, tt.wantMsg, msg)
 		})
@@ -107,7 +120,6 @@ func TestCheckAgainstThreshold(t *testing.T) {
 			10,
 			100,
 			"oh no",
-			false,
 		)
 		require.Equal(t, WARN, status)
 		require.Equal(t, "some int is 28, we expect it to be within 10. oh no", msg)
@@ -121,7 +133,6 @@ func TestCheckAgainstThreshold(t *testing.T) {
 			4.0,
 			10.1,
 			"oh no",
-			false,
 		)
 		require.Equal(t, OK, status)
 		require.Equal(t, "some float is 3.14, we expect it to be within 4", msg)
@@ -176,8 +187,8 @@ func TestCheckPathDelay(t *testing.T) {
 
 	r.MeanPathDelayNS = -151000000.0
 	status, msg = checkPathDelay(r)
-	require.Equal(t, WARN, status)
-	require.Equal(t, "GM mean path delay is 151ms, we expect it to be within 100ms. Mean path delay is measured network delay between us and GM", msg)
+	require.Equal(t, FAIL, status)
+	require.Equal(t, "GM mean path delay is -151ms, we expect it to be positive and within 100ms. Mean path delay is measured network delay between us and GM", msg)
 }
 
 func TestExpandDiagnosers(t *testing.T) {
