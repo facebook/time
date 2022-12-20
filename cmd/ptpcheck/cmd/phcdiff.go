@@ -45,14 +45,6 @@ func init() {
 	phcdiffCmd.Flags().BoolVarP(&phcDiffIsJSON, "json", "j", false, "produce json output")
 }
 
-func calcDiff(timeAndOffsetA, timeAndOffsetB phc.SysoffResult) (PHCDiff time.Duration, PHC1Delay time.Duration, PHC2Delay time.Duration) {
-	sysOffset := timeAndOffsetB.SysTime.Sub(timeAndOffsetA.SysTime)
-	phcOffset := timeAndOffsetB.PHCTime.Sub(timeAndOffsetA.PHCTime)
-	phcOffset -= sysOffset
-
-	return phcOffset, timeAndOffsetA.Delay, timeAndOffsetB.Delay
-}
-
 func phcdiffRun(deviceA, deviceB string, isJSON bool) error {
 	timeAndOffsetA, err := phc.TimeAndOffsetFromDevice(deviceA, phc.MethodIoctlSysOffsetExtended)
 	if err != nil {
@@ -64,10 +56,10 @@ func phcdiffRun(deviceA, deviceB string, isJSON bool) error {
 		return err
 	}
 
-	phcOffset, delay1, delay2 := calcDiff(timeAndOffsetA, timeAndOffsetB)
+	phcOffset := phc.CalcPHCOffet(timeAndOffsetA, timeAndOffsetB)
 
 	if isJSON {
-		stats := phcStats{PHCOffset: phcOffset, PHC1Delay: delay1, PHC2Delay: delay2}
+		stats := phcStats{PHCOffset: phcOffset, PHC1Delay: timeAndOffsetA.Delay, PHC2Delay: timeAndOffsetB.Delay}
 		str, err := json.Marshal(stats)
 		if err != nil {
 			return fmt.Errorf("marshaling json: %w", err)
@@ -75,8 +67,8 @@ func phcdiffRun(deviceA, deviceB string, isJSON bool) error {
 		fmt.Println(string(str))
 	} else {
 		fmt.Printf("PHC offset: %s\n", phcOffset)
-		fmt.Printf("Delay for PHC1: %s\n", delay1)
-		fmt.Printf("Delay for PHC2: %s\n", delay2)
+		fmt.Printf("Delay for PHC1: %s\n", timeAndOffsetA.Delay)
+		fmt.Printf("Delay for PHC2: %s\n", timeAndOffsetB.Delay)
 	}
 
 	return nil

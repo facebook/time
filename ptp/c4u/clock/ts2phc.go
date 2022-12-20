@@ -37,9 +37,5 @@ func ts2phc() (time.Duration, error) {
 		return 0, err
 	}
 
-	sysOffset := tcard.SysTime.Sub(tnic.SysTime)
-	phcOffset := tcard.PHCTime.Sub(tnic.PHCTime)
-	phcOffset -= sysOffset
-
-	return phcOffset, nil
+	return phc.CalcPHCOffet(tcard, tnic), nil
 }
