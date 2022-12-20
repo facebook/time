@@ -12,30 +12,29 @@ actions:
   # Fetch the specfile from Rawhide, remove the snapshot and drop any patches
   post-upstream-clone: "bash -c \"curl -s https://src.fedoraproject.org/rpms/golang-github-facebook-time/raw/main/f/golang-github-facebook-time.spec | sed -e '/^%global commit/d' -e '/^Patch[0-9]/d' > golang-github-facebook-time.spec\""
 
+srpm_build_deps:
+  - bash
+  - curl
+  - sed
+ 
 jobs:
 - job: copr_build
   trigger: commit
-  metadata:
-    owner: "@meta"
-    project: time
-    targets:
-      - fedora-latest-stable-aarch64
-      # https://github.com/facebook/time/pull/101#issuecomment-1062295307
-      # - fedora-latest-stable-armhfp
-      - fedora-latest-stable-i386
-      - fedora-latest-stable-ppc64le
-      # - fedora-latest-stable-s390x
-      - fedora-latest-stable-x86_64
+  owner: "@meta"
+  project: time
+  targets:
+    - fedora-all-aarch64
+    # https://bugzilla.redhat.com/show_bug.cgi?id=2152259
+    # - fedora-all-armhfp
+    - fedora-all-ppc64le
+    - fedora-all-x86_64
 - job: copr_build
   trigger: pull_request
-  metadata:
-    owner: "@meta"
-    project: time
-    targets:
-      - fedora-latest-stable-aarch64
-      # https://github.com/facebook/time/pull/101#issuecomment-1062295307
-      # - fedora-latest-stable-armhfp
-      - fedora-latest-stable-i386
-      - fedora-latest-stable-ppc64le
-      # - fedora-latest-stable-s390x
-      - fedora-latest-stable-x86_64
+  owner: "@meta"
+  project: time
+  targets:
+    - fedora-all-aarch64
+    # https://bugzilla.redhat.com/show_bug.cgi?id=2152259
+    # - fedora-all-armhfp
+    - fedora-all-ppc64le
+    - fedora-all-x86_64
