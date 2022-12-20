@@ -12,6 +12,11 @@ actions:
   # Fetch the specfile from Rawhide, remove the snapshot and drop any patches
   post-upstream-clone: "bash -c \"curl -s https://src.fedoraproject.org/rpms/golang-github-facebook-time/raw/main/f/golang-github-facebook-time.spec | sed -e '/^%global commit/d' -e '/^Patch[0-9]/d' > golang-github-facebook-time.spec\""
 
+srpm_build_deps:
+  - bash
+  - curl
+  - sed
+ 
 jobs:
 - job: copr_build
   trigger: commit
