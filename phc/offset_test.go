@@ -55,3 +55,19 @@ func TestSysoffEstimateExtended(t *testing.T) {
 	}
 	require.Equal(t, want, got)
 }
+
+func TestCalcPHCOffet(t *testing.T) {
+	tA := SysoffResult{
+		SysTime: time.Unix(0, 1667818190552297683),
+		PHCTime: time.Unix(0, 1667818153552297661),
+	}
+
+	tB := SysoffResult{
+		SysTime: time.Unix(0, 1667818190552297699),
+		PHCTime: time.Unix(0, 1667818153552297681),
+	}
+
+	want := 4 * time.Nanosecond
+	got := CalcPHCOffet(tA, tB)
+	require.Equal(t, want, got)
+}
