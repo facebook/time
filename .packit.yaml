@@ -24,7 +24,8 @@ jobs:
   project: time
   targets:
     - fedora-all-aarch64
-    - fedora-all-armhfp
+    # https://bugzilla.redhat.com/show_bug.cgi?id=2152259
+    # - fedora-all-armhfp
     - fedora-all-ppc64le
     - fedora-all-s390x
     - fedora-all-x86_64
@@ -34,7 +35,8 @@ jobs:
   project: time
   targets:
     - fedora-all-aarch64
-    - fedora-all-armhfp
+    # https://bugzilla.redhat.com/show_bug.cgi?id=2152259
+    # - fedora-all-armhfp
     - fedora-all-ppc64le
     - fedora-all-s390x
     - fedora-all-x86_64
