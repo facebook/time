@@ -25,7 +25,6 @@ jobs:
   targets:
     - fedora-all-aarch64
     - fedora-all-armhfp
-    - fedora-all-i386
     - fedora-all-ppc64le
     - fedora-all-s390x
     - fedora-all-x86_64
@@ -36,7 +35,6 @@ jobs:
   targets:
     - fedora-all-aarch64
     - fedora-all-armhfp
-    - fedora-all-i386
     - fedora-all-ppc64le
     - fedora-all-s390x
     - fedora-all-x86_64
