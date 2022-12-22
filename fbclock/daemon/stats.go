@@ -20,6 +20,7 @@ import (
 	"sync"
 )
 
+// StatsServer is a stats server interface
 type StatsServer interface {
 	// Reset atomically sets all the counters to 0
 	Reset()
@@ -27,11 +28,13 @@ type StatsServer interface {
 	UpdateCounterBy(key string, count int64)
 }
 
+// Stats is an implementation of
 type Stats struct {
 	mux      sync.Mutex
 	counters map[string]int64
 }
 
+// NewStats created new instance of Stats
 func NewStats() *Stats {
 	return &Stats{
 		counters: map[string]int64{},
@@ -52,6 +55,7 @@ func (s *Stats) SetCounter(key string, val int64) {
 	s.mux.Unlock()
 }
 
+// Get returns an map of counters
 func (s *Stats) Get() map[string]int64 {
 	ret := make(map[string]int64)
 	s.mux.Lock()
@@ -62,7 +66,7 @@ func (s *Stats) Get() map[string]int64 {
 	return ret
 }
 
-// copy all key-values between maps
+// Copy all key-values between maps
 func (s *Stats) Copy(dst *Stats) {
 	s.mux.Lock()
 	for k, v := range s.counters {
@@ -71,6 +75,7 @@ func (s *Stats) Copy(dst *Stats) {
 	s.mux.Unlock()
 }
 
+// Reset all the values of counters
 func (s *Stats) Reset() {
 	s.mux.Lock()
 	for k := range s.counters {

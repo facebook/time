@@ -31,6 +31,7 @@ import (
 // so that fbclock clients can access it without explicit configuration.
 const ManagedPTPDevicePath = string(fbclock.PTPPath)
 
+// SetupDeviceDir creates a PHC device path from the interface name
 func SetupDeviceDir(iface string) error {
 	// explicitly convert to string to prevent GOPLS from panicking here
 	target := ManagedPTPDevicePath

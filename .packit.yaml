@@ -16,7 +16,7 @@ srpm_build_deps:
   - bash
   - curl
   - sed
- 
+
 jobs:
 - job: copr_build
   trigger: commit

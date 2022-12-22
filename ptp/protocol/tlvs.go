@@ -319,7 +319,7 @@ func (t *PathTraceTLV) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
-// Table 116 ALTERNATE_TIME_OFFSET_INDICATOR TLV format
+// AlternateTimeOffsetIndicatorTLV is a Table 116 ALTERNATE_TIME_OFFSET_INDICATOR TLV format
 type AlternateTimeOffsetIndicatorTLV struct {
 	TLVHead
 	KeyField       uint8

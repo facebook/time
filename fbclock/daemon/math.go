@@ -24,6 +24,7 @@ import (
 	"github.com/eclesh/welford"
 )
 
+// MathHelp is a help message used by flags in main
 const MathHelp = `When composing the -m and -w formulas, here is what you can do:
 supported operations:
   evaluation is done with govaluate, please check https://github.com/Knetic/govaluate/blob/master/MANUAL.md
@@ -41,10 +42,14 @@ supported functions:
   stddev(values, number) - standard deviation of list of 'number' values, for example stddev(offset, 10) will take 10 elements from array 'offset' and return standard deviation for those values`
 
 const (
+	// MathDefaultHistory is a default number of samples to keep
 	MathDefaultHistory = 100
-	MathDefaultM       = "mean(clockaccuracy, 100) + abs(mean(offset, 100)) + 1.0 * stddev(offset, 100)"
-	MathDefaultW       = "mean(m, 100) + 4.0 * stddev(m, 100)"
-	MathDefaultDrift   = "1.5 * mean(freqchangeabs, 99)"
+	// MathDefaultM is a default formula to calculate M
+	MathDefaultM = "mean(clockaccuracy, 100) + abs(mean(offset, 100)) + 1.0 * stddev(offset, 100)"
+	// MathDefaultW is a default formula to calculate W
+	MathDefaultW = "mean(m, 100) + 4.0 * stddev(m, 100)"
+	// MathDefaultDrift is a default formula to calculate default drift
+	MathDefaultDrift = "1.5 * mean(freqchangeabs, 99)"
 )
 
 // Math stores our math expressions for M ans W values in two forms: string and parsed

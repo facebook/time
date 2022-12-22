@@ -113,6 +113,7 @@ func TimeAndOffsetFromDevice(device string, method TimeMethod) (SysoffResult, er
 	return SysoffResult{}, fmt.Errorf("unknown method to get PHC time %q", method)
 }
 
+// CalcPHCOffet calculates the offset between 2 SysoffResult
 func CalcPHCOffet(timeAndOffsetA, timeAndOffsetB SysoffResult) (PHCDiff time.Duration) {
 	sysOffset := timeAndOffsetB.SysTime.Sub(timeAndOffsetA.SysTime)
 	phcOffset := timeAndOffsetB.PHCTime.Sub(timeAndOffsetA.PHCTime)

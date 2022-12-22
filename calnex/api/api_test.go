@@ -525,6 +525,7 @@ func TestPushCert(t *testing.T) {
 		Result:  true,
 		Message: "The API Interface will now be restarted",
 	}
+	// @lint-ignore PRIVATEKEY insecure-private-key-storage
 	cert := []byte("-----BEGIN CERTIFICATE-----\nI am a certificate\n-----END CERTIFICATE-----\n-----BEGIN RSA PRIVATE KEY-----I am a key-----END RSA PRIVATE KEY-----")
 
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,

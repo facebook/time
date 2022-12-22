@@ -28,6 +28,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// Config is a struct representing the config of the c4u
 type Config struct {
 	Apply               bool
 	Path                string

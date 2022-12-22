@@ -156,26 +156,27 @@ func (c LeapSecondChange) String() string {
 	return s
 }
 
-// ClockClass is a oscillatord specific clockClass
+// ClockClass is a oscillatord specific ClockClass
 type ClockClass ptp.ClockClass
 
 const (
-	ClockClassLock         = ClockClass(ptp.ClockClass6)
-	ClockClassHoldover     = ClockClass(ptp.ClockClass7)
-	ClockClassCalibrating  = ClockClass(ptp.ClockClass13)
-	ClockClassUncalibrated = ClockClass(ptp.ClockClass52)
+	clockClassLock         = ClockClass(ptp.ClockClass6)
+	clockClassHoldover     = ClockClass(ptp.ClockClass7)
+	clockClassCalibrating  = ClockClass(ptp.ClockClass13)
+	clockClassUncalibrated = ClockClass(ptp.ClockClass52)
 )
 
+// UnmarshalText parses ClockClass from a config string
 func (c *ClockClass) UnmarshalText(text []byte) error {
 	switch string(text) {
 	case "Lock":
-		*c = ClockClassLock
+		*c = clockClassLock
 	case "Holdover":
-		*c = ClockClassHoldover
+		*c = clockClassHoldover
 	case "Calibrating":
-		*c = ClockClassCalibrating
+		*c = clockClassCalibrating
 	case "Uncalibrated":
-		*c = ClockClassUncalibrated
+		*c = clockClassUncalibrated
 	default:
 		return fmt.Errorf("clock class %s not supported", string(text))
 	}
@@ -184,12 +185,13 @@ func (c *ClockClass) UnmarshalText(text []byte) error {
 }
 
 var clockClassToString = map[ClockClass]string{
-	ClockClassLock:         "Lock",
-	ClockClassHoldover:     "Holdover",
-	ClockClassCalibrating:  "Calibrating",
-	ClockClassUncalibrated: "Uncalibrated",
+	clockClassLock:         "Lock",
+	clockClassHoldover:     "Holdover",
+	clockClassCalibrating:  "Calibrating",
+	clockClassUncalibrated: "Uncalibrated",
 }
 
+// String representation of the ClockClass
 func (c ClockClass) String() string {
 	s, found := clockClassToString[c]
 	if !found {
@@ -232,6 +234,7 @@ type Status struct {
 	Clock      Clock      `json:"clock"`
 }
 
+// MonitoringJSON returns a json representation of status
 func (s *Status) MonitoringJSON(prefix string) ([]byte, error) {
 	if prefix != "" {
 		prefix = fmt.Sprintf("%s.", prefix)

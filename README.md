@@ -1,4 +1,4 @@
-# Time 
+# Time
 
 [![Build Status](https://img.shields.io/github/workflow/status/facebook/time/test/main)](https://github.com/facebook/time/actions?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/facebook/time/branch/main/graph/badge.svg?token=QC44PEpHRi)](https://codecov.io/gh/facebook/time)
@@ -48,4 +48,3 @@ Client C library and Go daemon to provide TrueTime API based on PTP time.
 
 # License
 time is licensed under Apache 2.0 as found in the [LICENSE file](LICENSE).
-

@@ -61,10 +61,10 @@ typedef struct fbclock_shmdata {
 
 // library
 typedef struct fbclock_lib {
-  char *ptp_path;        // path to PHC clock device
-  int shm_fd;            // file descriptor of opened shared mem
-  int dev_fd;            // file descriptor of opened /dev/ptpN
-  fbclock_shmdata *shmp; // mmap-ed data
+  char* ptp_path; // path to PHC clock device
+  int shm_fd; // file descriptor of opened shared mem
+  int dev_fd; // file descriptor of opened /dev/ptpN
+  fbclock_shmdata* shmp; // mmap-ed data
 } fbclock_lib;
 
 // what customers get
@@ -73,20 +73,25 @@ typedef struct fbclock_truetime {
   uint64_t latest_ns;
 } fbclock_truetime;
 
-int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata *data);
-int fbclock_clockdata_load_data(fbclock_shmdata *shm, fbclock_clockdata *data);
-double fbclock_window_of_uncertainty(int64_t seconds, double error_bound_ns,
-                                     double holdover_multiplier_ns);
-int fbclock_calculate_time(double error_bound_ns, double h_value_ns,
-                           int64_t ingress_time_ns, int64_t phctime_ns,
-                           fbclock_truetime *truetime);
+int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data);
+int fbclock_clockdata_load_data(fbclock_shmdata* shm, fbclock_clockdata* data);
+double fbclock_window_of_uncertainty(
+    int64_t seconds,
+    double error_bound_ns,
+    double holdover_multiplier_ns);
+int fbclock_calculate_time(
+    double error_bound_ns,
+    double h_value_ns,
+    int64_t ingress_time_ns,
+    int64_t phctime_ns,
+    fbclock_truetime* truetime);
 
 // methods we provide to end users
-int fbclock_init(fbclock_lib *lib, const char *shm_path);
-int fbclock_destroy(fbclock_lib *lib);
-int fbclock_gettime(fbclock_lib *lib, fbclock_truetime *truetime);
+int fbclock_init(fbclock_lib* lib, const char* shm_path);
+int fbclock_destroy(fbclock_lib* lib);
+int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime);
 // turn error code into err msg
-const char *fbclock_strerror(int err_code);
+const char* fbclock_strerror(int err_code);
 
 #ifdef __cplusplus
 } // extern "C"

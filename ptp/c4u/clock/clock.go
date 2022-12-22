@@ -25,12 +25,17 @@ import (
 )
 
 const (
-	ClockClassLock         ptp.ClockClass = ptp.ClockClass6
-	ClockClassHoldover     ptp.ClockClass = ptp.ClockClass7
-	ClockClassCalibrating  ptp.ClockClass = ptp.ClockClass13
+	// ClockClassLock is a class representing locked state
+	ClockClassLock ptp.ClockClass = ptp.ClockClass6
+	// ClockClassHoldover is a class representing holdover state
+	ClockClassHoldover ptp.ClockClass = ptp.ClockClass7
+	// ClockClassCalibrating is a class representing calibrating state
+	ClockClassCalibrating ptp.ClockClass = ptp.ClockClass13
+	// ClockClassUncalibrated is a class representing uncalibrated state
 	ClockClassUncalibrated ptp.ClockClass = ptp.ClockClass52
 )
 
+// DataPoint representing a sample of data used in clock class/accuracy calculations
 type DataPoint struct {
 	PHCOffset            time.Duration
 	OscillatorOffset     time.Duration
@@ -58,11 +63,12 @@ func (rb *RingBuffer) Write(c *DataPoint) {
 	rb.index++
 }
 
-// Export data from the ring buffer
+// Data from the ring buffer
 func (rb *RingBuffer) Data() []*DataPoint {
 	return rb.data
 }
 
+// Worst finding worst case clock quality from supplied data points
 func Worst(points []*DataPoint, accuracyExpr, classExpr string) (*ptp.ClockQuality, error) {
 	aexpr, err := prepareExpression(accuracyExpr)
 	if err != nil {
@@ -127,6 +133,7 @@ func Worst(points []*DataPoint, accuracyExpr, classExpr string) (*ptp.ClockQuali
 	return w, nil
 }
 
+// Run the data point collection
 func Run() (*DataPoint, error) {
 	oscillatord, err := oscillatord()
 	if err != nil {

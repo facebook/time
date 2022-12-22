@@ -49,4 +49,3 @@ Here one can see 1000513 clients registered on `ptp4u` side, where:
 ![image](https://user-images.githubusercontent.com/4749052/137388307-7d0e9e6b-df42-4d3d-bc23-b85bab458548.png)
 Spirent N4U showing 512 monitoring clients are working as expected:
 ![image](https://user-images.githubusercontent.com/4749052/137388205-89b57751-8dca-49ab-8a6b-b43bd0382783.png)
-

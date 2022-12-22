@@ -29,7 +29,10 @@ import (
 	"unsafe"
 )
 
+// Order of the bytes
 var Order binary.ByteOrder = binary.LittleEndian
+
+// IsBigEndian is a flag determining if value is in Big Endian
 var IsBigEndian bool
 
 func init() {

@@ -397,7 +397,7 @@ func (sc *SubscriptionClient) UpdateSignalingCancel() {
 	}
 }
 
-// Grant returns ptp Signaling packet granting the requested subscription
+// Signaling returns ptp Signaling packet granting the requested subscription
 func (sc *SubscriptionClient) Signaling() *ptp.Signaling {
 	return sc.signaling
 }

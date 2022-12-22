@@ -14,29 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fbclock
+package test
 
 import (
 	"fmt"
 	"testing"
 	"time"
 
+	lib "github.com/facebook/time/fbclock"
+
 	"github.com/stretchr/testify/require"
 )
 
 func TestStatsUpdate(t *testing.T) {
 	type in struct {
-		tt  *TrueTime
+		tt  *lib.TrueTime
 		err error
 	}
 	testCases := []struct {
 		name   string
 		inputs []in
-		want   Stats
+		want   lib.Stats
 	}{
 		{
 			name: "empty",
-			want: Stats{},
+			want: lib.Stats{},
 		},
 		{
 			name: "single error",
@@ -46,7 +48,7 @@ func TestStatsUpdate(t *testing.T) {
 					err: fmt.Errorf("oh no"),
 				},
 			},
-			want: Stats{
+			want: lib.Stats{
 				Requests: 1,
 				Errors:   1,
 			},
@@ -55,11 +57,11 @@ func TestStatsUpdate(t *testing.T) {
 			name: "single value",
 			inputs: []in{
 				{
-					tt:  &TrueTime{Earliest: time.Unix(0, 1648137249050666302), Latest: time.Unix(0, 1648137249050666313)},
+					tt:  &lib.TrueTime{Earliest: time.Unix(0, 1648137249050666302), Latest: time.Unix(0, 1648137249050666313)},
 					err: nil,
 				},
 			},
-			want: Stats{
+			want: lib.Stats{
 				Requests:  1,
 				Errors:    0,
 				WOUAvg:    11,
@@ -71,11 +73,11 @@ func TestStatsUpdate(t *testing.T) {
 			name: "mixed",
 			inputs: []in{
 				{
-					tt:  &TrueTime{Earliest: time.Unix(0, 1648137249050666302), Latest: time.Unix(0, 1648137249050666313)},
+					tt:  &lib.TrueTime{Earliest: time.Unix(0, 1648137249050666302), Latest: time.Unix(0, 1648137249050666313)},
 					err: nil,
 				},
 				{
-					tt:  &TrueTime{Earliest: time.Unix(0, 1648137249050666902), Latest: time.Unix(0, 1648137249050667333)},
+					tt:  &lib.TrueTime{Earliest: time.Unix(0, 1648137249050666902), Latest: time.Unix(0, 1648137249050667333)},
 					err: nil,
 				},
 				{
@@ -83,7 +85,7 @@ func TestStatsUpdate(t *testing.T) {
 					err: fmt.Errorf("oh no"),
 				},
 				{
-					tt:  &TrueTime{Earliest: time.Unix(0, 1648137249050667499), Latest: time.Unix(0, 1648137249050668300)},
+					tt:  &lib.TrueTime{Earliest: time.Unix(0, 1648137249050667499), Latest: time.Unix(0, 1648137249050668300)},
 					err: nil,
 				},
 				{
@@ -91,11 +93,11 @@ func TestStatsUpdate(t *testing.T) {
 					err: fmt.Errorf("whoops"),
 				},
 				{
-					tt:  &TrueTime{Earliest: time.Unix(0, 1648137249050668999), Latest: time.Unix(0, 1648137249050699300)},
+					tt:  &lib.TrueTime{Earliest: time.Unix(0, 1648137249050668999), Latest: time.Unix(0, 1648137249050699300)},
 					err: nil,
 				},
 			},
-			want: Stats{
+			want: lib.Stats{
 				Requests:   6,
 				Errors:     2,
 				WOUAvg:     7886,
@@ -108,7 +110,7 @@ func TestStatsUpdate(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &StatsCollector{}
+			s := &lib.StatsCollector{}
 			for _, v := range tt.inputs {
 				s.Update(v.tt, v.err)
 			}

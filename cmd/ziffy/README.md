@@ -26,7 +26,7 @@ This will send 80 PTP SYNC packets to `<<receiver_hostname>>` from source port r
 ## Requirements
 * IPv6
 * sudo - needed because
-    * ziffy listens for packets even if the port is already used by another process, using a BPF filter 
+    * ziffy listens for packets even if the port is already used by another process, using a BPF filter
     * ziffy decodes raw packets
     * minimal capabilities to run ziffy: `cap_net_raw=eip`.
 * pcap library - used to build and run ziffy.

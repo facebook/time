@@ -500,6 +500,7 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 	}
 }
 
+// Run a daemon
 func (s *Daemon) Run(ctx context.Context) error {
 	shm, err := fbclock.OpenFBClockSHM()
 	if err != nil {

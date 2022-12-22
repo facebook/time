@@ -91,6 +91,7 @@ func (dc *DynamicConfig) UTCOffsetSanity() error {
 	return nil
 }
 
+// ReadDynamicConfig reads dynamic config from the file
 func ReadDynamicConfig(path string) (*DynamicConfig, error) {
 	dc := &DynamicConfig{}
 	cData, err := os.ReadFile(path)
@@ -110,6 +111,7 @@ func ReadDynamicConfig(path string) (*DynamicConfig, error) {
 	return dc, nil
 }
 
+// Write dynamic config to a file
 func (dc *DynamicConfig) Write(path string) error {
 	d, err := yaml.Marshal(&dc)
 	if err != nil {

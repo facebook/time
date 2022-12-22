@@ -53,6 +53,7 @@ kgEAiwyM3UboyEtLXDPk9VwqzCglAj0=
 -----END CERTIFICATE-----
 `
 
+// @lint-ignore PRIVATEKEY insecure-private-key-storage
 const testKey = `-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC6CnsEElO640Xk
 9H7SPHPHXXQS9Oo4pGf3uNMc9qXIA8PgNktskXMTh020vtV1d2RMRjbAvUmfK8RP
