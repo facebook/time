@@ -27,7 +27,7 @@ func TestSysoffEstimateBasic(t *testing.T) {
 	ts1 := time.Unix(0, 1667818190552297411)
 	rt := time.Unix(0, 1667818153552297462)
 	ts2 := time.Unix(0, 1667818190552297522)
-	got := sysoffEstimateBasic(ts1, rt, ts2)
+	got := SysoffEstimateBasic(ts1, rt, ts2)
 	want := SysoffResult{
 		SysTime: time.Unix(0, 1667818190552297466),
 		PHCTime: rt,
@@ -46,7 +46,7 @@ func TestSysoffEstimateExtended(t *testing.T) {
 			{{Sec: 1667818190, NSec: 552297644}, {Sec: 1667818153, NSec: 552297661}, {Sec: 1667818190, NSec: 552297722}},
 		},
 	}
-	got := sysoffEstimateExtended(extended)
+	got := SysoffEstimateExtended(extended)
 	want := SysoffResult{
 		SysTime: time.Unix(0, 1667818190552297683),
 		PHCTime: time.Unix(0, 1667818153552297661),
@@ -56,6 +56,50 @@ func TestSysoffEstimateExtended(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
+func TestSysoffFromExtendedTS(t *testing.T) {
+	extendedTS := [3]PTPClockTime{
+		{Sec: 1667818190, NSec: 552297411},
+		{Sec: 1667818153, NSec: 552297462},
+		{Sec: 1667818190, NSec: 552297522},
+	}
+	sysoff := sysoffFromExtendedTS(extendedTS)
+	want := SysoffResult{
+		SysTime: time.Unix(1667818190, 552297466),
+		PHCTime: time.Unix(1667818153, 552297462),
+		Delay:   111,
+		Offset:  37000000004,
+	}
+	require.Equal(t, want, sysoff)
+}
+
+func TestOffsetBetweenExtendedReadings(t *testing.T) {
+	extendedA := &PTPSysOffsetExtended{
+		NSamples: 6,
+		TS: [ptpMaxSamples][3]PTPClockTime{
+			{{Sec: 1667818190, NSec: 552297411}, {Sec: 1667818153, NSec: 552297462}, {Sec: 1667818190, NSec: 552297522}},
+			{{Sec: 1667818190, NSec: 552297533}, {Sec: 1667818153, NSec: 552297582}, {Sec: 1667818190, NSec: 552297602}},
+			{{Sec: 1667818190, NSec: 552297644}, {Sec: 1667818153, NSec: 552297661}, {Sec: 1667818190, NSec: 552297722}},
+			{{Sec: 1667818190, NSec: 552297755}, {Sec: 1667818153, NSec: 552297782}, {Sec: 1667818190, NSec: 552297822}},
+			{{Sec: 1667818190, NSec: 552297866}, {Sec: 1667818153, NSec: 552297861}, {Sec: 1667818190, NSec: 552297922}},
+			{{Sec: 1667818190, NSec: 552297966}, {Sec: 1667818153, NSec: 552297961}, {Sec: 1667818190, NSec: 552298022}},
+		},
+	}
+
+	extendedB := &PTPSysOffsetExtended{
+		NSamples: 5,
+		TS: [ptpMaxSamples][3]PTPClockTime{
+			{{Sec: 1667818191, NSec: 552298311}, {Sec: 1667818154, NSec: 552297452}, {Sec: 1667818191, NSec: 552298512}},
+			{{Sec: 1667818191, NSec: 552298033}, {Sec: 1667818154, NSec: 552297572}, {Sec: 1667818191, NSec: 552298712}},
+			{{Sec: 1667818191, NSec: 552299644}, {Sec: 1667818154, NSec: 552297691}, {Sec: 1667818191, NSec: 552308702}},
+			{{Sec: 1667818191, NSec: 552300755}, {Sec: 1667818154, NSec: 552297782}, {Sec: 1667818191, NSec: 552309812}},
+			{{Sec: 1667818191, NSec: 552301866}, {Sec: 1667818154, NSec: 552297861}, {Sec: 1667818191, NSec: 552328912}},
+		},
+	}
+	offset := OffsetBetweenExtendedReadings(extendedA, extendedB)
+	require.Equal(t, time.Duration(-815), offset)
+}
+
+/*
 func TestCalcPHCOffet(t *testing.T) {
 	tA := SysoffResult{
 		SysTime: time.Unix(0, 1667818190552297683),
@@ -71,3 +115,4 @@ func TestCalcPHCOffet(t *testing.T) {
 	got := CalcPHCOffet(tA, tB)
 	require.Equal(t, want, got)
 }
+*/
