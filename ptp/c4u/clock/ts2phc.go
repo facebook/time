@@ -27,15 +27,5 @@ const (
 )
 
 func ts2phc() (time.Duration, error) {
-	tcard, err := phc.TimeAndOffsetFromDevice(phcTimeCardPath, phc.MethodIoctlSysOffsetExtended)
-	if err != nil {
-		return 0, err
-	}
-
-	tnic, err := phc.TimeAndOffsetFromDevice(phcNICPath, phc.MethodIoctlSysOffsetExtended)
-	if err != nil {
-		return 0, err
-	}
-
-	return phc.CalcPHCOffet(tcard, tnic), nil
+	return phc.OffsetBetweenDevices(phcTimeCardPath, phcNICPath)
 }

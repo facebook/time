@@ -46,17 +46,17 @@ func init() {
 }
 
 func phcdiffRun(deviceA, deviceB string, isJSON bool) error {
-	timeAndOffsetA, err := phc.TimeAndOffsetFromDevice(deviceA, phc.MethodIoctlSysOffsetExtended)
+	extendedA, err := phc.ReadPTPSysOffsetExtended(deviceA, phc.ExtendedNumProbes)
 	if err != nil {
 		return err
 	}
-
-	timeAndOffsetB, err := phc.TimeAndOffsetFromDevice(deviceB, phc.MethodIoctlSysOffsetExtended)
+	extendedB, err := phc.ReadPTPSysOffsetExtended(deviceB, phc.ExtendedNumProbes)
 	if err != nil {
 		return err
 	}
-
-	phcOffset := phc.CalcPHCOffet(timeAndOffsetA, timeAndOffsetB)
+	timeAndOffsetA := phc.SysoffEstimateExtended(extendedA)
+	timeAndOffsetB := phc.SysoffEstimateExtended(extendedB)
+	phcOffset := phc.OffsetBetweenExtendedReadings(extendedA, extendedB)
 
 	if isJSON {
 		stats := phcStats{PHCOffset: phcOffset, PHC1Delay: timeAndOffsetA.Delay, PHC2Delay: timeAndOffsetB.Delay}
