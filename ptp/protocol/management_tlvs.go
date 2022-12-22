@@ -229,7 +229,7 @@ type ParentDataSetTLV struct {
 	GrandmasterIdentity                   ClockIdentity
 }
 
-// ClockAccuracyTLV
+// ClockAccuracyTLV is a TLV containing Clock Accuracy
 type ClockAccuracyTLV struct {
 	ManagementTLVHead
 

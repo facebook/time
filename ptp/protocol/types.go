@@ -243,17 +243,21 @@ func (p PortIdentity) String() string {
 	return fmt.Sprintf("%s-%d", p.ClockIdentity, p.PortNumber)
 }
 
+// PTPSeconds type representing seconds
 type PTPSeconds [6]uint8 // uint48
 
+// Empty returns 0 seconds
 func (s PTPSeconds) Empty() bool {
 	return s == [6]uint8{0, 0, 0, 0, 0, 0}
 }
 
+// Seconds returns number of seconds as uint64
 func (s PTPSeconds) Seconds() uint64 {
 	b := append([]byte{0x0, 0x0}, s[:]...)
 	return binary.BigEndian.Uint64(b)
 }
 
+// Time returns number of seconds in as Time
 func (s PTPSeconds) Time() time.Time {
 	if s.Empty() {
 		return time.Time{}
@@ -261,6 +265,7 @@ func (s PTPSeconds) Time() time.Time {
 	return time.Unix(int64(s.Seconds()), 0)
 }
 
+// String returns number of seconds in as String
 func (s PTPSeconds) String() string {
 	if s.Empty() {
 		return "PTPSeconds(empty)"
@@ -268,6 +273,7 @@ func (s PTPSeconds) String() string {
 	return fmt.Sprintf("PTPSeconds(%s)", s.Time())
 }
 
+// NewPTPSeconds creates a new instance of PTPSeconds
 func NewPTPSeconds(t time.Time) PTPSeconds {
 	if t.IsZero() {
 		return PTPSeconds{}
@@ -301,10 +307,12 @@ func (t Timestamp) Time() time.Time {
 	return time.Unix(int64(t.Seconds.Seconds()), int64(t.Nanoseconds))
 }
 
+// Empty timestamp
 func (t Timestamp) Empty() bool {
 	return t.Nanoseconds == 0 && t.Seconds.Empty()
 }
 
+// String representation of the timestamp
 func (t Timestamp) String() string {
 	if t.Empty() {
 		return "Timestamp(empty)"
@@ -644,13 +652,14 @@ func (t TransportType) String() string {
 	return TransportTypeToString[t]
 }
 
-// 5.3.6 PortAddress
+// PortAddress see 5.3.6 PortAddress
 type PortAddress struct {
 	NetworkProtocol TransportType
 	AddressLength   uint16
 	AddressField    []byte
 }
 
+// UnmarshalBinary converts bytes to PortAddress
 func (p *PortAddress) UnmarshalBinary(b []byte) error {
 	if len(b) < 8 {
 		return fmt.Errorf("not enough data to decode PortAddress")
@@ -665,6 +674,7 @@ func (p *PortAddress) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
+// IP converts PortAddress to IP
 func (p *PortAddress) IP() (net.IP, error) {
 	if p.NetworkProtocol != TransportTypeUDPIPV4 && p.NetworkProtocol != TransportTypeUDPIPV6 {
 		return nil, fmt.Errorf("unsupported network protocol %s (%d)", p.NetworkProtocol, p.NetworkProtocol)

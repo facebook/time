@@ -27,10 +27,12 @@ type Logger interface {
 	PrintEntry(e *Entry)
 }
 
+// JSONLogger is a json logger implementation
 type JSONLogger struct {
 	Out io.Writer
 }
 
+// PrintEntry prints logging entity
 func (j JSONLogger) PrintEntry(e *Entry) {
 	entryj, _ := json.Marshal(e)
 	fmt.Fprintln(j.Out, string(entryj))

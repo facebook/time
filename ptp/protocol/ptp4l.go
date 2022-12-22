@@ -64,10 +64,15 @@ func (t UnicastMasterState) String() string {
 type Timestamping uint8
 
 const (
+	// TimestampingSoftware is a software timestamp const
 	TimestampingSoftware Timestamping = iota
+	// TimestampingHardware is a hardware timestamp const
 	TimestampingHardware
+	// TimestampingLegacyHW is a legacy hardware timestamp const
 	TimestampingLegacyHW
+	// TimestampingOneStep is a one step timestamp const
 	TimestampingOneStep
+	// TimestampingP2P1Step is a P2P one step timestamp const
 	TimestampingP2P1Step
 )
 
@@ -121,6 +126,7 @@ type TimeStatusNPTLV struct {
 	GMIdentity                 ClockIdentity
 }
 
+// PortPropertiesNPTLV is a ptp4l struct containing port properties
 type PortPropertiesNPTLV struct {
 	ManagementTLVHead
 

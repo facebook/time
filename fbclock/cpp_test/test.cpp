@@ -14,20 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <future>
 #include <gtest/gtest.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <future>
 #include <thread>
 
 #include "../fbclock.h"
 
 TEST(fbclock_test, test_write_read) {
   int err;
-  char *test_shm = std::tmpnam(nullptr);
+  char* test_shm = std::tmpnam(nullptr);
 
   // open file, write data into it
-  FILE *f = fopen(test_shm, "wb+");
+  FILE* f = fopen(test_shm, "wb+");
   int sfd_rw = fileno(f);
   ASSERT_NE(sfd_rw, -1);
 
@@ -46,7 +46,7 @@ TEST(fbclock_test, test_write_read) {
   int sfd_ro = fileno(f);
   ASSERT_NE(sfd_ro, -1);
 
-  fbclock_shmdata *shmp = (fbclock_shmdata *)mmap(
+  fbclock_shmdata* shmp = (fbclock_shmdata*)mmap(
       nullptr, FBCLOCK_SHMDATA_SIZE, PROT_READ, MAP_SHARED, sfd_ro, 0);
   ASSERT_NE(shmp, MAP_FAILED);
 
@@ -84,7 +84,7 @@ int writer_thread(int sfd_rw, int tries) {
   return 0;
 }
 
-int reader_thread(fbclock_shmdata *shmp, int tries) {
+int reader_thread(fbclock_shmdata* shmp, int tries) {
   int err;
   fbclock_clockdata data;
   for (int i = 0; i < tries; i++) {
@@ -110,10 +110,10 @@ int reader_thread(fbclock_shmdata *shmp, int tries) {
 
 TEST(fbclock_test, test_concurrent) {
   int err;
-  char *test_shm = std::tmpnam(nullptr);
+  char* test_shm = std::tmpnam(nullptr);
 
   // open file, write data into it
-  FILE *f_rw = fopen(test_shm, "wb+");
+  FILE* f_rw = fopen(test_shm, "wb+");
   int sfd_rw = fileno(f_rw);
   ASSERT_NE(sfd_rw, -1);
 
@@ -121,11 +121,11 @@ TEST(fbclock_test, test_concurrent) {
   ASSERT_EQ(err, 0);
 
   // read data from the file
-  FILE *f_ro = fopen(test_shm, "r");
+  FILE* f_ro = fopen(test_shm, "r");
   int sfd_ro = fileno(f_ro);
   ASSERT_NE(sfd_ro, -1);
 
-  fbclock_shmdata *shmp = (fbclock_shmdata *)mmap(
+  fbclock_shmdata* shmp = (fbclock_shmdata*)mmap(
       nullptr, FBCLOCK_SHMDATA_SIZE, PROT_READ, MAP_SHARED, sfd_ro, 0);
   ASSERT_NE(shmp, MAP_FAILED);
 
@@ -149,13 +149,13 @@ TEST(fbclock_test, test_window_of_uncertainty) {
   double error_bound_ns = 172.0;
   double holdover_multiplier_ns = 50.5;
 
-  double wou = fbclock_window_of_uncertainty(seconds, error_bound_ns,
-                                             holdover_multiplier_ns);
+  double wou = fbclock_window_of_uncertainty(
+      seconds, error_bound_ns, holdover_multiplier_ns);
   EXPECT_DOUBLE_EQ(wou, 172.0);
 
   seconds = 10;
-  wou = fbclock_window_of_uncertainty(seconds, error_bound_ns,
-                                      holdover_multiplier_ns);
+  wou = fbclock_window_of_uncertainty(
+      seconds, error_bound_ns, holdover_multiplier_ns);
 
   EXPECT_DOUBLE_EQ(wou, 677.0);
 }
@@ -169,15 +169,15 @@ TEST(fbclock_test, test_fbclock_calculate_time) {
   int64_t ingress_time_ns = 1647269091803102957;
   int64_t phctime_ns = 1647269082943150996;
 
-  err = fbclock_calculate_time(error_bound_ns, h_value_ns, ingress_time_ns,
-                               phctime_ns, &truetime);
+  err = fbclock_calculate_time(
+      error_bound_ns, h_value_ns, ingress_time_ns, phctime_ns, &truetime);
   ASSERT_EQ(err, FBCLOCK_E_PHC_IN_THE_PAST);
 
   // phc time is after ingress time, all good
   ingress_time_ns = 1647269082943150996;
   phctime_ns = 1647269091803102957;
-  err = fbclock_calculate_time(error_bound_ns, h_value_ns, ingress_time_ns,
-                               phctime_ns, &truetime);
+  err = fbclock_calculate_time(
+      error_bound_ns, h_value_ns, ingress_time_ns, phctime_ns, &truetime);
   ASSERT_EQ(err, 0);
 
   EXPECT_EQ(truetime.earliest_ns, 1647269091803102381);
@@ -186,14 +186,14 @@ TEST(fbclock_test, test_fbclock_calculate_time) {
   // WOU is very big
   error_bound_ns = 1000.0;
   phctime_ns += 6 * 3600 * 1000000000.0; // + 6 hours
-  err = fbclock_calculate_time(error_bound_ns, h_value_ns, ingress_time_ns,
-                               phctime_ns, &truetime);
+  err = fbclock_calculate_time(
+      error_bound_ns, h_value_ns, ingress_time_ns, phctime_ns, &truetime);
   ASSERT_EQ(err, 0);
   EXPECT_EQ(truetime.earliest_ns, 1647290691802010772);
   EXPECT_EQ(truetime.latest_ns, 1647290691804195180);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

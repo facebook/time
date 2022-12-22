@@ -1,8 +1,8 @@
 # NTP
 
-<img width="50%" 
+<img width="50%"
 align="right"
-style="display: block; margin:40px auto;" 
+style="display: block; margin:40px auto;"
 src="https://raw.githubusercontent.com/leoleovich/images/master/NTP.png"/>
 
 Collection of Facebook's NTP libraries.

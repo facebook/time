@@ -22,6 +22,7 @@ import (
 	"github.com/facebook/time/leapsectz"
 )
 
+// Run the utcoffset calculation
 func Run() (time.Duration, error) {
 	// TAI <-> UTC offset was 10 seconds before introduction of leap seconds.
 	// https://en.wikipedia.org/wiki/Leap_second

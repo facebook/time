@@ -16,15 +16,17 @@ limitations under the License.
 
 #include "../../fbclock/fbclock.h"
 
-#include <ctype.h>  // for isprint
-#include <fcntl.h>  // For O_* constants
-#include <stdio.h>  // for printf and perror
+#include <ctype.h> // for isprint
+#include <fcntl.h> // For O_* constants
+#include <stdio.h> // for printf and perror
 #include <stdlib.h> // for EXIT_* constants
 #include <unistd.h> // for sleep, getopt
 
-void show_error(int err_code) { puts(fbclock_strerror(err_code)); }
+void show_error(int err_code) {
+  puts(fbclock_strerror(err_code));
+}
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   fbclock_truetime truetime;
   fbclock_lib lib;
   int err;
@@ -34,13 +36,15 @@ int main(int argc, char *argv[]) {
 
   while ((c = getopt(argc, argv, "f")) != -1)
     switch (c) {
-    case 'f':
-      fflag = 1;
-      break;
-    default:
-      fprintf(stderr, "Usage: %s [-f]\n  -f will print TrueTime in a loop\n",
-              argv[0]);
-      exit(EXIT_FAILURE);
+      case 'f':
+        fflag = 1;
+        break;
+      default:
+        fprintf(
+            stderr,
+            "Usage: %s [-f]\n  -f will print TrueTime in a loop\n",
+            argv[0]);
+        exit(EXIT_FAILURE);
     }
 
   err = fbclock_init(&lib, FBCLOCK_PATH);

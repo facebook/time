@@ -15,7 +15,6 @@ limitations under the License.
 */
 
 #include "fbclock.h"
-#include "missing.h"
 #include <fcntl.h> // For O_* constants
 #include <linux/ptp_clock.h>
 #include <math.h> // pow
@@ -27,11 +26,12 @@ limitations under the License.
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h> // close
+#include "missing.h"
 
 #ifndef NDEBUG
-#define fbclock_debug_print(fmt, ...)                                          \
-  do {                                                                         \
-    fprintf(stderr, fmt, __VA_ARGS__);                                         \
+#define fbclock_debug_print(fmt, ...)  \
+  do {                                 \
+    fprintf(stderr, fmt, __VA_ARGS__); \
   } while (0)
 #else
 #define fbclock_debug_print(fmt, ...)
@@ -55,7 +55,7 @@ limitations under the License.
 #define fbclock_crc64(a, b) ({ a ^ b; })
 #endif
 
-static uint64_t fbclock_clockdata_crc(fbclock_clockdata *value) {
+static uint64_t fbclock_clockdata_crc(fbclock_clockdata* value) {
   uint64_t counter = fbclock_crc64(value->ingress_time_ns, 0x04C11DB7);
   counter = fbclock_crc64(value->error_bound_ns, counter);
   counter = fbclock_crc64(value->holdover_multiplier_ns, counter);
@@ -63,9 +63,9 @@ static uint64_t fbclock_clockdata_crc(fbclock_clockdata *value) {
 }
 
 // fbclock_clockdata_store_data is used in shmem.go to store timing data
-int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata *data) {
-  fbclock_shmdata *shmp = mmap(NULL, FBCLOCK_SHMDATA_SIZE,
-                               PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data) {
+  fbclock_shmdata* shmp = mmap(
+      NULL, FBCLOCK_SHMDATA_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (shmp == MAP_FAILED) {
     return FBCLOCK_E_SHMEM_MAP_FAILED;
   }
@@ -76,8 +76,9 @@ int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata *data) {
   return 0;
 }
 
-int fbclock_clockdata_load_data(fbclock_shmdata *shmp,
-                                fbclock_clockdata *data) {
+int fbclock_clockdata_load_data(
+    fbclock_shmdata* shmp,
+    fbclock_clockdata* data) {
   for (int i = 0; i < FBCLOCK_MAX_READ_TRIES; i++) {
     memcpy(data, &shmp->data, FBCLOCK_CLOCKDATA_SIZE);
     uint64_t our_crc = fbclock_clockdata_crc(data);
@@ -90,7 +91,7 @@ int fbclock_clockdata_load_data(fbclock_shmdata *shmp,
   return 0;
 }
 
-static int64_t fbclock_pct2ns(const struct ptp_clock_time *ptc) {
+static int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
   return (int64_t)(ptc->sec * 1000000000) + (int64_t)ptc->nsec;
 }
 
@@ -113,7 +114,7 @@ static int64_t fbclock_read_ptp_offset_extended(int fd) {
   return ts + mean_delay;
 }
 
-int fbclock_init(fbclock_lib *lib, const char *shm_path) {
+int fbclock_init(fbclock_lib* lib, const char* shm_path) {
   lib->ptp_path = FBCLOCK_PTPPATH;
   int sfd = open(shm_path, O_RDONLY, 0);
   if (sfd == -1) {
@@ -129,7 +130,7 @@ int fbclock_init(fbclock_lib *lib, const char *shm_path) {
   }
   lib->dev_fd = ffd;
 
-  fbclock_shmdata *shmp =
+  fbclock_shmdata* shmp =
       mmap(NULL, FBCLOCK_SHMDATA_SIZE, PROT_READ, MAP_SHARED, lib->shm_fd, 0);
   if (shmp == MAP_FAILED) {
     return FBCLOCK_E_SHMEM_MAP_FAILED;
@@ -138,7 +139,7 @@ int fbclock_init(fbclock_lib *lib, const char *shm_path) {
   return 0;
 }
 
-int fbclock_destroy(fbclock_lib *lib) {
+int fbclock_destroy(fbclock_lib* lib) {
   munmap(lib->shmp, FBCLOCK_SHMDATA_SIZE);
   close(lib->dev_fd);
   close(lib->shm_fd);
@@ -146,8 +147,10 @@ int fbclock_destroy(fbclock_lib *lib) {
   // we don't want to unlink it, others might still use it
 }
 
-double fbclock_window_of_uncertainty(int64_t seconds, double error_bound_ns,
-                                     double holdover_multiplier_ns) {
+double fbclock_window_of_uncertainty(
+    int64_t seconds,
+    double error_bound_ns,
+    double holdover_multiplier_ns) {
   double h = holdover_multiplier_ns * seconds;
   double w = error_bound_ns + h;
   fbclock_debug_print("error_bound=%f\n", error_bound_ns);
@@ -158,9 +161,12 @@ double fbclock_window_of_uncertainty(int64_t seconds, double error_bound_ns,
   return w;
 }
 
-int fbclock_calculate_time(double error_bound_ns, double h_value_ns,
-                           int64_t ingress_time_ns, int64_t phctime_ns,
-                           fbclock_truetime *truetime) {
+int fbclock_calculate_time(
+    double error_bound_ns,
+    double h_value_ns,
+    int64_t ingress_time_ns,
+    int64_t phctime_ns,
+    fbclock_truetime* truetime) {
   // first, we check how long it was since last SYNC message from GM, in seconds
   int64_t seconds = (double)(phctime_ns - ingress_time_ns) / 1000000000.0;
   if (seconds < 0) {
@@ -174,7 +180,7 @@ int fbclock_calculate_time(double error_bound_ns, double h_value_ns,
   return 0;
 }
 
-int fbclock_gettime(fbclock_lib *lib, fbclock_truetime *truetime) {
+int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
   fbclock_clockdata state;
   int rcode = fbclock_clockdata_load_data(lib->shmp, &state);
   if (rcode != 0) {
@@ -200,40 +206,40 @@ int fbclock_gettime(fbclock_lib *lib, fbclock_truetime *truetime) {
 
   double error_bound = (double)state.error_bound_ns;
   double h_value = (double)state.holdover_multiplier_ns / FBCLOCK_POW2_16;
-  return fbclock_calculate_time(error_bound, h_value, state.ingress_time_ns,
-                                phctime_ns, truetime);
+  return fbclock_calculate_time(
+      error_bound, h_value, state.ingress_time_ns, phctime_ns, truetime);
 }
 
-const char *fbclock_strerror(int err_code) {
-  const char *err_info = "unknown error";
+const char* fbclock_strerror(int err_code) {
+  const char* err_info = "unknown error";
   switch (err_code) {
-  case FBCLOCK_E_SHMEM_MAP_FAILED:
-    err_info = "shmem map error";
-    break;
-  case FBCLOCK_E_SHMEM_OPEN:
-    err_info = "shmem open error";
-    break;
-  case FBCLOCK_E_PTP_READ_OFFSET:
-    err_info = "PTP PTP_SYS_OFFSET_EXTENDED ioctl error";
-    break;
-  case FBCLOCK_E_PTP_OPEN:
-    err_info = "PTP device open error";
-    break;
-  case FBCLOCK_E_NO_DATA:
-    err_info = "no data from daemon error";
-    break;
-  case FBCLOCK_E_WOU_TOO_BIG:
-    err_info = "WOU is too big";
-    break;
-  case FBCLOCK_E_PHC_IN_THE_PAST:
-    err_info = "PHC jumped back in time";
-    break;
-  case 0:
-    err_info = "no error";
-    break;
-  default:
-    err_info = "unknown error";
-    break;
+    case FBCLOCK_E_SHMEM_MAP_FAILED:
+      err_info = "shmem map error";
+      break;
+    case FBCLOCK_E_SHMEM_OPEN:
+      err_info = "shmem open error";
+      break;
+    case FBCLOCK_E_PTP_READ_OFFSET:
+      err_info = "PTP PTP_SYS_OFFSET_EXTENDED ioctl error";
+      break;
+    case FBCLOCK_E_PTP_OPEN:
+      err_info = "PTP device open error";
+      break;
+    case FBCLOCK_E_NO_DATA:
+      err_info = "no data from daemon error";
+      break;
+    case FBCLOCK_E_WOU_TOO_BIG:
+      err_info = "WOU is too big";
+      break;
+    case FBCLOCK_E_PHC_IN_THE_PAST:
+      err_info = "PHC jumped back in time";
+      break;
+    case 0:
+      err_info = "no error";
+      break;
+    default:
+      err_info = "unknown error";
+      break;
   }
   return err_info;
 }

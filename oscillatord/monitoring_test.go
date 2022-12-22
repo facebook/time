@@ -60,7 +60,7 @@ func TestOscillatordRead(t *testing.T) {
 			SurveyInPositionError: 12,
 		},
 		Clock: Clock{
-			Class:  ClockClassHoldover,
+			Class:  clockClassHoldover,
 			Offset: -265095,
 		},
 	}
@@ -148,12 +148,12 @@ func TestLeapSecondChange(t *testing.T) {
 }
 
 func TestClockClass(t *testing.T) {
-	require.Equal(t, ClockClass(ptp.ClockClass6), ClockClassLock)
-	require.Equal(t, ClockClass(ptp.ClockClass7), ClockClassHoldover)
-	require.Equal(t, ClockClass(ptp.ClockClass13), ClockClassCalibrating)
-	require.Equal(t, ClockClass(ptp.ClockClass52), ClockClassUncalibrated)
+	require.Equal(t, ClockClass(ptp.ClockClass6), clockClassLock)
+	require.Equal(t, ClockClass(ptp.ClockClass7), clockClassHoldover)
+	require.Equal(t, ClockClass(ptp.ClockClass13), clockClassCalibrating)
+	require.Equal(t, ClockClass(ptp.ClockClass52), clockClassUncalibrated)
 
-	require.Equal(t, clockClassToString[ClockClassLock], ClockClassLock.String())
+	require.Equal(t, clockClassToString[clockClassLock], clockClassLock.String())
 	for k := range clockClassToString {
 		require.Equal(t, clockClassToString[k], k.String())
 	}
@@ -165,19 +165,19 @@ func TestClockClassUnmarshalText(t *testing.T) {
 	c := ClockClass(42)
 	err := c.UnmarshalText([]byte("Lock"))
 	require.NoError(t, err)
-	require.Equal(t, ClockClassLock, c)
+	require.Equal(t, clockClassLock, c)
 
 	err = c.UnmarshalText([]byte("Holdover"))
 	require.NoError(t, err)
-	require.Equal(t, ClockClassHoldover, c)
+	require.Equal(t, clockClassHoldover, c)
 
 	err = c.UnmarshalText([]byte("Calibrating"))
 	require.NoError(t, err)
-	require.Equal(t, ClockClassCalibrating, c)
+	require.Equal(t, clockClassCalibrating, c)
 
 	err = c.UnmarshalText([]byte("Uncalibrated"))
 	require.NoError(t, err)
-	require.Equal(t, ClockClassUncalibrated, c)
+	require.Equal(t, clockClassUncalibrated, c)
 
 	err = c.UnmarshalText([]byte("blah"))
 	require.Equal(t, errors.New("clock class blah not supported"), err)
@@ -204,7 +204,7 @@ func TestJSON(t *testing.T) {
 			SurveyInPositionError: 12,
 		},
 		Clock: Clock{
-			Class:  ClockClassHoldover,
+			Class:  clockClassHoldover,
 			Offset: -265095,
 		},
 	}
