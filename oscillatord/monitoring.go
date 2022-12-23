@@ -160,23 +160,27 @@ func (c LeapSecondChange) String() string {
 type ClockClass ptp.ClockClass
 
 const (
-	clockClassLock         = ClockClass(ptp.ClockClass6)
-	clockClassHoldover     = ClockClass(ptp.ClockClass7)
-	clockClassCalibrating  = ClockClass(ptp.ClockClass13)
-	clockClassUncalibrated = ClockClass(ptp.ClockClass52)
+	// ClockClassLock is an alias for ClockClass6
+	ClockClassLock = ClockClass(ptp.ClockClass6)
+	// ClockClassHoldover is an alias for ClockClass7
+	ClockClassHoldover = ClockClass(ptp.ClockClass7)
+	// ClockClassCalibrating is an alias for ClockClass13
+	ClockClassCalibrating = ClockClass(ptp.ClockClass13)
+	// ClockClassUncalibrated is an alias for ClockClass52
+	ClockClassUncalibrated = ClockClass(ptp.ClockClass52)
 )
 
 // UnmarshalText parses ClockClass from a config string
 func (c *ClockClass) UnmarshalText(text []byte) error {
 	switch string(text) {
 	case "Lock":
-		*c = clockClassLock
+		*c = ClockClassLock
 	case "Holdover":
-		*c = clockClassHoldover
+		*c = ClockClassHoldover
 	case "Calibrating":
-		*c = clockClassCalibrating
+		*c = ClockClassCalibrating
 	case "Uncalibrated":
-		*c = clockClassUncalibrated
+		*c = ClockClassUncalibrated
 	default:
 		return fmt.Errorf("clock class %s not supported", string(text))
 	}
@@ -185,10 +189,10 @@ func (c *ClockClass) UnmarshalText(text []byte) error {
 }
 
 var clockClassToString = map[ClockClass]string{
-	clockClassLock:         "Lock",
-	clockClassHoldover:     "Holdover",
-	clockClassCalibrating:  "Calibrating",
-	clockClassUncalibrated: "Uncalibrated",
+	ClockClassLock:         "Lock",
+	ClockClassHoldover:     "Holdover",
+	ClockClassCalibrating:  "Calibrating",
+	ClockClassUncalibrated: "Uncalibrated",
 }
 
 // String representation of the ClockClass
