@@ -64,14 +64,18 @@ ch5\used=No
 }
 
 func TestBaseConfig(t *testing.T) {
-	testConfig := `[measure]
+	testConfig := `[gnss]
+antenna_delay=42 ns
+[measure]
 continuous=Off
 meas_time=10 minutes
 tie_mode=TIE
 ch8\used=No
 `
 
-	expectedConfig := `[measure]
+	expectedConfig := `[gnss]
+antenna_delay=42 ns
+[measure]
 continuous=On
 meas_time=1 days 1 hours
 tie_mode=TIE + 1 PPS Alignment
@@ -97,8 +101,9 @@ ch7\protocol_enabled=Off
 	require.NoError(t, err)
 
 	s := f.Section("measure")
+	g := f.Section("gnss")
 
-	c.baseConfig(s)
+	c.baseConfig(s, g, 42)
 	require.True(t, c.changed)
 
 	buf, err := api.ToBuffer(f)
@@ -380,22 +385,25 @@ ch30\ptp_synce\ptp\domain=0
 
 	s := f.Section("measure")
 
-	mc := map[api.Channel]MeasureConfig{
-		api.ChannelA: {
-			Target: "fd00:3226:301b::1f",
-			Probe:  api.ProbePPS,
-		},
-		api.ChannelVP1: {
-			Target: "fd00:3226:301b::3f",
-			Probe:  api.ProbeNTP,
-		},
-		api.ChannelVP22: {
-			Target: "fd00:3016:3109:face:0:1:0",
-			Probe:  api.ProbePTP,
+	cc := &CalnexConfig{
+		AntennaDelayNS: 42,
+		Measure: map[api.Channel]MeasureConfig{
+			api.ChannelA: {
+				Target: "fd00:3226:301b::1f",
+				Probe:  api.ProbePPS,
+			},
+			api.ChannelVP1: {
+				Target: "fd00:3226:301b::3f",
+				Probe:  api.ProbeNTP,
+			},
+			api.ChannelVP22: {
+				Target: "fd00:3016:3109:face:0:1:0",
+				Probe:  api.ProbePTP,
+			},
 		},
 	}
 
-	c.measureConfig(s, CalnexConfig(mc))
+	c.measureConfig(s, cc.Measure)
 	require.True(t, c.changed)
 
 	buf, err := api.ToBuffer(f)
@@ -404,7 +412,9 @@ ch30\ptp_synce\ptp\domain=0
 }
 
 func TestConfig(t *testing.T) {
-	expectedConfig := `[measure]
+	expectedConfig := `[gnss]
+antenna_delay=42 ns
+[measure]
 continuous=On
 meas_time=1 days 1 hours
 tie_mode=TIE + 1 PPS Alignment
@@ -574,50 +584,56 @@ ch30\ptp_synce\ptp\domain=0
 	calnexAPI := api.NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
 
-	mc := map[api.Channel]MeasureConfig{
-		api.ChannelA: {
-			Target: "fd00:3226:301b::1f",
-			Probe:  api.ProbePPS,
-		},
-		api.ChannelVP1: {
-			Target: "fd00:3226:301b::3f",
-			Probe:  api.ProbeNTP,
-		},
-		api.ChannelVP22: {
-			Target: "fd00:3016:3109:face:0:1:0",
-			Probe:  api.ProbePTP,
+	cc := &CalnexConfig{
+		AntennaDelayNS: 42,
+		Measure: map[api.Channel]MeasureConfig{
+			api.ChannelA: {
+				Target: "fd00:3226:301b::1f",
+				Probe:  api.ProbePPS,
+			},
+			api.ChannelVP1: {
+				Target: "fd00:3226:301b::3f",
+				Probe:  api.ProbeNTP,
+			},
+			api.ChannelVP22: {
+				Target: "fd00:3016:3109:face:0:1:0",
+				Probe:  api.ProbePTP,
+			},
 		},
 	}
 
-	err := Config(parsed.Host, true, CalnexConfig(mc), true)
+	err := Config(parsed.Host, true, cc, true)
 	require.NoError(t, err)
 }
 
 func TestConfigFail(t *testing.T) {
-	mc := map[api.Channel]MeasureConfig{}
+	cc := &CalnexConfig{Measure: map[api.Channel]MeasureConfig{}}
 
-	err := Config("localhost", true, CalnexConfig(mc), true)
+	err := Config("localhost", true, cc, true)
 	require.Error(t, err)
 }
 
 func TestJSONExport(t *testing.T) {
-	expected := `{"0":{"target":"1 PPS","probe":3,"name":""},"30":{"target":"fd00:3016:3109:face:0:1:0","probe":0,"name":""},"9":{"target":"fd00:3226:301b::3f","probe":2,"name":""}}`
-	mc := map[api.Channel]MeasureConfig{
-		api.ChannelA: {
-			Target: "1 PPS",
-			Probe:  api.ProbePPS,
-		},
-		api.ChannelVP1: {
-			Target: "fd00:3226:301b::3f",
-			Probe:  api.ProbeNTP,
-		},
-		api.ChannelVP22: {
-			Target: "fd00:3016:3109:face:0:1:0",
-			Probe:  api.ProbePTP,
+	expected := `{"measure":{"0":{"target":"1 PPS","probe":3,"name":""},"30":{"target":"fd00:3016:3109:face:0:1:0","probe":0,"name":""},"9":{"target":"fd00:3226:301b::3f","probe":2,"name":""}},"antennaDelayNS":42}`
+	cc := CalnexConfig{
+		AntennaDelayNS: 42,
+		Measure: map[api.Channel]MeasureConfig{
+			api.ChannelA: {
+				Target: "1 PPS",
+				Probe:  api.ProbePPS,
+			},
+			api.ChannelVP1: {
+				Target: "fd00:3226:301b::3f",
+				Probe:  api.ProbeNTP,
+			},
+			api.ChannelVP22: {
+				Target: "fd00:3016:3109:face:0:1:0",
+				Probe:  api.ProbePTP,
+			},
 		},
 	}
 
-	jsonData, err := json.Marshal(mc)
+	jsonData, err := json.Marshal(cc)
 	require.NoError(t, err)
 	require.Equal(t, expected, string(jsonData))
 }

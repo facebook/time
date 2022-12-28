@@ -24,8 +24,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// CalnexConfig is a wrapper around map[channel]MeasureConfig
-type CalnexConfig map[api.Channel]MeasureConfig
+// CalnexConfig is a config representation of calnex
+type CalnexConfig struct {
+	Measure        map[api.Channel]MeasureConfig `json:"measure"`
+	AntennaDelayNS int                           `json:"antennaDelayNS"`
+}
 
 // MeasureConfig is a Calnex channel config
 type MeasureConfig struct {
@@ -56,10 +59,10 @@ func (c *config) set(s *ini.Section, name, value string) {
 	}
 }
 
-func (c *config) measureConfig(s *ini.Section, cc CalnexConfig) {
+func (c *config) measureConfig(s *ini.Section, mc map[api.Channel]MeasureConfig) {
 	channelEnabled := make(map[api.Channel]bool)
 
-	for ch, m := range cc {
+	for ch, m := range mc {
 		channelEnabled[ch] = true
 		probe := ""
 
@@ -131,39 +134,42 @@ func (c *config) measureConfig(s *ini.Section, cc CalnexConfig) {
 	}
 }
 
-func (c *config) baseConfig(s *ini.Section) {
+func (c *config) baseConfig(measure *ini.Section, gnss *ini.Section, antennaDelayNS int) {
+	// gnss antenna compensation
+	c.set(gnss, "antenna_delay", fmt.Sprintf("%d ns", antennaDelayNS))
+
 	// continuous measurement
-	c.set(s, "continuous", api.ON)
+	c.set(measure, "continuous", api.ON)
 
 	// 25h measurement
-	c.set(s, "meas_time", "1 days 1 hours")
+	c.set(measure, "meas_time", "1 days 1 hours")
 
 	// tie_mode=TIE + 1 PPS Alignment
-	c.set(s, "tie_mode", "TIE + 1 PPS Alignment")
+	c.set(measure, "tie_mode", "TIE + 1 PPS Alignment")
 
 	// ch8 is a ref channel. Always ON
-	c.set(s, "ch8\\used", api.YES)
+	c.set(measure, "ch8\\used", api.YES)
 
 	// disable synce
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\synce_enabled", api.OFF)
+	c.chSet(measure, api.ChannelONE, api.ChannelTWO, "%s\\synce_enabled", api.OFF)
 
 	// ptp dscp
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\dscp", "0")
+	c.chSet(measure, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\dscp", "0")
 
 	// DHCP
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v6", api.DHCP)
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v4", api.DISABLED)
+	c.chSet(measure, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v6", api.DHCP)
+	c.chSet(measure, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v4", api.DISABLED)
 
 	// enable QSFP FEC for 100G links (first channel only)
-	c.chSet(s, api.ChannelONE, api.ChannelONE, "%s\\ptp_synce\\ethernet\\qsfp_fec", api.RSFEC)
+	c.chSet(measure, api.ChannelONE, api.ChannelONE, "%s\\ptp_synce\\ethernet\\qsfp_fec", api.RSFEC)
 
 	// Disable 2nd Physical channel
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\used", api.NO)
-	c.chSet(s, api.ChannelONE, api.ChannelTWO, "%s\\protocol_enabled", api.OFF)
+	c.chSet(measure, api.ChannelONE, api.ChannelTWO, "%s\\used", api.NO)
+	c.chSet(measure, api.ChannelONE, api.ChannelTWO, "%s\\protocol_enabled", api.OFF)
 }
 
 // Config configures target Calnex with Network/Calnex configs if apply is specified
-func Config(target string, insecureTLS bool, cc CalnexConfig, apply bool) error {
+func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error {
 	var c config
 	api := api.NewAPI(target, insecureTLS)
 
@@ -172,13 +178,14 @@ func Config(target string, insecureTLS bool, cc CalnexConfig, apply bool) error 
 		return err
 	}
 
-	s := f.Section("measure")
+	m := f.Section("measure")
+	g := f.Section("gnss")
 
-	// set static config
-	c.baseConfig(s)
+	// set base config
+	c.baseConfig(m, g, cc.AntennaDelayNS)
 
 	// set measure config
-	c.measureConfig(s, cc)
+	c.measureConfig(m, cc.Measure)
 
 	if !apply {
 		log.Infof("dry run. Exiting")

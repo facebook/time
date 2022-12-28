@@ -1,16 +1,19 @@
 {
     "calnex01.example.com": {
-        "a": {
-            "target": "fd00::d",
-            "probe": "pps"
-        },
-        "VP1": {
-            "target": "fd00::d",
-            "probe": "ntp"
-        },
-        "VP22": {
-            "target": "fd00::d",
-            "probe": "ptp"
+        "antennaDelayNS": 42,
+        "measure": {
+            "a": {
+                "target": "fd00::d",
+                "probe": "pps"
+            },
+            "VP1": {
+                "target": "fd00::d",
+                "probe": "ntp"
+            },
+            "VP22": {
+                "target": "fd00::d",
+                "probe": "ptp"
+            }
         }
     }
 }
