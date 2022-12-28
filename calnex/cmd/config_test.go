@@ -29,40 +29,46 @@ func TestUnmarshalConfig(t *testing.T) {
 	testConfig := `
 	{
 		"calnex01.example.com": {
-			"a": {
-				"target": "fd00::d",
-				"probe": "pps"
-			},
-			"VP1": {
-				"target": "fd00::d",
-				"probe": "ntp"
-			},
-			"VP22": {
-				"target": "fd00::d",
-				"probe": "ptp"
+			"antennaDelayNS": 42,
+			"measure": {
+				"a": {
+					"target": "fd00::d",
+					"probe": "pps"
+				},
+				"VP1": {
+					"target": "fd00::d",
+					"probe": "ntp"
+				},
+				"VP22": {
+					"target": "fd00::d",
+					"probe": "ptp"
+				}
 			}
 		}
 	}
 `
 
-	var d devices
-	err := json.Unmarshal([]byte(testConfig), &d)
+	var cs calnexes
+	err := json.Unmarshal([]byte(testConfig), &cs)
 	require.NoError(t, err)
 
-	expected := devices{}
+	expected := calnexes{}
 	expected["calnex01.example.com"] = config.CalnexConfig{
-		api.ChannelA: config.MeasureConfig{
-			Target: "fd00::d",
-			Probe:  api.ProbePPS,
-		},
-		api.ChannelVP1: config.MeasureConfig{
-			Target: "fd00::d",
-			Probe:  api.ProbeNTP,
-		},
-		api.ChannelVP22: config.MeasureConfig{
-			Target: "fd00::d",
-			Probe:  api.ProbePTP,
+		AntennaDelayNS: 42,
+		Measure: map[api.Channel]config.MeasureConfig{
+			api.ChannelA: {
+				Target: "fd00::d",
+				Probe:  api.ProbePPS,
+			},
+			api.ChannelVP1: {
+				Target: "fd00::d",
+				Probe:  api.ProbeNTP,
+			},
+			api.ChannelVP22: {
+				Target: "fd00::d",
+				Probe:  api.ProbePTP,
+			},
 		},
 	}
-	require.Equal(t, expected, d)
+	require.Equal(t, expected, cs)
 }

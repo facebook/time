@@ -40,7 +40,7 @@ func init() {
 	}
 }
 
-type devices map[string]config.CalnexConfig
+type calnexes map[string]config.CalnexConfig
 
 var configCmd = &cobra.Command{
 	Use:   "config",
@@ -56,18 +56,18 @@ var configCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		var d devices
-		err = json.Unmarshal(b, &d)
+		var cs calnexes
+		err = json.Unmarshal(b, &cs)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		dc, ok := d[target]
+		dc, ok := cs[target]
 		if !ok {
 			log.Fatalf("Failed to find config for %s in %s", target, source)
 		}
 
-		if err := config.Config(target, insecureTLS, dc, apply); err != nil {
+		if err := config.Config(target, insecureTLS, &dc, apply); err != nil {
 			log.Fatal(err)
 		}
 	},
