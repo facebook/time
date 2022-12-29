@@ -34,7 +34,7 @@ func init() {
 
 func reboot() error {
 	if !apply {
-		log.Infof("dry run. Exiting")
+		log.Info("dry run. Exiting")
 		return nil
 	}
 

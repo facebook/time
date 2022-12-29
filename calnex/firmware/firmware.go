@@ -56,7 +56,7 @@ func Firmware(target string, insecureTLS bool, fw FW, apply bool) error {
 	log.Infof("%s is running %s, latest is %s. Needs an update", target, calnexVersion, v)
 
 	if !apply {
-		log.Infof("dry run. Exiting")
+		log.Info("dry run. Exiting")
 		return nil
 	}
 

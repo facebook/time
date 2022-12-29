@@ -188,7 +188,7 @@ func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error
 	c.measureConfig(m, cc.Measure)
 
 	if !apply {
-		log.Infof("dry run. Exiting")
+		log.Info("dry run. Exiting")
 		return nil
 	}
 
