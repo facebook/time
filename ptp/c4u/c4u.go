@@ -102,6 +102,7 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 	if err != nil {
 		return err
 	}
+	st.SetClockAccuracyWorst(int64(w.ClockAccuracy))
 
 	// Evaluate and override if needed
 	q := evaluateClockQuality(config, w)

@@ -27,6 +27,7 @@ func TestCountersToMap(t *testing.T) {
 		utcOffsetSec:       1,
 		phcOffsetNS:        2,
 		oscillatorOffsetNS: 3,
+		clockAccuracyWorst: 33,
 		clockAccuracy:      42,
 		clockClass:         6,
 		reload:             7,
@@ -35,13 +36,14 @@ func TestCountersToMap(t *testing.T) {
 	result := c.toMap()
 
 	expectedMap := make(map[string]int64)
-	expectedMap["utcoffset_sec"] = 1
-	expectedMap["phcoffset_ns"] = 2
-	expectedMap["oscillatoroffset_ns"] = 3
-	expectedMap["clockaccuracy"] = 42
-	expectedMap["clockclass"] = 6
+	expectedMap["utc_offset_sec"] = 1
+	expectedMap["phc_offset_ns"] = 2
+	expectedMap["oscillator_offset_ns"] = 3
+	expectedMap["clock_accuracy_worst"] = 33
+	expectedMap["clock_accuracy"] = 42
+	expectedMap["clock_class"] = 6
 	expectedMap["reload"] = 7
-	expectedMap["dataerror"] = 8
+	expectedMap["data_error"] = 8
 
 	require.Equal(t, expectedMap, result)
 }

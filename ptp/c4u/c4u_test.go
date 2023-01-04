@@ -34,8 +34,8 @@ func TestRun(t *testing.T) {
 	utcoffset, _ := utcoffset.Run()
 
 	expected := &server.DynamicConfig{
-		ClockClass:     clock.ClockClassUncalibrated,
-		ClockAccuracy:  ptp.ClockAccuracyUnknown,
+		ClockClass:     ptp.ClockClass6,
+		ClockAccuracy:  ptp.ClockAccuracyNanosecond25,
 		DrainInterval:  30 * time.Second,
 		MaxSubDuration: 1 * time.Hour,
 		MetricInterval: 1 * time.Minute,
@@ -52,12 +52,18 @@ func TestRun(t *testing.T) {
 		Sample:       3,
 		Apply:        true,
 		AccuracyExpr: "1",
-		ClassExpr:    "1",
+		ClassExpr:    "6",
 	}
 
 	st := stats.NewJSONStats()
-
-	err = Run(c, clock.NewRingBuffer(1), st)
+	rb := clock.NewRingBuffer(2)
+	dp := &clock.DataPoint{
+		PHCOffset:            time.Microsecond,
+		OscillatorOffset:     time.Microsecond,
+		OscillatorClockClass: clock.ClockClassHoldover,
+	}
+	rb.Write(dp)
+	err = Run(c, rb, st)
 	require.NoError(t, err)
 
 	dc, err := server.ReadDynamicConfig(c.Path)

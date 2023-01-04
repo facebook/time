@@ -58,6 +58,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	go stats.Start(0)
 	time.Sleep(time.Millisecond)
 
+	stats.SetClockAccuracyWorst(1)
 	stats.SetClockAccuracy(1)
 	stats.SetClockClass(1)
 	stats.SetUTCOffsetSec(1)
@@ -67,11 +68,13 @@ func TestJSONStatsSnapshot(t *testing.T) {
 
 	expectedStats := counters{}
 	expectedStats.utcOffsetSec = 1
+	expectedStats.clockAccuracyWorst = 1
 	expectedStats.clockAccuracy = 1
 	expectedStats.clockClass = 1
 	expectedStats.reload = 1
 
 	require.Equal(t, expectedStats.utcOffsetSec, stats.report.utcOffsetSec)
+	require.Equal(t, expectedStats.clockAccuracyWorst, stats.report.clockAccuracyWorst)
 	require.Equal(t, expectedStats.clockAccuracy, stats.report.clockAccuracy)
 	require.Equal(t, expectedStats.clockClass, stats.report.clockClass)
 	require.Equal(t, expectedStats.reload, stats.report.reload)
@@ -85,6 +88,7 @@ func TestJSONExport(t *testing.T) {
 
 	stats.SetUTCOffsetSec(1)
 	stats.SetClockAccuracy(1)
+	stats.SetClockAccuracyWorst(1)
 	stats.SetClockClass(1)
 	stats.IncReload()
 
@@ -102,13 +106,14 @@ func TestJSONExport(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedMap := map[string]int64{
-		"phcoffset_ns":        0,
-		"oscillatoroffset_ns": 0,
-		"utcoffset_sec":       1,
-		"clockaccuracy":       1,
-		"clockclass":          1,
-		"dataerror":           0,
-		"reload":              1,
+		"phc_offset_ns":        0,
+		"oscillator_offset_ns": 0,
+		"utc_offset_sec":       1,
+		"clock_accuracy_worst": 1,
+		"clock_accuracy":       1,
+		"clock_class":          1,
+		"data_error":           0,
+		"reload":               1,
 	}
 
 	require.Equal(t, expectedMap, data)

@@ -57,6 +57,7 @@ func (s *JSONStats) Snapshot() {
 	s.report.phcOffsetNS = s.phcOffsetNS
 	s.report.oscillatorOffsetNS = s.oscillatorOffsetNS
 	s.report.clockAccuracy = s.clockAccuracy
+	s.report.clockAccuracyWorst = s.clockAccuracyWorst
 	s.report.clockClass = s.clockClass
 	s.report.reload = s.reload
 	s.report.dataError = s.dataError
@@ -108,6 +109,11 @@ func (s *JSONStats) SetPHCOffsetNS(phcOffsetNS int64) {
 // SetOscillatorOffsetNS atomically sets the oscillatoroffset
 func (s *JSONStats) SetOscillatorOffsetNS(oscillatorOffsetNS int64) {
 	atomic.StoreInt64(&s.oscillatorOffsetNS, oscillatorOffsetNS)
+}
+
+// SetClockAccuracyWorst atomically sets the worst clock accuracy (before adjustment to baseline)
+func (s *JSONStats) SetClockAccuracyWorst(clockAccuracy int64) {
+	atomic.StoreInt64(&s.clockAccuracyWorst, clockAccuracy)
 }
 
 // SetClockAccuracy atomically sets the clock accuracy

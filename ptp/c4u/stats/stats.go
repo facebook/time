@@ -51,6 +51,9 @@ type Stats interface {
 	// SetOscillatorOffsetNS atomically sets the oscillatorOffsetNS
 	SetOscillatorOffsetNS(oscillatorOffsetNS int64)
 
+	// SetClockAccuracyWorst atomically sets the worst clock accuracy (before adjustment to baseline)
+	SetClockAccuracyWorst(clockAccuracy int64)
+
 	// SetClockAccuracy atomically sets the clock accuracy
 	SetClockAccuracy(clockAccuracy int64)
 
@@ -59,25 +62,27 @@ type Stats interface {
 }
 
 type counters struct {
-	utcOffsetSec       int64
-	phcOffsetNS        int64
-	oscillatorOffsetNS int64
 	clockAccuracy      int64
+	clockAccuracyWorst int64
 	clockClass         int64
-	reload             int64
 	dataError          int64
+	oscillatorOffsetNS int64
+	phcOffsetNS        int64
+	reload             int64
+	utcOffsetSec       int64
 }
 
 // toMap converts counters to a map
 func (c *counters) toMap() (export map[string]int64) {
 	res := make(map[string]int64)
-	res["utcoffset_sec"] = c.utcOffsetSec
-	res["phcoffset_ns"] = c.phcOffsetNS
-	res["oscillatoroffset_ns"] = c.oscillatorOffsetNS
-	res["clockaccuracy"] = c.clockAccuracy
-	res["clockclass"] = c.clockClass
+	res["utc_offset_sec"] = c.utcOffsetSec
+	res["phc_offset_ns"] = c.phcOffsetNS
+	res["oscillator_offset_ns"] = c.oscillatorOffsetNS
+	res["clock_accuracy_worst"] = c.clockAccuracyWorst
+	res["clock_accuracy"] = c.clockAccuracy
+	res["clock_class"] = c.clockClass
 	res["reload"] = c.reload
-	res["dataerror"] = c.dataError
+	res["data_error"] = c.dataError
 
 	return res
 }
