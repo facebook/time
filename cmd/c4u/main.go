@@ -50,7 +50,7 @@ func main() {
 	flag.DurationVar(&interval, "interval", time.Second, "Data cata collection interval")
 	flag.StringVar(&logLevel, "loglevel", "info", "Set a log level. Can be: debug, info, warning, error")
 	flag.IntVar(&monitoringPort, "monitoringport", 8889, "Port to run monitoring server on")
-	flag.DurationVar(&lockBaseLine, "lockBaseLine", 250*time.Nanosecond, "Minimum value for ClockClass in LOCK state")
+	flag.DurationVar(&lockBaseLine, "lockBaseLine", 100*time.Nanosecond, "Minimum value for ClockClass in LOCK state")
 	flag.DurationVar(&holdoverBaseLine, "holdoverBaseLine", time.Microsecond, "Minimum value for ClockClass in HOLDOVER state")
 	flag.DurationVar(&calibratingBaseLine, "calibratingBaseLine", 250*time.Nanosecond, "Minimum value for ClockClass in CALIBRATING state")
 	flag.Parse()
