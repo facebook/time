@@ -1,7 +1,7 @@
 # Time
 
-[![Lint Status](https://img.shields.io/github/actions/workflow/status/facebook/time/lint.yml?branch=main&label=lint&style=for-the-badge&logo=github)](https://github.com/facebook/time/actions/workflows/lint.yml?query=branch%3Amain)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/facebook/time/test.yml?branch=main&label=test&style=for-the-badge&logo=github)](https://github.com/facebook/time/actions/workflows/test.yml?query=branch%3Amain)
+[![lint](https://github.com/facebook/time/actions/workflows/lint.yml/badge.svg)](https://github.com/facebook/time/actions/workflows/lint.yml)
+[![test](https://github.com/facebook/time/actions/workflows/test.yml/badge.svg)](https://github.com/facebook/time/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/facebook/time/branch/main/graph/badge.svg?token=QC44PEpHRi)](https://codecov.io/gh/facebook/time)
 [![Go Report Card](https://goreportcard.com/badge/github.com/facebook/time)](https://goreportcard.com/report/github.com/facebook/time)
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/facebook/time)
