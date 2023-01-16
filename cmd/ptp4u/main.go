@@ -60,6 +60,8 @@ func main() {
 	flag.StringVar(&c.PidFile, "pidfile", "/var/run/ptp4u.pid", "Pid file location")
 	flag.StringVar(&c.TimestampType, "timestamptype", timestamp.HWTIMESTAMP, fmt.Sprintf("Timestamp type. Can be: %s, %s", timestamp.HWTIMESTAMP, timestamp.SWTIMESTAMP))
 	flag.StringVar(&ipaddr, "ip", "::", "IP to bind on")
+	flag.StringVar(&c.DrainFileName, "drainfile", "/var/tmp/kill_ptp4u", "ptp4u drain file location")
+	flag.StringVar(&c.UndrainFileName, "undrainfile", "/var/tmp/unkill_ptp4u", "ptp4u force undrain file location")
 	flag.Parse()
 
 	switch c.LogLevel {
@@ -125,7 +127,7 @@ func main() {
 	go st.Start(c.MonitoringPort)
 
 	// drain check
-	check := &drain.FileDrain{FileName: "/var/tmp/kill_ptp4u"}
+	check := &drain.FileDrain{FileName: c.DrainFileName}
 	checks := []drain.Drain{check}
 
 	s := server.Server{

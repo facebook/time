@@ -33,3 +33,13 @@ func TestCheck(t *testing.T) {
 	os.Remove(file.Name())
 	require.False(t, check.Check())
 }
+
+func TestUndrain(t *testing.T) {
+	file, err := os.CreateTemp("", "")
+	require.NoError(t, err)
+
+	require.True(t, Undrain(file.Name()))
+
+	os.Remove(file.Name())
+	require.False(t, Undrain(file.Name()))
+}

@@ -41,19 +41,21 @@ var dcMux = sync.Mutex{}
 
 // StaticConfig is a set of static options which require a server restart
 type StaticConfig struct {
-	ConfigFile     string
-	DebugAddr      string
-	DomainNumber   uint
-	DSCP           int
-	Interface      string
-	IP             net.IP
-	LogLevel       string
-	MonitoringPort int
-	PidFile        string
-	QueueSize      int
-	RecvWorkers    int
-	SendWorkers    int
-	TimestampType  string
+	ConfigFile      string
+	DebugAddr       string
+	DomainNumber    uint
+	DrainFileName   string
+	DSCP            int
+	Interface       string
+	IP              net.IP
+	LogLevel        string
+	MonitoringPort  int
+	PidFile         string
+	QueueSize       int
+	RecvWorkers     int
+	SendWorkers     int
+	TimestampType   string
+	UndrainFileName string
 }
 
 // DynamicConfig is a set of dynamic options which don't need a server restart

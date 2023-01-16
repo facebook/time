@@ -16,8 +16,21 @@ limitations under the License.
 
 package drain
 
+import (
+	"os"
+)
+
 // Drain is a drain check interface
 type Drain interface {
 	// Check returns true if the service needs to be drained
 	Check() bool
+}
+
+// Undrain checks the existence of a undrain file
+func Undrain(filename string) bool {
+	if _, err := os.Stat(filename); err == nil {
+		return true
+	}
+
+	return false
 }

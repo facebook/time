@@ -99,16 +99,22 @@ func (s *Server) Start() error {
 	// Drain check
 	go func() {
 		for ; true; <-time.After(s.Config.DrainInterval) {
-			var drain bool
+			var shouldDrain bool
 			for _, check := range s.Checks {
 				if check.Check() {
-					drain = true
-					log.Warningf("%T engaged shifting traffic", check)
+					shouldDrain = true
+					log.Warningf("%T engaged", check)
 					break
 				}
 			}
 
-			if drain {
+			if drain.Undrain(s.Config.UndrainFileName) {
+				log.Warningf("Force undrain file %s is planted, undraining!", s.Config.UndrainFileName)
+				shouldDrain = false
+			}
+
+			if shouldDrain {
+				log.Warningf("shifting traffic")
 				s.Drain()
 				s.Stats.SetDrain(1)
 			} else {
