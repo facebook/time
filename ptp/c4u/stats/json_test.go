@@ -18,13 +18,29 @@ package stats
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+func getFreePort() (int, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
 
 func TestJSONStatsReset(t *testing.T) {
 	stats := JSONStats{}
@@ -82,8 +98,9 @@ func TestJSONStatsSnapshot(t *testing.T) {
 
 func TestJSONExport(t *testing.T) {
 	stats := NewJSONStats()
-
-	go stats.Start(8889)
+	port, err := getFreePort()
+	require.Nil(t, err, "Failed to allocate port")
+	go stats.Start(port)
 	time.Sleep(time.Second)
 
 	stats.SetUTCOffsetSec(1)
@@ -94,7 +111,7 @@ func TestJSONExport(t *testing.T) {
 
 	stats.Snapshot()
 
-	resp, err := http.Get("http://localhost:8889")
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d", port))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
