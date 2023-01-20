@@ -466,9 +466,9 @@ func (c ClockAccuracy) Duration() time.Duration {
 
 // ClockQuality represents the quality of a clock.
 type ClockQuality struct {
-	ClockClass              ClockClass
-	ClockAccuracy           ClockAccuracy
-	OffsetScaledLogVariance uint16
+	ClockClass              ClockClass    `json:"clock_class"`
+	ClockAccuracy           ClockAccuracy `json:"clock_accuracy"`
+	OffsetScaledLogVariance uint16        `json:"offset_scaled_log_variance"`
 }
 
 // TimeSource indicates the immediate source of time used by the Grandmaster PTP Instance
