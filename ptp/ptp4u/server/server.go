@@ -262,7 +262,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 	var sc *SubscriptionClient
 	var ip net.IP
 	var gclisa unix.Sockaddr
-	expire := time.Now().Add(subscriptionDuration)
+	var expire time.Time
 
 	for {
 		bbuf, eclisa, rxTS, err := timestamp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
