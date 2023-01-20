@@ -52,6 +52,9 @@ type Server struct {
 	ctx    context.Context
 }
 
+// fixed subscription duration for ptpng clients
+const subscriptionDuration = time.Minute * 5
+
 // Start the workers send bind to event and general UDP ports
 func (s *Server) Start() error {
 	if err := s.Config.CreatePidFile(); err != nil {
@@ -257,9 +260,12 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 	var msgType ptp.MessageType
 	var worker *sendWorker
 	var sc *SubscriptionClient
+	var ip net.IP
+	var gclisa unix.Sockaddr
+	expire := time.Now().Add(subscriptionDuration)
 
 	for {
-		bbuf, clisa, rxTS, err := timestamp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
+		bbuf, eclisa, rxTS, err := timestamp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
 		if err != nil {
 			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
 			continue
@@ -282,15 +288,32 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 				log.Errorf("Failed to read the ptp SyncDelayReq: %v", err)
 				continue
 			}
-
 			log.Debugf("Got delay request")
 			worker = s.findWorker(dReq.Header.SourcePortIdentity, r)
-			sc = worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp)
-			if sc == nil {
-				log.Infof("Delay request from %s is not in the subscription list", timestamp.SockaddrToIP(clisa))
-				continue
+			if dReq.FlagField == ptp.FlagProfileSpecific1|ptp.FlagUnicast {
+				expire = time.Now().Add(subscriptionDuration)
+				// SYNC DELAY_REQUEST and ANNOUNCE
+				if sc = worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayReq); sc == nil {
+					ip = timestamp.SockaddrToIP(eclisa)
+					gclisa = timestamp.IPToSockaddr(ip, ptp.PortGeneral)
+					// Create a new subscription
+					sc = NewSubscriptionClient(worker.queue, worker.signalingQueue, eclisa, gclisa, ptp.MessageDelayReq, s.Config, subscriptionDuration, expire)
+					worker.RegisterSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayReq, sc)
+					go sc.Start(s.ctx)
+				} else {
+					// bump the subscription
+					sc.SetExpire(expire)
+				}
+				sc.UpdateSyncDelayReq(rxTS, dReq.SequenceID)
+				sc.UpdateAnnounceDelayReq(dReq.CorrectionField, dReq.SequenceID)
+			} else {
+				// DELAY_RESPONSE
+				if sc = worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp); sc == nil {
+					log.Infof("Delay request from %s is not in the subscription list", timestamp.SockaddrToIP(eclisa))
+					continue
+				}
+				sc.UpdateDelayResp(&dReq.Header, rxTS)
 			}
-			sc.UpdateDelayResp(&dReq.Header, rxTS)
 			sc.Once()
 		default:
 			log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)

@@ -247,6 +247,47 @@ func (s *sendWorker) Start() {
 				}
 				s.stats.IncTX(c.subscriptionType)
 
+			case ptp.MessageDelayReq:
+				// send sync
+				n, err = ptp.BytesTo(c.Sync(), buf)
+				if err != nil {
+					log.Errorf("Failed to generate the sync packet: %v", err)
+					continue
+				}
+				log.Debugf("Sending sync")
+
+				err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
+				if err != nil {
+					log.Errorf("Failed to send the sync packet: %v", err)
+					continue
+				}
+				s.stats.IncTX(ptp.MessageSync)
+
+				txTS, attempts, err = timestamp.ReadTXtimestampBuf(eFd, oob, toob)
+				s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
+				if err != nil {
+					log.Errorf("Failed to read TX timestamp: %v", err)
+					return
+				}
+				if s.config.TimestampType != timestamp.HWTIMESTAMP {
+					txTS = txTS.Add(s.config.UTCOffset)
+				}
+
+				// send announce
+				c.UpdateAnnounceFollowUp(txTS)
+				n, err = ptp.BytesTo(c.Announce(), buf)
+				if err != nil {
+					log.Errorf("Failed to prepare the announce packet: %v", err)
+					continue
+				}
+				log.Debug("Sending announce")
+
+				err = unix.Sendto(gFd, buf[:n], 0, c.gclisa)
+				if err != nil {
+					log.Errorf("Failed to send the announce packet: %v", err)
+					continue
+				}
+				s.stats.IncTX(ptp.MessageAnnounce)
 			default:
 				log.Errorf("Unknown subscription type: %v", c.subscriptionType)
 				continue

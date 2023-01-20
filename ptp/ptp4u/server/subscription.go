@@ -88,18 +88,19 @@ func NewSubscriptionClient(q chan *SubscriptionClient, gq chan *SubscriptionClie
 func (sc *SubscriptionClient) Start(ctx context.Context) {
 	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa))
 	sc.setRunning(true)
-	over := fmt.Sprintf("Subscription %s is over for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa))
 
 	// Send first message right away
-	if sc.subscriptionType != ptp.MessageDelayResp {
+	if sc.subscriptionType != ptp.MessageDelayResp && sc.subscriptionType != ptp.MessageDelayReq {
 		sc.Once()
 	}
 
 	sc.runningInterval = sc.interval
 	sc.intervalTicker = time.NewTicker(sc.runningInterval)
 
-	defer log.Infof(over)
-	defer sc.sendSignalingCancel()
+	defer log.Infof(fmt.Sprintf("Subscription %s is over for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa)))
+	if sc.subscriptionType != ptp.MessageDelayReq {
+		defer sc.sendSignalingCancel()
+	}
 	defer sc.intervalTicker.Stop()
 	defer sc.setRunning(false)
 
@@ -119,7 +120,7 @@ func (sc *SubscriptionClient) Start(ctx context.Context) {
 				sc.runningInterval = sc.interval
 				sc.intervalTicker.Reset(sc.runningInterval)
 			}
-			if sc.subscriptionType != ptp.MessageDelayResp {
+			if sc.subscriptionType != ptp.MessageDelayResp && sc.subscriptionType != ptp.MessageDelayReq {
 				// Add myself to the worker queue
 				sc.Once()
 			}
@@ -220,6 +221,12 @@ func (sc *SubscriptionClient) UpdateSync() {
 	sc.syncP.SequenceID = sc.sequenceID
 }
 
+// UpdateSyncDelayReq updates ptp SyncDelayReq packet
+func (sc *SubscriptionClient) UpdateSyncDelayReq(received time.Time, seq uint16) {
+	sc.syncP.SequenceID = seq
+	sc.syncP.OriginTimestamp = ptp.NewTimestamp(received)
+}
+
 // Sync returns ptp Sync packet
 func (sc *SubscriptionClient) Sync() *ptp.SyncDelayReq {
 	return sc.syncP
@@ -301,6 +308,20 @@ func (sc *SubscriptionClient) UpdateAnnounce() {
 	sc.announceP.CurrentUTCOffset = int16(sc.serverConfig.UTCOffset.Seconds())
 	sc.announceP.GrandmasterClockQuality.ClockClass = sc.serverConfig.ClockClass
 	sc.announceP.GrandmasterClockQuality.ClockAccuracy = sc.serverConfig.ClockAccuracy
+}
+
+// UpdateAnnounceDelayReq updates ptp Announce Delay Req payload
+func (sc *SubscriptionClient) UpdateAnnounceDelayReq(cf ptp.Correction, seq uint16) {
+	sc.announceP.SequenceID = seq
+	sc.announceP.CurrentUTCOffset = int16(sc.serverConfig.UTCOffset.Seconds())
+	sc.announceP.GrandmasterClockQuality.ClockClass = sc.serverConfig.ClockClass
+	sc.announceP.GrandmasterClockQuality.ClockAccuracy = sc.serverConfig.ClockAccuracy
+	sc.announceP.CorrectionField = cf
+}
+
+// UpdateAnnounceFollowUp updates ptp Announce Follow Up payload
+func (sc *SubscriptionClient) UpdateAnnounceFollowUp(transmitted time.Time) {
+	sc.announceP.OriginTimestamp = ptp.NewTimestamp(transmitted)
 }
 
 // Announce returns ptp Announce packet
