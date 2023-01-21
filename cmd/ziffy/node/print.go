@@ -77,9 +77,9 @@ func getHostIfPrefix(ip string) string {
 }
 
 // PrettyPrint formats and prints the output to stdout
-func PrettyPrint(routes []PathInfo, cfThreshold ptp.Correction) {
+func PrettyPrint(c *Config, routes []PathInfo, cfThreshold ptp.Correction) {
 	debugPrint(routes)
-	info := computeInfo(routes, cfThreshold)
+	info := computeInfo(c, routes, cfThreshold)
 	detailedPrint(info)
 }
 
@@ -127,7 +127,7 @@ func debugPrint(routes []PathInfo) {
 	}
 }
 
-func computeInfo(routes []PathInfo, cfThreshold ptp.Correction) map[keyPair]*SwitchPrintInfo {
+func computeInfo(c *Config, routes []PathInfo, cfThreshold ptp.Correction) map[keyPair]*SwitchPrintInfo {
 	discovered := make(map[keyPair]*SwitchPrintInfo)
 
 	for _, route := range routes {
@@ -136,6 +136,7 @@ func computeInfo(routes []PathInfo, cfThreshold ptp.Correction) map[keyPair]*Swi
 			last := false
 			host := getHostNoPrefix(swh.ip)
 			intf := getHostIfPrefix(swh.ip)
+			sp := swh.routeIdx + c.SourcePort
 
 			if swh.ip == route.switches[len(route.switches)-1].ip {
 				last = true
@@ -162,6 +163,7 @@ func computeInfo(routes []PathInfo, cfThreshold ptp.Correction) map[keyPair]*Swi
 				discovered[pair] = &SwitchPrintInfo{
 					ip:        swh.ip,
 					hostname:  host,
+					sampleSP:  sp,
 					interf:    intf,
 					totalCF:   corrField,
 					routes:    1,
@@ -237,7 +239,7 @@ func colNumber(header []string, colName string) (int, error) {
 
 func computePrintData(sw []SwitchPrintInfo) [][]string {
 	ret := [][]string{
-		{"uniq", "width", "hop", "ip_address", "intf", "hostname", "flows", "TC", "avg_CF(ns)", "max_CF(ns)", "min_CF(ns)"},
+		{"uniq", "width", "hop", "ip_address", "sample_sp", "intf", "hostname", "flows", "TC", "avg_CF(ns)", "max_CF(ns)", "min_CF(ns)"},
 	}
 
 	// unique counts number of devices discovered
@@ -260,7 +262,7 @@ func computePrintData(sw []SwitchPrintInfo) [][]string {
 			already[val.hostname] = true
 			unique++
 		}
-		ret = append(ret, []string{uniqDisplay, strconv.Itoa(hopCount(sw, val.hop)), strconv.Itoa(val.hop), val.ip, val.interf, val.hostname,
+		ret = append(ret, []string{uniqDisplay, strconv.Itoa(hopCount(sw, val.hop)), strconv.Itoa(val.hop), val.ip, strconv.Itoa(val.sampleSP), val.interf, val.hostname,
 			strconv.Itoa(val.routes), statusToString[val.tcEnable], avgDisplay, maxDisplay, minDisplay})
 	}
 	return ret
@@ -305,8 +307,8 @@ func detailedPrint(info map[keyPair]*SwitchPrintInfo) {
 }
 
 // CsvPrint outputs the data in a csv file
-func CsvPrint(routes []PathInfo, path string, cfThreshold ptp.Correction) {
-	info := computeInfo(routes, cfThreshold)
+func CsvPrint(c *Config, routes []PathInfo, path string, cfThreshold ptp.Correction) {
+	info := computeInfo(c, routes, cfThreshold)
 	aux := parseSwitchMap(info)
 	data := computePrintData(aux)
 

@@ -66,6 +66,7 @@ type Config struct {
 type SwitchPrintInfo struct {
 	ip        string
 	hostname  string
+	sampleSP  int
 	interf    string
 	routes    int
 	divRoutes int

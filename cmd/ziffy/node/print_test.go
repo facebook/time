@@ -36,6 +36,7 @@ func TestComputeInfo(t *testing.T) {
 	s := Sender{
 		Config: &Config{},
 	}
+	c := &Config{}
 	numInfos := 5
 	cfThold := 250
 	cfIncrement := 100
@@ -52,7 +53,7 @@ func TestComputeInfo(t *testing.T) {
 		currentCf += cfIncrement
 	}
 
-	info := computeInfo(s.routes, ptp.NewCorrection(float64(cfThold)))
+	info := computeInfo(c, s.routes, ptp.NewCorrection(float64(cfThold)))
 
 	for i := 0; i <= numInfos; i++ {
 		if info[keyPair{strconv.Itoa(i), i}].last {

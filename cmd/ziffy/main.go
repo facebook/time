@@ -61,7 +61,7 @@ func main() {
 	}
 
 	flag.StringVar(&c.LogLevel, "loglevel", "info", "set a log level. Can be: trace, debug, info, warning, error")
-	flag.StringVar(&c.Mode, "mode", "receiver", "set the mode. Can be either sender or receiver")
+	flag.StringVar(&c.Mode, "mode", "sender", "set the mode. Can be either sender or receiver")
 	flag.StringVar(&c.Device, "if", "eth0", "network interface to use")
 	flag.IntVar(&c.HopMax, "maxhop", 7, "max number of hops (used by sender)")
 	flag.IntVar(&c.HopMin, "minhop", 1, "min number of hops (used by sender)")
@@ -92,6 +92,10 @@ func main() {
 
 	if c.IcmpTimeout < 100*time.Millisecond {
 		log.Warnf("setting timeout < 100ms for ICMP replies may lead to inaccurate results")
+	}
+
+	if c.DestinationAddress == "" {
+		log.Fatalf("A target host is required; use -addr {hostname} to specify target")
 	}
 
 	switch messageType {
@@ -142,9 +146,9 @@ func main() {
 			log.Errorf("sender start failed: %v", err)
 		}
 
-		node.PrettyPrint(info, ptp.NewCorrection(float64(nsCFThreshold)))
+		node.PrettyPrint(c, info, ptp.NewCorrection(float64(nsCFThreshold)))
 		if s.Config.CsvFile != "" {
-			node.CsvPrint(info, s.Config.CsvFile, ptp.NewCorrection(float64(nsCFThreshold)))
+			node.CsvPrint(c, info, s.Config.CsvFile, ptp.NewCorrection(float64(nsCFThreshold)))
 		}
 	default:
 		log.Errorf("--mode must be sender or receiver")
