@@ -94,10 +94,6 @@ func main() {
 		log.Warnf("setting timeout < 100ms for ICMP replies may lead to inaccurate results")
 	}
 
-	if c.DestinationAddress == "" {
-		log.Fatalf("A target host is required; use -addr {hostname} to specify target")
-	}
-
 	switch messageType {
 	case "delay_req":
 		c.MessageType = ptp.MessageDelayReq
@@ -136,6 +132,10 @@ func main() {
 		}
 	case "sender":
 		log.Infof("SENDER")
+
+		if c.DestinationAddress == "" {
+			log.Fatalf("A target host is required in 'sender' mode; use -addr {hostname} to specify target")
+		}
 
 		s := node.Sender{
 			Config: c,
