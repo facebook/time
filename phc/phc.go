@@ -25,6 +25,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// DefaultMaxClockFreqPPB value came from linuxptp project (clockadj.c)
+const DefaultMaxClockFreqPPB = 500000.0
+
 // PTPClockTime as defined in linux/ptp_clock.h
 type PTPClockTime struct {
 	Sec      int64  /* seconds */
@@ -176,20 +179,20 @@ func ReadPTPClockCapsFromDevice(phcDevice string) (*PTPClockCaps, error) {
 
 	caps := &PTPClockCaps{}
 
-	_, _, err = unix.Syscall(
+	_, _, errno := unix.Syscall(
 		unix.SYS_IOCTL, f.Fd(),
 		ioctlPTPClockGetcaps,
 		uintptr(unsafe.Pointer(caps)),
 	)
-	if err != nil {
-		return nil, fmt.Errorf("clock didn't respond properly: %w", err)
+	if errno != 0 {
+		return nil, fmt.Errorf("clock didn't respond properly: %w", errno)
 	}
 
 	return caps, nil
 }
 
-// MaxFreqFromDevice reads max value for frequency adjustments from ptp device
-func MaxFreqFromDevice(phcDevice string) (maxFreq float64, err error) {
+// MaxFreqAdjPPBFromDevice reads max value for frequency adjustments (in PPB) from ptp device
+func MaxFreqAdjPPBFromDevice(phcDevice string) (maxFreq float64, err error) {
 	caps, err := ReadPTPClockCapsFromDevice(phcDevice)
 
 	if err != nil {
@@ -200,10 +203,8 @@ func MaxFreqFromDevice(phcDevice string) (maxFreq float64, err error) {
 }
 
 func maxAdj(caps *PTPClockCaps) float64 {
-	if caps.MaxAdj == 0 {
-		// the default value came from linuxptp project (clockadj.c)
-		return 500000.0
+	if caps == nil || caps.MaxAdj == 0 {
+		return DefaultMaxClockFreqPPB
 	}
-	// caps.MaxAdj is in ppb, but we need it as ppm per man clock_adjtime notes
-	return (float64(caps.MaxAdj) / 65.536)
+	return float64(caps.MaxAdj)
 }

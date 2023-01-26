@@ -35,7 +35,7 @@ const (
 var ioctlPTPSysOffsetExtended = ioctl.IOWR(ptpClkMagic, 9, unsafe.Sizeof(PTPSysOffsetExtended{}))
 
 // ioctlPTPClockGetCaps is an IOCTL to get PTP clock capabilities
-var ioctlPTPClockGetcaps = ioctl.IOWR(ptpClkMagic, 1, unsafe.Sizeof(PTPClockCaps{}))
+var ioctlPTPClockGetcaps = ioctl.IOR(ptpClkMagic, 1, unsafe.Sizeof(PTPClockCaps{}))
 
 // Ifreq is the request we send with SIOCETHTOOL IOCTL
 // as per Linux kernel's include/uapi/linux/if.h
