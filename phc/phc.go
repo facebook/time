@@ -163,3 +163,47 @@ func FrequencyPPB(iface string) (float64, error) {
 	}
 	return FrequencyPPBFromDevice(device)
 }
+
+const ptpClockGetcaps int = 1
+
+// ReadPTPClockCapsFromDevice reads ptp capabilities using ioctl
+func ReadPTPClockCapsFromDevice(phcDevice string) (*PTPClockCaps, error) {
+	f, err := os.OpenFile(phcDevice, os.O_RDWR, 0)
+	if err != nil {
+		return nil, fmt.Errorf("opening device %q to get max frequency: %w", phcDevice, err)
+	}
+	defer f.Close()
+
+	caps := &PTPClockCaps{}
+
+	_, _, err = unix.Syscall(
+		unix.SYS_IOCTL, f.Fd(),
+		ioctlPTPClockGetcaps,
+		uintptr(unsafe.Pointer(caps)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("clock didn't respond properly: %w", err)
+	}
+
+	return caps, nil
+}
+
+// MaxFreqFromDevice reads max value for frequency adjustments from ptp device
+func MaxFreqFromDevice(phcDevice string) (maxFreq float64, err error) {
+	caps, err := ReadPTPClockCapsFromDevice(phcDevice)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return maxAdj(caps), nil
+}
+
+func maxAdj(caps *PTPClockCaps) float64 {
+	if caps.MaxAdj == 0 {
+		// the default value came from linuxptp project (clockadj.c)
+		return 500000.0
+	}
+	// caps.MaxAdj is in ppb, but we need it as ppm per man clock_adjtime notes
+	return (float64(caps.MaxAdj) / 65.536)
+}

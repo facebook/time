@@ -34,6 +34,9 @@ const (
 // ioctlPTPSysOffsetExtended is an IOCTL to get extended offset
 var ioctlPTPSysOffsetExtended = ioctl.IOWR(ptpClkMagic, 9, unsafe.Sizeof(PTPSysOffsetExtended{}))
 
+// ioctlPTPClockGetCaps is an IOCTL to get PTP clock capabilities
+var ioctlPTPClockGetcaps = ioctl.IOWR(ptpClkMagic, 1, unsafe.Sizeof(PTPClockCaps{}))
+
 // Ifreq is the request we send with SIOCETHTOOL IOCTL
 // as per Linux kernel's include/uapi/linux/if.h
 type Ifreq struct {
@@ -65,6 +68,21 @@ type PTPSysOffsetExtended struct {
 	 * - system time immediately after reading the lowest bits of the PHC timestamp
 	 */
 	TS [ptpMaxSamples][3]PTPClockTime
+}
+
+// PTPClockCaps as defined in linux/ptp_clock.h
+type PTPClockCaps struct {
+	MaxAdj  int32 /* Maximum frequency adjustment in parts per billon. */
+	NAalarm int32 /* Number of programmable alarms. */
+	NExtTs  int32 /* Number of external time stamp channels. */
+	NPerOut int32 /* Number of programmable periodic signals. */
+	PPS     int32 /* Whether the clock supports a PPS callback. */
+	NPins   int32 /* Number of input/output pins. */
+	/* Whether the clock supports precise system-device cross timestamps */
+	CrossTimestamping int32
+	/* Whether the clock supports adjust phase */
+	AdjustPhase int32
+	Rsv         [12]int32 /* Reserved for future use. */
 }
 
 // IfaceInfo uses SIOCETHTOOL ioctl to get information for the give nic, i.e. eth0.

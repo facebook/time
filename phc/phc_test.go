@@ -39,3 +39,17 @@ func TestIfaceInfoToPHCDevice(t *testing.T) {
 	_, err = ifaceInfoToPHCDevice(info)
 	require.Error(t, err)
 }
+
+func TestMaxAdjFreq(t *testing.T) {
+	caps := &PTPClockCaps{
+		MaxAdj: 1000000000,
+	}
+
+	got := maxAdj(caps)
+	require.InEpsilon(t, 15258789.0625, got, 0.00001)
+
+	caps.MaxAdj = 0
+	got = maxAdj(caps)
+	require.InEpsilon(t, 500000.0, got, 0.00001)
+
+}
