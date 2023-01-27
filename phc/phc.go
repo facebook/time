@@ -129,46 +129,6 @@ func ReadPTPSysOffsetExtended(device string, nsamples int) (*PTPSysOffsetExtende
 	return res, nil
 }
 
-// ClockAdjtime issues CLOCK_ADJTIME syscall to either adjust the parameters of given clock,
-// or read them if buf is empty.  man(2) clock_adjtime
-func ClockAdjtime(clockid int32, buf *unix.Timex) (state int, err error) {
-	r0, _, errno := unix.Syscall(unix.SYS_CLOCK_ADJTIME, uintptr(clockid), uintptr(unsafe.Pointer(buf)), 0)
-	state = int(r0)
-	if errno != 0 {
-		err = errno
-	}
-	return state, err
-}
-
-// FrequencyPPBFromDevice reads PHC device frequency in PPB
-func FrequencyPPBFromDevice(device string) (freqPPB float64, err error) {
-	// we need RW permissions to issue CLOCK_ADJTIME on the device, even with empty struct
-	f, err := os.OpenFile(device, os.O_RDWR, 0)
-	if err != nil {
-		return freqPPB, fmt.Errorf("opening device %q to read frequency: %w", device, err)
-	}
-	defer f.Close()
-	tx := &unix.Timex{}
-	state, err := ClockAdjtime(FDToClockID(f.Fd()), tx)
-	// man(2) clock_adjtime
-	freqPPB = float64(tx.Freq) / 65.536
-	if err == nil && state != unix.TIME_OK {
-		return freqPPB, fmt.Errorf("clock %q state %d is not TIME_OK", device, state)
-	}
-	return freqPPB, err
-}
-
-// FrequencyPPB reads network card PHC device frequency in PPB
-func FrequencyPPB(iface string) (float64, error) {
-	device, err := IfaceToPHCDevice(iface)
-	if err != nil {
-		return 0.0, err
-	}
-	return FrequencyPPBFromDevice(device)
-}
-
-const ptpClockGetcaps int = 1
-
 // ReadPTPClockCapsFromDevice reads ptp capabilities using ioctl
 func ReadPTPClockCapsFromDevice(phcDevice string) (*PTPClockCaps, error) {
 	f, err := os.OpenFile(phcDevice, os.O_RDWR, 0)
