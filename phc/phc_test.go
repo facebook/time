@@ -51,5 +51,4 @@ func TestMaxAdjFreq(t *testing.T) {
 	caps.MaxAdj = 0
 	got = maxAdj(caps)
 	require.InEpsilon(t, 500000.0, got, 0.00001)
-
 }
