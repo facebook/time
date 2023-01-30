@@ -29,7 +29,7 @@ func printOffset(r *checker.NTPCheckResult) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%.3f\n", stats.PeerOffset)
+	fmt.Printf("%.3f\n", stats.Offset)
 	return nil
 }
 

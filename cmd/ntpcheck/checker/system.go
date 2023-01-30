@@ -68,7 +68,7 @@ func NewSystemVariablesFromChrony(p *chrony.ReplyTracking) *SystemVariables {
 		RootDisp:  secToMS(p.RootDispersion),
 		RefID:     chrony.RefidAsHEX(p.RefID),
 		RefTime:   p.RefTime.String(),
-		Offset:    secToMS(p.RMSOffset),
+		Offset:    secToMS(p.LastOffset),
 		Frequency: p.FreqPPM,
 	}
 }

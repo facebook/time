@@ -65,7 +65,7 @@ func TestNewSystemVariablesFromChrony(t *testing.T) {
 	p.RootDispersion = 0.001
 	p.RefID = 123456
 	p.RefTime = time.Unix(1587738257, 0)
-	p.RMSOffset = 0.010
+	p.LastOffset = 0.010
 	p.FreqPPM = 100
 	s := NewSystemVariablesFromChrony(p)
 	expected := &SystemVariables{

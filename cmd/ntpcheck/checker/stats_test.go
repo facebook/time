@@ -65,7 +65,10 @@ func TestNTPStatsNoGoodPeer(t *testing.T) {
 }
 
 func TestNTPStatsNoSysPeer(t *testing.T) {
-	s := SystemVariables{}
+	s := SystemVariables{
+		Offset:    0.003,
+		RootDelay: 3.14,
+	}
 	r := &NTPCheckResult{
 		SysVars: &s,
 		Peers: map[uint16]*Peer{
@@ -98,12 +101,17 @@ func TestNTPStatsNoSysPeer(t *testing.T) {
 		PeerStratum: 3,
 		PeerJitter:  3.55,
 		PeerCount:   2,
+		Offset:      s.Offset,
+		RootDelay:   s.RootDelay,
 	}
 	require.Equal(t, want, stats)
 }
 
 func TestNTPStatsWithSysPeer(t *testing.T) {
-	s := SystemVariables{}
+	s := SystemVariables{
+		Offset:    0.003,
+		RootDelay: 3.14,
+	}
 	r := &NTPCheckResult{
 		SysVars: &s,
 		Peers: map[uint16]*Peer{
@@ -136,6 +144,8 @@ func TestNTPStatsWithSysPeer(t *testing.T) {
 		PeerStratum: 4,
 		PeerJitter:  4,
 		PeerCount:   2,
+		Offset:      s.Offset,
+		RootDelay:   s.RootDelay,
 	}
 	require.Equal(t, want, stats)
 }

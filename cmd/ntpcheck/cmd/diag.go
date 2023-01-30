@@ -136,14 +136,14 @@ func checkCorrectionMetric(r *checker.NTPCheckResult) (status, string) {
 	)
 }
 
-func checkOffset(r *checker.NTPCheckResult) (status, string) {
+func checkSysPeerOffset(r *checker.NTPCheckResult) (status, string) {
 	syspeer, err := r.FindSysPeer()
 	if err != nil {
 		return CRITICAL, "No sys peer, clock is not syncing"
 	}
-	// We expect our clock difference from server to be no more than 1ms.
+	// We expect our clock difference from server to be no more than 2ms.
 	// Currently there is no SLA, so it's just a warning.
-	const warnThreshold = 1.0
+	const warnThreshold = 2.0
 	// If offset is > 1s something is very very wrong
 	const failThreshold = 1000.0
 	return checkAgainstThreshold(
@@ -152,6 +152,24 @@ func checkOffset(r *checker.NTPCheckResult) (status, string) {
 		warnThreshold,
 		failThreshold,
 		"Offset is the difference between our clock and remote server (time error).",
+	)
+}
+
+func checkOffset(r *checker.NTPCheckResult) (status, string) {
+	if r.SysVars == nil {
+		return CRITICAL, "No sys vars, clock is not syncing"
+	}
+	// We expect our clock difference from server to be no more than 1ms.
+	// Currently there is no SLA, so it's just a warning.
+	const warnThreshold = 1.0
+	// If offset is > 1s something is very very wrong
+	const failThreshold = 1000.0
+	return checkAgainstThreshold(
+		"Tracking offset",
+		r.SysVars.Offset,
+		warnThreshold,
+		failThreshold,
+		"Offset is the difference between our clock and selected remote servers (time error).",
 	)
 }
 
@@ -205,6 +223,7 @@ var diagnosers = []diagnoser{
 	checkSync,
 	checkLeap,
 	checkOffset,
+	checkSysPeerOffset,
 	checkJitter,
 	checkCorrectionMetric,
 	checkPeersFlash,

@@ -51,7 +51,7 @@ var (
 			IPAddr:     net.ParseIP("192.168.0.1"),
 			Stratum:    3,
 			LeapStatus: 0,
-			RMSOffset:  0.001,
+			LastOffset: 0.001,
 		},
 	}
 

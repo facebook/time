@@ -40,7 +40,7 @@ func printStats(r *checker.NTPCheckResult, legacy bool) error {
 	if legacy {
 		extraOutput := ntpStatsLegacy{
 			NTPStats:      *output,
-			SystemNTPStat: math.Abs(output.PeerOffset),
+			SystemNTPStat: math.Abs(output.Offset),
 		}
 		toPrint, err := json.Marshal(extraOutput)
 		if err != nil {
