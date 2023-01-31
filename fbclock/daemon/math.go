@@ -207,7 +207,7 @@ func prepareExpression(exprStr string) (*govaluate.EvaluableExpression, error) {
 	return expr, nil
 }
 
-func prepareMathParameters(lastN []*dataPoint) map[string][]float64 {
+func prepareMathParameters(lastN []*DataPoint) map[string][]float64 {
 	size := len(lastN)
 	offsets := make([]float64, size)
 	delays := make([]float64, size)
@@ -217,13 +217,13 @@ func prepareMathParameters(lastN []*dataPoint) map[string][]float64 {
 	freqChangesAbs := make([]float64, size-1)
 	prev := lastN[0]
 	for i := 0; i < size; i++ {
-		offsets[i] = lastN[i].masterOffsetNS
-		delays[i] = lastN[i].pathDelayNS
-		freqs[i] = lastN[i].freqAdjustmentPPB
-		clockAccuracies[i] = lastN[i].clockAccuracyNS
+		offsets[i] = lastN[i].MasterOffsetNS
+		delays[i] = lastN[i].PathDelayNS
+		freqs[i] = lastN[i].FreqAdjustmentPPB
+		clockAccuracies[i] = lastN[i].ClockAccuracyNS
 		if i != 0 {
-			freqChanges[i-1] = lastN[i].freqAdjustmentPPB - prev.freqAdjustmentPPB
-			freqChangesAbs[i-1] = math.Abs(lastN[i].freqAdjustmentPPB - prev.freqAdjustmentPPB)
+			freqChanges[i-1] = lastN[i].FreqAdjustmentPPB - prev.FreqAdjustmentPPB
+			freqChangesAbs[i-1] = math.Abs(lastN[i].FreqAdjustmentPPB - prev.FreqAdjustmentPPB)
 		}
 		prev = lastN[i]
 	}

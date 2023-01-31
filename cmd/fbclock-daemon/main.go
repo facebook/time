@@ -108,7 +108,7 @@ func main() {
 	}
 	stats := daemon.NewJSONStats()
 	go stats.Start(monitoringPort)
-	s, err := daemon.New(cfg, stats, l)
+	s, err := daemon.New(cfg, stats, l, &daemon.SockFetcher{})
 	if err != nil {
 		log.Fatal(err)
 	}

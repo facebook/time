@@ -41,10 +41,11 @@ func (l *testLogger) Log(s *LogSample) error {
 
 func newTestDaemon(cfg *Config, stats StatsServer) *Daemon {
 	s := &Daemon{
-		stats: stats,
-		cfg:   cfg,
-		state: newDaemonState(cfg.RingSize),
-		l:     &testLogger{samples: []*LogSample{}},
+		stats:       stats,
+		cfg:         cfg,
+		state:       newDaemonState(cfg.RingSize),
+		l:           &testLogger{samples: []*LogSample{}},
+		DataFetcher: &SockFetcher{},
 	}
 	return s
 }
@@ -80,21 +81,21 @@ func TestDaemonStateLinearizabilityRing(t *testing.T) {
 func TestDaemonStateAggregateMax(t *testing.T) {
 	s := newDaemonState(3)
 
-	probes := []*dataPoint{
+	probes := []*DataPoint{
 		{
-			masterOffsetNS:    123.0,
-			pathDelayNS:       3,
-			freqAdjustmentPPB: 4,
+			MasterOffsetNS:    123.0,
+			PathDelayNS:       3,
+			FreqAdjustmentPPB: 4,
 		},
 		{
-			masterOffsetNS:    -2000.0,
-			pathDelayNS:       300,
-			freqAdjustmentPPB: 2,
+			MasterOffsetNS:    -2000.0,
+			PathDelayNS:       300,
+			FreqAdjustmentPPB: 2,
 		},
 		{
-			masterOffsetNS:    1009.0,
-			pathDelayNS:       200,
-			freqAdjustmentPPB: 5,
+			MasterOffsetNS:    1009.0,
+			PathDelayNS:       200,
+			FreqAdjustmentPPB: 5,
 		},
 	}
 
@@ -102,10 +103,10 @@ func TestDaemonStateAggregateMax(t *testing.T) {
 		s.pushDataPoint(tr)
 	}
 	got := s.aggregateDataPointsMax(3)
-	want := &dataPoint{
-		masterOffsetNS:    2000.0,
-		pathDelayNS:       300,
-		freqAdjustmentPPB: 5,
+	want := &DataPoint{
+		MasterOffsetNS:    2000.0,
+		PathDelayNS:       300,
+		FreqAdjustmentPPB: 5,
 	}
 	require.Equal(t, want, got)
 }
@@ -269,83 +270,83 @@ func TestMathPrepare(t *testing.T) {
 func TestDataPointSanityCheck(t *testing.T) {
 	testCases := []struct {
 		name    string
-		in      *dataPoint
+		in      *DataPoint
 		wantErr bool
 	}{
 		{
 			name: "no ingress time",
-			in: &dataPoint{
-				ingressTimeNS:     0,
-				masterOffsetNS:    23.0,
-				pathDelayNS:       213.0,
-				freqAdjustmentPPB: 212131,
-				clockAccuracyNS:   25.0,
+			in: &DataPoint{
+				IngressTimeNS:     0,
+				MasterOffsetNS:    23.0,
+				PathDelayNS:       213.0,
+				FreqAdjustmentPPB: 212131,
+				ClockAccuracyNS:   25.0,
 			},
 			wantErr: true,
 		},
 		{
 			name: "zero offset",
-			in: &dataPoint{
-				ingressTimeNS:     1647359186979431900,
-				masterOffsetNS:    0,
-				pathDelayNS:       213.0,
-				freqAdjustmentPPB: 212131,
-				clockAccuracyNS:   25.0,
+			in: &DataPoint{
+				IngressTimeNS:     1647359186979431900,
+				MasterOffsetNS:    0,
+				PathDelayNS:       213.0,
+				FreqAdjustmentPPB: 212131,
+				ClockAccuracyNS:   25.0,
 			},
 			wantErr: true,
 		},
 		{
 			name: "zero delay",
-			in: &dataPoint{
-				ingressTimeNS:     1647359186979431900,
-				masterOffsetNS:    123,
-				pathDelayNS:       0,
-				freqAdjustmentPPB: 212131,
-				clockAccuracyNS:   25.0,
+			in: &DataPoint{
+				IngressTimeNS:     1647359186979431900,
+				MasterOffsetNS:    123,
+				PathDelayNS:       0,
+				FreqAdjustmentPPB: 212131,
+				ClockAccuracyNS:   25.0,
 			},
 			wantErr: true,
 		},
 		{
 			name: "zero freq",
-			in: &dataPoint{
-				ingressTimeNS:     1647359186979431900,
-				masterOffsetNS:    123,
-				pathDelayNS:       213.0,
-				freqAdjustmentPPB: 0,
-				clockAccuracyNS:   25.0,
+			in: &DataPoint{
+				IngressTimeNS:     1647359186979431900,
+				MasterOffsetNS:    123,
+				PathDelayNS:       213.0,
+				FreqAdjustmentPPB: 0,
+				ClockAccuracyNS:   25.0,
 			},
 			wantErr: true,
 		},
 		{
 			name: "zero clock accuracy",
-			in: &dataPoint{
-				ingressTimeNS:     1647359186979431900,
-				masterOffsetNS:    123,
-				pathDelayNS:       213.0,
-				freqAdjustmentPPB: 212131,
-				clockAccuracyNS:   0,
+			in: &DataPoint{
+				IngressTimeNS:     1647359186979431900,
+				MasterOffsetNS:    123,
+				PathDelayNS:       213.0,
+				FreqAdjustmentPPB: 212131,
+				ClockAccuracyNS:   0,
 			},
 			wantErr: true,
 		},
 		{
 			name: "unknown clock accuracy",
-			in: &dataPoint{
-				ingressTimeNS:     1647359186979431900,
-				masterOffsetNS:    123,
-				pathDelayNS:       213.0,
-				freqAdjustmentPPB: 212131,
-				clockAccuracyNS:   float64(ptp.ClockAccuracyUnknown.Duration()),
+			in: &DataPoint{
+				IngressTimeNS:     1647359186979431900,
+				MasterOffsetNS:    123,
+				PathDelayNS:       213.0,
+				FreqAdjustmentPPB: 212131,
+				ClockAccuracyNS:   float64(ptp.ClockAccuracyUnknown.Duration()),
 			},
 			wantErr: true,
 		},
 		{
 			name: "all good",
-			in: &dataPoint{
-				ingressTimeNS:     1647359186979431900,
-				masterOffsetNS:    123,
-				pathDelayNS:       213.0,
-				freqAdjustmentPPB: 212131,
-				clockAccuracyNS:   25.0,
+			in: &DataPoint{
+				IngressTimeNS:     1647359186979431900,
+				MasterOffsetNS:    123,
+				PathDelayNS:       213.0,
+				FreqAdjustmentPPB: 212131,
+				ClockAccuracyNS:   25.0,
 			},
 			wantErr: false,
 		},
@@ -377,7 +378,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 	stats := NewStats()
 	s := newTestDaemon(cfg, stats)
 	startTime := time.Duration(1647359186979431900)
-	var d *dataPoint
+	var d *DataPoint
 	adj := 212131.0
 	for i := 0; i < 58; i++ {
 		if i%2 == 0 {
@@ -385,27 +386,27 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		} else {
 			adj -= float64(i)
 		}
-		d = &dataPoint{
-			ingressTimeNS:     int64(startTime + time.Duration(i)*time.Second),
-			masterOffsetNS:    23.0,
-			pathDelayNS:       213.0,
-			freqAdjustmentPPB: adj,
-			clockAccuracyNS:   100.0,
+		d = &DataPoint{
+			IngressTimeNS:     int64(startTime + time.Duration(i)*time.Second),
+			MasterOffsetNS:    23.0,
+			PathDelayNS:       213.0,
+			FreqAdjustmentPPB: adj,
+			ClockAccuracyNS:   100.0,
 		}
 		shmData, err := s.calculateSHMData(d)
 		require.Nil(t, shmData)
 		require.Error(t, err, "not enough data should give us error when calculating shm state")
 	}
-	d = &dataPoint{
-		ingressTimeNS:     int64(startTime + 61*time.Second),
-		masterOffsetNS:    23.0,
-		pathDelayNS:       213.0,
-		freqAdjustmentPPB: 212131,
-		clockAccuracyNS:   100.0,
+	d = &DataPoint{
+		IngressTimeNS:     int64(startTime + 61*time.Second),
+		MasterOffsetNS:    23.0,
+		PathDelayNS:       213.0,
+		FreqAdjustmentPPB: 212131,
+		ClockAccuracyNS:   100.0,
 	}
 
 	want := &fbclock.Data{
-		IngressTimeNS:        d.ingressTimeNS,
+		IngressTimeNS:        d.IngressTimeNS,
 		ErrorBoundNS:         123.0,
 		HoldoverMultiplierNS: 64.5,
 	}
@@ -414,37 +415,37 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 	require.Equal(t, want, shmData)
 
 	// ptp4l got restarted, not yet syncing, all values are zeroes
-	d = &dataPoint{
-		ingressTimeNS:     0,
-		masterOffsetNS:    0,
-		pathDelayNS:       0,
-		freqAdjustmentPPB: 0,
+	d = &DataPoint{
+		IngressTimeNS:     0,
+		MasterOffsetNS:    0,
+		PathDelayNS:       0,
+		FreqAdjustmentPPB: 0,
 	}
 	shmData, err = s.calculateSHMData(d)
 	require.Error(t, err, "we expect calculateSHMData to produce no new shm state when new input is invalid")
 	require.Nil(t, shmData)
 	// ptp4l started syncing, but haven't started updating the clock
-	d = &dataPoint{
-		ingressTimeNS:     int64(startTime + 65*time.Second),
-		masterOffsetNS:    0,
-		pathDelayNS:       213,
-		freqAdjustmentPPB: 0,
+	d = &DataPoint{
+		IngressTimeNS:     int64(startTime + 65*time.Second),
+		MasterOffsetNS:    0,
+		PathDelayNS:       213,
+		FreqAdjustmentPPB: 0,
 	}
 	shmData, err = s.calculateSHMData(d)
 	require.Nil(t, shmData)
 	require.Error(t, err, "we expect calculateSHMData to produce no new shm state when new input is incomplete")
 
 	// ptp4l is back to normal operations
-	d = &dataPoint{
-		ingressTimeNS:     int64(startTime + 66*time.Second),
-		masterOffsetNS:    234,
-		pathDelayNS:       213,
-		freqAdjustmentPPB: 32333,
-		clockAccuracyNS:   100,
+	d = &DataPoint{
+		IngressTimeNS:     int64(startTime + 66*time.Second),
+		MasterOffsetNS:    234,
+		PathDelayNS:       213,
+		FreqAdjustmentPPB: 32333,
+		ClockAccuracyNS:   100,
 	}
 	shmData, err = s.calculateSHMData(d)
 	want = &fbclock.Data{
-		IngressTimeNS:        d.ingressTimeNS,
+		IngressTimeNS:        d.IngressTimeNS,
 		ErrorBoundNS:         157,
 		HoldoverMultiplierNS: 9362.84482758621,
 	}
@@ -479,15 +480,15 @@ func TestDaemonDoWork(t *testing.T) {
 	defer shm.Close()
 
 	// populate the data
-	var d *dataPoint
+	var d *DataPoint
 
 	// bad data (ptp4l is just starting)
 	for i := 0; i < 10; i++ {
-		d = &dataPoint{
-			ingressTimeNS:     0,
-			masterOffsetNS:    0,
-			pathDelayNS:       0,
-			freqAdjustmentPPB: 0,
+		d = &DataPoint{
+			IngressTimeNS:     0,
+			MasterOffsetNS:    0,
+			PathDelayNS:       0,
+			FreqAdjustmentPPB: 0,
 		}
 		err = s.doWork(shm, d)
 		require.Error(t, err, "not enough data should give us error when calculating shm state")
@@ -512,12 +513,12 @@ func TestDaemonDoWork(t *testing.T) {
 			adj -= float64(i)
 		}
 		tme := startTime + time.Duration(i)*time.Second
-		d = &dataPoint{
-			ingressTimeNS:     int64(tme),
-			masterOffsetNS:    23.0,
-			pathDelayNS:       213.0,
-			freqAdjustmentPPB: adj,
-			clockAccuracyNS:   25.0,
+		d = &DataPoint{
+			IngressTimeNS:     int64(tme),
+			MasterOffsetNS:    23.0,
+			PathDelayNS:       213.0,
+			FreqAdjustmentPPB: adj,
+			ClockAccuracyNS:   25.0,
 		}
 		phcTime = tme + time.Microsecond
 		err = s.doWork(shm, d)
@@ -525,9 +526,9 @@ func TestDaemonDoWork(t *testing.T) {
 		// check exported stats
 		require.Equal(t, int64(tme), stats.counters["ingress_time_ns"])
 		require.Equal(t, int64(time.Microsecond), stats.counters["time_since_ingress_ns"])
-		require.Equal(t, int64(d.masterOffsetNS), stats.counters["master_offset_ns"])
-		require.Equal(t, int64(d.pathDelayNS), stats.counters["path_delay_ns"])
-		require.Equal(t, int64(d.freqAdjustmentPPB), stats.counters["freq_adj_ppb"])
+		require.Equal(t, int64(d.MasterOffsetNS), stats.counters["master_offset_ns"])
+		require.Equal(t, int64(d.PathDelayNS), stats.counters["path_delay_ns"])
+		require.Equal(t, int64(d.FreqAdjustmentPPB), stats.counters["freq_adj_ppb"])
 		require.Equal(t, int64(0), stats.counters["data_sanity_check_error"])
 		// we can calculate M after 30 seconds
 		if i < 29 {
@@ -544,12 +545,12 @@ func TestDaemonDoWork(t *testing.T) {
 	}
 
 	// another data point, now that we have enough in the ring buffer to write to shm
-	d = &dataPoint{
-		ingressTimeNS:     int64(startTime + 61*time.Second),
-		masterOffsetNS:    23.0,
-		pathDelayNS:       213.0,
-		freqAdjustmentPPB: 212131,
-		clockAccuracyNS:   25.0,
+	d = &DataPoint{
+		IngressTimeNS:     int64(startTime + 61*time.Second),
+		MasterOffsetNS:    23.0,
+		PathDelayNS:       213.0,
+		FreqAdjustmentPPB: 212131,
+		ClockAccuracyNS:   25.0,
 	}
 	phcTime = startTime + 62*time.Second
 
@@ -558,9 +559,9 @@ func TestDaemonDoWork(t *testing.T) {
 	// check that we have proper stats reported
 	require.Equal(t, int64(startTime+61*time.Second), stats.counters["ingress_time_ns"], "ingress_time_ns after good data")
 	require.Equal(t, int64(time.Second), stats.counters["time_since_ingress_ns"], "time_since_ingress_ns after good data")
-	require.Equal(t, int64(d.masterOffsetNS), stats.counters["master_offset_ns"], "master_offset_ns after good data")
-	require.Equal(t, int64(d.pathDelayNS), stats.counters["path_delay_ns"], "path_delay_ns after good data")
-	require.Equal(t, int64(d.freqAdjustmentPPB), stats.counters["freq_adj_ppb"], "freq_adj_ppb after good data")
+	require.Equal(t, int64(d.MasterOffsetNS), stats.counters["master_offset_ns"], "master_offset_ns after good data")
+	require.Equal(t, int64(d.PathDelayNS), stats.counters["path_delay_ns"], "path_delay_ns after good data")
+	require.Equal(t, int64(d.FreqAdjustmentPPB), stats.counters["freq_adj_ppb"], "freq_adj_ppb after good data")
 	require.Equal(t, int64(48), stats.counters["m_ns"], "m_ns after good data")
 	require.Equal(t, int64(48), stats.counters["w_ns"], "w_ns after good data")
 	require.Equal(t, int64(64), stats.counters["drift_ppb"], "drift_ppb after good data")
@@ -571,7 +572,7 @@ func TestDaemonDoWork(t *testing.T) {
 
 	// check that we wrote data correctly
 	want := &fbclock.Data{
-		IngressTimeNS:        d.ingressTimeNS,
+		IngressTimeNS:        d.IngressTimeNS,
 		ErrorBoundNS:         48.0,
 		HoldoverMultiplierNS: 64.5,
 	}
@@ -584,11 +585,11 @@ func TestDaemonDoWork(t *testing.T) {
 	require.InDelta(t, want.HoldoverMultiplierNS, got.HoldoverMultiplierNS, 0.001)
 
 	// ptp4l has a hiccup, but that should be okay
-	d = &dataPoint{
-		ingressTimeNS:     0,
-		masterOffsetNS:    0,
-		pathDelayNS:       0,
-		freqAdjustmentPPB: 0,
+	d = &DataPoint{
+		IngressTimeNS:     0,
+		MasterOffsetNS:    0,
+		PathDelayNS:       0,
+		FreqAdjustmentPPB: 0,
 	}
 	phcTime = startTime + 63*time.Second
 
@@ -597,9 +598,9 @@ func TestDaemonDoWork(t *testing.T) {
 	// check that we have proper stats reported
 	require.Equal(t, int64(0), stats.counters["ingress_time_ns"], "ingress_time_ns after bad data")
 	require.Equal(t, int64(2*time.Second), stats.counters["time_since_ingress_ns"], "time_since_ingress_ns after bad data")
-	require.Equal(t, int64(d.masterOffsetNS), stats.counters["master_offset_ns"], "master_offset_ns after bad data")
-	require.Equal(t, int64(d.pathDelayNS), stats.counters["path_delay_ns"], "path_delay_ns after bad data")
-	require.Equal(t, int64(d.freqAdjustmentPPB), stats.counters["freq_adj_ppb"], "freq_adj_ppb after bad data")
+	require.Equal(t, int64(d.MasterOffsetNS), stats.counters["master_offset_ns"], "master_offset_ns after bad data")
+	require.Equal(t, int64(d.PathDelayNS), stats.counters["path_delay_ns"], "path_delay_ns after bad data")
+	require.Equal(t, int64(d.FreqAdjustmentPPB), stats.counters["freq_adj_ppb"], "freq_adj_ppb after bad data")
 	require.Equal(t, int64(48), stats.counters["m_ns"], "m_ns after bad data")
 	require.Equal(t, int64(48), stats.counters["w_ns"], "w_ns after bad data")
 	require.Equal(t, int64(64), stats.counters["drift_ppb"], "w_ns after bad data")

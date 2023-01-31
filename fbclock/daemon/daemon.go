@@ -21,9 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -40,59 +37,49 @@ import (
 
 var errNotEnoughData = fmt.Errorf("not enough data points")
 
-// connect creates connection to unix socket in unixgram mode
-func connect(address, local string, timeout time.Duration) (*net.UnixConn, error) {
-	deadline := time.Now().Add(timeout)
-
-	addr, err := net.ResolveUnixAddr("unixgram", address)
-	if err != nil {
-		return nil, err
-	}
-	localAddr, _ := net.ResolveUnixAddr("unixgram", local)
-	conn, err := net.DialUnix("unixgram", localAddr, addr)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := os.Chmod(local, 0666); err != nil {
-		return nil, err
-	}
-	if err := conn.SetReadDeadline(deadline); err != nil {
-		return nil, err
-	}
-	log.Debugf("connected to %s", address)
-	return conn, nil
+// DataPoint is what we store in DataPoint ring buffer
+type DataPoint struct {
+	// IngressTimeNS represents ingress time in NanoSeconds
+	IngressTimeNS int64
+	// MasterOffsetNS represents master offset in NanoSeconds
+	MasterOffsetNS float64
+	// PathDelayNS represents path delay in NanoSeconds
+	PathDelayNS float64
+	// FreqAdjustmentPPB represents freq adjustment in parts per billion
+	FreqAdjustmentPPB float64
+	// ClockAccuracyNS represents clock accurary in nanoseconds
+	ClockAccuracyNS float64
 }
 
-// dataPoint is what we store in datapoint ring buffer
-type dataPoint struct {
-	ingressTimeNS     int64
-	masterOffsetNS    float64
-	pathDelayNS       float64
-	freqAdjustmentPPB float64
-	clockAccuracyNS   float64
-}
-
-func (d *dataPoint) SanityCheck() error {
-	if d.ingressTimeNS == 0 {
+// SanityCheck checks datapoint for correctness
+func (d *DataPoint) SanityCheck() error {
+	if d.IngressTimeNS == 0 {
 		return fmt.Errorf("ingress time is 0")
 	}
-	if d.masterOffsetNS == 0 {
+	if d.MasterOffsetNS == 0 {
 		return fmt.Errorf("master offset is 0")
 	}
-	if d.pathDelayNS == 0 {
+	if d.PathDelayNS == 0 {
 		return fmt.Errorf("path dealy is 0")
 	}
-	if d.freqAdjustmentPPB == 0 {
+	if d.FreqAdjustmentPPB == 0 {
 		return fmt.Errorf("frequency adjustment is 0")
 	}
-	if d.clockAccuracyNS == 0 {
+	if d.ClockAccuracyNS == 0 {
 		return fmt.Errorf("clock accuracy is 0")
 	}
-	if time.Duration(d.clockAccuracyNS) >= ptp.ClockAccuracyUnknown.Duration() {
+	if time.Duration(d.ClockAccuracyNS) >= ptp.ClockAccuracyUnknown.Duration() {
 		return fmt.Errorf("clock accuracy is unknown")
 	}
 	return nil
+}
+
+// DataFetcher is the data fetcher interface
+type DataFetcher interface {
+	//function to gm data
+	FetchGMs(cfg *Config) (targest []string, err error)
+	//function to fetch stats
+	FetchStats(cfg *Config) (*DataPoint, error)
 }
 
 // Daemon is a component of fbclock that
@@ -103,6 +90,7 @@ func (d *dataPoint) SanityCheck() error {
 type Daemon struct {
 	//*fb303.FacebookBase
 	//server thrift.Server
+	DataFetcher
 
 	cfg   *Config
 	state *daemonState
@@ -115,7 +103,7 @@ type Daemon struct {
 	getPHCFreqPPB func() (float64, error)
 }
 
-// minRingSize calculate how many datapoint we need to have in a ring buffer
+// minRingSize calculate how many DataPoint we need to have in a ring buffer
 // in order to provide aggregate values over 1 minute
 func minRingSize(configuredRingSize int, interval time.Duration) int {
 	size := configuredRingSize
@@ -126,14 +114,15 @@ func minRingSize(configuredRingSize int, interval time.Duration) int {
 }
 
 // New creates new fbclock-daemon
-func New(cfg *Config, stats StatsServer, l Logger) (*Daemon, error) {
+func New(cfg *Config, stats StatsServer, l Logger, dataFetcher DataFetcher) (*Daemon, error) {
 	// we need at least 1m of samples for aggregate values
 	effectiveRingSize := minRingSize(cfg.RingSize, cfg.Interval)
 	s := &Daemon{
-		stats: stats,
-		state: newDaemonState(effectiveRingSize),
-		cfg:   cfg,
-		l:     l,
+		stats:       stats,
+		state:       newDaemonState(effectiveRingSize),
+		cfg:         cfg,
+		l:           l,
+		DataFetcher: dataFetcher,
 	}
 	phcDevice, err := phc.IfaceToPHCDevice(cfg.Iface)
 	if err != nil {
@@ -232,98 +221,14 @@ func (s *Daemon) calcDriftPPB() (float64, error) {
 	return drift, nil
 }
 
-func (s *Daemon) gmDataFromSocket(local string) (targets []string, err error) {
-	timeout := s.cfg.Interval / 2
-	conn, err := connect(s.cfg.PTP4Lsock, local, timeout)
-	defer func() {
-		if conn != nil {
-			conn.Close()
-			if f, err := conn.File(); err == nil {
-				f.Close()
-			}
-		}
-		// make sure there is no leftover socket
-		os.RemoveAll(local)
-	}()
-	if err != nil {
-		return targets, fmt.Errorf("failed to connect to ptp4l: %w", err)
-	}
-
-	c := &ptp.MgmtClient{
-		Connection: conn,
-	}
-	tlv, err := c.UnicastMasterTableNP()
-	if err != nil {
-		return targets, fmt.Errorf("getting UNICAST_MASTER_TABLE_NP from ptp4l: %w", err)
-	}
-
-	for _, entry := range tlv.UnicastMasterTable.UnicastMasters {
-		// skip the current best master
-		if entry.Selected {
-			continue
-		}
-		// skip GMs we didn't get announce from
-		if entry.PortState == ptp.UnicastMasterStateWait {
-			continue
-		}
-		server := entry.Address.String()
-		targets = append(targets, server)
-	}
-	return
-}
-
-func (s *Daemon) dataFromSocket(local string) (*dataPoint, error) {
-	timeout := s.cfg.Interval / 2
-	conn, err := connect(s.cfg.PTP4Lsock, local, timeout)
-	defer func() {
-		if conn != nil {
-			conn.Close()
-			if f, err := conn.File(); err == nil {
-				f.Close()
-			}
-		}
-		// make sure there is no leftover socket
-		os.RemoveAll(local)
-	}()
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to ptp4l: %w", err)
-	}
-
-	c := &ptp.MgmtClient{
-		Connection: conn,
-	}
-	status, err := c.TimeStatusNP()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get TIME_STATUS_NP: %w", err)
-	}
-	log.Debugf("TIME_STATUS_NP: %+v", status)
-
-	pds, err := c.ParentDataSet()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get PARENT_DATA_SET: %w", err)
-	}
-	cds, err := c.CurrentDataSet()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get CURRENT_DATA_SET: %w", err)
-	}
-	accuracyNS := pds.GrandmasterClockQuality.ClockAccuracy.Duration().Nanoseconds()
-
-	return &dataPoint{
-		ingressTimeNS:   status.IngressTimeNS,
-		masterOffsetNS:  float64(status.MasterOffsetNS),
-		pathDelayNS:     cds.MeanPathDelay.Nanoseconds(),
-		clockAccuracyNS: float64(int64(status.GMPresent) * accuracyNS),
-	}, nil
-}
-
-func (s *Daemon) calculateSHMData(data *dataPoint) (*fbclock.Data, error) {
+func (s *Daemon) calculateSHMData(data *DataPoint) (*fbclock.Data, error) {
 	if err := data.SanityCheck(); err != nil {
 		s.stats.UpdateCounterBy("data_sanity_check_error", 1)
 		return nil, fmt.Errorf("sanity checking data point: %w", err)
 	}
 	s.stats.SetCounter("data_sanity_check_error", 0)
 
-	// store datapoint in ring buffer
+	// store DataPoint in ring buffer
 	s.state.pushDataPoint(data)
 
 	// calculate W
@@ -345,26 +250,26 @@ func (s *Daemon) calculateSHMData(data *dataPoint) (*fbclock.Data, error) {
 	}
 	s.stats.SetCounter("drift_ppb", int64(hValue))
 	return &fbclock.Data{
-		IngressTimeNS:        data.ingressTimeNS,
+		IngressTimeNS:        data.IngressTimeNS,
 		ErrorBoundNS:         wUint,
 		HoldoverMultiplierNS: hValue,
 	}, nil
 }
 
-func (s *Daemon) doWork(shm *fbclock.Shm, data *dataPoint) error {
+func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 	// push stats
-	s.stats.SetCounter("master_offset_ns", int64(data.masterOffsetNS))
-	s.stats.SetCounter("path_delay_ns", int64(data.pathDelayNS))
-	s.stats.SetCounter("ingress_time_ns", data.ingressTimeNS)
-	s.stats.SetCounter("freq_adj_ppb", int64(data.freqAdjustmentPPB))
-	s.stats.SetCounter("clock_accuracy_ns", int64(data.clockAccuracyNS))
+	s.stats.SetCounter("master_offset_ns", int64(data.MasterOffsetNS))
+	s.stats.SetCounter("path_delay_ns", int64(data.PathDelayNS))
+	s.stats.SetCounter("ingress_time_ns", data.IngressTimeNS)
+	s.stats.SetCounter("freq_adj_ppb", int64(data.FreqAdjustmentPPB))
+	s.stats.SetCounter("clock_accuracy_ns", int64(data.ClockAccuracyNS))
 	// try and calculate how long ago was the ingress time
 	// use clock_gettime as the fastest and widely available method
 	if phcTime, err := s.getPHCTime(); err != nil {
 		log.Warningf("Failed to get PHC time from %s: %v", s.cfg.Iface, err)
 	} else {
-		if data.ingressTimeNS > 0 {
-			s.state.updateIngressTimeNS(data.ingressTimeNS)
+		if data.IngressTimeNS > 0 {
+			s.state.updateIngressTimeNS(data.IngressTimeNS)
 		}
 		it := s.state.ingressTimeNS()
 		if it > 0 {
@@ -389,9 +294,9 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *dataPoint) error {
 	}
 	// aggregated stats over 1 minute
 	maxDp := s.state.aggregateDataPointsMax(minRingSize(s.cfg.RingSize, s.cfg.Interval))
-	s.stats.SetCounter("master_offset_ns.60.abs_max", int64(maxDp.masterOffsetNS))
-	s.stats.SetCounter("path_delay_ns.60.abs_max", int64(maxDp.pathDelayNS))
-	s.stats.SetCounter("freq_adj_ppb.60.abs_max", int64(maxDp.freqAdjustmentPPB))
+	s.stats.SetCounter("master_offset_ns.60.abs_max", int64(maxDp.MasterOffsetNS))
+	s.stats.SetCounter("path_delay_ns.60.abs_max", int64(maxDp.PathDelayNS))
+	s.stats.SetCounter("freq_adj_ppb.60.abs_max", int64(maxDp.FreqAdjustmentPPB))
 	return nil
 }
 
@@ -421,14 +326,13 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 
 	m := new(sync.Mutex)
 
-	local := filepath.Join("/var/run/", fmt.Sprintf("fbclock.%d.linear.sock", os.Getpid()))
 	ticker := time.NewTicker(s.cfg.LinearizabilityTestInterval)
 	defer ticker.Stop()
 	for ; true; <-ticker.C { // first run without delay, then at interval
 		eg := new(errgroup.Group)
 		currentResults := map[string]*linearizability.TestResult{}
 
-		targets, err := s.gmDataFromSocket(local)
+		targets, err := s.DataFetcher.FetchGMs(s.cfg)
 		if err != nil {
 			log.Errorf("getting linearizability test targets from ptp4l: %v", err)
 			continue
@@ -511,12 +415,10 @@ func (s *Daemon) Run(ctx context.Context) error {
 	if s.cfg.LinearizabilityTestInterval != 0 {
 		go s.runLinearizabilityTests(ctx)
 	}
-	local := filepath.Join("/var/run/", fmt.Sprintf("fbclock.%d.sock", os.Getpid()))
-
 	ticker := time.NewTicker(s.cfg.Interval)
 	defer ticker.Stop()
 	for ; true; <-ticker.C { // first run without delay, then at interval
-		data, err := s.dataFromSocket(local)
+		data, err := s.DataFetcher.FetchStats(s.cfg)
 		if err != nil {
 			log.Error(err)
 			s.stats.UpdateCounterBy("data_error", 1)
@@ -531,7 +433,7 @@ func (s *Daemon) Run(ctx context.Context) error {
 			continue
 		}
 		s.stats.SetCounter("phc_error", 0)
-		data.freqAdjustmentPPB = freqPPB
+		data.FreqAdjustmentPPB = freqPPB
 		if err := s.doWork(shm, data); err != nil {
 			log.Error(err)
 			s.stats.UpdateCounterBy("processing_error", 1)

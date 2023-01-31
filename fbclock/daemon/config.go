@@ -26,7 +26,7 @@ import (
 
 // Config represents configuration we expect to read from file
 type Config struct {
-	PTP4Lsock                   string        // how to talk to ptp4l
+	PTPClientAddress            string        // where should fbclock connect to
 	RingSize                    int           // must be at least the size of N samples we use in expressions
 	Math                        Math          // configuration for calculation we'll be doing
 	Interval                    time.Duration // how often do we poll ptp4l and update data in shm
@@ -36,8 +36,8 @@ type Config struct {
 
 // EvalAndValidate makes sure config is valid and evaluates expressions for further use.
 func (c *Config) EvalAndValidate() error {
-	if c.PTP4Lsock == "" {
-		return fmt.Errorf("bad config: 'ptp4lsock' must be specified")
+	if c.PTPClientAddress == "" {
+		return fmt.Errorf("bad config: 'ptpclientaddress'")
 	}
 	if c.RingSize <= 0 {
 		return fmt.Errorf("bad config: 'ringsize' must be >0")

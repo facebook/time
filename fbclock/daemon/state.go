@@ -28,7 +28,7 @@ import (
 type daemonState struct {
 	sync.Mutex
 
-	dataPoints                 *ring.Ring // dataPoints we collected from ptp4l
+	DataPoints                 *ring.Ring // DataPoints we collected from ptp4l
 	mmms                       *ring.Ring // M values we calculated
 	linearizabilityTestResults *ring.Ring // linearizability test results
 
@@ -37,14 +37,14 @@ type daemonState struct {
 
 func newDaemonState(ringSize int) *daemonState {
 	s := &daemonState{
-		dataPoints:                 ring.New(ringSize),
+		DataPoints:                 ring.New(ringSize),
 		mmms:                       ring.New(ringSize),
 		linearizabilityTestResults: ring.New(ringSize),
 	}
 	// init ring buffers with nils
 	for i := 0; i < ringSize; i++ {
-		s.dataPoints.Value = nil
-		s.dataPoints = s.dataPoints.Next()
+		s.DataPoints.Value = nil
+		s.DataPoints = s.DataPoints.Next()
 
 		s.mmms.Value = nil
 		s.mmms = s.mmms.Next()
@@ -67,46 +67,46 @@ func (s *daemonState) ingressTimeNS() int64 {
 	return s.lastIngressTimeNS
 }
 
-func (s *daemonState) pushDataPoint(data *dataPoint) {
+func (s *daemonState) pushDataPoint(data *DataPoint) {
 	s.Lock()
 	defer s.Unlock()
-	s.dataPoints.Value = data
-	s.dataPoints = s.dataPoints.Next()
+	s.DataPoints.Value = data
+	s.DataPoints = s.DataPoints.Next()
 }
 
-func (s *daemonState) takeDataPoint(n int) []*dataPoint {
+func (s *daemonState) takeDataPoint(n int) []*DataPoint {
 	s.Lock()
 	defer s.Unlock()
-	result := []*dataPoint{}
-	r := s.dataPoints.Prev()
+	result := []*DataPoint{}
+	r := s.DataPoints.Prev()
 	for j := 0; j < n; j++ {
 		if r.Value == nil {
 			continue
 		}
-		result = append(result, r.Value.(*dataPoint))
+		result = append(result, r.Value.(*DataPoint))
 		r = r.Prev()
 	}
 	return result
 }
 
-func (s *daemonState) aggregateDataPointsMax(n int) *dataPoint {
+func (s *daemonState) aggregateDataPointsMax(n int) *DataPoint {
 	s.Lock()
 	defer s.Unlock()
-	d := &dataPoint{}
-	r := s.dataPoints.Prev()
+	d := &DataPoint{}
+	r := s.DataPoints.Prev()
 	for j := 0; j < n; j++ {
 		if r.Value == nil {
 			continue
 		}
-		dp := r.Value.(*dataPoint)
-		if math.Abs(dp.masterOffsetNS) > d.masterOffsetNS {
-			d.masterOffsetNS = math.Abs(dp.masterOffsetNS)
+		dp := r.Value.(*DataPoint)
+		if math.Abs(dp.MasterOffsetNS) > d.MasterOffsetNS {
+			d.MasterOffsetNS = math.Abs(dp.MasterOffsetNS)
 		}
-		if math.Abs(dp.pathDelayNS) > d.pathDelayNS {
-			d.pathDelayNS = math.Abs(dp.pathDelayNS)
+		if math.Abs(dp.PathDelayNS) > d.PathDelayNS {
+			d.PathDelayNS = math.Abs(dp.PathDelayNS)
 		}
-		if math.Abs(dp.freqAdjustmentPPB) > d.freqAdjustmentPPB {
-			d.freqAdjustmentPPB = math.Abs(dp.freqAdjustmentPPB)
+		if math.Abs(dp.FreqAdjustmentPPB) > d.FreqAdjustmentPPB {
+			d.FreqAdjustmentPPB = math.Abs(dp.FreqAdjustmentPPB)
 		}
 		r = r.Prev()
 	}
