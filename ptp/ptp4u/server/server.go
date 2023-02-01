@@ -52,7 +52,7 @@ type Server struct {
 	ctx    context.Context
 }
 
-// fixed subscription duration for ptpng clients
+// fixed subscription duration for sptp clients
 const subscriptionDuration = time.Minute * 5
 
 // Start the workers send bind to event and general UDP ports
