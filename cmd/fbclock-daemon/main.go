@@ -47,7 +47,7 @@ func main() {
 	}
 
 	flag.StringVar(&cfg.Iface, "iface", "eth0", "Network interface to use PHC device from. Used for linearizability tests as well. Must match what ptp4l is configured to use")
-	flag.StringVar(&cfg.PTP4Lsock, "ptp4lsock", "/var/run/ptp4l", "Path to ptp4l unix socket")
+	flag.StringVar(&cfg.PTPClientAddress, "ptp4lsock", "/var/run/ptp4l", "Path to ptp4l unix socket")
 	flag.IntVar(&monitoringPort, "monitoringport", 21039, "Port to run monitoring server on")
 	flag.IntVar(&cfg.RingSize, "buffer", daemon.MathDefaultHistory, "Size of ring buffers, must be at least size of largest num of samples used in M and W formulas")
 	flag.StringVar(&cfg.Math.M, "m", daemon.MathDefaultM, "Math expression for M")
