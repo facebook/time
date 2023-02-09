@@ -106,7 +106,7 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 	for {
 		select {
 		case <-ctx.Done():
-			break
+			return
 		case <-time.After(30 * time.Second):
 			if s.ListenConfig.ShouldAnnounce {
 				// First run will be 30 seconds delayed
@@ -144,7 +144,7 @@ func (s *Server) startListener(conn *net.UDPConn) {
 	}
 
 	// Allow reading of kernel timestamps via socket
-	if err := timestamp.EnableSWTimestampsRx(connFd); err != nil {
+	if err = timestamp.EnableSWTimestampsRx(connFd); err != nil {
 		log.Fatalf("enabling timestamp error: %s", err)
 	}
 
@@ -186,8 +186,8 @@ func (s *Server) startWorker() {
 	s.fillStaticHeaders(response)
 	s.Stats.IncWorkers()
 	for {
-		task := <-s.tasks
-		task.serve(response, s.ExtraOffset)
+		t := <-s.tasks
+		t.serve(response, s.ExtraOffset)
 	}
 }
 
@@ -204,7 +204,7 @@ func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 		}
 
 		log.Debugf("Writing response: %+v", response)
-		if err := unix.Sendto(t.connFd, responseBytes, 0, t.addr); err != nil {
+		if err := unix.Sendto(t.connFd, responseBytes, unix.O_NONBLOCK, t.addr); err != nil {
 			log.Debugf("Failed to respond to the request: %v", err)
 		}
 		t.stats.IncResponses()
