@@ -195,23 +195,25 @@ func (s *Server) startWorker() {
 // gets time from local and respond.
 func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 	log.Debugf("Received request: %+v", t.request)
-	if t.request.ValidSettingsFormat() {
-		generateResponse(time.Now().Add(extraoffset), t.received.Add(extraoffset), t.request, response)
-		responseBytes, err := response.Bytes()
-		if err != nil {
-			log.Errorf("Failed to convert ntp.%v to bytes %v: %v", response, responseBytes, err)
-			return
-		}
-
-		log.Debugf("Writing response: %+v", response)
-		if err := unix.Sendto(t.connFd, responseBytes, unix.O_NONBLOCK, t.addr); err != nil {
-			log.Debugf("Failed to respond to the request: %v", err)
-		}
-		t.stats.IncResponses()
+	if !t.request.ValidSettingsFormat() {
+		log.Debugf("Invalid query, discarding: %v", t.request)
+		t.stats.IncInvalidFormat()
 		return
 	}
-	log.Debugf("Invalid query, discarding: %v", t.request)
-	t.stats.IncInvalidFormat()
+
+	generateResponse(time.Now().Add(extraoffset), t.received.Add(extraoffset), t.request, response)
+	responseBytes, err := response.Bytes()
+	if err != nil {
+		log.Errorf("Failed to convert ntp.%v to bytes %v: %v", response, responseBytes, err)
+		return
+	}
+
+	log.Debugf("Writing response: %+v", response)
+	if err := unix.Sendto(t.connFd, responseBytes, unix.O_NONBLOCK, t.addr); err != nil {
+		log.Debugf("Failed to respond to the request: %v", err)
+		return
+	}
+	t.stats.IncResponses()
 }
 
 // fillStaticHeaders pre-sets all the headers per worker which will never change
