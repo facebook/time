@@ -98,21 +98,3 @@ func TestOffsetBetweenExtendedReadings(t *testing.T) {
 	offset := OffsetBetweenExtendedReadings(extendedA, extendedB)
 	require.Equal(t, time.Duration(-815), offset)
 }
-
-/*
-func TestCalcPHCOffet(t *testing.T) {
-	tA := SysoffResult{
-		SysTime: time.Unix(0, 1667818190552297683),
-		PHCTime: time.Unix(0, 1667818153552297661),
-	}
-
-	tB := SysoffResult{
-		SysTime: time.Unix(0, 1667818190552297699),
-		PHCTime: time.Unix(0, 1667818153552297681),
-	}
-
-	want := 4 * time.Nanosecond
-	got := CalcPHCOffet(tA, tB)
-	require.Equal(t, want, got)
-}
-*/
