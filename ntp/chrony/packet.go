@@ -125,8 +125,6 @@ const (
 )
 
 // response status codes
-//
-//nolint:varcheck,deadcode,unused
 const (
 	sttSuccess            ResponseStatusType = 0
 	sttFailed             ResponseStatusType = 1
@@ -253,7 +251,7 @@ type ResponsePacket interface {
 type RequestSources struct {
 	RequestHead
 	// we actually need this to send proper packet
-	data [maxDataLen]uint8 //nolint:unused,structcheck
+	data [maxDataLen]uint8
 }
 
 // RequestSourceData - packet to request source data for source id
@@ -262,7 +260,7 @@ type RequestSourceData struct {
 	Index int32
 	EOR   int32
 	// we pass i32 - 4 bytes
-	data [maxDataLen - 4]uint8 //nolint:unused,structcheck
+	data [maxDataLen - 4]uint8
 }
 
 // RequestNTPData - packet to request NTP data for peer IP.
@@ -272,21 +270,21 @@ type RequestNTPData struct {
 	IPAddr ipAddr
 	EOR    int32
 	// we pass at max ipv6 addr - 16 bytes
-	data [maxDataLen - 16]uint8 //nolint:unused,structcheck
+	data [maxDataLen - 16]uint8
 }
 
 // RequestServerStats - packet to request server stats
 type RequestServerStats struct {
 	RequestHead
 	// we actually need this to send proper packet
-	data [maxDataLen]uint8 //nolint:unused,structcheck
+	data [maxDataLen]uint8
 }
 
 // RequestTracking - packet to request 'tracking' data
 type RequestTracking struct {
 	RequestHead
 	// we actually need this to send proper packet
-	data [maxDataLen]uint8 //nolint:unused,structcheck
+	data [maxDataLen]uint8
 }
 
 // RequestSourceStats - packet to request 'sourcestats' data for source id
@@ -295,14 +293,14 @@ type RequestSourceStats struct {
 	Index int32
 	EOR   int32
 	// we pass i32 - 4 bytes
-	data [maxDataLen - 4]uint8 //nolint:unused,structcheck
+	data [maxDataLen - 4]uint8
 }
 
 // RequestActivity - packet to request 'activity' data
 type RequestActivity struct {
 	RequestHead
 	// we actually need this to send proper packet
-	data [maxDataLen]uint8 //nolint:unused,structcheck
+	data [maxDataLen]uint8
 }
 
 // ReplyHead is the first (common) part of the reply packet,
@@ -677,6 +675,7 @@ func NewSourcesPacket() *RequestSources {
 			PKTType: pktTypeCmdRequest,
 			Command: reqNSources,
 		},
+		data: [maxDataLen]uint8{},
 	}
 }
 
@@ -688,6 +687,7 @@ func NewTrackingPacket() *RequestTracking {
 			PKTType: pktTypeCmdRequest,
 			Command: reqTracking,
 		},
+		data: [maxDataLen]uint8{},
 	}
 }
 
@@ -700,6 +700,7 @@ func NewSourceStatsPacket(sourceID int32) *RequestSourceStats {
 			Command: reqSourceStats,
 		},
 		Index: sourceID,
+		data:  [maxDataLen - 4]uint8{},
 	}
 }
 
@@ -712,6 +713,7 @@ func NewSourceDataPacket(sourceID int32) *RequestSourceData {
 			Command: reqSourceData,
 		},
 		Index: sourceID,
+		data:  [maxDataLen - 4]uint8{},
 	}
 }
 
@@ -724,6 +726,7 @@ func NewNTPDataPacket(ip net.IP) *RequestNTPData {
 			Command: reqNTPData,
 		},
 		IPAddr: *newIPAddr(ip),
+		data:   [maxDataLen - 16]uint8{},
 	}
 }
 
@@ -735,6 +738,7 @@ func NewServerStatsPacket() *RequestServerStats {
 			PKTType: pktTypeCmdRequest,
 			Command: reqServerStats,
 		},
+		data: [maxDataLen]uint8{},
 	}
 }
 
@@ -746,6 +750,7 @@ func NewActivityPacket() *RequestActivity {
 			PKTType: pktTypeCmdRequest,
 			Command: reqActivity,
 		},
+		data: [maxDataLen]uint8{},
 	}
 }
 
