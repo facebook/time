@@ -47,5 +47,11 @@ Command line tool and library for a Calnex Sentinel device.
 ### fbclock
 Client C library and Go daemon to provide TrueTime API based on PTP time.
 
+### servo
+Pi servo library
+
+### SPTP
+Simplified Unicast PTP client
+
 # License
 time is licensed under Apache 2.0 as found in the [LICENSE file](LICENSE).
