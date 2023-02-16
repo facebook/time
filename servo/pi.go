@@ -1,3 +1,19 @@
+/*
+Copyright (c) Facebook, Inc. and its affiliates.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package servo
 
 import (
@@ -47,18 +63,16 @@ type PiServoFilterSample struct {
 
 // PiServoFilter is a filter state structure
 type PiServoFilter struct {
-	offsetStdev       int64
-	offsetSigmaSq     int64
-	offsetMean        int64
-	freqStdev         float64
-	freqSigmaSq       float64
-	freqMean          float64
-	skippedCount      int
-	minOffsetFreqMean float64
-	minOffsetStddev   int64
-	samples           *ring.Ring
-	samplesCount      int
-	cfg               *PiServoFilterCfg
+	offsetStdev   int64
+	offsetSigmaSq int64
+	offsetMean    int64
+	freqStdev     float64
+	freqSigmaSq   float64
+	freqMean      float64
+	skippedCount  int
+	samples       *ring.Ring
+	samplesCount  int
+	cfg           *PiServoFilterCfg
 }
 
 // PiServo is an integral servo
@@ -96,9 +110,9 @@ func (s *PiServo) SetMaxFreq(freq float64) {
 }
 
 // Sample function to calculate frequency based on the offset
-func (s *PiServo) Sample(offset int64, localTs uint64) (float64, ServoState) {
+func (s *PiServo) Sample(offset int64, localTs uint64) (float64, State) {
 	var kiTerm, freqEstInterval, localDiff float64
-	state := ServoInit
+	state := StateInit
 	ppb := s.lastFreq
 	sOffset := offset
 	if sOffset < 0 {
@@ -142,9 +156,9 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, ServoState) {
 		if (s.FirstUpdate && s.FirstStepThreshold > 0 &&
 			s.FirstStepThreshold < sOffset) ||
 			(s.StepThreshold > 0 && s.StepThreshold < sOffset) {
-			state = ServoJump
+			state = StateJump
 		} else {
-			state = ServoLocked
+			state = StateLocked
 		}
 		ppb = s.drift
 		s.count = 2
@@ -159,7 +173,7 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, ServoState) {
 		if s.StepThreshold != 0 &&
 			s.StepThreshold < sOffset {
 			s.count = 0
-			state = ServoInit
+			state = StateInit
 			if s.filter != nil {
 				s.filter.Reset()
 			}
@@ -167,10 +181,10 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, ServoState) {
 		}
 		if s.filter != nil && s.filter.IsSpike(offset, s.lastCorrectionTime) {
 			ppb = s.filter.freqMean
-			state = ServoFilter
+			state = StateFilter
 			break
 		}
-		state = ServoLocked
+		state = StateLocked
 		kiTerm = s.ki * float64(offset)
 		ppb = s.kp*float64(offset) + s.drift + kiTerm
 		if ppb < -s.maxFreq {
@@ -182,11 +196,11 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, ServoState) {
 		}
 	}
 	s.lastFreq = ppb
-	if state == ServoLocked && s.filter != nil {
+	if state == StateLocked && s.filter != nil {
 		s.filter.Sample(&PiServoFilterSample{offset: offset, freq: ppb})
 	}
-	if state == ServoFilter {
-		state = ServoLocked
+	if state == StateFilter {
+		state = StateLocked
 	}
 	return ppb, state
 }
@@ -245,7 +259,6 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 
 	f.freqMean = freqMean / float64(f.samplesCount)
 	f.freqStdev = math.Sqrt(freqSigmaSq / float64(f.samplesCount))
-
 }
 
 // Reset - cleanup and restart filter

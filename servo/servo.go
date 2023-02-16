@@ -1,3 +1,19 @@
+/*
+Copyright (c) Facebook, Inc. and its affiliates.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package servo
 
 // Servo structure has values common for any type of servo
@@ -11,26 +27,26 @@ type Servo struct {
 	currOffsetValues   int
 }
 
-// ServoState provides the result of servo calculation
-type ServoState uint8
+// State provides the result of servo calculation
+type State uint8
 
 // All the states of servo
 const (
-	ServoInit   ServoState = 0
-	ServoJump   ServoState = 1
-	ServoLocked ServoState = 2
-	ServoFilter ServoState = 3
+	StateInit   State = 0
+	StateJump   State = 1
+	StateLocked State = 2
+	StateFilter State = 3
 )
 
-func (s ServoState) String() string {
+func (s State) String() string {
 	switch s {
-	case ServoInit:
+	case StateInit:
 		return "INIT"
-	case ServoJump:
+	case StateJump:
 		return "JUMP"
-	case ServoLocked:
+	case StateLocked:
 		return "LOCKED"
-	case ServoFilter:
+	case StateFilter:
 		return "FILTER"
 	}
 	return "UNSUPPORTED"

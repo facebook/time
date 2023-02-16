@@ -18,11 +18,18 @@ package stats
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+)
+
+// port stats prefixes
+const (
+	PortStatsTxPrefix = "sptp.portstats.tx."
+	PortStatsRxPrefix = "sptp.portstats.rx."
 )
 
 // Stats is a representation of a monitoring struct for sptp client
@@ -43,7 +50,7 @@ type Stats struct {
 	CorrectionFieldTX int64            `json:"cf_tx"`
 }
 
-// FetchStats returns populated Stats structure fetched from url
+// FetchStats returns populated Stats structure fetched from the url
 func FetchStats(url string) (map[string]Stats, error) {
 	c := http.Client{
 		Timeout: time.Second * 2,
@@ -64,4 +71,26 @@ func FetchStats(url string) (map[string]Stats, error) {
 	err = json.Unmarshal(b, &s)
 
 	return s, err
+}
+
+// FetchCounters returns counters map fetched from the url
+func FetchCounters(url string) (map[string]float64, error) {
+	counters := make(map[string]float64)
+	url = fmt.Sprintf("%s/counters", url)
+	c := http.Client{
+		Timeout: time.Second * 2,
+	}
+
+	resp, err := c.Get(url)
+	if err != nil {
+		return counters, err
+	}
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return counters, err
+	}
+	err = json.Unmarshal(b, &counters)
+	return counters, err
 }

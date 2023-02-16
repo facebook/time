@@ -1,3 +1,19 @@
+/*
+Copyright (c) Facebook, Inc. and its affiliates.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package client
 
 import (
@@ -48,9 +64,9 @@ func (s *SysStats) CollectRuntimeStats(interval time.Duration) (map[string]uint6
 	}
 
 	if val, err := proc.MemoryInfo(); err == nil {
-		stats["process.rss"] = uint64(val.RSS)
-		stats["process.vms"] = uint64(val.VMS)
-		stats["process.swap"] = uint64(val.Swap)
+		stats["process.rss"] = val.RSS
+		stats["process.vms"] = val.VMS
+		stats["process.swap"] = val.Swap
 	}
 
 	if val, err := proc.NumFDs(); err == nil {
@@ -93,13 +109,13 @@ func (s *SysStats) CollectRuntimeStats(interval time.Duration) (map[string]uint6
 	stats["runtime.mem.gc.pause"] = m.PauseNs[(m.NumGC+255)%256]
 	stats["runtime.mem.gc.count"] = uint64(m.NumGC)
 	if lastStats != nil {
-		setRate("runtime.lookups", stats, uint64(m.Lookups), uint64(lastStats.Lookups), interval)
+		setRate("runtime.lookups", stats, m.Lookups, lastStats.Lookups, interval)
 
-		setRate("runtime.mem.total_alloc", stats, uint64(m.Mallocs), uint64(lastStats.Mallocs), interval)
-		setRate("runtime.mem.mallocs", stats, uint64(m.Mallocs), uint64(lastStats.Mallocs), interval)
-		setRate("runtime.mem.frees", stats, uint64(m.Frees), uint64(lastStats.Frees), interval)
+		setRate("runtime.mem.total_alloc", stats, m.Mallocs, lastStats.Mallocs, interval)
+		setRate("runtime.mem.mallocs", stats, m.Mallocs, lastStats.Mallocs, interval)
+		setRate("runtime.mem.frees", stats, m.Frees, lastStats.Frees, interval)
 
-		setRate("runtime.gc.pause_ns", stats, uint64(m.PauseTotalNs), uint64(lastStats.PauseTotalNs), interval)
+		setRate("runtime.gc.pause_ns", stats, m.PauseTotalNs, lastStats.PauseTotalNs, interval)
 		setRate("runtime.gc.count", stats, uint64(m.NumGC), uint64(lastStats.NumGC), interval)
 	}
 	s.memstats = m

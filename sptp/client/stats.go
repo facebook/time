@@ -117,7 +117,7 @@ func runResultToStats(r *RunResult, p3 int, selected bool) *gmstats.Stats {
 	s.Priority3 = uint8(p3)
 	s.Offset = float64(r.Measurement.Offset)
 	s.MeanPathDelay = float64(r.Measurement.Delay)
-	s.StepsRemoved = int(r.Measurement.Announce.StepsRemoved)
+	s.StepsRemoved = int(r.Measurement.Announce.StepsRemoved) + 1 // we are one step away from GM
 	s.IngressTime = r.Measurement.Timestamp.UnixNano()
 	s.CorrectionFieldRX = r.Measurement.CorrectionFieldRX.Nanoseconds()
 	s.CorrectionFieldTX = r.Measurement.CorrectionFieldTX.Nanoseconds()
