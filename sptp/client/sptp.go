@@ -1,3 +1,19 @@
+/*
+Copyright (c) Facebook, Inc. and its affiliates.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package client
 
 import (
@@ -20,7 +36,7 @@ import (
 // Servo abstracts away servo
 type Servo interface {
 	SyncInterval(float64)
-	Sample(offset int64, localTs uint64) (float64, servo.ServoState)
+	Sample(offset int64, localTs uint64) (float64, servo.State)
 	SetMaxFreq(float64)
 }
 
@@ -61,7 +77,7 @@ func NewSPTP(cfg *Config, stats StatsServer) (*SPTP, error) {
 		ns := net.ParseIP(server).String()
 		c, err := newClient(ns, p.clockID, p.eventConn, &cfg.Measurement, p.stats)
 		if err != nil {
-			return nil, fmt.Errorf("initializing client %q: %v", ns, err)
+			return nil, fmt.Errorf("initializing client %q: %w", ns, err)
 		}
 		p.clients[ns] = c
 		p.priorities[ns] = prio
@@ -234,6 +250,8 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 }
 
 func (p *SPTP) processResults(results map[string]*RunResult) {
+	gmsTotal := len(results)
+	gmsAvailable := 0
 	announces := []*ptp.Announce{}
 	idsToClients := map[ptp.ClockIdentity]string{}
 	localPrioMap := map[ptp.ClockIdentity]int{}
@@ -250,9 +268,16 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 			log.Errorf("result for %s is missing Measurement", addr)
 			continue
 		}
+		gmsAvailable++
 		announces = append(announces, &res.Measurement.Announce)
 		idsToClients[res.Measurement.Announce.GrandmasterIdentity] = addr
 		localPrioMap[res.Measurement.Announce.GrandmasterIdentity] = p.priorities[addr]
+	}
+	p.stats.SetCounter("sptp.gms.total", int64(gmsTotal))
+	if gmsTotal != 0 {
+		p.stats.SetCounter("sptp.gms.available_pct", int64((float64(gmsAvailable)/float64(gmsTotal))*100))
+	} else {
+		p.stats.SetCounter("sptp.gms.available_pct", int64(0))
 	}
 	best := bmca(announces, localPrioMap)
 	if best == nil {
@@ -270,7 +295,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	freqAdj, state := p.pi.Sample(int64(bm.Offset), uint64(bm.Timestamp.UnixNano()))
 	log.Infof("freqAdj: %v, state: %s(%d)", freqAdj, state, state)
 	switch state {
-	case servo.ServoJump:
+	case servo.StateJump:
 		if err := p.phc.Step(-1 * bm.Offset); err != nil {
 			log.Errorf("failed to step freq by %v: %v", -1*bm.Offset, err)
 		}
@@ -279,7 +304,6 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 			log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
 		}
 	}
-
 }
 
 func (p *SPTP) runInternal(ctx context.Context, interval time.Duration) error {

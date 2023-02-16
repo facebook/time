@@ -1,3 +1,19 @@
+/*
+Copyright (c) Facebook, Inc. and its affiliates.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package client
 
 import (
@@ -9,6 +25,7 @@ import (
 	"github.com/facebook/time/servo"
 
 	"github.com/golang/mock/gomock"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -21,11 +38,16 @@ func TestProcessResultsNoResults(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPHC := NewMockPHCIface(ctrl)
+	mockStatsServer := NewMockStatsServer(ctrl)
 	p := &SPTP{
-		phc: mockPHC,
+		phc:   mockPHC,
+		stats: mockStatsServer,
 	}
 	results := map[string]*RunResult{}
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(0))
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(0))
 	p.processResults(results)
+
 	require.Equal(t, "", p.bestGM)
 }
 
@@ -34,14 +56,18 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	defer ctrl.Finish()
 	mockPHC := NewMockPHCIface(ctrl)
 	mockServo := NewMockServo(ctrl)
+	mockStatsServer := NewMockStatsServer(ctrl)
 	p := &SPTP{
 		phc:   mockPHC,
 		pi:    mockServo,
-		stats: NewStats(),
+		stats: mockStatsServer,
 	}
 	results := map[string]*RunResult{
 		"iamthebest": {},
 	}
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(1))
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(0))
+	mockStatsServer.EXPECT().SetGMStats("iamthebest", gomock.Any())
 	p.processResults(results)
 	require.Equal(t, "", p.bestGM)
 }
@@ -55,12 +81,16 @@ func TestProcessResultsSingle(t *testing.T) {
 	mockPHC.EXPECT().AdjFreqPPB(gomock.Any()).Return(nil)
 	mockPHC.EXPECT().Step(gomock.Any()).Return(nil)
 	mockServo := NewMockServo(ctrl)
-	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.ServoJump)
-	mockServo.EXPECT().Sample(int64(-100001000), gomock.Any()).Return(14.2, servo.ServoLocked)
+	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.StateJump)
+	mockServo.EXPECT().Sample(int64(-100001000), gomock.Any()).Return(14.2, servo.StateLocked)
+	mockStatsServer := NewMockStatsServer(ctrl)
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(1))
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(100))
+	mockStatsServer.EXPECT().SetGMStats("iamthebest", gomock.Any())
 	p := &SPTP{
 		phc:   mockPHC,
 		pi:    mockServo,
-		stats: NewStats(),
+		stats: mockStatsServer,
 	}
 	results := map[string]*RunResult{
 		"iamthebest": {
@@ -80,6 +110,9 @@ func TestProcessResultsSingle(t *testing.T) {
 
 	results["iamthebest"].Measurement.Offset = -100001 * time.Microsecond
 	// we adj here
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(1))
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(100))
+	mockStatsServer.EXPECT().SetGMStats("iamthebest", gomock.Any())
 	p.processResults(results)
 	require.Equal(t, "iamthebest", p.bestGM)
 }
@@ -93,12 +126,18 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockPHC.EXPECT().AdjFreqPPB(gomock.Any()).Return(nil)
 	mockPHC.EXPECT().Step(gomock.Any()).Return(nil)
 	mockServo := NewMockServo(ctrl)
-	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.ServoJump)
-	mockServo.EXPECT().Sample(int64(-104002000), gomock.Any()).Return(14.2, servo.ServoLocked)
+	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.StateJump)
+	mockServo.EXPECT().Sample(int64(-104002000), gomock.Any()).Return(14.2, servo.StateLocked)
+	mockStatsServer := NewMockStatsServer(ctrl)
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(2))
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(50))
+	mockStatsServer.EXPECT().SetGMStats("iamthebest", gomock.Any())
+	mockStatsServer.EXPECT().SetGMStats("soontobebest", gomock.Any())
+
 	p := &SPTP{
 		phc:   mockPHC,
 		pi:    mockServo,
-		stats: NewStats(),
+		stats: mockStatsServer,
 	}
 	announce0 := announcePkt(0)
 	announce0.GrandmasterIdentity = ptp.ClockIdentity(0x001)
@@ -138,6 +177,10 @@ func TestProcessResultsMulti(t *testing.T) {
 		Announce:           *announce1,
 	}
 	// we adj here, while also switching to new best GM
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(2))
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(100))
+	mockStatsServer.EXPECT().SetGMStats("iamthebest", gomock.Any())
+	mockStatsServer.EXPECT().SetGMStats("soontobebest", gomock.Any())
 	p.processResults(results)
 	require.Equal(t, "soontobebest", p.bestGM)
 }

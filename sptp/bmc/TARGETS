@@ -1,0 +1,12 @@
+load("//libfb/go:defs.bzl", "go_package")
+
+go_package(
+    name = "bmc",
+    package_name = "github.com/facebook/time/sptp/bmc",
+    test_external_deps = [
+        "github.com/stretchr/testify/require",
+    ],
+    deps = [
+        "//time/ptp/protocol:protocol",
+    ],
+)

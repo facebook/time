@@ -1,3 +1,19 @@
+/*
+Copyright (c) Facebook, Inc. and its affiliates.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package client
 
 import (
@@ -16,6 +32,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/sptp/stats"
 	"github.com/facebook/time/timestamp"
 )
 
@@ -116,9 +133,8 @@ type RunResult struct {
 
 // inPacket is input packet data + receive timestamp
 type inPacket struct {
-	source net.IP
-	data   []byte
-	ts     time.Time
+	data []byte
+	ts   time.Time
 }
 
 // Client is a part of PTPNG that talks to only one server
@@ -193,18 +209,18 @@ func (c *Client) handleMsg(msg *inPacket) error {
 		if err := ptp.FromBytes(msg.data, announce); err != nil {
 			return fmt.Errorf("reading announce msg: %w", err)
 		}
-		c.stats.UpdateCounterBy(fmt.Sprintf("sptp.portstats.rx.%s", strings.ToLower(msgType.String())), 1)
+		c.stats.UpdateCounterBy(fmt.Sprintf("%s%s", stats.PortStatsRxPrefix, strings.ToLower(msgType.String())), 1)
 		return c.handleAnnounce(announce)
 	case ptp.MessageSync:
 		b := &ptp.SyncDelayReq{}
 		if err := ptp.FromBytes(msg.data, b); err != nil {
 			return fmt.Errorf("reading sync msg: %w", err)
 		}
-		c.stats.UpdateCounterBy(fmt.Sprintf("sptp.portstats.rx.%s", strings.ToLower(msgType.String())), 1)
+		c.stats.UpdateCounterBy(fmt.Sprintf("%s%s", stats.PortStatsRxPrefix, strings.ToLower(msgType.String())), 1)
 		return c.handleSync(b, msg.ts)
 	default:
 		c.logReceive(msgType, "unsupported, ignoring")
-		c.stats.UpdateCounterBy(fmt.Sprintf("sptp.portstats.rx.%s", strings.ToLower(msgType.String())), 1)
+		c.stats.UpdateCounterBy(fmt.Sprintf("%s%s", stats.PortStatsRxPrefix, strings.ToLower(msgType.String())), 1)
 		c.stats.UpdateCounterBy("sptp.portstats.rx.unsupported", 1)
 		return nil
 	}
@@ -286,7 +302,7 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 				}
 				c.m.addT3(seq, hwts)
 				c.logSent(ptp.MessageDelayReq, "seq=%d, our T3=%v", seq, hwts)
-				c.stats.UpdateCounterBy(fmt.Sprintf("sptp.portstats.tx.%s", strings.ToLower(ptp.MessageDelayReq.String())), 1)
+				c.stats.UpdateCounterBy(fmt.Sprintf("%s%s", stats.PortStatsTxPrefix, strings.ToLower(ptp.MessageDelayReq.String())), 1)
 				started = true
 			}
 		}

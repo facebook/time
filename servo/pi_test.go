@@ -1,3 +1,19 @@
+/*
+Copyright (c) Facebook, Inc. and its affiliates.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package servo
 
 import (
@@ -24,20 +40,19 @@ func TestPiServoSample(t *testing.T) {
 
 	freq, state := pi.Sample(1191, 1674148530671467104)
 	require.InEpsilon(t, -111288.406372, freq, 0.00001)
-	require.Equal(t, ServoInit, state)
+	require.Equal(t, StateInit, state)
 
 	freq, state = pi.Sample(225, 1674148531671518924)
 	require.InEpsilon(t, -112254.463816, freq, 0.00001)
-	require.Equal(t, ServoLocked, state)
+	require.Equal(t, StateLocked, state)
 
 	freq, state = pi.Sample(1170, 1674148532671555647)
 	require.InEpsilon(t, -111084.463816, freq, 0.00001)
-	require.Equal(t, ServoLocked, state)
+	require.Equal(t, StateLocked, state)
 
 	freq, state = pi.Sample(919, 1674148533671484215)
 	require.InEpsilon(t, -110984.463816, freq, 0.00001)
-	require.Equal(t, ServoLocked, state)
-
+	require.Equal(t, StateLocked, state)
 }
 
 func TestPiServoStepSample(t *testing.T) {
@@ -51,20 +66,19 @@ func TestPiServoStepSample(t *testing.T) {
 
 	freq, state := pi.Sample(235000, 1674148528671467104)
 	require.InEpsilon(t, -111288.406372, freq, 0.00001)
-	require.Equal(t, ServoInit, state)
+	require.Equal(t, StateInit, state)
 
 	freq, state = pi.Sample(225000, 1674148529671518924)
 	require.InEpsilon(t, -121289.001025, freq, 0.00001)
-	require.Equal(t, ServoJump, state)
+	require.Equal(t, StateJump, state)
 
 	freq, state = pi.Sample(1191, 1674148530671467104)
 	require.InEpsilon(t, -120098.001025, freq, 0.00001)
-	require.Equal(t, ServoLocked, state)
+	require.Equal(t, StateLocked, state)
 
 	freq, state = pi.Sample(225, 1674148531671518924)
 	require.InEpsilon(t, -120706.701025, freq, 0.00001)
-	require.Equal(t, ServoLocked, state)
-
+	require.Equal(t, StateLocked, state)
 }
 
 func TestPiServoFilterSample(t *testing.T) {
@@ -79,26 +93,25 @@ func TestPiServoFilterSample(t *testing.T) {
 
 	freq, state := pi.Sample(1191, 1674148530671467104)
 	require.InEpsilon(t, -111288.406372, freq, 0.00001)
-	require.Equal(t, ServoInit, state)
+	require.Equal(t, StateInit, state)
 
 	freq, state = pi.Sample(225, 1674148531671518924)
 	require.InEpsilon(t, -112254.463816, freq, 0.00001)
-	require.Equal(t, ServoLocked, state)
+	require.Equal(t, StateLocked, state)
 
 	freq, state = pi.Sample(1170, 1674148532671555647)
 	require.InEpsilon(t, -111084.463816, freq, 0.00001)
-	require.Equal(t, ServoLocked, state)
+	require.Equal(t, StateLocked, state)
 
 	freq, state = pi.Sample(919, 1674148533671484215)
 	require.InEpsilon(t, -110984.463816, freq, 0.00001)
-	require.Equal(t, ServoLocked, state)
+	require.Equal(t, StateLocked, state)
 
 	freq, state = pi.Sample(919000, 1674148534671684215)
 	require.InEpsilon(t, -111034.463816, freq, 0.00001)
 	require.InEpsilon(t, f.freqMean, freq, 0.00001)
-	require.Equal(t, ServoLocked, state)
+	require.Equal(t, StateLocked, state)
 	require.Equal(t, 1, f.skippedCount)
-
 }
 
 func TestPiServoSetFreq(t *testing.T) {

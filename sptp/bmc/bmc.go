@@ -47,7 +47,6 @@ func ComparePortIdentity(this *ptp.PortIdentity, that *ptp.PortIdentity) int64 {
 
 // Dscmp2 finds better Announce based on network topology
 func Dscmp2(a *ptp.Announce, b *ptp.Announce) ComparisonResult {
-
 	if a.AnnounceBody.StepsRemoved+1 < b.AnnounceBody.StepsRemoved {
 		return ABetter
 	}
@@ -109,7 +108,6 @@ func Dscmp(a *ptp.Announce, b *ptp.Announce) ComparisonResult {
 		return ABetter
 	}
 	return BBetter
-
 }
 
 // TelcoDscmp Dscmp finds better Announce based on Announce response content and local priorities
@@ -166,5 +164,4 @@ func TelcoDscmp(a *ptp.Announce, b *ptp.Announce, localPrioA int, localPrioB int
 		return ABetter
 	}
 	return BBetter
-
 }
