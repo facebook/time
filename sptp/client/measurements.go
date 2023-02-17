@@ -156,7 +156,7 @@ func (m *measurements) addT4(seq uint16, ts time.Time) {
 func (m *measurements) delay(newDelay time.Duration) time.Duration {
 	lastDelay := m.delaysWindow.lastSample()
 	// we want to have at least one sample recorded, even if it doesn't meet the filter, otherwise we'll never sync
-	if !math.IsNaN(lastDelay) && (m.cfg.PathDelayDiscardFilterEnabled && newDelay < m.cfg.PathDelayDiscardBelow) {
+	if !math.IsNaN(lastDelay) && (m.cfg.PathDelayDiscardFilterEnabled && m.delaysWindow.Full() && newDelay < m.cfg.PathDelayDiscardBelow) {
 		log.Warningf("bad path delay %v < %v filtered out", newDelay, m.cfg.PathDelayDiscardBelow)
 	} else {
 		m.delaysWindow.add(float64(newDelay))

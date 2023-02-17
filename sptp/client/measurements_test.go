@@ -161,7 +161,7 @@ func TestMeasurementsFullRun(t *testing.T) {
 
 func TestMeasurementsPathDelayFilter(t *testing.T) {
 	mcfg := &MeasurementConfig{
-		PathDelayFilterLength:         5,
+		PathDelayFilterLength:         4,
 		PathDelayFilter:               FilterNone,
 		PathDelayDiscardFilterEnabled: true,
 		PathDelayDiscardBelow:         100 * time.Millisecond,

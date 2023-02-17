@@ -90,3 +90,19 @@ func TestSlidingWindowMultiple(t *testing.T) {
 	require.InDelta(t, 3.52, w.median(), 0.001)
 	require.Equal(t, 5, len(w.allSamples()))
 }
+
+func TestSlidingWindowFull(t *testing.T) {
+	w := newSlidingWindow(5)
+	w.add(42)
+	require.False(t, w.Full())
+	w.add(42)
+	require.False(t, w.Full())
+	w.add(42)
+	require.False(t, w.Full())
+	w.add(42)
+	require.False(t, w.Full())
+	w.add(42)
+	require.True(t, w.Full())
+	w.add(42)
+	require.True(t, w.Full())
+}

@@ -51,7 +51,7 @@ func (w *slidingWindow) add(sample float64) {
 	if !math.IsNaN(v) {
 		w.sum -= v
 	}
-	if w.currentSize < w.size {
+	if !w.Full() {
 		w.currentSize++
 	}
 	w.samples.Value = sample
@@ -97,4 +97,8 @@ func (w *slidingWindow) median() float64 {
 
 func (w *slidingWindow) mean() float64 {
 	return w.sum / float64(w.currentSize)
+}
+
+func (w *slidingWindow) Full() bool {
+	return w.currentSize == w.size
 }
