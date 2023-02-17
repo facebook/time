@@ -87,11 +87,11 @@ func TestCheckAgainstThreshold(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			var (
-				status status
-				msg    string
+				st  status
+				msg string
 			)
 			if tt.failOnZero {
-				status, msg = checkAgainstThresholdNonZero(
+				st, msg = checkAgainstThresholdNonZero(
 					tt.name,
 					tt.value,
 					tt.warnThreshold,
@@ -99,7 +99,7 @@ func TestCheckAgainstThreshold(t *testing.T) {
 					tt.explanation,
 				)
 			} else {
-				status, msg = checkAgainstThreshold(
+				st, msg = checkAgainstThreshold(
 					tt.name,
 					tt.value,
 					tt.warnThreshold,
@@ -107,34 +107,34 @@ func TestCheckAgainstThreshold(t *testing.T) {
 					tt.explanation,
 				)
 			}
-			require.Equal(t, tt.wantStatus, status)
+			require.Equal(t, tt.wantStatus, st)
 			require.Equal(t, tt.wantMsg, msg)
 		})
 	}
 
 	// check with float now just to exercise generics
 	t.Run("ints", func(t *testing.T) {
-		status, msg := checkAgainstThreshold(
+		st, msg := checkAgainstThreshold(
 			"some int",
 			28,
 			10,
 			100,
 			"oh no",
 		)
-		require.Equal(t, WARN, status)
+		require.Equal(t, WARN, st)
 		require.Equal(t, "some int is 28, we expect it to be within 10. oh no", msg)
 	})
 
 	// check with float now just to exercise generics
 	t.Run("floats", func(t *testing.T) {
-		status, msg := checkAgainstThreshold(
+		st, msg := checkAgainstThreshold(
 			"some float",
 			3.14,
 			4.0,
 			10.1,
 			"oh no",
 		)
-		require.Equal(t, OK, status)
+		require.Equal(t, OK, st)
 		require.Equal(t, "some float is 3.14, we expect it to be within 4", msg)
 	})
 }
@@ -143,13 +143,13 @@ func TestCheckGMPresent(t *testing.T) {
 	r := &checker.PTPCheckResult{
 		GrandmasterPresent: true,
 	}
-	status, msg := checkGMPresent(r)
-	require.Equal(t, OK, status)
+	st, msg := checkGMPresent(r)
+	require.Equal(t, OK, st)
 	require.Equal(t, "GM is present", msg)
 
 	r.GrandmasterPresent = false
-	status, msg = checkGMPresent(r)
-	require.Equal(t, FAIL, status)
+	st, msg = checkGMPresent(r)
+	require.Equal(t, FAIL, st)
 	require.Equal(t, "GM is not present", msg)
 }
 
@@ -157,18 +157,18 @@ func TestCheckOffset(t *testing.T) {
 	r := &checker.PTPCheckResult{
 		OffsetFromMasterNS: 100.0,
 	}
-	status, msg := checkOffset(r)
-	require.Equal(t, OK, status)
+	st, msg := checkOffset(r)
+	require.Equal(t, OK, st)
 	require.Equal(t, "GM offset is 100ns, we expect it to be within 250µs", msg)
 
 	r.OffsetFromMasterNS = 251000.0
-	status, msg = checkOffset(r)
-	require.Equal(t, WARN, status)
+	st, msg = checkOffset(r)
+	require.Equal(t, WARN, st)
 	require.Equal(t, "GM offset is 251µs, we expect it to be within 250µs. Offset is the difference between our clock and remote server (time error).", msg)
 
 	r.OffsetFromMasterNS = -251000.0
-	status, msg = checkOffset(r)
-	require.Equal(t, WARN, status)
+	st, msg = checkOffset(r)
+	require.Equal(t, WARN, st)
 	require.Equal(t, "GM offset is 251µs, we expect it to be within 250µs. Offset is the difference between our clock and remote server (time error).", msg)
 }
 
@@ -176,18 +176,18 @@ func TestCheckPathDelay(t *testing.T) {
 	r := &checker.PTPCheckResult{
 		MeanPathDelayNS: 100.0,
 	}
-	status, msg := checkPathDelay(r)
-	require.Equal(t, OK, status)
+	st, msg := checkPathDelay(r)
+	require.Equal(t, OK, st)
 	require.Equal(t, "GM mean path delay is 100ns, we expect it to be within 100ms", msg)
 
 	r.MeanPathDelayNS = 151000000.0
-	status, msg = checkPathDelay(r)
-	require.Equal(t, WARN, status)
+	st, msg = checkPathDelay(r)
+	require.Equal(t, WARN, st)
 	require.Equal(t, "GM mean path delay is 151ms, we expect it to be within 100ms. Mean path delay is measured network delay between us and GM", msg)
 
 	r.MeanPathDelayNS = -151000000.0
-	status, msg = checkPathDelay(r)
-	require.Equal(t, FAIL, status)
+	st, msg = checkPathDelay(r)
+	require.Equal(t, FAIL, st)
 	require.Equal(t, "GM mean path delay is -151ms, we expect it to be positive and within 100ms. Mean path delay is measured network delay between us and GM", msg)
 }
 
@@ -211,17 +211,17 @@ func TestPortServiceStatsDiagnosers(t *testing.T) {
 	diagnosers := portServiceStatsDiagnosers(r)
 	require.Equal(t, 4, len(diagnosers))
 
-	status, msg := diagnosers[0](r)
-	assert.Equal(t, WARN, status)
+	st, msg := diagnosers[0](r)
+	assert.Equal(t, WARN, st)
 	assert.Equal(t, "Sync timeout count is 200, we expect it to be within 100. We expect to not skip sync packets", msg)
-	status, msg = diagnosers[1](r)
-	assert.Equal(t, OK, status)
+	st, msg = diagnosers[1](r)
+	assert.Equal(t, OK, st)
 	assert.Equal(t, "Announce timeout count is 10, we expect it to be within 100", msg)
-	status, msg = diagnosers[2](r)
-	assert.Equal(t, OK, status)
+	st, msg = diagnosers[2](r)
+	assert.Equal(t, OK, st)
 	assert.Equal(t, "Sync mismatch count is 0, we expect it to be within 100", msg)
-	status, msg = diagnosers[3](r)
-	assert.Equal(t, FAIL, status)
+	st, msg = diagnosers[3](r)
+	assert.Equal(t, FAIL, st)
 	assert.Equal(t, "FollowUp mismatch count is 2000, we expect it to be within 100. We expect FollowUp packets to arrive in correct order", msg)
 }
 

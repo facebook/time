@@ -32,7 +32,9 @@ var RootCmd = &cobra.Command{
 
 // flags
 var rootVerboseFlag bool
-var rootServerFlag string
+var rootClientFlag string
+
+var rootClientFlagDesc = "Address of PTP client to connect to. Can be either Unix socket for ptp4l or http endpoint for sptp. Empty means detect automatically."
 
 func init() {
 	RootCmd.PersistentFlags().BoolVarP(&rootVerboseFlag, "verbose", "v", false, "verbose output")

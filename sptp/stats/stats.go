@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -50,6 +51,39 @@ type Stats struct {
 	CorrectionFieldTX int64            `json:"cf_tx"`
 }
 
+// Counters is various counters exported by SPTP client
+type Counters map[string]int64
+
+// PortStats returns two maps: packet type to counter, TX and RX
+func (c Counters) PortStats() (tx map[string]uint64, rx map[string]uint64) {
+	tx = map[string]uint64{}
+	rx = map[string]uint64{}
+	for k, v := range c {
+		if strings.HasPrefix(k, PortStatsTxPrefix) {
+			tx[strings.TrimPrefix(k, PortStatsTxPrefix)] = uint64(v)
+		}
+		if strings.HasPrefix(k, PortStatsRxPrefix) {
+			rx[strings.TrimPrefix(k, PortStatsRxPrefix)] = uint64(v)
+		}
+	}
+	return
+}
+
+// SysStats return sys stats from counters
+func (c Counters) SysStats() map[string]int64 {
+	res := map[string]int64{}
+	for k, v := range c {
+		if strings.HasPrefix(k, PortStatsTxPrefix) {
+			continue
+		}
+		if strings.HasPrefix(k, PortStatsRxPrefix) {
+			continue
+		}
+		res[k] = v
+	}
+	return res
+}
+
 // FetchStats returns populated Stats structure fetched from the url
 func FetchStats(url string) (map[string]Stats, error) {
 	c := http.Client{
@@ -74,8 +108,8 @@ func FetchStats(url string) (map[string]Stats, error) {
 }
 
 // FetchCounters returns counters map fetched from the url
-func FetchCounters(url string) (map[string]float64, error) {
-	counters := make(map[string]float64)
+func FetchCounters(url string) (Counters, error) {
+	counters := make(Counters)
 	url = fmt.Sprintf("%s/counters", url)
 	c := http.Client{
 		Timeout: time.Second * 2,
@@ -93,4 +127,23 @@ func FetchCounters(url string) (map[string]float64, error) {
 	}
 	err = json.Unmarshal(b, &counters)
 	return counters, err
+}
+
+// FetchPortStats fetches all counters and then returns two maps: packet type to counter, TX and RX
+func FetchPortStats(url string) (tx map[string]uint64, rx map[string]uint64, err error) {
+	counters, err := FetchCounters(url)
+	if err != nil {
+		return nil, nil, err
+	}
+	tx, rx = counters.PortStats()
+	return tx, rx, err
+}
+
+// FetchSysStats fetches all counters and return sys stats from them
+func FetchSysStats(url string) (map[string]int64, error) {
+	counters, err := FetchCounters(url)
+	if err != nil {
+		return nil, err
+	}
+	return counters.SysStats(), nil
 }

@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/facebook/time/cmd/ptpcheck/checker"
+	"github.com/facebook/time/sptp/stats"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -28,11 +29,11 @@ import (
 
 func init() {
 	RootCmd.AddCommand(serviceStatsCmd)
-	serviceStatsCmd.Flags().StringVarP(&rootServerFlag, "server", "S", "/var/run/ptp4l", "server to connect to")
+	serviceStatsCmd.Flags().StringVarP(&rootClientFlag, "client", "C", "", rootClientFlagDesc)
 }
 
-func serviceStatsRun(server string) error {
-	c, cleanup, err := checker.PrepareClient(server)
+func serviceStatsRunPTP4l(address string) error {
+	c, cleanup, err := checker.PrepareMgmtClient(address)
 	defer cleanup()
 	if err != nil {
 		return fmt.Errorf("preparing connection: %w", err)
@@ -49,13 +50,37 @@ func serviceStatsRun(server string) error {
 	return nil
 }
 
+func serviceStatsRunSPTP(address string) error {
+	sysStats, err := stats.FetchSysStats(address)
+	if err != nil {
+		return err
+	}
+	str, err := json.Marshal(sysStats)
+	if err != nil {
+		return fmt.Errorf("marshaling json: %w", err)
+	}
+	fmt.Printf("%s\n", string(str))
+	return nil
+}
+
+func serviceStatsRun(address string) error {
+	f := checker.GetFlavour()
+	address = checker.GetServerAddress(address, f)
+	switch f {
+	case checker.FlavourPTP4L:
+		return serviceStatsRunPTP4l(address)
+	case checker.FlavourSPTP:
+		return serviceStatsRunSPTP(address)
+	}
+	return fmt.Errorf("uknown PTP client flavour %v", f)
+}
+
 var serviceStatsCmd = &cobra.Command{
 	Use:   "servicestats",
 	Short: "Print PTP port service stats in JSON format",
 	Run: func(c *cobra.Command, args []string) {
 		ConfigureVerbosity()
-
-		if err := serviceStatsRun(rootServerFlag); err != nil {
+		if err := serviceStatsRun(rootClientFlag); err != nil {
 			log.Fatal(err)
 		}
 

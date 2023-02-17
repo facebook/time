@@ -388,31 +388,31 @@ func prepareTestClient(t *testing.T, packets ...ptp.Packet) *ptp.MgmtClient {
 
 func TestCheckerRunEmpty(t *testing.T) {
 	client := prepareTestClient(t)
-	res, err := Run(client)
+	res, err := RunPTP4L(client)
 	require.EqualError(t, err, "getting CURRENT_DATA_SET management TLV: EOF")
 	require.Nil(t, res)
 }
 
 func TestCheckerRunErrorMsg(t *testing.T) {
 	client := prepareTestClient(t, managementError)
-	res, err := Run(client)
+	res, err := RunPTP4L(client)
 	require.EqualError(t, err, "getting CURRENT_DATA_SET management TLV: got Management Error in response: NOT_SUPPORTED")
 	require.Nil(t, res)
 
 	client = prepareTestClient(t, currentDataSet, managementError)
-	res, err = Run(client)
+	res, err = RunPTP4L(client)
 	require.EqualError(t, err, "getting DEFAULT_DATA_SET management TLV: got Management Error in response: NOT_SUPPORTED")
 	require.Nil(t, res)
 
 	client = prepareTestClient(t, currentDataSet, defaultDataSet, managementError)
-	res, err = Run(client)
+	res, err = RunPTP4L(client)
 	require.EqualError(t, err, "getting PARENT_DATA_SET management TLV: got Management Error in response: NOT_SUPPORTED")
 	require.Nil(t, res)
 }
 
 func TestCheckerRunWithoutNP(t *testing.T) {
 	client := prepareTestClient(t, currentDataSet, defaultDataSet, parentDataSet, managementError)
-	res, err := Run(client)
+	res, err := RunPTP4L(client)
 	require.NoError(t, err)
 
 	want := &PTPCheckResult{
@@ -420,7 +420,6 @@ func TestCheckerRunWithoutNP(t *testing.T) {
 		GrandmasterPresent:  true,
 		MeanPathDelayNS:     (currentDataSet.TLV.(*ptp.CurrentDataSetTLV)).MeanPathDelay.Nanoseconds(),
 		StepsRemoved:        int((currentDataSet.TLV.(*ptp.CurrentDataSetTLV)).StepsRemoved),
-		ClockIdentity:       (defaultDataSet.TLV.(*ptp.DefaultDataSetTLV)).ClockIdentity.String(),
 		GrandmasterIdentity: (parentDataSet.TLV.(*ptp.ParentDataSetTLV)).GrandmasterIdentity.String(),
 		PortStatsTX:         map[string]uint64{},
 		PortStatsRX:         map[string]uint64{},
@@ -430,7 +429,7 @@ func TestCheckerRunWithoutNP(t *testing.T) {
 
 func TestCheckerRunWithPortStats(t *testing.T) {
 	client := prepareTestClient(t, currentDataSet, defaultDataSet, parentDataSet, portStatsNP, managementError)
-	res, err := Run(client)
+	res, err := RunPTP4L(client)
 	require.NoError(t, err)
 
 	want := &PTPCheckResult{
@@ -438,7 +437,6 @@ func TestCheckerRunWithPortStats(t *testing.T) {
 		GrandmasterPresent:  true,
 		MeanPathDelayNS:     (currentDataSet.TLV.(*ptp.CurrentDataSetTLV)).MeanPathDelay.Nanoseconds(),
 		StepsRemoved:        int((currentDataSet.TLV.(*ptp.CurrentDataSetTLV)).StepsRemoved),
-		ClockIdentity:       (defaultDataSet.TLV.(*ptp.DefaultDataSetTLV)).ClockIdentity.String(),
 		GrandmasterIdentity: (parentDataSet.TLV.(*ptp.ParentDataSetTLV)).GrandmasterIdentity.String(),
 		PortStatsTX: map[string]uint64{
 			"ANNOUNCE":              1962,
@@ -470,7 +468,7 @@ func TestCheckerRunWithPortStats(t *testing.T) {
 
 func TestCheckerRunFull(t *testing.T) {
 	client := prepareTestClient(t, currentDataSet, defaultDataSet, parentDataSet, portStatsNP, timeStatusNP, portServiceStatsNP)
-	res, err := Run(client)
+	res, err := RunPTP4L(client)
 	require.NoError(t, err)
 
 	want := &PTPCheckResult{
@@ -478,7 +476,6 @@ func TestCheckerRunFull(t *testing.T) {
 		GrandmasterPresent:  true,
 		MeanPathDelayNS:     (currentDataSet.TLV.(*ptp.CurrentDataSetTLV)).MeanPathDelay.Nanoseconds(),
 		StepsRemoved:        int((currentDataSet.TLV.(*ptp.CurrentDataSetTLV)).StepsRemoved),
-		ClockIdentity:       (defaultDataSet.TLV.(*ptp.DefaultDataSetTLV)).ClockIdentity.String(),
 		GrandmasterIdentity: (parentDataSet.TLV.(*ptp.ParentDataSetTLV)).GrandmasterIdentity.String(),
 		IngressTimeNS:       (timeStatusNP.TLV.(*ptp.TimeStatusNPTLV)).IngressTimeNS,
 		PortStatsTX: map[string]uint64{
@@ -521,7 +518,7 @@ func TestPrepareLocalConn(t *testing.T) {
 	require.NoError(t, err)
 	defer listener.Close()
 
-	conn, cleanup, err := prepareConn(targetSocketPath)
+	conn, cleanup, err := preparePTP4lConn(targetSocketPath)
 	require.NoError(t, err)
 	localFile := (conn.LocalAddr().(*net.UnixAddr)).Name
 	require.NotEqual(t, "", localFile)
@@ -540,14 +537,14 @@ func TestPrepareLocalConnEmpty(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir) // clean up
 	targetSocketPath := filepath.Join(dir, "ptp4l")
-	conn, cleanup, err := prepareConn(targetSocketPath)
+	conn, cleanup, err := preparePTP4lConn(targetSocketPath)
 	require.Error(t, err)
 	require.Nil(t, conn)
 	require.NotNil(t, cleanup)
 }
 
 func TestPrepareLocalConnError(t *testing.T) {
-	conn, cleanup, err := prepareConn("")
+	conn, cleanup, err := preparePTP4lConn("")
 	require.EqualError(t, err, "preparing ptp4l connection: target address is empty")
 	require.Nil(t, conn)
 	require.NotNil(t, cleanup)

@@ -28,6 +28,9 @@ import (
 	"github.com/facebook/time/hostendian"
 )
 
+// PTP4lSock is the default path to PTP4L socket
+const PTP4lSock = "/var/run/ptp4l"
+
 // ptp4l-specific management TLV ids
 const (
 	IDTimeStatusNP         ManagementID = 0xC000

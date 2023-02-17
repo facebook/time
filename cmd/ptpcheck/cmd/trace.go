@@ -38,7 +38,7 @@ var traceTimestampingFlag string
 
 func init() {
 	RootCmd.AddCommand(traceCmd)
-	traceCmd.Flags().StringVarP(&traceRemoteServerFlag, "server", "S", "", "server to connect to")
+	traceCmd.Flags().StringVarP(&traceRemoteServerFlag, "server", "S", "", "remote PTP server to connect to")
 	traceCmd.Flags().StringVarP(&traceIfaceFlag, "iface", "i", "eth0", "network interface to use")
 	traceCmd.Flags().StringVarP(&traceTimestampingFlag, "timestamping", "T", "", fmt.Sprintf("timestamping to use, either %q or %q. empty means auto-detection", client.HWTIMESTAMP, client.SWTIMESTAMP))
 	traceCmd.Flags().DurationVarP(&traceTimeoutFlag, "timeout", "t", 15*time.Second, "global timeout")
