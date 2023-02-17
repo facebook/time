@@ -128,6 +128,26 @@ func TestPortIdentityString(t *testing.T) {
 	require.Equal(t, "4857dd.fffe.086488-1", pi.String())
 }
 
+func TestPortIdentityCompare(t *testing.T) {
+	pi1 := PortIdentity{PortNumber: 1, ClockIdentity: 5212879185253000328}
+	pi2 := PortIdentity{PortNumber: 1, ClockIdentity: 0}
+	pi3 := PortIdentity{PortNumber: 69, ClockIdentity: 0}
+	require.Equal(t, pi1.Compare(pi1), 0)
+	require.Equal(t, pi1.Compare(pi2), 1)
+	require.Equal(t, pi2.Compare(pi3), -1)
+}
+
+func TestPortIdentityLess(t *testing.T) {
+	pi1 := PortIdentity{PortNumber: 1, ClockIdentity: 5212879185253000328}
+	pi2 := PortIdentity{PortNumber: 1, ClockIdentity: 0}
+	pi3 := PortIdentity{PortNumber: 69, ClockIdentity: 0}
+	require.Equal(t, pi1.Less(pi1), false)
+	require.Equal(t, pi1.Less(pi2), false)
+	require.Equal(t, pi2.Less(pi1), true)
+	require.Equal(t, pi2.Less(pi3), true)
+	require.Equal(t, pi3.Less(pi2), false)
+}
+
 func TestTimeIntervalNanoseconds(t *testing.T) {
 	tests := []struct {
 		in      TimeInterval

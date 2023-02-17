@@ -243,6 +243,31 @@ func (p PortIdentity) String() string {
 	return fmt.Sprintf("%s-%d", p.ClockIdentity, p.PortNumber)
 }
 
+// Compare returns an integer comparing two port identities. The result will be 0 if p == q, -1 if p < q, and +1 if p > q.
+// The definition of "less than" is the same as the Less method.
+func (p PortIdentity) Compare(q PortIdentity) int {
+	cl1, cl2 := p.ClockIdentity, q.ClockIdentity
+	switch {
+	case cl1 < cl2:
+		return -1
+	case cl1 > cl2:
+		return 1
+	}
+	// cl1 == cl2
+	pn1, pn2 := p.PortNumber, q.PortNumber
+	switch {
+	case pn1 < pn2:
+		return -1
+	case pn1 > pn2:
+		return 1
+	}
+	// pn1 == pn2
+	return 0
+}
+
+// Less reports whether p sorts before q. Port identities sort first by clock identity, then their port numbers.
+func (p PortIdentity) Less(q PortIdentity) bool { return p.Compare(q) == -1 }
+
 // PTPSeconds type representing seconds
 type PTPSeconds [6]uint8 // uint48
 
