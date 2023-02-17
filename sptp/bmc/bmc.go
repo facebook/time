@@ -36,17 +36,8 @@ const (
 	BBetterTopo ComparisonResult = -2
 )
 
-// ComparePortIdentity compares two port identities
-func ComparePortIdentity(this *ptp.PortIdentity, that *ptp.PortIdentity) int64 {
-	diff := int64(this.ClockIdentity) - int64(that.ClockIdentity)
-	if diff == 0 {
-		diff = int64(this.PortNumber) - int64(that.PortNumber)
-	}
-	return diff
-}
-
 // Dscmp2 finds better Announce based on network topology
-func Dscmp2(a *ptp.Announce, b *ptp.Announce) ComparisonResult {
+func Dscmp2(a, b *ptp.Announce) ComparisonResult {
 	if a.AnnounceBody.StepsRemoved+1 < b.AnnounceBody.StepsRemoved {
 		return ABetter
 	}
@@ -54,14 +45,15 @@ func Dscmp2(a *ptp.Announce, b *ptp.Announce) ComparisonResult {
 		return BBetter
 	}
 
-	diff := ComparePortIdentity(&a.Header.SourcePortIdentity, &b.Header.SourcePortIdentity)
-	if diff < 0 {
+	p1, p2 := a.Header.SourcePortIdentity, b.Header.SourcePortIdentity
+	switch p1.Compare(p2) {
+	case -1:
 		return ABetterTopo
-	}
-	if diff > 0 {
+	case 1:
 		return BBetterTopo
+	default:
+		return Unknown
 	}
-	return Unknown
 }
 
 // Dscmp finds better Announce based on Announce response content

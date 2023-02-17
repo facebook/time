@@ -22,24 +22,6 @@ import (
 	"testing"
 )
 
-func TestComparePortIdentity(t *testing.T) {
-	pi1 := ptp.PortIdentity{
-		PortNumber:    1,
-		ClockIdentity: 5212879185253000328,
-	}
-	pi2 := ptp.PortIdentity{
-		PortNumber:    1,
-		ClockIdentity: 0,
-	}
-	pi3 := ptp.PortIdentity{
-		PortNumber:    69,
-		ClockIdentity: 0,
-	}
-	require.Equal(t, ComparePortIdentity(&pi1, &pi1), int64(0))
-	require.Equal(t, ComparePortIdentity(&pi2, &pi3), int64(-68))
-	require.Equal(t, ComparePortIdentity(&pi1, &pi2), int64(5212879185253000328))
-}
-
 func TestDscmp2(t *testing.T) {
 	pi1 := ptp.PortIdentity{
 		PortNumber:    1,
