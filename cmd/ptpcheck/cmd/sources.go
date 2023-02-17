@@ -20,11 +20,13 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/facebook/time/cmd/ptpcheck/checker"
 	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/sptp/stats"
 
 	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
@@ -37,12 +39,12 @@ var (
 
 func init() {
 	RootCmd.AddCommand(sourcesCmd)
-	sourcesCmd.Flags().StringVarP(&rootServerFlag, "server", "S", "/var/run/ptp4l", "server to connect to")
+	sourcesCmd.Flags().StringVarP(&rootClientFlag, "client", "C", "", rootClientFlagDesc)
 	sourcesCmd.Flags().BoolVarP(&sourcesNoDNSFlag, "no-resolving", "n", false, "disable resolving of IP addresses to hostnames")
 }
 
-func sourcesRun(server string, noDNS bool) error {
-	c, cleanup, err := checker.PrepareClient(server)
+func sourcesRunPTP4l(server string, noDNS bool) error {
+	c, cleanup, err := checker.PrepareMgmtClient(server)
 	defer cleanup()
 	if err != nil {
 		return fmt.Errorf("preparing connection: %w", err)
@@ -124,6 +126,67 @@ func sourcesRun(server string, noDNS bool) error {
 	return nil
 }
 
+func sourcesRunSPTP(address string, noDNS bool) error {
+	umt, err := stats.FetchStats(address)
+	if err != nil {
+		return fmt.Errorf("fetching data: %w", err)
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetColWidth(20)
+	table.SetHeader([]string{
+		"selected", "identity", "address", "clock", "variance", "p1:p2:p3", "offset(ns)", "delay(ns)", "cf tx:rx(ns)", "error",
+	})
+	keys := []string{}
+	for address := range umt {
+		keys = append(keys, address)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(keys)))
+	for _, address := range keys {
+		state := umt[address]
+		if !noDNS {
+			names, err := net.LookupAddr(address)
+			if err == nil && len(names) > 0 {
+				address = names[0]
+			}
+		}
+
+		val := []string{
+			fmt.Sprintf("%v", state.Selected),
+			state.PortIdentity,
+			address,
+		}
+		if state.Error == "" {
+			val = append(val, []string{
+				fmt.Sprintf("%d:0x%x", state.ClockQuality.ClockClass, state.ClockQuality.ClockAccuracy),
+				fmt.Sprintf("0x%x", state.ClockQuality.OffsetScaledLogVariance),
+				fmt.Sprintf("%d:%d:%d", state.Priority1, state.Priority2, state.Priority3),
+				fmt.Sprintf("%3.f", state.Offset),
+				fmt.Sprintf("%3.f", state.MeanPathDelay),
+				fmt.Sprintf("%d:%d", state.CorrectionFieldTX, state.CorrectionFieldRX),
+			}...)
+		} else {
+			val = append(val, []string{"", "", "", "", "", ""}...)
+		}
+		val = append(val, state.Error)
+		table.Append(val)
+	}
+	table.Render()
+	return nil
+}
+
+func sourcesRun(address string, noDNS bool) error {
+	f := checker.GetFlavour()
+	address = checker.GetServerAddress(address, f)
+	switch f {
+	case checker.FlavourPTP4L:
+		return sourcesRunPTP4l(address, noDNS)
+	case checker.FlavourSPTP:
+		return sourcesRunSPTP(address, noDNS)
+	}
+	return fmt.Errorf("uknown PTP client flavour %v", f)
+}
+
 var sourcesCmd = &cobra.Command{
 	Use:   "sources",
 	Short: "Print PTP client unicast master table",
@@ -131,7 +194,7 @@ var sourcesCmd = &cobra.Command{
 	Run: func(c *cobra.Command, args []string) {
 		ConfigureVerbosity()
 
-		if err := sourcesRun(rootServerFlag, sourcesNoDNSFlag); err != nil {
+		if err := sourcesRun(rootClientFlag, sourcesNoDNSFlag); err != nil {
 			log.Fatal(err)
 		}
 

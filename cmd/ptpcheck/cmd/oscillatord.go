@@ -73,7 +73,7 @@ func oscillatordRun(address string, jsonOut bool) error {
 	}
 	defer conn.Close()
 	deadline := time.Now().Add(timeout)
-	if err := conn.SetDeadline(deadline); err != nil {
+	if err = conn.SetDeadline(deadline); err != nil {
 		return fmt.Errorf("setting connection deadline: %w", err)
 	}
 

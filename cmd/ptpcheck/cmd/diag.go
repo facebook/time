@@ -274,7 +274,7 @@ func runAllDiagnosers(r *checker.PTPCheckResult) int {
 
 func init() {
 	RootCmd.AddCommand(diagCmd)
-	diagCmd.Flags().StringVarP(&rootServerFlag, "server", "S", "/var/run/ptp4l", "server to connect to")
+	diagCmd.Flags().StringVarP(&rootClientFlag, "client", "C", "", rootClientFlagDesc)
 	diagCmd.Flags().StringVarP(&diagIfaceFlag, "iface", "i", "eth0", "Network interface to get time from")
 }
 
@@ -288,7 +288,7 @@ Exit code will be equal to sum of failed check, or 127 in case of critical probl
 	Run: func(cmd *cobra.Command, args []string) {
 		ConfigureVerbosity()
 
-		result, err := checker.RunCheck(rootServerFlag)
+		result, err := checker.RunCheck(rootClientFlag)
 		if err != nil {
 			log.Fatal(err)
 		}

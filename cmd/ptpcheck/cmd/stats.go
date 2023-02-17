@@ -29,19 +29,23 @@ import (
 
 func printStats(r *checker.PTPCheckResult) error {
 	type stats struct {
-		Offset        float64 `json:"ptp.offset_ns"`
-		OffsetAbs     float64 `json:"ptp.offset_abs_ns"`
-		MeanPathDelay float64 `json:"ptp.mean_path_delay_ns"`
-		StepsRemoved  int     `json:"ptp.steps_removed"`
-		GMPresent     int     `json:"ptp.gm_present"` // bool for ODS
+		Offset            float64 `json:"ptp.offset_ns"`
+		OffsetAbs         float64 `json:"ptp.offset_abs_ns"`
+		MeanPathDelay     float64 `json:"ptp.mean_path_delay_ns"`
+		StepsRemoved      int     `json:"ptp.steps_removed"`
+		GMPresent         int     `json:"ptp.gm_present"` // bool for ODS
+		CorrectionFieldRX int64   `json:"ptp.cf_rx,omitempty"`
+		CorrectionFieldTX int64   `json:"ptp.cf_tx,omitempty"`
 	}
 
 	output := stats{
-		Offset:        r.OffsetFromMasterNS,
-		OffsetAbs:     math.Abs(r.OffsetFromMasterNS),
-		MeanPathDelay: r.MeanPathDelayNS,
-		StepsRemoved:  r.StepsRemoved,
-		GMPresent:     0,
+		Offset:            r.OffsetFromMasterNS,
+		OffsetAbs:         math.Abs(r.OffsetFromMasterNS),
+		MeanPathDelay:     r.MeanPathDelayNS,
+		StepsRemoved:      r.StepsRemoved,
+		GMPresent:         0,
+		CorrectionFieldRX: r.CorrectionFieldRxNS,
+		CorrectionFieldTX: r.CorrectionFieldTxNS,
 	}
 	if r.GrandmasterPresent {
 		output.GMPresent = 1
@@ -57,7 +61,7 @@ func printStats(r *checker.PTPCheckResult) error {
 
 func init() {
 	RootCmd.AddCommand(statsCmd)
-	statsCmd.Flags().StringVarP(&rootServerFlag, "server", "S", "/var/run/ptp4l", "server to connect to")
+	statsCmd.Flags().StringVarP(&rootClientFlag, "client", "C", "", rootClientFlagDesc)
 }
 
 var statsCmd = &cobra.Command{
@@ -66,7 +70,7 @@ var statsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ConfigureVerbosity()
 
-		result, err := checker.RunCheck(rootServerFlag)
+		result, err := checker.RunCheck(rootClientFlag)
 		if err != nil {
 			log.Fatal(err)
 		}

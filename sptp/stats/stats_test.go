@@ -90,7 +90,7 @@ func TestFetchCounters(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	expected := map[string]float64{
+	expected := Counters{
 		"sptp.gms.available_pct":               100,
 		"sptp.gms.total":                       4,
 		"sptp.portstats.rx.announce":           4656,
@@ -148,6 +148,93 @@ func TestFetchCounters(t *testing.T) {
 	}
 
 	actual, err := FetchCounters(ts.URL)
+	require.NoError(t, err)
+	require.Equal(t, expected, actual)
+}
+
+func TestFetchPortStats(t *testing.T) {
+	sampleResp := `{"sptp.gms.available_pct":100,"sptp.gms.total":4,"sptp.portstats.rx.announce":4656,"sptp.portstats.rx.sync":4656,"sptp.portstats.tx.delay_req":4656,"sptp.process.alive":1,"sptp.process.alive_since":1676549472,"sptp.process.cpu_pct.avg.60":0,"sptp.process.cpu_permil.avg.60":0,"sptp.process.num_fds":12,"sptp.process.num_threads":16,"sptp.process.rss":13713408,"sptp.process.swap":0,"sptp.process.uptime":1140,"sptp.process.vms":1865134080,"sptp.runtime.cpu.cgo_calls":1,"sptp.runtime.cpu.goroutines":10,"sptp.runtime.gc.count.rate.60":0,"sptp.runtime.gc.count.sum.60":1,"sptp.runtime.gc.pause_ns.rate.60":1665,"sptp.runtime.gc.pause_ns.sum.60":99943,"sptp.runtime.lookups.rate.60":0,"sptp.runtime.lookups.sum.60":0,"sptp.runtime.mem.alloc":2487032,"sptp.runtime.mem.frees":566856,"sptp.runtime.mem.frees.rate.60":523,"sptp.runtime.mem.frees.sum.60":31418,"sptp.runtime.mem.gc.count":19,"sptp.runtime.mem.gc.last":1676550571374514171,"sptp.runtime.mem.gc.next":4194304,"sptp.runtime.mem.gc.pause":99943,"sptp.runtime.mem.gc.pause_total":1987074,"sptp.runtime.mem.gc.sys":4868072,"sptp.runtime.mem.heap.alloc":2487032,"sptp.runtime.mem.heap.idle":2891776,"sptp.runtime.mem.heap.inuse":4349952,"sptp.runtime.mem.heap.objects":21678,"sptp.runtime.mem.heap.released":1826816,"sptp.runtime.mem.heap.sys":7241728,"sptp.runtime.mem.lookups":0,"sptp.runtime.mem.malloc":588534,"sptp.runtime.mem.mallocs.rate.60":514,"sptp.runtime.mem.mallocs.sum.60":30848,"sptp.runtime.mem.othersys":2935262,"sptp.runtime.mem.stack.inuse":1146880,"sptp.runtime.mem.stack.mcache_inuse":62400,"sptp.runtime.mem.stack.mcache_sys":62400,"sptp.runtime.mem.stack.mspan_inuse":172312,"sptp.runtime.mem.stack.mspan_sys":195840,"sptp.runtime.mem.stack.sys":1146880,"sptp.runtime.mem.sys":17908744,"sptp.runtime.mem.total":41251472,"sptp.runtime.mem.total_alloc.rate.60":514,"sptp.runtime.mem.total_alloc.sum.60":30848}`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	expectedTX := map[string]uint64{
+		"delay_req": 4656,
+	}
+	expectedRX := map[string]uint64{
+		"announce": 4656,
+		"sync":     4656,
+	}
+
+	actualTX, actualRX, err := FetchPortStats(ts.URL)
+	require.NoError(t, err)
+	require.Equal(t, expectedTX, actualTX)
+	require.Equal(t, expectedRX, actualRX)
+}
+
+func TestFetchSysStats(t *testing.T) {
+	sampleResp := `{"sptp.gms.available_pct":100,"sptp.gms.total":4,"sptp.portstats.rx.announce":4656,"sptp.portstats.rx.sync":4656,"sptp.portstats.tx.delay_req":4656,"sptp.process.alive":1,"sptp.process.alive_since":1676549472,"sptp.process.cpu_pct.avg.60":0,"sptp.process.cpu_permil.avg.60":0,"sptp.process.num_fds":12,"sptp.process.num_threads":16,"sptp.process.rss":13713408,"sptp.process.swap":0,"sptp.process.uptime":1140,"sptp.process.vms":1865134080,"sptp.runtime.cpu.cgo_calls":1,"sptp.runtime.cpu.goroutines":10,"sptp.runtime.gc.count.rate.60":0,"sptp.runtime.gc.count.sum.60":1,"sptp.runtime.gc.pause_ns.rate.60":1665,"sptp.runtime.gc.pause_ns.sum.60":99943,"sptp.runtime.lookups.rate.60":0,"sptp.runtime.lookups.sum.60":0,"sptp.runtime.mem.alloc":2487032,"sptp.runtime.mem.frees":566856,"sptp.runtime.mem.frees.rate.60":523,"sptp.runtime.mem.frees.sum.60":31418,"sptp.runtime.mem.gc.count":19,"sptp.runtime.mem.gc.last":1676550571374514171,"sptp.runtime.mem.gc.next":4194304,"sptp.runtime.mem.gc.pause":99943,"sptp.runtime.mem.gc.pause_total":1987074,"sptp.runtime.mem.gc.sys":4868072,"sptp.runtime.mem.heap.alloc":2487032,"sptp.runtime.mem.heap.idle":2891776,"sptp.runtime.mem.heap.inuse":4349952,"sptp.runtime.mem.heap.objects":21678,"sptp.runtime.mem.heap.released":1826816,"sptp.runtime.mem.heap.sys":7241728,"sptp.runtime.mem.lookups":0,"sptp.runtime.mem.malloc":588534,"sptp.runtime.mem.mallocs.rate.60":514,"sptp.runtime.mem.mallocs.sum.60":30848,"sptp.runtime.mem.othersys":2935262,"sptp.runtime.mem.stack.inuse":1146880,"sptp.runtime.mem.stack.mcache_inuse":62400,"sptp.runtime.mem.stack.mcache_sys":62400,"sptp.runtime.mem.stack.mspan_inuse":172312,"sptp.runtime.mem.stack.mspan_sys":195840,"sptp.runtime.mem.stack.sys":1146880,"sptp.runtime.mem.sys":17908744,"sptp.runtime.mem.total":41251472,"sptp.runtime.mem.total_alloc.rate.60":514,"sptp.runtime.mem.total_alloc.sum.60":30848}`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	expected := map[string]int64{
+		"sptp.gms.available_pct":               100,
+		"sptp.gms.total":                       4,
+		"sptp.process.alive":                   1,
+		"sptp.process.alive_since":             1676549472,
+		"sptp.process.cpu_pct.avg.60":          0,
+		"sptp.process.cpu_permil.avg.60":       0,
+		"sptp.process.num_fds":                 12,
+		"sptp.process.num_threads":             16,
+		"sptp.process.rss":                     13713408,
+		"sptp.process.swap":                    0,
+		"sptp.process.uptime":                  1140,
+		"sptp.process.vms":                     1865134080,
+		"sptp.runtime.cpu.cgo_calls":           1,
+		"sptp.runtime.cpu.goroutines":          10,
+		"sptp.runtime.gc.count.rate.60":        0,
+		"sptp.runtime.gc.count.sum.60":         1,
+		"sptp.runtime.gc.pause_ns.rate.60":     1665,
+		"sptp.runtime.gc.pause_ns.sum.60":      99943,
+		"sptp.runtime.lookups.rate.60":         0,
+		"sptp.runtime.lookups.sum.60":          0,
+		"sptp.runtime.mem.alloc":               2487032,
+		"sptp.runtime.mem.frees":               566856,
+		"sptp.runtime.mem.frees.rate.60":       523,
+		"sptp.runtime.mem.frees.sum.60":        31418,
+		"sptp.runtime.mem.gc.count":            19,
+		"sptp.runtime.mem.gc.last":             1676550571374514171,
+		"sptp.runtime.mem.gc.next":             4194304,
+		"sptp.runtime.mem.gc.pause":            99943,
+		"sptp.runtime.mem.gc.pause_total":      1987074,
+		"sptp.runtime.mem.gc.sys":              4868072,
+		"sptp.runtime.mem.heap.alloc":          2487032,
+		"sptp.runtime.mem.heap.idle":           2891776,
+		"sptp.runtime.mem.heap.inuse":          4349952,
+		"sptp.runtime.mem.heap.objects":        21678,
+		"sptp.runtime.mem.heap.released":       1826816,
+		"sptp.runtime.mem.heap.sys":            7241728,
+		"sptp.runtime.mem.lookups":             0,
+		"sptp.runtime.mem.malloc":              588534,
+		"sptp.runtime.mem.mallocs.rate.60":     514,
+		"sptp.runtime.mem.mallocs.sum.60":      30848,
+		"sptp.runtime.mem.othersys":            2935262,
+		"sptp.runtime.mem.stack.inuse":         1146880,
+		"sptp.runtime.mem.stack.mcache_inuse":  62400,
+		"sptp.runtime.mem.stack.mcache_sys":    62400,
+		"sptp.runtime.mem.stack.mspan_inuse":   172312,
+		"sptp.runtime.mem.stack.mspan_sys":     195840,
+		"sptp.runtime.mem.stack.sys":           1146880,
+		"sptp.runtime.mem.sys":                 17908744,
+		"sptp.runtime.mem.total":               41251472,
+		"sptp.runtime.mem.total_alloc.rate.60": 514,
+		"sptp.runtime.mem.total_alloc.sum.60":  30848,
+	}
+
+	actual, err := FetchSysStats(ts.URL)
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)
 }

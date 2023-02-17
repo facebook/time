@@ -48,7 +48,7 @@ func printPortStats(r *checker.PTPCheckResult) error {
 
 func init() {
 	RootCmd.AddCommand(portStatsCmd)
-	portStatsCmd.Flags().StringVarP(&rootServerFlag, "server", "S", "/var/run/ptp4l", "server to connect to")
+	portStatsCmd.Flags().StringVarP(&rootClientFlag, "client", "C", "", rootClientFlagDesc)
 }
 
 var portStatsCmd = &cobra.Command{
@@ -57,7 +57,7 @@ var portStatsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ConfigureVerbosity()
 
-		result, err := checker.RunCheck(rootServerFlag)
+		result, err := checker.RunCheck(rootClientFlag)
 		if err != nil {
 			log.Fatal(err)
 		}
