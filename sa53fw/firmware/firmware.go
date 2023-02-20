@@ -99,7 +99,7 @@ func (f *Firmware) ParseVersion() error {
 		return fmt.Errorf("cannot find firmware footer")
 	}
 
-	if _, err := f.fd.ReadAt(buf, idx); err != nil {
+	if n, err := f.fd.ReadAt(buf, idx); err != nil && n == 0 {
 		return err
 	}
 	if _, err := f.fd.Seek(0, 0); err != nil {
