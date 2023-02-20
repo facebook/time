@@ -17,7 +17,7 @@ limitations under the License.
 package checker
 
 import (
-	"github.com/facebook/time/sptp/stats"
+	"github.com/facebook/time/ptp/sptp/stats"
 
 	log "github.com/sirupsen/logrus"
 )

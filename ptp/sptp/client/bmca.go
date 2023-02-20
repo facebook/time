@@ -19,7 +19,7 @@ package client
 import (
 	ptp "github.com/facebook/time/ptp/protocol"
 
-	"github.com/facebook/time/sptp/bmc"
+	"github.com/facebook/time/ptp/sptp/bmc"
 )
 
 func bmca(msgs []*ptp.Announce, prios map[ptp.ClockIdentity]int) *ptp.Announce {
