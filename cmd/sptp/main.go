@@ -26,7 +26,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/facebook/time/sptp/client"
+	"github.com/facebook/time/ptp/sptp/client"
 
 	_ "net/http/pprof"
 )

@@ -32,7 +32,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	ptp "github.com/facebook/time/ptp/protocol"
-	"github.com/facebook/time/sptp/stats"
+	"github.com/facebook/time/ptp/sptp/stats"
 	"github.com/facebook/time/timestamp"
 )
 

@@ -26,7 +26,7 @@ import (
 	"github.com/facebook/time/cmd/ptpcheck/checker"
 	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
-	"github.com/facebook/time/sptp/stats"
+	"github.com/facebook/time/ptp/sptp/stats"
 
 	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"

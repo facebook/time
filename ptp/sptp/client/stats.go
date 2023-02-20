@@ -19,7 +19,7 @@ package client
 import (
 	"sync"
 
-	gmstats "github.com/facebook/time/sptp/stats"
+	gmstats "github.com/facebook/time/ptp/sptp/stats"
 )
 
 // StatsServer is a stats server interface

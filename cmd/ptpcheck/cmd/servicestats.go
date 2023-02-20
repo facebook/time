@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/facebook/time/cmd/ptpcheck/checker"
-	"github.com/facebook/time/sptp/stats"
+	"github.com/facebook/time/ptp/sptp/stats"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
