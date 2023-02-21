@@ -601,3 +601,95 @@ func TestGnssStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expected, g)
 }
+
+func TestPushLicense(t *testing.T) {
+	sampleResp := "{\n\"result\" : true}"
+	expected := &Result{
+		Result:  true,
+		Message: "",
+	}
+	// License file itself
+	license, err := os.CreateTemp("/tmp", "calnex")
+	require.NoError(t, err, "Failed to create temp license file.")
+	defer license.Close()
+	defer os.Remove(license.Name())
+	_, err = license.WriteString("#SENTINEL license file")
+	require.NoError(t, err, "Failed to write into temp license file.")
+
+	// License file saved via http
+	licenseRes, err := os.CreateTemp("/tmp", "calnexls")
+	require.NoError(t, err, "Failed to write temp license file for HTTP")
+	defer os.Remove(licenseRes.Name())
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		defer r.Body.Close()
+		defer licenseRes.Close()
+		_, err := io.Copy(licenseRes, r.Body)
+		require.NoError(t, err)
+
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI.Client = ts.Client()
+
+	r, err := calnexAPI.PushLicense(license.Name())
+	require.NoError(t, err, "Error occurred while uploading license file.")
+	require.Equal(t, expected, r)
+
+	originalLicense, err := os.ReadFile(license.Name())
+	require.NoError(t, err)
+
+	uploadedLicense, err := os.ReadFile(licenseRes.Name())
+	require.NoError(t, err)
+
+	require.Equal(t, originalLicense, uploadedLicense)
+}
+
+func TestPushLicenseError(t *testing.T) {
+	sampleResp := "{\"message\":\"License file data is not valid.\",\"result\":false}"
+	var expected *Result
+
+	// License file itself
+	license, err := os.CreateTemp("/tmp", "calnex")
+	require.NoError(t, err, "Failed to create temp license file.")
+	defer license.Close()
+	defer os.Remove(license.Name())
+	_, err = license.WriteString("#SENTINEL license file")
+	require.NoError(t, err, "Failed to write into temp license file.")
+
+	// License file saved via http
+	licenseRes, err := os.CreateTemp("/tmp", "calnexls")
+	require.NoError(t, err, "Failed to write temp license file for HTTP")
+	defer os.Remove(licenseRes.Name())
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		defer r.Body.Close()
+		defer licenseRes.Close()
+		_, err := io.Copy(licenseRes, r.Body)
+		require.NoError(t, err)
+
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI.Client = ts.Client()
+
+	r, err := calnexAPI.PushLicense(license.Name())
+	require.Equal(t, expected, r)
+	require.Error(t, err, "Invalid license file should yield an error.")
+
+	originalLicense, err := os.ReadFile(license.Name())
+	require.NoError(t, err)
+
+	uploadedLicense, err := os.ReadFile(licenseRes.Name())
+	require.NoError(t, err)
+
+	require.Equal(t, originalLicense, uploadedLicense)
+}

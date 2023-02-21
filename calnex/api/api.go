@@ -402,6 +402,7 @@ const (
 	versionURL     = "https://%s/api/version"
 	firmwareURL    = "https://%s/api/updatefirmware"
 	certificateURL = "https://%s/api/installcertificate"
+	licenseURL     = "https://%s/api/option/load"
 
 	gnssURL = "https://%s/api/gnss/status"
 )
@@ -664,6 +665,26 @@ func (a *API) PushVersion(path string) (*Result, error) {
 func (a *API) PushCert(cert []byte) (*Result, error) {
 	url := fmt.Sprintf(certificateURL, a.source)
 	buf := bytes.NewBuffer(cert)
+
+	r, err := a.post(url, buf)
+	return r, err
+}
+
+// PushLicense uploads a new license to the device
+func (a *API) PushLicense(path string) (*Result, error) {
+	license, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer license.Close()
+
+	url := fmt.Sprintf(licenseURL, a.source)
+	buf := &bytes.Buffer{}
+	_, err = buf.ReadFrom(license)
+
+	if err != nil {
+		return nil, err
+	}
 
 	r, err := a.post(url, buf)
 	return r, err
