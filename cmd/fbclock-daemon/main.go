@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"github.com/facebook/time/fbclock/daemon"
+	ptp "github.com/facebook/time/ptp/protocol"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -38,6 +40,7 @@ func main() {
 		csvPath        string
 		verbose        bool
 		monitoringPort int
+		isSPTP         bool
 	)
 
 	flag.Usage = func() {
@@ -46,14 +49,15 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	flag.StringVar(&cfg.Iface, "iface", "eth0", "Network interface to use PHC device from. Used for linearizability tests as well. Must match what ptp4l is configured to use")
-	flag.StringVar(&cfg.PTPClientAddress, "ptp4lsock", "/var/run/ptp4l", "Path to ptp4l unix socket")
+	flag.StringVar(&cfg.Iface, "iface", "eth0", "Network interface to use PHC device from. Used for linearizability tests as well. Must match what PTP client is configured to use")
+	flag.StringVar(&cfg.PTPClientAddress, "ptpclientaddress", ptp.PTP4lSock, "Path to PTP client management address")
+	flag.BoolVar(&isSPTP, "sptp", false, "Connect to sptp instead ot ptp4l")
 	flag.IntVar(&monitoringPort, "monitoringport", 21039, "Port to run monitoring server on")
 	flag.IntVar(&cfg.RingSize, "buffer", daemon.MathDefaultHistory, "Size of ring buffers, must be at least size of largest num of samples used in M and W formulas")
 	flag.StringVar(&cfg.Math.M, "m", daemon.MathDefaultM, "Math expression for M")
 	flag.StringVar(&cfg.Math.W, "w", daemon.MathDefaultW, "Math expression for W")
 	flag.StringVar(&cfg.Math.Drift, "drift", daemon.MathDefaultDrift, "Math expression for Drift PPB")
-	flag.DurationVar(&cfg.Interval, "i", time.Second, "Interval at which we talk to ptp4l and update data in shm")
+	flag.DurationVar(&cfg.Interval, "i", time.Second, "Interval at which we talk to PTP client and update data in shm")
 	flag.DurationVar(&cfg.LinearizabilityTestInterval, "I", time.Minute, "Interval at which we run linearizability tests. 0 means disabled.")
 
 	flag.StringVar(&cfgPath, "cfg", "", "Path to config")
@@ -108,7 +112,13 @@ func main() {
 	}
 	stats := daemon.NewJSONStats()
 	go stats.Start(monitoringPort)
-	s, err := daemon.New(cfg, stats, l, &daemon.SockFetcher{})
+	var fetcher daemon.DataFetcher
+	if isSPTP {
+		fetcher = &daemon.HTTPFetcher{}
+	} else {
+		fetcher = &daemon.SockFetcher{}
+	}
+	s, err := daemon.New(cfg, stats, l, fetcher)
 	if err != nil {
 		log.Fatal(err)
 	}
