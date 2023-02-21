@@ -266,9 +266,16 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 		Server: c.server,
 	}
 
-	started := false
-
 	eg.Go(func() error {
+		// ask for delay
+		seq, hwts, err := c.sendEventMsg(reqDelay(c.clockID))
+		if err != nil {
+			return err
+		}
+		c.m.addT3(seq, hwts)
+		c.logSent(ptp.MessageDelayReq, "seq=%d, our T3=%v", seq, hwts)
+		c.stats.UpdateCounterBy(fmt.Sprintf("%s%s", stats.PortStatsTxPrefix, strings.ToLower(ptp.MessageDelayReq.String())), 1)
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -291,19 +298,6 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 					result.Measurement = latest
 					return nil
 				}
-			default:
-				if started {
-					continue
-				}
-				// ask for delay
-				seq, hwts, err := c.sendEventMsg(reqDelay(c.clockID))
-				if err != nil {
-					return err
-				}
-				c.m.addT3(seq, hwts)
-				c.logSent(ptp.MessageDelayReq, "seq=%d, our T3=%v", seq, hwts)
-				c.stats.UpdateCounterBy(fmt.Sprintf("%s%s", stats.PortStatsTxPrefix, strings.ToLower(ptp.MessageDelayReq.String())), 1)
-				started = true
 			}
 		}
 	})
