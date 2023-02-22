@@ -44,7 +44,7 @@ const (
 	// PayloadSizeBytes is a size of maximum ptp packet which is usually up to 66 bytes
 	PayloadSizeBytes = 128
 	// look only for X sequential TS
-	maxTXTS = 100
+	defaultTXTS = 100
 	// Socket Control Message Header Offset on Linux
 )
 
@@ -67,6 +67,12 @@ type hwtstampConfig struct {
 	txType   int32
 	rxFilter int32
 }
+
+// AttemptsTXTS is configured amount of attempts to read TX timestamp
+var AttemptsTXTS = defaultTXTS
+
+// TimeoutTXTS is configured timeout to read TX timestamp
+var TimeoutTXTS = time.Millisecond
 
 // ConnFd returns file descriptor of a connection
 func ConnFd(conn *net.UDPConn) (int, error) {
