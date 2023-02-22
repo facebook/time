@@ -170,10 +170,12 @@ func EnableHWTimestamps(connFd int, iface string) error {
 func waitForHWTS(connFd int) error {
 	// Wait until TX timestamp is ready
 	fds := []unix.PollFd{{Fd: int32(connFd), Events: unix.POLLPRI, Revents: 0}}
-	if _, err := unix.Poll(fds, 1); err != nil { // Timeout is 1 ms
-		return err
+	for {
+		_, err := unix.Poll(fds, int(TimeoutTXTS.Milliseconds()))
+		if !errors.Is(err, syscall.EINTR) {
+			return err
+		}
 	}
-	return nil
 }
 
 // recvoob receives only OOB message from the socket
@@ -203,7 +205,7 @@ func ReadTXtimestampBuf(connFd int, oob, toob []byte) (time.Time, int, error) {
 	// Sync is out -> read TS from the previous Sync
 	// Because we always perform at least 2 tries we start with 0 so on success we are at 1.
 	attempts := 0
-	for ; attempts < maxTXTS; attempts++ {
+	for ; attempts < AttemptsTXTS; attempts++ {
 		if !txfound {
 			// Wait for the poll event, ignore the error
 			_ = waitForHWTS(connFd)
@@ -226,7 +228,7 @@ func ReadTXtimestampBuf(connFd int, oob, toob []byte) (time.Time, int, error) {
 	}
 
 	if !txfound {
-		return time.Time{}, attempts, fmt.Errorf("no TX timestamp found after %d tries", maxTXTS)
+		return time.Time{}, attempts, fmt.Errorf("no TX timestamp found after %d tries", AttemptsTXTS)
 	}
 	timestamp, err := socketControlMessageTimestamp(oob[:boob])
 	return timestamp, attempts, err
