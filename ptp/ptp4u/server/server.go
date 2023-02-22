@@ -282,6 +282,11 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 
 		s.Stats.IncRX(msgType)
 
+		// Don't respond on event (delay) requests while being drained
+		if s.ctx.Err() != nil {
+			continue
+		}
+
 		switch msgType {
 		case ptp.MessageDelayReq:
 			if err := ptp.FromBytes(buf[:bbuf], dReq); err != nil {
