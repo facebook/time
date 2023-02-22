@@ -59,10 +59,24 @@ func Test_ReadTXtimestamp(t *testing.T) {
 	err = EnableSWTimestamps(connFd)
 	require.Nil(t, err)
 
+	start := time.Now()
 	txts, attempts, err := ReadTXtimestamp(connFd)
+	duration := time.Since(start)
 	require.Equal(t, time.Time{}, txts)
-	require.Equal(t, maxTXTS, attempts)
-	require.Equal(t, fmt.Errorf("no TX timestamp found after %d tries", maxTXTS), err)
+	require.Equal(t, defaultTXTS, attempts)
+	require.Equal(t, fmt.Errorf("no TX timestamp found after %d tries", defaultTXTS), err)
+	require.GreaterOrEqual(t, duration, time.Duration(AttemptsTXTS)*TimeoutTXTS)
+
+	AttemptsTXTS = 10
+	TimeoutTXTS = 5 * time.Millisecond
+
+	start = time.Now()
+	txts, attempts, err = ReadTXtimestamp(connFd)
+	duration = time.Since(start)
+	require.Equal(t, time.Time{}, txts)
+	require.Equal(t, 10, attempts)
+	require.Equal(t, fmt.Errorf("no TX timestamp found after %d tries", 10), err)
+	require.GreaterOrEqual(t, duration, time.Duration(AttemptsTXTS)*TimeoutTXTS)
 
 	addr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 12345}
 	_, err = conn.WriteTo([]byte{}, addr)
