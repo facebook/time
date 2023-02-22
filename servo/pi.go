@@ -20,6 +20,8 @@ import (
 	"container/ring"
 	"math"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -140,6 +142,7 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, State) {
 			freqEstInterval = 1000.0
 		}
 		if localDiff < freqEstInterval {
+			log.Warningf("servo Sample is called too often, not enough time passed since first sample")
 			break
 		}
 
@@ -182,6 +185,7 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, State) {
 		if s.filter != nil && s.filter.IsSpike(offset, s.lastCorrectionTime) {
 			ppb = s.filter.freqMean
 			state = StateFilter
+			log.Warningf("servo filtered out offset %d", offset)
 			break
 		}
 		state = StateLocked
