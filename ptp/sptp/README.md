@@ -80,6 +80,8 @@ monitoringport: 4269
 dscp: 35
 firststepthreshold: 1s
 metricsaggregationwindow: 60s
+attemptstxts: 100
+timeouttxts: 1ms
 servers:
   "192.168.0.10": 1
   "192.168.0.11": 2

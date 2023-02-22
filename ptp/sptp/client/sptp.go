@@ -149,6 +149,10 @@ func (p *SPTP) init() error {
 	}
 	p.eventConn = newUDPConnTS(eventConn)
 
+	// Configure TX timestamp attempts and timemouts
+	timestamp.AttemptsTXTS = p.cfg.AttemptsTXTS
+	timestamp.TimeoutTXTS = p.cfg.TimeoutTXTS
+
 	phcDev, err := NewPHC(p.cfg.Iface)
 	if err != nil {
 		return err

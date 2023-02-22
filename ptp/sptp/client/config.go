@@ -42,11 +42,17 @@ type Config struct {
 	Servers                  map[string]int
 	Measurement              MeasurementConfig
 	MetricsAggregationWindow time.Duration
+	AttemptsTXTS             int
+	TimeoutTXTS              time.Duration
 }
 
 // ReadConfig reads config from the file
 func ReadConfig(path string) (*Config, error) {
-	c := &Config{MetricsAggregationWindow: time.Duration(60) * time.Second}
+	c := &Config{
+		MetricsAggregationWindow: time.Duration(60) * time.Second,
+		AttemptsTXTS:             10,
+		TimeoutTXTS:              time.Duration(50) * time.Millisecond,
+	}
 	cData, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
