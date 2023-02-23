@@ -87,3 +87,17 @@ func (mr *MockServoMockRecorder) SetMaxFreq(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMaxFreq", reflect.TypeOf((*MockServo)(nil).SetMaxFreq), arg0)
 }
+
+// MeanFreq mocks base method
+func (m *MockServo) MeanFreq() float64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MeanFreq")
+	ret0, _ := ret[0].(float64)
+	return ret0
+}
+
+// MeanFreq indicates an expected call of MeanFreq
+func (mr *MockServoMockRecorder) MeanFreq() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MeanFreq", reflect.TypeOf((*MockServo)(nil).MeanFreq))
+}

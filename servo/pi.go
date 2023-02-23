@@ -278,6 +278,19 @@ func (f *PiServoFilter) Reset() {
 	f.samplesCount = 0
 }
 
+// MeanFreq to return best calculated frequency
+func (f *PiServoFilter) MeanFreq() float64 {
+	return f.freqMean
+}
+
+// MeanFreq to return best calculated frequency from filter
+func (s *PiServo) MeanFreq() float64 {
+	if s.filter != nil {
+		return s.filter.MeanFreq()
+	}
+	return s.lastFreq
+}
+
 // NewPiServo to create servo structure
 func NewPiServo(s Servo, cfg *PiServoCfg, freq float64) *PiServo {
 	var pi PiServo
