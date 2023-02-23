@@ -38,6 +38,7 @@ type Servo interface {
 	SyncInterval(float64)
 	Sample(offset int64, localTs uint64) (float64, servo.State)
 	SetMaxFreq(float64)
+	MeanFreq() float64
 }
 
 // SPTP is a Simple Unicast PTP client
@@ -350,6 +351,11 @@ func (p *SPTP) runInternal(ctx context.Context, interval time.Duration) error {
 		select {
 		case <-ctx.Done():
 			log.Debugf("cancelled main loop")
+			freqAdj := p.pi.MeanFreq()
+			log.Infof("Existing, setting freq to: %v", -1*freqAdj)
+			if err := p.phc.AdjFreqPPB(-1 * freqAdj); err != nil {
+				log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
+			}
 			return ctx.Err()
 		case <-ticker.C:
 			tick()

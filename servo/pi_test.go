@@ -53,6 +53,9 @@ func TestPiServoSample(t *testing.T) {
 	freq, state = pi.Sample(919, 1674148533671484215)
 	require.InEpsilon(t, -110984.463816, freq, 0.00001)
 	require.Equal(t, StateLocked, state)
+
+	freq = pi.MeanFreq()
+	require.InEpsilon(t, -110984.463816, freq, 0.00001)
 }
 
 func TestPiServoStepSample(t *testing.T) {
@@ -112,6 +115,9 @@ func TestPiServoFilterSample(t *testing.T) {
 	require.InEpsilon(t, f.freqMean, freq, 0.00001)
 	require.Equal(t, StateLocked, state)
 	require.Equal(t, 1, f.skippedCount)
+
+	freq = pi.MeanFreq()
+	require.InEpsilon(t, -111034.463816, freq, 0.00001)
 }
 
 func TestPiServoSetFreq(t *testing.T) {
