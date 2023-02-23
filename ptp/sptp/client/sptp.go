@@ -64,25 +64,32 @@ type SPTP struct {
 // NewSPTP creates SPTP client
 func NewSPTP(cfg *Config, stats StatsServer) (*SPTP, error) {
 	p := &SPTP{
-		cfg:        cfg,
-		clients:    map[string]*Client{},
-		priorities: map[string]int{},
-		stats:      stats,
+		cfg:   cfg,
+		stats: stats,
 	}
 	if err := p.init(); err != nil {
 		return nil, err
 	}
-	for server, prio := range cfg.Servers {
+	if err := p.initClients(); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (p *SPTP) initClients() error {
+	p.clients = map[string]*Client{}
+	p.priorities = map[string]int{}
+	for server, prio := range p.cfg.Servers {
 		// normalize the address
 		ns := net.ParseIP(server).String()
-		c, err := newClient(ns, p.clockID, p.eventConn, &cfg.Measurement, p.stats)
+		c, err := newClient(ns, p.clockID, p.eventConn, &p.cfg.Measurement, p.stats)
 		if err != nil {
-			return nil, fmt.Errorf("initializing client %q: %w", ns, err)
+			return fmt.Errorf("initializing client %q: %w", ns, err)
 		}
 		p.clients[ns] = c
 		p.priorities[ns] = prio
 	}
-	return p, nil
+	return nil
 }
 
 func (p *SPTP) init() error {
@@ -311,35 +318,41 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 }
 
 func (p *SPTP) runInternal(ctx context.Context, interval time.Duration) error {
-	timeout := 500 * time.Millisecond
+	timeout := time.Duration(0.9 * float64(interval))
 	p.pi.SyncInterval(interval.Seconds())
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	var lock sync.Mutex
+
+	tick := func() {
+		eg, ictx := errgroup.WithContext(ctx)
+		results := map[string]*RunResult{}
+		for addr, c := range p.clients {
+			addr := addr
+			c := c
+			eg.Go(func() error {
+				res := c.RunOnce(ictx, timeout)
+				lock.Lock()
+				defer lock.Unlock()
+				results[addr] = res
+				return nil
+			})
+		}
+		err := eg.Wait()
+		if err != nil {
+			log.Errorf("run failed: %v", err)
+		}
+		p.processResults(results)
+	}
+
+	tick()
 	for {
 		select {
 		case <-ctx.Done():
 			log.Debugf("cancelled main loop")
 			return ctx.Err()
 		case <-ticker.C:
-			eg, ctx := errgroup.WithContext(ctx)
-			results := map[string]*RunResult{}
-			for addr, c := range p.clients {
-				addr := addr
-				c := c
-				eg.Go(func() error {
-					res := c.RunOnce(ctx, timeout)
-					lock.Lock()
-					defer lock.Unlock()
-					results[addr] = res
-					return nil
-				})
-			}
-			err := eg.Wait()
-			if err != nil {
-				log.Errorf("run failed: %v", err)
-			}
-			p.processResults(results)
+			tick()
 		}
 	}
 }

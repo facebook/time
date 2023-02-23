@@ -46,13 +46,18 @@ type Config struct {
 	TimeoutTXTS              time.Duration
 }
 
-// ReadConfig reads config from the file
-func ReadConfig(path string) (*Config, error) {
-	c := &Config{
+// DefaultConfig returns Config initialized with default values
+func DefaultConfig() *Config {
+	return &Config{
 		MetricsAggregationWindow: time.Duration(60) * time.Second,
 		AttemptsTXTS:             10,
 		TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 	}
+}
+
+// ReadConfig reads config from the file
+func ReadConfig(path string) (*Config, error) {
+	c := DefaultConfig()
 	cData, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err

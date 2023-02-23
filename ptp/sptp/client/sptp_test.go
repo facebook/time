@@ -17,11 +17,13 @@ limitations under the License.
 package client
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	gmstats "github.com/facebook/time/ptp/sptp/stats"
 	"github.com/facebook/time/servo"
 
 	"github.com/golang/mock/gomock"
@@ -183,4 +185,46 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockStatsServer.EXPECT().SetGMStats("soontobebest", gomock.Any())
 	p.processResults(results)
 	require.Equal(t, "soontobebest", p.bestGM)
+}
+
+func TestRunInternalAllDead(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).Times(4)
+	mockPHC := NewMockPHCIface(ctrl)
+	mockServo := NewMockServo(ctrl)
+	mockServo.EXPECT().SyncInterval(float64(1))
+	mockStatsServer := NewMockStatsServer(ctrl)
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(2)).Times(2)
+	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(0)).Times(2)
+	mockStatsServer.EXPECT().UpdateCounterBy("sptp.portstats.tx.delay_req", int64(1)).Times(4)
+	mockStatsServer.EXPECT().SetGMStats("192.168.0.10", &gmstats.Stats{Error: context.DeadlineExceeded.Error()}).Times(2)
+	mockStatsServer.EXPECT().SetGMStats("192.168.0.11", &gmstats.Stats{Error: context.DeadlineExceeded.Error()}).Times(2)
+
+	p := &SPTP{
+		phc:   mockPHC,
+		pi:    mockServo,
+		stats: mockStatsServer,
+		cfg: &Config{
+			Interval: time.Second,
+			Servers: map[string]int{
+				"192.168.0.10": 1,
+				"192.168.0.11": 2,
+			},
+			Measurement: MeasurementConfig{
+				PathDelayFilterLength:         59,
+				PathDelayFilter:               "median",
+				PathDelayDiscardFilterEnabled: true,
+				PathDelayDiscardBelow:         2 * time.Microsecond,
+			},
+		},
+		eventConn: mockEventConn,
+	}
+	err := p.initClients()
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	err = p.runInternal(ctx, time.Second)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
