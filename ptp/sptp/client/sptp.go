@@ -318,7 +318,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 }
 
 func (p *SPTP) runInternal(ctx context.Context, interval time.Duration) error {
-	timeout := time.Duration(0.9 * float64(interval))
+	timeout := time.Duration(0.1 * float64(interval))
 	p.pi.SyncInterval(interval.Seconds())
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
