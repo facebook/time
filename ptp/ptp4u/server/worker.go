@@ -266,8 +266,8 @@ func (s *sendWorker) Start() {
 				txTS, attempts, err = timestamp.ReadTXtimestampBuf(eFd, oob, toob)
 				s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
 				if err != nil {
-					log.Errorf("Failed to read TX timestamp: %v", err)
-					return
+					log.Warningf("Failed to read TX timestamp: %v", err)
+					continue
 				}
 				if s.config.TimestampType != timestamp.HWTIMESTAMP {
 					txTS = txTS.Add(s.config.UTCOffset)
