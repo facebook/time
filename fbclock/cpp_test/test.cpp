@@ -180,8 +180,8 @@ TEST(fbclock_test, test_fbclock_calculate_time) {
       error_bound_ns, h_value_ns, ingress_time_ns, phctime_ns, &truetime);
   ASSERT_EQ(err, 0);
 
-  EXPECT_EQ(truetime.earliest_ns, 1647269091803102381);
-  EXPECT_EQ(truetime.latest_ns, 1647269091803103533);
+  EXPECT_EQ(truetime.earliest_ns, 1647269091803102338);
+  EXPECT_EQ(truetime.latest_ns, 1647269091803103576);
 
   // WOU is very big
   error_bound_ns = 1000.0;
@@ -189,8 +189,8 @@ TEST(fbclock_test, test_fbclock_calculate_time) {
   err = fbclock_calculate_time(
       error_bound_ns, h_value_ns, ingress_time_ns, phctime_ns, &truetime);
   ASSERT_EQ(err, 0);
-  EXPECT_EQ(truetime.earliest_ns, 1647290691802010772);
-  EXPECT_EQ(truetime.latest_ns, 1647290691804195180);
+  EXPECT_EQ(truetime.earliest_ns, 1647290691802010729);
+  EXPECT_EQ(truetime.latest_ns, 1647290691804195223);
 }
 
 int main(int argc, char** argv) {
