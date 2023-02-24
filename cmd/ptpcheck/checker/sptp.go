@@ -28,10 +28,10 @@ func RunSPTP(address string) (*PTPCheckResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	var selected *stats.Stats
+	var selected *stats.Stat
 	for _, s := range sm {
 		if s.Selected {
-			selected = &s
+			selected = s
 			break
 		}
 	}

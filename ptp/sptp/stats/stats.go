@@ -33,8 +33,9 @@ const (
 	PortStatsRxPrefix = "sptp.portstats.rx."
 )
 
-// Stats is a representation of a monitoring struct for sptp client
-type Stats struct {
+// Stat is a representation of a monitoring struct for sptp client
+type Stat struct {
+	GMAddress         string           `json:"gm_address"`
 	ClockQuality      ptp.ClockQuality `json:"clock_quality"`
 	Error             string           `json:"error"`
 	GMPresent         int              `json:"gm_present"`
@@ -49,6 +50,28 @@ type Stats struct {
 	StepsRemoved      int              `json:"steps_removed"`
 	CorrectionFieldRX int64            `json:"cf_rx"`
 	CorrectionFieldTX int64            `json:"cf_tx"`
+}
+
+// Stats is a list of Stat
+type Stats []*Stat
+
+func (s Stats) Len() int { return len(s) }
+func (s Stats) Less(i, j int) bool {
+	if s[i].Priority3 == s[j].Priority3 {
+		return s[i].GMAddress < s[j].GMAddress
+	}
+	return s[i].Priority3 < s[j].Priority3
+}
+func (s Stats) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+// Index returns the index of the e if it's already in s. Otherwise -1
+func (s Stats) Index(e *Stat) int {
+	for i, a := range s {
+		if a.GMAddress == e.GMAddress {
+			return i
+		}
+	}
+	return -1
 }
 
 // Counters is various counters exported by SPTP client
@@ -85,7 +108,7 @@ func (c Counters) SysStats() map[string]int64 {
 }
 
 // FetchStats returns populated Stats structure fetched from the url
-func FetchStats(url string) (map[string]Stats, error) {
+func FetchStats(url string) (Stats, error) {
 	c := http.Client{
 		Timeout: time.Second * 2,
 	}
@@ -101,7 +124,7 @@ func FetchStats(url string) (map[string]Stats, error) {
 		return nil, err
 	}
 
-	s := make(map[string]Stats)
+	var s Stats
 	err = json.Unmarshal(b, &s)
 
 	return s, err

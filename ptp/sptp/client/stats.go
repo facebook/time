@@ -28,21 +28,21 @@ type StatsServer interface {
 	Reset()
 	SetCounter(key string, val int64)
 	UpdateCounterBy(key string, count int64)
-	SetGMStats(gm string, stats *gmstats.Stats)
+	SetGMStats(stat *gmstats.Stat)
 }
 
 // Stats is an implementation of
 type Stats struct {
 	mux      sync.Mutex
 	counters map[string]int64
-	gmStats  map[string]*gmstats.Stats
+	gmStats  gmstats.Stats
 }
 
 // NewStats created new instance of Stats
 func NewStats() *Stats {
 	return &Stats{
 		counters: map[string]int64{},
-		gmStats:  map[string]*gmstats.Stats{},
+		gmStats:  gmstats.Stats{},
 	}
 }
 
@@ -90,14 +90,22 @@ func (s *Stats) Reset() {
 }
 
 // SetGMStats sets GM stats for particular gm
-func (s *Stats) SetGMStats(gm string, stats *gmstats.Stats) {
+func (s *Stats) SetGMStats(stat *gmstats.Stat) {
 	s.mux.Lock()
-	s.gmStats[gm] = stats
+	if i := s.gmStats.Index(stat); i != -1 {
+		s.gmStats[i] = stat
+	} else {
+		s.gmStats = append(s.gmStats, stat)
+	}
 	s.mux.Unlock()
 }
 
-func runResultToStats(r *RunResult, p3 int, selected bool) *gmstats.Stats {
-	s := &gmstats.Stats{}
+func runResultToStats(address string, r *RunResult, p3 int, selected bool) *gmstats.Stat {
+	s := &gmstats.Stat{
+		GMAddress: address,
+		Priority3: uint8(p3),
+	}
+
 	if r.Error != nil {
 		s.GMPresent = 0
 		s.Selected = false
@@ -114,7 +122,6 @@ func runResultToStats(r *RunResult, p3 int, selected bool) *gmstats.Stats {
 	s.ClockQuality = r.Measurement.Announce.GrandmasterClockQuality
 	s.Priority1 = r.Measurement.Announce.GrandmasterPriority1
 	s.Priority2 = r.Measurement.Announce.GrandmasterPriority2
-	s.Priority3 = uint8(p3)
 	s.Offset = float64(r.Measurement.Offset)
 	s.MeanPathDelay = float64(r.Measurement.Delay)
 	s.StepsRemoved = int(r.Measurement.Announce.StepsRemoved) + 1 // we are one step away from GM

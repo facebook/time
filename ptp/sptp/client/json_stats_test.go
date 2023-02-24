@@ -52,12 +52,14 @@ func TestJSONStats(t *testing.T) {
 	stats.SetCounter("some.counter", 1)
 	stats.SetCounter("whatever", 42)
 
-	gm0 := &gmstats.Stats{
-		Error: "mymy",
+	gm0 := &gmstats.Stat{
+		GMAddress: "192.168.0.10",
+		Error:     "mymy",
 	}
-	stats.SetGMStats("192.168.0.10", gm0)
+	stats.SetGMStats(gm0)
 
-	gm1 := &gmstats.Stats{
+	gm1 := &gmstats.Stat{
+		GMAddress:         "192.168.0.13",
 		Error:             "",
 		GMPresent:         1,
 		IngressTime:       1676997604198536785,
@@ -72,7 +74,7 @@ func TestJSONStats(t *testing.T) {
 		CorrectionFieldRX: int64(6 * time.Microsecond),
 		CorrectionFieldTX: int64(4 * time.Microsecond),
 	}
-	stats.SetGMStats("192.168.0.13", gm1)
+	stats.SetGMStats(gm1)
 
 	counters, err := gmstats.FetchCounters(url)
 	require.NoError(t, err)
@@ -84,9 +86,9 @@ func TestJSONStats(t *testing.T) {
 
 	gms, err := gmstats.FetchStats(url)
 	require.NoError(t, err)
-	expectedStats := map[string]gmstats.Stats{
-		"192.168.0.10": *gm0,
-		"192.168.0.13": *gm1,
+	expectedStats := gmstats.Stats{
+		gm0,
+		gm1,
 	}
 	require.Equal(t, expectedStats, gms)
 }

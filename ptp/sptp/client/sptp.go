@@ -268,8 +268,8 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	idsToClients := map[ptp.ClockIdentity]string{}
 	localPrioMap := map[ptp.ClockIdentity]int{}
 	for addr, res := range results {
-		s := runResultToStats(res, p.priorities[addr], addr == p.bestGM)
-		p.stats.SetGMStats(addr, s)
+		s := runResultToStats(addr, res, p.priorities[addr], addr == p.bestGM)
+		p.stats.SetGMStats(s)
 		if res.Error == nil {
 			log.Debugf("result %s: %+v", addr, res.Measurement)
 		} else {

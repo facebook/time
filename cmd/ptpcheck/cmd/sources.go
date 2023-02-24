@@ -132,18 +132,16 @@ func sourcesRunSPTP(address string, noDNS bool) error {
 		return fmt.Errorf("fetching data: %w", err)
 	}
 
+	sort.Sort(umt)
+
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetColWidth(20)
 	table.SetHeader([]string{
 		"selected", "identity", "address", "clock", "variance", "p1:p2:p3", "offset(ns)", "delay(ns)", "cf tx:rx(ns)", "error",
 	})
-	keys := []string{}
-	for address := range umt {
-		keys = append(keys, address)
-	}
-	sort.Sort(sort.Reverse(sort.StringSlice(keys)))
-	for _, address := range keys {
-		state := umt[address]
+
+	for _, gm := range umt {
+		address := gm.GMAddress
 		if !noDNS {
 			names, err := net.LookupAddr(address)
 			if err == nil && len(names) > 0 {
@@ -152,23 +150,23 @@ func sourcesRunSPTP(address string, noDNS bool) error {
 		}
 
 		val := []string{
-			fmt.Sprintf("%v", state.Selected),
-			state.PortIdentity,
+			fmt.Sprintf("%v", gm.Selected),
+			gm.PortIdentity,
 			address,
 		}
-		if state.Error == "" {
+		if gm.Error == "" {
 			val = append(val, []string{
-				fmt.Sprintf("%d:0x%x", state.ClockQuality.ClockClass, state.ClockQuality.ClockAccuracy),
-				fmt.Sprintf("0x%x", state.ClockQuality.OffsetScaledLogVariance),
-				fmt.Sprintf("%d:%d:%d", state.Priority1, state.Priority2, state.Priority3),
-				fmt.Sprintf("%3.f", state.Offset),
-				fmt.Sprintf("%3.f", state.MeanPathDelay),
-				fmt.Sprintf("%d:%d", state.CorrectionFieldTX, state.CorrectionFieldRX),
+				fmt.Sprintf("%d:0x%x", gm.ClockQuality.ClockClass, gm.ClockQuality.ClockAccuracy),
+				fmt.Sprintf("0x%x", gm.ClockQuality.OffsetScaledLogVariance),
+				fmt.Sprintf("%d:%d:%d", gm.Priority1, gm.Priority2, gm.Priority3),
+				fmt.Sprintf("%3.f", gm.Offset),
+				fmt.Sprintf("%3.f", gm.MeanPathDelay),
+				fmt.Sprintf("%d:%d", gm.CorrectionFieldTX, gm.CorrectionFieldRX),
 			}...)
 		} else {
 			val = append(val, []string{"", "", "", "", "", ""}...)
 		}
-		val = append(val, state.Error)
+		val = append(val, gm.Error)
 		table.Append(val)
 	}
 	table.Render()
