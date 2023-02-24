@@ -60,7 +60,7 @@ struct phc_time_res {
   int64_t delay; // mean delay of several requests
 };
 
-static uint64_t fbclock_clockdata_crc(fbclock_clockdata* value) {
+static inline uint64_t fbclock_clockdata_crc(fbclock_clockdata* value) {
   uint64_t counter = fbclock_crc64(value->ingress_time_ns, 0x04C11DB7);
   counter = fbclock_crc64(value->error_bound_ns, counter);
   counter = fbclock_crc64(value->holdover_multiplier_ns, counter);
@@ -86,8 +86,8 @@ int fbclock_clockdata_load_data(
     fbclock_clockdata* data) {
   for (int i = 0; i < FBCLOCK_MAX_READ_TRIES; i++) {
     memcpy(data, &shmp->data, FBCLOCK_CLOCKDATA_SIZE);
-    uint64_t our_crc = fbclock_clockdata_crc(data);
     uint64_t crc = atomic_load(&shmp->crc);
+    uint64_t our_crc = fbclock_clockdata_crc(data);
     if (our_crc == crc) {
       fbclock_debug_print("reading clock data took %d tries\n", i + 1);
       break;
@@ -96,7 +96,7 @@ int fbclock_clockdata_load_data(
   return 0;
 }
 
-static int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
+static inline int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
   return (int64_t)(ptc->sec * 1000000000) + (int64_t)ptc->nsec;
 }
 
