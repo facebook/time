@@ -86,13 +86,13 @@ func (mr *MockStatsServerMockRecorder) UpdateCounterBy(key, count interface{}) *
 }
 
 // SetGMStats mocks base method
-func (m *MockStatsServer) SetGMStats(gm string, stats *stats.Stats) {
+func (m *MockStatsServer) SetGMStats(stats *stats.Stat) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetGMStats", gm, stats)
+	m.ctrl.Call(m, "SetGMStats", stats)
 }
 
 // SetGMStats indicates an expected call of SetGMStats
-func (mr *MockStatsServerMockRecorder) SetGMStats(gm, stats interface{}) *gomock.Call {
+func (mr *MockStatsServerMockRecorder) SetGMStats(stats interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGMStats", reflect.TypeOf((*MockStatsServer)(nil).SetGMStats), gm, stats)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGMStats", reflect.TypeOf((*MockStatsServer)(nil).SetGMStats), stats)
 }

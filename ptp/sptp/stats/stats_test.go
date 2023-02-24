@@ -26,20 +26,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestStats(t *testing.T) {
+	s0 := &Stat{GMAddress: "::1", Priority3: 2}
+	s1 := &Stat{GMAddress: "::1", Priority3: 3}
+	s2 := &Stat{GMAddress: "127.0.0.1", Priority3: 1}
+	s3 := &Stat{GMAddress: "127.0.0.2", Priority3: 1}
+
+	s := Stats{s0, s1, s2, s3}
+	require.Equal(t, 4, s.Len())
+	require.True(t, s.Less(0, 1))
+	require.False(t, s.Less(1, 2))
+	require.True(t, s.Less(2, 3))
+	require.True(t, s.Less(2, 0))
+
+	require.Equal(t, 2, s.Index(s2))
+	require.Equal(t, -1, s.Index(&Stat{}))
+}
+
 func TestFetchStats(t *testing.T) {
 	sampleResp := `
-{
-	"127.0.0.1": {"selected": false, "port_identity": "oleg", "clock_quality": {"clock_class": 6, "clock_accuracy": 33, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -42.42, "mean_path_delay": 42.42, "steps_removed": 3, "cf_rx": 10, "cf_tx": 20, "gm_present": 1, "error": ""},
-	"::1": {"selected": true, "port_identity": "oleg1", "clock_quality": {"clock_class": 7, "clock_accuracy": 34, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -43.43, "mean_path_delay": 43.43, "steps_removed": 3, "cf_rx": 100000, "cf_tx": 20000, "gm_present": 0, "error": "oops"}
-}
+[
+	{"gm_address": "127.0.0.1", "selected": false, "port_identity": "oleg", "clock_quality": {"clock_class": 6, "clock_accuracy": 33, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -42.42, "mean_path_delay": 42.42, "steps_removed": 3, "cf_rx": 10, "cf_tx": 20, "gm_present": 1, "error": ""},
+	{"gm_address": "::1", "selected": true, "port_identity": "oleg1", "clock_quality": {"clock_class": 7, "clock_accuracy": 34, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -43.43, "mean_path_delay": 43.43, "steps_removed": 3, "cf_rx": 100000, "cf_tx": 20000, "gm_present": 0, "error": "oops"}
+]
 `
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
 	}))
 	defer ts.Close()
 
-	expected := map[string]Stats{
-		"127.0.0.1": {
+	expected := Stats{
+		{
+			GMAddress:    "127.0.0.1",
 			Selected:     false,
 			PortIdentity: "oleg",
 			ClockQuality: ptp.ClockQuality{
@@ -57,7 +75,8 @@ func TestFetchStats(t *testing.T) {
 			CorrectionFieldTX: 20,
 			GMPresent:         1,
 		},
-		"::1": {
+		{
+			GMAddress:    "::1",
 			Selected:     true,
 			PortIdentity: "oleg1",
 			ClockQuality: ptp.ClockQuality{

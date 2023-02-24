@@ -37,7 +37,7 @@ func (hf *HTTPFetcher) FetchGMs(cfg *Config) (targets []string, err error) {
 		return nil, err
 	}
 
-	for gmIP, entry := range sm {
+	for _, entry := range sm {
 		// skip the current best master
 		if entry.Selected {
 			continue
@@ -46,7 +46,7 @@ func (hf *HTTPFetcher) FetchGMs(cfg *Config) (targets []string, err error) {
 		if entry.Error != "" {
 			continue
 		}
-		targets = append(targets, gmIP)
+		targets = append(targets, entry.GMAddress)
 	}
 	return
 }

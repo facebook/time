@@ -50,9 +50,11 @@ func TestRunResultToStatsError(t *testing.T) {
 		Server: "192.168.0.10",
 		Error:  fmt.Errorf("ooops"),
 	}
-	got := runResultToStats(r, 1, false)
-	want := &gmstats.Stats{
-		Error: "ooops",
+	got := runResultToStats("192.168.0.10", r, 1, false)
+	want := &gmstats.Stat{
+		GMAddress: "192.168.0.10",
+		Priority3: 1,
+		Error:     "ooops",
 	}
 	require.Equal(t, want, got)
 }
@@ -95,7 +97,8 @@ func TestRunResultToStats(t *testing.T) {
 		},
 	}
 
-	want := &gmstats.Stats{
+	want := &gmstats.Stat{
+		GMAddress:         "192.168.0.10",
 		ClockQuality:      statsAnnouncePkt.GrandmasterClockQuality,
 		Error:             "",
 		GMPresent:         1,
@@ -113,24 +116,25 @@ func TestRunResultToStats(t *testing.T) {
 	}
 
 	t.Run("not selected", func(t *testing.T) {
-		got := runResultToStats(r, 3, false)
+		got := runResultToStats("192.168.0.10", r, 3, false)
 		require.Equal(t, want, got)
 	})
 	want.Selected = true
 	t.Run("selected", func(t *testing.T) {
-		got := runResultToStats(r, 3, true)
+		got := runResultToStats("192.168.0.10", r, 3, true)
 		require.Equal(t, want, got)
 	})
 }
 
 func TestSetGMStats(t *testing.T) {
-	gms := &gmstats.Stats{
-		Error: "mymy",
+	gm := &gmstats.Stat{
+		GMAddress: "192.168.0.10",
+		Error:     "mymy",
 	}
 	s := NewStats()
-	s.SetGMStats("192.168.0.10", gms)
-	want := map[string]*gmstats.Stats{
-		"192.168.0.10": gms,
+	s.SetGMStats(gm)
+	want := gmstats.Stats{
+		gm,
 	}
 	require.Equal(t, want, s.gmStats)
 }
