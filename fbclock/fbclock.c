@@ -55,6 +55,11 @@ limitations under the License.
 #define fbclock_crc64(a, b) ({ a ^ b; })
 #endif
 
+struct phc_time_res {
+  int64_t ts; // last ts got from PHC
+  int64_t delay; // mean delay of several requests
+};
+
 static uint64_t fbclock_clockdata_crc(fbclock_clockdata* value) {
   uint64_t counter = fbclock_crc64(value->ingress_time_ns, 0x04C11DB7);
   counter = fbclock_crc64(value->error_bound_ns, counter);
@@ -95,23 +100,28 @@ static int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
   return (int64_t)(ptc->sec * 1000000000) + (int64_t)ptc->nsec;
 }
 
-static int64_t fbclock_read_ptp_offset_extended(int fd) {
+static int fbclock_read_ptp_offset_extended(int fd, struct phc_time_res* res) {
   struct ptp_sys_offset_extended psoe = {.n_samples = 5};
+  int64_t min_delay = INT64_MAX;
+
   int r = ioctl(fd, PTP_SYS_OFFSET_EXTENDED, &psoe);
   if (r) {
     perror("PTP_SYS_OFFSET_EXTENDED");
     return -1;
   }
-  int64_t total_delay = 0;
 
   for (unsigned i = 0; i < psoe.n_samples; ++i) {
     int64_t delay =
         fbclock_pct2ns(&psoe.ts[i][2]) - fbclock_pct2ns(&psoe.ts[i][0]);
-    total_delay += delay;
+    min_delay = (delay < min_delay) ? delay : min_delay;
   }
-  int64_t ts = fbclock_pct2ns(&psoe.ts[psoe.n_samples - 1][1]);
-  int64_t mean_delay = total_delay / psoe.n_samples;
-  return ts + mean_delay;
+  res->ts = fbclock_pct2ns(&psoe.ts[psoe.n_samples - 1][1]);
+  res->delay = min_delay;
+  if (min_delay < 0) {
+    perror("Negative request delay");
+    return -2;
+  }
+  return 0;
 }
 
 int fbclock_init(fbclock_lib* lib, const char* shm_path) {
@@ -181,6 +191,7 @@ int fbclock_calculate_time(
 }
 
 int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
+  struct phc_time_res res;
   fbclock_clockdata state;
   int rcode = fbclock_clockdata_load_data(lib->shmp, &state);
   if (rcode != 0) {
@@ -199,15 +210,14 @@ int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
     return FBCLOCK_E_WOU_TOO_BIG;
   }
 
-  int64_t phctime_ns = fbclock_read_ptp_offset_extended(lib->dev_fd);
-  if (phctime_ns <= 0) {
+  if (fbclock_read_ptp_offset_extended(lib->dev_fd, &res)) {
     return FBCLOCK_E_PTP_READ_OFFSET;
   }
 
-  double error_bound = (double)state.error_bound_ns;
+  double error_bound = (double)state.error_bound_ns + (double)res.delay;
   double h_value = (double)state.holdover_multiplier_ns / FBCLOCK_POW2_16;
   return fbclock_calculate_time(
-      error_bound, h_value, state.ingress_time_ns, phctime_ns, truetime);
+      error_bound, h_value, state.ingress_time_ns, res.ts, truetime);
 }
 
 const char* fbclock_strerror(int err_code) {
