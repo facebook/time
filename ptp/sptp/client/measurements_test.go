@@ -66,6 +66,10 @@ func TestMeasurementsFullRun(t *testing.T) {
 			ClientToServerDiff: netDelayBack,
 			Offset:             0,
 			Timestamp:          timeSyncReceived,
+			T1:                 timeSyncSent,
+			T2:                 timeSyncReceived,
+			T3:                 timeDelaySent,
+			T4:                 timeDelayReceived,
 		}
 		assert.Equal(t, want, got)
 	})
@@ -108,6 +112,10 @@ func TestMeasurementsFullRun(t *testing.T) {
 			ClientToServerDiff: netDelayBack,
 			Offset:             -100 * time.Millisecond,
 			Timestamp:          timeSyncReceived,
+			T1:                 timeSyncSent,
+			T2:                 timeSyncReceived,
+			T3:                 timeDelaySent,
+			T4:                 timeDelayReceived,
 		}
 		assert.Equal(t, want, got)
 	})
@@ -154,6 +162,10 @@ func TestMeasurementsFullRun(t *testing.T) {
 			CorrectionFieldRX:  6 * time.Microsecond,
 			CorrectionFieldTX:  4 * time.Microsecond,
 			Timestamp:          timeSyncReceived,
+			T1:                 timeSyncSent,
+			T2:                 timeSyncReceived,
+			T3:                 timeDelaySent,
+			T4:                 timeDelayReceived,
 		}
 		assert.Equal(t, want, got)
 	})
@@ -209,6 +221,10 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		CorrectionFieldRX:  6 * time.Microsecond,
 		CorrectionFieldTX:  4 * time.Microsecond,
 		Timestamp:          timeSyncReceived,
+		T1:                 timeSyncSent,
+		T2:                 timeSyncReceived,
+		T3:                 timeDelaySent,
+		T4:                 timeDelayReceived,
 	}
 	assert.Equal(t, want, got, "initial measurements check")
 
@@ -243,6 +259,10 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		CorrectionFieldRX:  6 * time.Microsecond,
 		CorrectionFieldTX:  4 * time.Microsecond,
 		Timestamp:          timeSyncReceived,
+		T1:                 timeSyncSent,
+		T2:                 timeSyncReceived,
+		T3:                 timeDelaySent,
+		T4:                 timeDelayReceived,
 	}
 	assert.Equal(t, want, got, "measurements after 6 more exchanges")
 
@@ -259,6 +279,10 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		CorrectionFieldRX:  6 * time.Microsecond,
 		CorrectionFieldTX:  4 * time.Microsecond,
 		Timestamp:          timeSyncReceived,
+		T1:                 timeSyncSent,
+		T2:                 timeSyncReceived,
+		T3:                 timeDelaySent,
+		T4:                 timeDelayReceived,
 	}
 	assert.Equal(t, want, got, "measurements with median path delay filter")
 
@@ -274,6 +298,10 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		CorrectionFieldRX:  6 * time.Microsecond,
 		CorrectionFieldTX:  4 * time.Microsecond,
 		Timestamp:          timeSyncReceived,
+		T1:                 timeSyncSent,
+		T2:                 timeSyncReceived,
+		T3:                 timeDelaySent,
+		T4:                 timeDelayReceived,
 	}
 	assert.Equal(t, want, got, "measurements with mean path delay filter")
 
@@ -301,6 +329,10 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		CorrectionFieldRX:  6 * time.Microsecond,
 		CorrectionFieldTX:  4 * time.Microsecond,
 		Timestamp:          timeSyncReceived,
+		T1:                 timeSyncSent,
+		T2:                 timeSyncReceived,
+		T3:                 timeDelaySent,
+		T4:                 timeDelayReceived,
 	}
 	assert.Equal(t, want, got, "measurements with mean path delay filter and skipped path delay sample")
 }
