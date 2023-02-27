@@ -77,9 +77,9 @@ func TestClientRun(t *testing.T) {
 	require.NoError(t, err)
 
 	// handle whatever client is sending over eventConn
-	statsServer.EXPECT().UpdateCounterBy("sptp.portstats.rx.sync", int64(1))
-	statsServer.EXPECT().UpdateCounterBy("sptp.portstats.rx.announce", int64(1))
-	statsServer.EXPECT().UpdateCounterBy("sptp.portstats.tx.delay_req", int64(1))
+	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.sync", int64(1))
+	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.announce", int64(1))
+	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.tx.delay_req", int64(1))
 	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ net.Addr) (int, time.Time, error) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
@@ -126,7 +126,7 @@ func TestClientTimeout(t *testing.T) {
 	statsServer := NewMockStatsServer(ctrl)
 	c, err := newClient("127.0.0.1", cid, eventConn, mcfg, statsServer)
 	require.NoError(t, err)
-	statsServer.EXPECT().UpdateCounterBy("sptp.portstats.tx.delay_req", int64(1))
+	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.tx.delay_req", int64(1))
 	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any())
 
 	ctx := context.Background()

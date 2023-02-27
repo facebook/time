@@ -46,8 +46,8 @@ func TestProcessResultsNoResults(t *testing.T) {
 		stats: mockStatsServer,
 	}
 	results := map[string]*RunResult{}
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(0))
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(0))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(0))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(0))
 	p.processResults(results)
 
 	require.Equal(t, "", p.bestGM)
@@ -67,8 +67,8 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	results := map[string]*RunResult{
 		"iamthebest": {},
 	}
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(1))
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(0))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(0))
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	p.processResults(results)
 	require.Equal(t, "", p.bestGM)
@@ -86,8 +86,8 @@ func TestProcessResultsSingle(t *testing.T) {
 	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.StateJump)
 	mockServo.EXPECT().Sample(int64(-100001000), gomock.Any()).Return(14.2, servo.StateLocked)
 	mockStatsServer := NewMockStatsServer(ctrl)
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(1))
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(100))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(100))
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	p := &SPTP{
 		phc:   mockPHC,
@@ -112,8 +112,8 @@ func TestProcessResultsSingle(t *testing.T) {
 
 	results["iamthebest"].Measurement.Offset = -100001 * time.Microsecond
 	// we adj here
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(1))
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(100))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(100))
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	p.processResults(results)
 	require.Equal(t, "iamthebest", p.bestGM)
@@ -131,8 +131,8 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.StateJump)
 	mockServo.EXPECT().Sample(int64(-104002000), gomock.Any()).Return(14.2, servo.StateLocked)
 	mockStatsServer := NewMockStatsServer(ctrl)
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(2))
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(50))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(2))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(50))
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 
@@ -179,8 +179,8 @@ func TestProcessResultsMulti(t *testing.T) {
 		Announce:           *announce1,
 	}
 	// we adj here, while also switching to new best GM
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(2))
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(100))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(2))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(100))
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	p.processResults(results)
@@ -198,9 +198,9 @@ func TestRunInternalAllDead(t *testing.T) {
 	mockServo.EXPECT().SyncInterval(float64(1))
 	mockServo.EXPECT().MeanFreq()
 	mockStatsServer := NewMockStatsServer(ctrl)
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.total", int64(2)).Times(2)
-	mockStatsServer.EXPECT().SetCounter("sptp.gms.available_pct", int64(0)).Times(2)
-	mockStatsServer.EXPECT().UpdateCounterBy("sptp.portstats.tx.delay_req", int64(1)).Times(4)
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(2)).Times(2)
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(0)).Times(2)
+	mockStatsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.tx.delay_req", int64(1)).Times(4)
 	mockStatsServer.EXPECT().SetGMStats(&gmstats.Stat{GMAddress: "192.168.0.10", Error: context.DeadlineExceeded.Error(), Priority3: 1}).Times(2)
 	mockStatsServer.EXPECT().SetGMStats(&gmstats.Stat{GMAddress: "192.168.0.11", Error: context.DeadlineExceeded.Error(), Priority3: 2}).Times(2)
 

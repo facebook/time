@@ -285,11 +285,11 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 		idsToClients[res.Measurement.Announce.GrandmasterIdentity] = addr
 		localPrioMap[res.Measurement.Announce.GrandmasterIdentity] = p.priorities[addr]
 	}
-	p.stats.SetCounter("sptp.gms.total", int64(gmsTotal))
+	p.stats.SetCounter("ptp.sptp.gms.total", int64(gmsTotal))
 	if gmsTotal != 0 {
-		p.stats.SetCounter("sptp.gms.available_pct", int64((float64(gmsAvailable)/float64(gmsTotal))*100))
+		p.stats.SetCounter("ptp.sptp.gms.available_pct", int64((float64(gmsAvailable)/float64(gmsTotal))*100))
 	} else {
-		p.stats.SetCounter("sptp.gms.available_pct", int64(0))
+		p.stats.SetCounter("ptp.sptp.gms.available_pct", int64(0))
 	}
 	best := bmca(announces, localPrioMap)
 	if best == nil {

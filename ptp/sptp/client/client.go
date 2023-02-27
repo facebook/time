@@ -221,7 +221,7 @@ func (c *Client) handleMsg(msg *inPacket) error {
 	default:
 		c.logReceive(msgType, "unsupported, ignoring")
 		c.stats.UpdateCounterBy(fmt.Sprintf("%s%s", stats.PortStatsRxPrefix, strings.ToLower(msgType.String())), 1)
-		c.stats.UpdateCounterBy("sptp.portstats.rx.unsupported", 1)
+		c.stats.UpdateCounterBy("ptp.sptp.portstats.rx.unsupported", 1)
 		return nil
 	}
 }

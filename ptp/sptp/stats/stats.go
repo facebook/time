@@ -29,8 +29,8 @@ import (
 
 // port stats prefixes
 const (
-	PortStatsTxPrefix = "sptp.portstats.tx."
-	PortStatsRxPrefix = "sptp.portstats.rx."
+	PortStatsTxPrefix = "ptp.sptp.portstats.tx."
+	PortStatsRxPrefix = "ptp.sptp.portstats.rx."
 )
 
 // Stat is a representation of a monitoring struct for sptp client
