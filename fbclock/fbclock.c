@@ -158,14 +158,14 @@ int fbclock_destroy(fbclock_lib* lib) {
 }
 
 double fbclock_window_of_uncertainty(
-    int64_t seconds,
+    double seconds,
     double error_bound_ns,
     double holdover_multiplier_ns) {
   double h = holdover_multiplier_ns * seconds;
   double w = error_bound_ns + h;
   fbclock_debug_print("error_bound=%f\n", error_bound_ns);
   fbclock_debug_print("holdover_multiplier=%f\n", holdover_multiplier_ns);
-  fbclock_debug_print("%ld seconds holdover, h=%f\n", seconds, h);
+  fbclock_debug_print("%.3f seconds holdover, h=%f\n", seconds, h);
   fbclock_debug_print("w = %f ns\n", w);
   fbclock_debug_print("w = %f ms\n", w / 1000000.0);
   return w;
@@ -178,7 +178,8 @@ int fbclock_calculate_time(
     int64_t phctime_ns,
     fbclock_truetime* truetime) {
   // first, we check how long it was since last SYNC message from GM, in seconds
-  int64_t seconds = (double)(phctime_ns - ingress_time_ns) / 1000000000.0;
+  // with parts
+  double seconds = (double)(phctime_ns - ingress_time_ns) / 1000000000.0;
   if (seconds < 0) {
     return FBCLOCK_E_PHC_IN_THE_PAST;
   }

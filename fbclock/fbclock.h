@@ -76,7 +76,7 @@ typedef struct fbclock_truetime {
 int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data);
 int fbclock_clockdata_load_data(fbclock_shmdata* shm, fbclock_clockdata* data);
 double fbclock_window_of_uncertainty(
-    int64_t seconds,
+    double seconds,
     double error_bound_ns,
     double holdover_multiplier_ns);
 int fbclock_calculate_time(
