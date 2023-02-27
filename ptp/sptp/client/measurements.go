@@ -78,6 +78,10 @@ type MeasurementResult struct {
 	CorrectionFieldTX  time.Duration
 	Timestamp          time.Time
 	Announce           ptp.Announce
+	T1                 time.Time
+	T2                 time.Time
+	T3                 time.Time
+	T4                 time.Time
 }
 
 // measurements abstracts away tracking and calculation of various packet timestamps
@@ -206,6 +210,10 @@ func (m *measurements) latest() (*MeasurementResult, error) {
 		CorrectionFieldRX:  lastData.c1,
 		CorrectionFieldTX:  lastData.c2,
 		Timestamp:          lastData.t2,
+		T1:                 lastData.t1,
+		T2:                 lastData.t2,
+		T3:                 lastData.t3,
+		T4:                 lastData.t4,
 		Announce:           m.announce,
 	}, nil
 }

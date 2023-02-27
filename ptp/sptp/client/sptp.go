@@ -55,6 +55,7 @@ type SPTP struct {
 
 	clients    map[string]*Client
 	priorities map[string]int
+	lastTick   time.Time
 
 	clockID ptp.ClockIdentity
 	genConn UDPConn
@@ -262,6 +263,12 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 }
 
 func (p *SPTP) processResults(results map[string]*RunResult) {
+	now := time.Now()
+	if !p.lastTick.IsZero() {
+		log.Infof("tick took %vms sys time", now.Sub(p.lastTick).Milliseconds())
+		p.stats.SetCounter("ptp.sptp.tick_duration_ns", int64(now.Sub(p.lastTick)))
+	}
+	p.lastTick = now
 	gmsTotal := len(results)
 	gmsAvailable := 0
 	announces := []*ptp.Announce{}
@@ -294,6 +301,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	best := bmca(announces, localPrioMap)
 	if best == nil {
 		log.Warningf("no Best Master selected")
+		p.bestGM = ""
 		return
 	}
 	bestAddr := idsToClients[best.GrandmasterIdentity]
@@ -321,8 +329,6 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 func (p *SPTP) runInternal(ctx context.Context, interval time.Duration) error {
 	timeout := time.Duration(0.1 * float64(interval))
 	p.pi.SyncInterval(interval.Seconds())
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
 	var lock sync.Mutex
 
 	tick := func() {
@@ -346,7 +352,7 @@ func (p *SPTP) runInternal(ctx context.Context, interval time.Duration) error {
 		p.processResults(results)
 	}
 
-	tick()
+	timer := time.NewTimer(0)
 	for {
 		select {
 		case <-ctx.Done():
@@ -357,7 +363,8 @@ func (p *SPTP) runInternal(ctx context.Context, interval time.Duration) error {
 				log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
 			}
 			return ctx.Err()
-		case <-ticker.C:
+		case <-timer.C:
+			timer.Reset(interval)
 			tick()
 		}
 	}
