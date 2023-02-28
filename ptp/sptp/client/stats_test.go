@@ -32,13 +32,13 @@ func TestStatsReset(t *testing.T) {
 	stats := NewStats()
 
 	stats.SetCounter("some.counter", 123)
-	got := stats.Get()
+	got := stats.GetCounters()
 	want := map[string]int64{
 		"some.counter": 123,
 	}
 	require.Equal(t, want, got)
 	stats.Reset()
-	got = stats.Get()
+	got = stats.GetCounters()
 	want = map[string]int64{
 		"some.counter": 0,
 	}
@@ -136,5 +136,5 @@ func TestSetGMStats(t *testing.T) {
 	want := gmstats.Stats{
 		gm,
 	}
-	require.Equal(t, want, s.gmStats)
+	require.Equal(t, want, s.GetStats())
 }
