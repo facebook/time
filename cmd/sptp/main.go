@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net"
 	"net/http"
 	"time"
 
@@ -30,64 +29,6 @@ import (
 
 	_ "net/http/pprof"
 )
-
-func prepareConfig(cfgPath string, targets []string, iface string, monitoringPort int, interval time.Duration, dscp int) (*client.Config, error) {
-	cfg := &client.Config{}
-	var err error
-	warn := func(name string) {
-		log.Warningf("overriding %s from CLI flag", name)
-	}
-	if cfgPath != "" {
-		cfg, err = client.ReadConfig(cfgPath)
-		if err != nil {
-			return nil, fmt.Errorf("reading config from %q: %w", cfgPath, err)
-		}
-	}
-	if len(targets) > 0 {
-		warn("targets")
-		cfg.Servers = map[string]int{}
-		for i, t := range targets {
-			address := t
-			names, err := net.LookupHost(t)
-			if err == nil && len(names) > 0 {
-				address = names[0]
-			}
-			cfg.Servers[address] = i
-		}
-	} else {
-		newServers := map[string]int{}
-		for t, i := range cfg.Servers {
-			address := t
-			names, err := net.LookupHost(t)
-			if err == nil && len(names) > 0 {
-				address = names[0]
-			}
-			newServers[address] = i
-		}
-		cfg.Servers = newServers
-	}
-	if iface != "" && iface != cfg.Iface {
-		warn("iface")
-		cfg.Iface = iface
-	}
-
-	if monitoringPort != 0 && monitoringPort != cfg.MonitoringPort {
-		warn("monitoringPort")
-		cfg.MonitoringPort = monitoringPort
-	}
-
-	if interval != 0 && interval != cfg.Interval {
-		warn("interval")
-		cfg.Interval = interval
-	}
-
-	if dscp != 0 && dscp != cfg.DSCP {
-		warn("dscp")
-		cfg.DSCP = dscp
-	}
-	log.Debugf("config: %+v", cfg)
-	return cfg, nil
-}
 
 func updateSysStats(sysstats *client.SysStats, statsserver client.StatsServer, interval time.Duration) {
 	stats, err := sysstats.CollectRuntimeStats(interval)
@@ -147,7 +88,7 @@ func main() {
 	if verboseFlag {
 		log.SetLevel(log.DebugLevel)
 	}
-	cfg, err := prepareConfig(configFlag, flag.Args(), ifaceFlag, monitoringPortFlag, intervalFlag, dscpFlag)
+	cfg, err := client.PrepareConfig(configFlag, flag.Args(), ifaceFlag, monitoringPortFlag, intervalFlag, dscpFlag)
 	if err != nil {
 		log.Fatal(err)
 	}

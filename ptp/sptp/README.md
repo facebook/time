@@ -75,6 +75,7 @@ Example config:
 $ cat /etc/sptp.yaml
 iface: eth0
 interval: 1s
+exchangetimeout: 100ms
 timestamping: hardware
 monitoringport: 4269
 dscp: 35

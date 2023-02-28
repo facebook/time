@@ -327,7 +327,6 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 }
 
 func (p *SPTP) runInternal(ctx context.Context, interval time.Duration) error {
-	timeout := time.Duration(0.1 * float64(interval))
 	p.pi.SyncInterval(interval.Seconds())
 	var lock sync.Mutex
 
@@ -338,7 +337,7 @@ func (p *SPTP) runInternal(ctx context.Context, interval time.Duration) error {
 			addr := addr
 			c := c
 			eg.Go(func() error {
-				res := c.RunOnce(ictx, timeout)
+				res := c.RunOnce(ictx, p.cfg.ExchangeTimeout)
 				lock.Lock()
 				defer lock.Unlock()
 				results[addr] = res
