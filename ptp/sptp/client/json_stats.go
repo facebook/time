@@ -49,7 +49,7 @@ func (s *JSONStats) Start(monitoringport int) {
 
 // handleRootRequest is a handler used for all http monitoring requests
 func (s *JSONStats) handleRootRequest(w http.ResponseWriter, r *http.Request) {
-	js, err := json.Marshal(s.gmStats)
+	js, err := json.Marshal(s.GetStats())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -62,7 +62,7 @@ func (s *JSONStats) handleRootRequest(w http.ResponseWriter, r *http.Request) {
 
 // handleCountersRequest is a handler used for all http monitoring requests
 func (s *JSONStats) handleCountersRequest(w http.ResponseWriter, r *http.Request) {
-	js, err := json.Marshal(s.counters)
+	js, err := json.Marshal(s.GetCounters())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

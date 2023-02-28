@@ -60,13 +60,22 @@ func (s *Stats) SetCounter(key string, val int64) {
 	s.mux.Unlock()
 }
 
-// Get returns an map of counters
-func (s *Stats) Get() map[string]int64 {
+// GetCounters returns an map of counters
+func (s *Stats) GetCounters() map[string]int64 {
 	ret := make(map[string]int64)
 	s.mux.Lock()
 	for key, val := range s.counters {
 		ret[key] = val
 	}
+	s.mux.Unlock()
+	return ret
+}
+
+// GetStats returns an all gm stats
+func (s *Stats) GetStats() gmstats.Stats {
+	ret := make(gmstats.Stats, len(s.gmStats))
+	s.mux.Lock()
+	copy(ret, s.gmStats)
 	s.mux.Unlock()
 	return ret
 }
