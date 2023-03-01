@@ -265,6 +265,7 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 	result := RunResult{
 		Server: c.server,
 	}
+	c.m.cleanup()
 
 	eg.Go(func() error {
 		// ask for delay
@@ -294,7 +295,6 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 					}
 				} else {
 					log.Debugf("latest measurement: %+v", latest)
-					c.m.cleanup(latest.Timestamp, time.Minute)
 					result.Measurement = latest
 					return nil
 				}

@@ -218,23 +218,10 @@ func (m *measurements) latest() (*MeasurementResult, error) {
 	}, nil
 }
 
-func (m *measurements) cleanup(latest time.Time, maxAge time.Duration) {
+func (m *measurements) cleanup() {
 	m.Lock()
 	defer m.Unlock()
-	toDrop := []uint16{}
-	for seq, v := range m.data {
-		if v.Complete() {
-			toDrop = append(toDrop, seq)
-			continue
-		}
-		if !v.Complete() && latest.Sub(v.LatestTS()) > maxAge {
-			toDrop = append(toDrop, seq)
-			continue
-		}
-	}
-	for _, seq := range toDrop {
-		delete(m.data, seq)
-	}
+	m.data = map[uint16]*mData{}
 }
 
 func newMeasurements(cfg *MeasurementConfig) *measurements {

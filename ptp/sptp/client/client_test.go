@@ -76,6 +76,11 @@ func TestClientRun(t *testing.T) {
 	c, err := newClient("127.0.0.1", cid, eventConn, mcfg, statsServer)
 	require.NoError(t, err)
 
+	// put stuff into measurements to make sure it got cleaned before the run
+	c.m.data[124] = &mData{
+		t2: time.Now(),
+	}
+
 	// handle whatever client is sending over eventConn
 	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.sync", int64(1))
 	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.announce", int64(1))
@@ -114,6 +119,9 @@ func TestClientRun(t *testing.T) {
 	require.NotEqual(t, 0, runResult.Measurement.ServerToClientDiff)
 	require.NotEqual(t, 0, runResult.Measurement.ClientToServerDiff)
 	require.False(t, runResult.Measurement.Timestamp.IsZero())
+	// make sure only latest measurements are stored, none of the previous stuff
+	require.Nil(t, c.m.data[123])
+	require.Equal(t, 1, len(c.m.data))
 }
 
 func TestClientTimeout(t *testing.T) {

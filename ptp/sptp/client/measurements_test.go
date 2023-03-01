@@ -336,3 +336,17 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 	}
 	assert.Equal(t, want, got, "measurements with mean path delay filter and skipped path delay sample")
 }
+
+func TestMeasurementsCleanup(t *testing.T) {
+	mcfg := &MeasurementConfig{}
+	m := newMeasurements(mcfg)
+	m.data[123] = &mData{
+		t2: time.Now(),
+	}
+	m.data[0] = &mData{
+		t1: time.Now(),
+	}
+	require.Equal(t, 2, len(m.data))
+	m.cleanup()
+	require.Equal(t, 0, len(m.data))
+}
