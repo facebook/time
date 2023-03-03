@@ -350,3 +350,16 @@ func TestMeasurementsCleanup(t *testing.T) {
 	m.cleanup()
 	require.Equal(t, 0, len(m.data))
 }
+
+func TestMDataComplete(t *testing.T) {
+	d := mData{}
+	require.False(t, d.Complete())
+	d.t1 = time.Now()
+	require.False(t, d.Complete())
+	d.t2 = time.Now()
+	require.False(t, d.Complete())
+	d.t3 = time.Now()
+	require.False(t, d.Complete())
+	d.t4 = time.Now()
+	require.True(t, d.Complete())
+}

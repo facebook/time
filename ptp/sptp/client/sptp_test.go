@@ -19,6 +19,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 )
 
 func init() {
@@ -230,6 +232,171 @@ func TestRunInternalAllDead(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
-	err = p.runInternal(ctx, time.Second)
+	err = p.runInternal(ctx)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestRunListenerNoAddr(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ReadPacketWithRXTimestamp().AnyTimes()
+	mockGenConn := NewMockUDPConn(ctrl)
+	mockGenConn.EXPECT().ReadFromUDP(gomock.Any()).AnyTimes()
+	mockPHC := NewMockPHCIface(ctrl)
+	mockServo := NewMockServo(ctrl)
+	mockStatsServer := NewMockStatsServer(ctrl)
+
+	p := &SPTP{
+		phc:   mockPHC,
+		pi:    mockServo,
+		stats: mockStatsServer,
+		cfg: &Config{
+			Interval: time.Second,
+			Servers: map[string]int{
+				"192.168.0.10": 1,
+				"192.168.0.11": 2,
+			},
+		},
+		eventConn: mockEventConn,
+		genConn:   mockGenConn,
+	}
+	err := p.initClients()
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	err = p.RunListener(ctx)
+	require.EqualError(t, err, "received packet on port 320 with nil source address")
+}
+
+func TestRunListenerError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ReadPacketWithRXTimestamp().Return([]byte{}, &unix.SockaddrInet6{}, time.Time{}, fmt.Errorf("some error")).AnyTimes()
+	mockGenConn := NewMockUDPConn(ctrl)
+	mockGenConn.EXPECT().ReadFromUDP(gomock.Any()).Return(2, nil, fmt.Errorf("some error")).AnyTimes()
+	mockPHC := NewMockPHCIface(ctrl)
+	mockServo := NewMockServo(ctrl)
+	mockStatsServer := NewMockStatsServer(ctrl)
+
+	p := &SPTP{
+		phc:   mockPHC,
+		pi:    mockServo,
+		stats: mockStatsServer,
+		cfg: &Config{
+			Interval: time.Second,
+			Servers: map[string]int{
+				"192.168.0.10": 1,
+				"192.168.0.11": 2,
+			},
+		},
+		eventConn: mockEventConn,
+		genConn:   mockGenConn,
+	}
+	err := p.initClients()
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err = p.RunListener(ctx)
+	require.EqualError(t, err, "some error")
+}
+
+func TestRunListenerGood(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	sentEvent := 0
+	sentGen := 0
+	mockEventConn.EXPECT().ReadPacketWithRXTimestamp().DoAndReturn(func() ([]byte, unix.Sockaddr, time.Time, error) {
+		// limit how many we send, so we don't overwhelm the client. packets from uknown IPs will be discarded
+		if sentEvent > 10 {
+			return nil, &unix.SockaddrInet4{}, time.Time{}, nil
+		}
+		addr := "192.168.0.11"
+		if sentEvent%2 == 0 {
+			addr = "192.168.0.10"
+		}
+		var addrBytes [4]byte
+		copy(addrBytes[:], net.ParseIP(addr).To4())
+		sentEvent++
+		return []byte{1, 2, 3, 4}, &unix.SockaddrInet4{Addr: addrBytes, Port: 319}, time.Now(), nil
+	}).AnyTimes()
+
+	mockGenConn := NewMockUDPConn(ctrl)
+	mockGenConn.EXPECT().ReadFromUDP(gomock.Any()).DoAndReturn(func(b []byte) (int, *net.UDPAddr, error) {
+		// limit how many we send, so we don't overwhelm the client. packets from uknown IPs will be discarded
+		if sentGen > 10 {
+			return 0, &net.UDPAddr{}, nil
+		}
+		sentGen++
+		addr := "192.168.0.11"
+		if sentGen%2 == 0 {
+			addr = "192.168.0.10"
+		}
+		udpAddr := &net.UDPAddr{
+			IP:   net.ParseIP(addr),
+			Port: 320,
+		}
+		b[0] = 9
+		b[1] = 3
+		b[2] = 7
+		b[3] = 4
+
+		return 4, udpAddr, nil
+	}).AnyTimes()
+
+	mockPHC := NewMockPHCIface(ctrl)
+	mockServo := NewMockServo(ctrl)
+	mockStatsServer := NewMockStatsServer(ctrl)
+
+	p := &SPTP{
+		phc:   mockPHC,
+		pi:    mockServo,
+		stats: mockStatsServer,
+		cfg: &Config{
+			Interval: time.Second,
+			Servers: map[string]int{
+				"192.168.0.10": 1,
+				"192.168.0.11": 2,
+			},
+		},
+		eventConn: mockEventConn,
+		genConn:   mockGenConn,
+	}
+	err := p.initClients()
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err = p.RunListener(ctx)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	receivedEvent10 := 0
+	receivedGen10 := 0
+	receivedEvent11 := 0
+	receivedGen11 := 0
+	nctx, ncancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer ncancel()
+LOOP:
+	for {
+		select {
+		case <-nctx.Done():
+			break LOOP
+		case p := <-p.clients["192.168.0.10"].inChan:
+			if p.data[0] == 1 {
+				receivedEvent10++
+			} else if p.data[0] == 9 {
+				receivedGen10++
+			}
+		case p := <-p.clients["192.168.0.11"].inChan:
+			if p.data[0] == 1 {
+				receivedEvent11++
+			} else if p.data[0] == 9 {
+				receivedGen11++
+			}
+		}
+	}
+	require.Equal(t, sentGen/2, receivedGen10, "expect to receive N general packets to client 192.168.0.10")
+	require.Equal(t, sentEvent/2+1, receivedEvent10, "expect to receive N event packets to client 192.168.0.10")
+	require.Equal(t, sentGen/2+1, receivedGen11, "expect to receive N general packets to client 192.168.0.11")
+	require.Equal(t, sentEvent/2, receivedEvent11, "expect to receive N event packets to client 192.168.0.11")
 }

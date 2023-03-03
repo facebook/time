@@ -51,23 +51,6 @@ func (d *mData) Complete() bool {
 	return !d.t1.IsZero() && !d.t2.IsZero() && !d.t3.IsZero() && !d.t4.IsZero()
 }
 
-func (d *mData) LatestTS() time.Time {
-	var res time.Time
-	if d.t1.After(res) {
-		res = d.t1
-	}
-	if d.t2.After(res) {
-		res = d.t2
-	}
-	if d.t3.After(res) {
-		res = d.t3
-	}
-	if d.t4.After(res) {
-		res = d.t4
-	}
-	return res
-}
-
 // MeasurementResult is a single measured datapoint
 type MeasurementResult struct {
 	Delay              time.Duration
@@ -183,7 +166,7 @@ func (m *measurements) latest() (*MeasurementResult, error) {
 	defer m.Unlock()
 	var lastData *mData
 	for _, v := range m.data {
-		if v.t1.IsZero() || v.t2.IsZero() || v.t3.IsZero() || v.t4.IsZero() {
+		if !v.Complete() {
 			continue
 		}
 		if lastData == nil || v.t2.After(lastData.t2) {
