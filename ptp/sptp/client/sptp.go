@@ -156,7 +156,7 @@ func (p *SPTP) init() error {
 	if err = unix.SetNonblock(connFd, false); err != nil {
 		return fmt.Errorf("failed to set event socket to blocking: %w", err)
 	}
-	p.eventConn = newUDPConnTS(eventConn)
+	p.eventConn = newUDPConnTS(eventConn, connFd)
 
 	// Configure TX timestamp attempts and timemouts
 	timestamp.AttemptsTXTS = p.cfg.AttemptsTXTS
@@ -210,6 +210,10 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 				n, addr, err := p.genConn.ReadFromUDP(response)
 				if err != nil {
 					doneChan <- err
+					return
+				}
+				if addr == nil {
+					doneChan <- fmt.Errorf("received packet on port 320 with nil source address")
 					return
 				}
 				log.Debugf("got packet on port 320, n = %v, addr = %v", n, addr)
@@ -326,8 +330,8 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	}
 }
 
-func (p *SPTP) runInternal(ctx context.Context, interval time.Duration) error {
-	p.pi.SyncInterval(interval.Seconds())
+func (p *SPTP) runInternal(ctx context.Context) error {
+	p.pi.SyncInterval(p.cfg.Interval.Seconds())
 	var lock sync.Mutex
 
 	tick := func() {
@@ -363,19 +367,19 @@ func (p *SPTP) runInternal(ctx context.Context, interval time.Duration) error {
 			}
 			return ctx.Err()
 		case <-timer.C:
-			timer.Reset(interval)
+			timer.Reset(p.cfg.Interval)
 			tick()
 		}
 	}
 }
 
 // Run makes things run, continuously
-func (p *SPTP) Run(ctx context.Context, interval time.Duration) error {
+func (p *SPTP) Run(ctx context.Context) error {
 	go func() {
 		log.Debugf("starting listener")
 		if err := p.RunListener(ctx); err != nil {
 			log.Fatal(err)
 		}
 	}()
-	return p.runInternal(ctx, interval)
+	return p.runInternal(ctx)
 }

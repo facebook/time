@@ -23,79 +23,15 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sys/unix"
 
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/sptp/stats"
-	"github.com/facebook/time/timestamp"
 )
-
-// re-export timestamping
-const (
-	// HWTIMESTAMP is a hardware timestamp
-	HWTIMESTAMP = timestamp.HWTIMESTAMP
-	// SWTIMESTAMP is a software timestamp
-	SWTIMESTAMP = timestamp.SWTIMESTAMP
-)
-
-// UDPConn describes what functionality we expect from UDP connection
-type UDPConn interface {
-	ReadFromUDP(b []byte) (int, *net.UDPAddr, error)
-	WriteTo(b []byte, addr net.Addr) (int, error)
-	Close() error
-}
-
-// UDPConnWithTS describes what functionality we expect from UDP connection that allows us to read TX timestamps
-type UDPConnWithTS interface {
-	UDPConn
-	WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, error)
-	ReadPacketWithRXTimestamp() ([]byte, unix.Sockaddr, time.Time, error)
-}
-
-type udpConnTS struct {
-	*net.UDPConn
-	l sync.Mutex
-}
-
-func newUDPConnTS(conn *net.UDPConn) *udpConnTS {
-	return &udpConnTS{
-		UDPConn: conn,
-	}
-}
-
-func (c *udpConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, error) {
-	c.l.Lock()
-	defer c.l.Unlock()
-	n, err := c.WriteTo(b, addr)
-	if err != nil {
-		return 0, time.Time{}, err
-	}
-	// get FD of the connection. Can be optimized by doing this when connection is created
-	connFd, err := timestamp.ConnFd(c.UDPConn)
-	if err != nil {
-		return 0, time.Time{}, fmt.Errorf("failed to get conn fd udp connection: %w", err)
-	}
-	hwts, _, err := timestamp.ReadTXtimestamp(connFd)
-	if err != nil {
-		return 0, time.Time{}, fmt.Errorf("failed to get timestamp of last packet: %w", err)
-	}
-	return n, hwts, nil
-}
-
-func (c *udpConnTS) ReadPacketWithRXTimestamp() ([]byte, unix.Sockaddr, time.Time, error) {
-	// get FD of the connection. Can be optimized by doing this when connection is created
-	connFd, err := timestamp.ConnFd(c.UDPConn)
-	if err != nil {
-		return nil, nil, time.Time{}, fmt.Errorf("failed to get conn fd udp connection: %w", err)
-	}
-	return timestamp.ReadPacketWithRXTimestamp(connFd)
-}
 
 // corrToDuration converts PTP CorrectionField to time.Duration, ignoring
 // case where correction is too big, and dropping fractions of nanoseconds

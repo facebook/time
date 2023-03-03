@@ -85,6 +85,9 @@ func TestClientRun(t *testing.T) {
 	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.sync", int64(1))
 	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.announce", int64(1))
 	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.tx.delay_req", int64(1))
+	// unexpected packet we just ignore
+	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.delay_req", int64(1))
+	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.unsupported", int64(1))
 	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ net.Addr) (int, time.Time, error) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
@@ -96,6 +99,10 @@ func TestClientRun(t *testing.T) {
 		c.inChan <- &inPacket{
 			data: syncBytes,
 			ts:   time.Now(),
+		}
+		// send in irrelevant packet client should ignore
+		c.inChan <- &inPacket{
+			data: []byte{1, 2, 3, 4, 5},
 		}
 
 		announce = announcePkt(0)
@@ -141,4 +148,36 @@ func TestClientTimeout(t *testing.T) {
 	runResult := c.RunOnce(ctx, 100*time.Millisecond)
 	require.NotNil(t, runResult)
 	require.Error(t, runResult.Error, "full client run should fail")
+}
+
+func TestClientBadPacket(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	cid := ptp.ClockIdentity(0xc42a1fffe6d7ca6)
+
+	eventConn := NewMockUDPConnWithTS(ctrl)
+	mcfg := &MeasurementConfig{}
+	statsServer := NewMockStatsServer(ctrl)
+	c, err := newClient("127.0.0.1", cid, eventConn, mcfg, statsServer)
+	require.NoError(t, err)
+
+	// handle whatever client is sending over eventConn
+	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.tx.delay_req", int64(1))
+	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ net.Addr) (int, time.Time, error) {
+		delayReq := &ptp.SyncDelayReq{}
+		err := ptp.FromBytes(b, delayReq)
+		require.Nil(t, err, "reading delayReq msg")
+		c.inChan <- &inPacket{
+			data: []byte{},
+			ts:   time.Now(),
+		}
+
+		return 10, time.Now(), nil
+	})
+
+	ctx := context.Background()
+	runResult := c.RunOnce(ctx, 100*time.Millisecond)
+	require.NotNil(t, runResult)
+	require.Error(t, runResult.Error, "full client run should fail")
+	require.Equal(t, "127.0.0.1", runResult.Server, "run result should have correct server")
 }

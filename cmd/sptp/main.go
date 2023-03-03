@@ -60,7 +60,7 @@ func doWork(cfg *client.Config) error {
 		return err
 	}
 	ctx := context.Background()
-	return p.Run(ctx, cfg.Interval)
+	return p.Run(ctx)
 }
 
 func main() {
