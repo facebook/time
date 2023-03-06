@@ -103,10 +103,14 @@ const (
 const (
 	SourceStateSync        SourceStateType = 0
 	SourceStateUnreach     SourceStateType = 1
-	SourceStateFalseTicket SourceStateType = 2
+	SourceStateFalseTicker SourceStateType = 2
 	SourceStateJittery     SourceStateType = 3
 	SourceStateCandidate   SourceStateType = 4
 	SourceStateOutlier     SourceStateType = 5
+
+	// API backward compatibility for a misnamed
+	// constant. See issue #269
+	SourceStateFalseTicket SourceStateType = SourceStateFalseTicker
 )
 
 // source data flags
@@ -183,7 +187,7 @@ func (r ResponseStatusType) String() string {
 var SourceStateDesc = [6]string{
 	"sync",
 	"unreach",
-	"falseticket",
+	"falseticker",
 	"jittery",
 	"candidate",
 	"outlier",
