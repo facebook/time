@@ -146,7 +146,7 @@ func EnableHWTimestamps(connFd int, iface string) error {
 			return err
 		}
 		// try again with more narrow filter
-		if err := ioctlTimestamp(connFd, iface, hwtstampFilterPTPv2Event); err != nil {
+		if err := ioctlTimestamp(connFd, iface, hwtstampFilterPTPv2L4Event); err != nil {
 			return err
 		}
 	}
