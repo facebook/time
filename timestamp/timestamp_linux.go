@@ -169,7 +169,7 @@ func EnableHWTimestamps(connFd int, iface string) error {
 
 func waitForHWTS(connFd int) error {
 	// Wait until TX timestamp is ready
-	fds := []unix.PollFd{{Fd: int32(connFd), Events: unix.POLLPRI, Revents: 0}}
+	fds := []unix.PollFd{{Fd: int32(connFd), Events: unix.POLLERR, Revents: 0}}
 	for {
 		_, err := unix.Poll(fds, int(TimeoutTXTS.Milliseconds()))
 		if !errors.Is(err, syscall.EINTR) {
