@@ -50,5 +50,8 @@ Client C library and Go daemon to provide TrueTime API based on PTP time.
 ### servo
 Pi servo library
 
+### clock
+Wrapper around CLOCK_ADJTIME syscall
+
 # License
 time is licensed under Apache 2.0 as found in the [LICENSE file](LICENSE).
