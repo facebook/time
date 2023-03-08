@@ -59,6 +59,7 @@ type Config struct {
 	MetricsAggregationWindow time.Duration
 	AttemptsTXTS             int
 	TimeoutTXTS              time.Duration
+	FreeRunning              bool
 }
 
 // DefaultConfig returns Config initialized with default values
@@ -99,8 +100,8 @@ func (c *Config) Validate() error {
 	if len(c.Servers) == 0 {
 		return fmt.Errorf("at least one server must be specified")
 	}
-	if c.Timestamping != HWTIMESTAMP {
-		return fmt.Errorf("only %q timestamping is supported at the moment", HWTIMESTAMP)
+	if c.Timestamping != HWTIMESTAMP && c.Timestamping != SWTIMESTAMP {
+		return fmt.Errorf("only %q and %q timestamping is supported", HWTIMESTAMP, SWTIMESTAMP)
 	}
 	if c.Iface == "" {
 		return fmt.Errorf("iface must be specified")

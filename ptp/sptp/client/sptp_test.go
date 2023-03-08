@@ -41,10 +41,10 @@ func init() {
 func TestProcessResultsNoResults(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockPHC := NewMockPHCIface(ctrl)
+	mockClock := NewMockClock(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
 	p := &SPTP{
-		phc:   mockPHC,
+		clock: mockClock,
 		stats: mockStatsServer,
 	}
 	results := map[string]*RunResult{}
@@ -58,11 +58,11 @@ func TestProcessResultsNoResults(t *testing.T) {
 func TestProcessResultsEmptyResult(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockPHC := NewMockPHCIface(ctrl)
+	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
 	p := &SPTP{
-		phc:   mockPHC,
+		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
 	}
@@ -81,9 +81,9 @@ func TestProcessResultsSingle(t *testing.T) {
 	require.Nil(t, err)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockPHC := NewMockPHCIface(ctrl)
-	mockPHC.EXPECT().AdjFreqPPB(gomock.Any()).Return(nil)
-	mockPHC.EXPECT().Step(gomock.Any()).Return(nil)
+	mockClock := NewMockClock(ctrl)
+	mockClock.EXPECT().AdjFreqPPB(gomock.Any()).Return(nil)
+	mockClock.EXPECT().Step(gomock.Any()).Return(nil)
 	mockServo := NewMockServo(ctrl)
 	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.StateJump)
 	mockServo.EXPECT().Sample(int64(-100001000), gomock.Any()).Return(14.2, servo.StateLocked)
@@ -92,7 +92,7 @@ func TestProcessResultsSingle(t *testing.T) {
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(100))
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	p := &SPTP{
-		phc:   mockPHC,
+		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
 	}
@@ -127,9 +127,9 @@ func TestProcessResultsMulti(t *testing.T) {
 	require.Nil(t, err)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockPHC := NewMockPHCIface(ctrl)
-	mockPHC.EXPECT().AdjFreqPPB(gomock.Any()).Return(nil)
-	mockPHC.EXPECT().Step(gomock.Any()).Return(nil)
+	mockClock := NewMockClock(ctrl)
+	mockClock.EXPECT().AdjFreqPPB(gomock.Any()).Return(nil)
+	mockClock.EXPECT().Step(gomock.Any()).Return(nil)
 	mockServo := NewMockServo(ctrl)
 	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.StateJump)
 	mockServo.EXPECT().Sample(int64(-104002000), gomock.Any()).Return(14.2, servo.StateLocked)
@@ -140,7 +140,7 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 
 	p := &SPTP{
-		phc:   mockPHC,
+		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
 	}
@@ -196,8 +196,8 @@ func TestRunInternalAllDead(t *testing.T) {
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).Times(4)
-	mockPHC := NewMockPHCIface(ctrl)
-	mockPHC.EXPECT().AdjFreqPPB((float64(0)))
+	mockClock := NewMockClock(ctrl)
+	mockClock.EXPECT().AdjFreqPPB((float64(0)))
 	mockServo := NewMockServo(ctrl)
 	mockServo.EXPECT().SyncInterval(float64(1))
 	mockServo.EXPECT().MeanFreq()
@@ -210,7 +210,7 @@ func TestRunInternalAllDead(t *testing.T) {
 	mockStatsServer.EXPECT().SetGMStats(&gmstats.Stat{GMAddress: "192.168.0.11", Error: context.DeadlineExceeded.Error(), Priority3: 2}).Times(2)
 
 	p := &SPTP{
-		phc:   mockPHC,
+		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
 		cfg: &Config{
@@ -243,12 +243,12 @@ func TestRunListenerNoAddr(t *testing.T) {
 	mockEventConn.EXPECT().ReadPacketWithRXTimestamp().AnyTimes()
 	mockGenConn := NewMockUDPConn(ctrl)
 	mockGenConn.EXPECT().ReadFromUDP(gomock.Any()).AnyTimes()
-	mockPHC := NewMockPHCIface(ctrl)
+	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
 
 	p := &SPTP{
-		phc:   mockPHC,
+		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
 		cfg: &Config{
@@ -276,12 +276,12 @@ func TestRunListenerError(t *testing.T) {
 	mockEventConn.EXPECT().ReadPacketWithRXTimestamp().Return([]byte{}, &unix.SockaddrInet6{}, time.Time{}, fmt.Errorf("some error")).AnyTimes()
 	mockGenConn := NewMockUDPConn(ctrl)
 	mockGenConn.EXPECT().ReadFromUDP(gomock.Any()).Return(2, nil, fmt.Errorf("some error")).AnyTimes()
-	mockPHC := NewMockPHCIface(ctrl)
+	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
 
 	p := &SPTP{
-		phc:   mockPHC,
+		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
 		cfg: &Config{
@@ -346,12 +346,12 @@ func TestRunListenerGood(t *testing.T) {
 		return 4, udpAddr, nil
 	}).AnyTimes()
 
-	mockPHC := NewMockPHCIface(ctrl)
+	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
 
 	p := &SPTP{
-		phc:   mockPHC,
+		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
 		cfg: &Config{

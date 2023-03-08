@@ -49,7 +49,7 @@ type SPTP struct {
 
 	stats StatsServer
 
-	phc PHCIface
+	clock Clock
 
 	bestGM string
 
@@ -162,13 +162,22 @@ func (p *SPTP) init() error {
 	timestamp.AttemptsTXTS = p.cfg.AttemptsTXTS
 	timestamp.TimeoutTXTS = p.cfg.TimeoutTXTS
 
-	phcDev, err := NewPHC(p.cfg.Iface)
-	if err != nil {
-		return err
+	if p.cfg.FreeRunning {
+		log.Warningf("operating in FreeRunning mode, will NOT adjust clock")
+		p.clock = &FreeRunningClock{}
+	} else {
+		if p.cfg.Timestamping == HWTIMESTAMP {
+			phcDev, err := NewPHC(p.cfg.Iface)
+			if err != nil {
+				return err
+			}
+			p.clock = phcDev
+		} else {
+			p.clock = &SysClock{}
+		}
 	}
-	p.phc = phcDev
 
-	freq, err := p.phc.FrequencyPPB()
+	freq, err := p.clock.FrequencyPPB()
 	log.Debugf("starting PHC frequency: %v", freq)
 	if err != nil {
 		return err
@@ -182,7 +191,7 @@ func (p *SPTP) init() error {
 		servoCfg.FirstStepThreshold = int64(p.cfg.FirstStepThreshold)
 	}
 	pi := servo.NewPiServo(servoCfg, servo.DefaultPiServoCfg(), -freq)
-	maxFreq, err := p.phc.MaxFreqPPB()
+	maxFreq, err := p.clock.MaxFreqPPB()
 	if err != nil {
 		log.Warningf("max PHC frequency error: %v", err)
 		maxFreq = phc.DefaultMaxClockFreqPPB
@@ -319,12 +328,17 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	log.Infof("freqAdj: %v, state: %s(%d)", freqAdj, state, state)
 	switch state {
 	case servo.StateJump:
-		if err := p.phc.Step(-1 * bm.Offset); err != nil {
+		if err := p.clock.Step(-1 * bm.Offset); err != nil {
 			log.Errorf("failed to step freq by %v: %v", -1*bm.Offset, err)
 		}
-	default:
-		if err := p.phc.AdjFreqPPB(-1 * freqAdj); err != nil {
+	case servo.StateLocked:
+		if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
 			log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
+		}
+		if sysClk, ok := p.clock.(*SysClock); ok {
+			if err := sysClk.SetSync(); err != nil {
+				log.Errorf("failed to set sys clock sync state")
+			}
 		}
 	}
 }
@@ -361,7 +375,7 @@ func (p *SPTP) runInternal(ctx context.Context) error {
 			log.Debugf("cancelled main loop")
 			freqAdj := p.pi.MeanFreq()
 			log.Infof("Existing, setting freq to: %v", -1*freqAdj)
-			if err := p.phc.AdjFreqPPB(-1 * freqAdj); err != nil {
+			if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
 				log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
 			}
 			return ctx.Err()

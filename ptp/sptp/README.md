@@ -68,6 +68,9 @@ Additionally, `originTimestamp` field contains **T1** (time when server sent *SY
 go get github.com/facebook/time/cmd/sptp@latest
 ```
 
+## Requirements
+Linux with a NIC that either has PHC and supports hardware timestamping or at very least supports `SOF_TIMESTAMPING_TX_SOFTWARE` to be used in 'software' ts mode (see [Linux Kernel timestamping docs](https://docs.kernel.org/networking/timestamping.html) for details).
+
 ## Configuration
 
 Example config:
@@ -77,6 +80,7 @@ iface: eth0
 interval: 1s
 exchangetimeout: 100ms
 timestamping: hardware
+freerunning: false
 monitoringport: 4269
 dscp: 35
 firststepthreshold: 1s
