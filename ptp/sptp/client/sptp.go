@@ -199,7 +199,6 @@ func (p *SPTP) init() error {
 // RunListener starts a listener, must be run before any client-server interactions happen
 func (p *SPTP) RunListener(ctx context.Context) error {
 	eg, ctx := errgroup.WithContext(ctx)
-	var err error
 	// get packets from general port
 	eg.Go(func() error {
 		// it's done in non-blocking way, so if context is cancelled we exit correctly
@@ -229,7 +228,7 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 		case <-ctx.Done():
 			log.Debugf("cancelled general port receiver")
 			return ctx.Err()
-		case err = <-doneChan:
+		case err := <-doneChan:
 			return err
 		}
 	})
@@ -258,7 +257,7 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 		case <-ctx.Done():
 			log.Debugf("cancelled event port receiver")
 			return ctx.Err()
-		case err = <-doneChan:
+		case err := <-doneChan:
 			return err
 		}
 	})
