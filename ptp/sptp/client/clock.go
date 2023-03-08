@@ -20,11 +20,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/facebook/time/clock"
 	"github.com/facebook/time/phc"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
-// PHCIface is the iface for phc device controls
-type PHCIface interface {
+// Clock is the iface for clock device controls
+type Clock interface {
 	AdjFreqPPB(freq float64) error
 	Step(step time.Duration) error
 	FrequencyPPB() (float64, error)
@@ -65,4 +68,79 @@ func (p *PHC) FrequencyPPB() (float64, error) {
 // MaxFreqPPB returns maximum frequency adjustment supported by PHC
 func (p *PHC) MaxFreqPPB() (float64, error) {
 	return phc.MaxFreqAdjPPBFromDevice(p.devicePath)
+}
+
+// SysClock groups methods for interacting with system clock
+type SysClock struct{}
+
+// AdjFreqPPB adjusts PHC frequency
+func (c *SysClock) AdjFreqPPB(freqPPB float64) error {
+	state, err := clock.AdjFreqPPB(unix.CLOCK_REALTIME, freqPPB)
+	if err == nil && state != unix.TIME_OK {
+		log.Warningf("clock state %d is not TIME_OK after adjusting frequency", state)
+	}
+	return err
+}
+
+// SetSync sets clock status to TIME_OK
+func (c *SysClock) SetSync() error {
+	tx := &unix.Timex{}
+	// man(2) clock_adjtime, turn ppb to ppm
+	tx.Modes = clock.AdjStatus | clock.AdjMaxError
+	state, err := clock.Adjtime(unix.CLOCK_REALTIME, tx)
+
+	if err == nil && state != unix.TIME_OK {
+		return fmt.Errorf("clock state %d is not TIME_OK after setting sync state", state)
+	}
+	return err
+}
+
+// Step jumps time on PHC
+func (c *SysClock) Step(step time.Duration) error {
+	state, err := clock.Step(unix.CLOCK_REALTIME, step)
+	if err == nil && state != unix.TIME_OK {
+		log.Warningf("clock state %d is not TIME_OK after stepping", state)
+	}
+	return err
+}
+
+// FrequencyPPB returns current PHC frequency
+func (c *SysClock) FrequencyPPB() (float64, error) {
+	freqPPB, state, err := clock.FrequencyPPB(unix.CLOCK_REALTIME)
+	if err == nil && state != unix.TIME_OK {
+		log.Warningf("clock state %d is not TIME_OK after getting current frequency", state)
+	}
+	return freqPPB, err
+}
+
+// MaxFreqPPB returns maximum frequency adjustment supported by PHC
+func (c *SysClock) MaxFreqPPB() (float64, error) {
+	freqPPB, state, err := clock.MaxFreqPPB(unix.CLOCK_REALTIME)
+	if err == nil && state != unix.TIME_OK {
+		log.Warningf("clock state %d is not TIME_OK after getting max frequency adjustment", state)
+	}
+	return freqPPB, err
+}
+
+// FreeRunningClock is a dummy clock that does nothing
+type FreeRunningClock struct{}
+
+// AdjFreqPPB adjusts PHC frequency
+func (c *FreeRunningClock) AdjFreqPPB(freqPPB float64) error {
+	return nil
+}
+
+// Step jumps time on PHC
+func (c *FreeRunningClock) Step(step time.Duration) error {
+	return nil
+}
+
+// FrequencyPPB returns current PHC frequency
+func (c *FreeRunningClock) FrequencyPPB() (float64, error) {
+	return 0.0, nil
+}
+
+// MaxFreqPPB returns maximum frequency adjustment supported by PHC
+func (c *FreeRunningClock) MaxFreqPPB() (float64, error) {
+	return 0.0, nil
 }

@@ -26,31 +26,31 @@ import (
 	time "time"
 )
 
-// MockPHCIface is a mock of PHCIface interface
-type MockPHCIface struct {
+// MockClock is a mock of PHCIface interface
+type MockClock struct {
 	ctrl     *gomock.Controller
-	recorder *MockPHCIfaceMockRecorder
+	recorder *MockClockMockRecorder
 }
 
-// MockPHCIfaceMockRecorder is the mock recorder for MockPHCIface
-type MockPHCIfaceMockRecorder struct {
-	mock *MockPHCIface
+// MockClockMockRecorder is the mock recorder for MockClock
+type MockClockMockRecorder struct {
+	mock *MockClock
 }
 
-// NewMockPHCIface creates a new mock instance
-func NewMockPHCIface(ctrl *gomock.Controller) *MockPHCIface {
-	mock := &MockPHCIface{ctrl: ctrl}
-	mock.recorder = &MockPHCIfaceMockRecorder{mock}
+// NewMockClock creates a new mock instance
+func NewMockClock(ctrl *gomock.Controller) *MockClock {
+	mock := &MockClock{ctrl: ctrl}
+	mock.recorder = &MockClockMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use
-func (m *MockPHCIface) EXPECT() *MockPHCIfaceMockRecorder {
+func (m *MockClock) EXPECT() *MockClockMockRecorder {
 	return m.recorder
 }
 
 // AdjFreqPPB mocks base method
-func (m *MockPHCIface) AdjFreqPPB(freq float64) error {
+func (m *MockClock) AdjFreqPPB(freq float64) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AdjFreqPPB", freq)
 	ret0, _ := ret[0].(error)
@@ -58,13 +58,13 @@ func (m *MockPHCIface) AdjFreqPPB(freq float64) error {
 }
 
 // AdjFreqPPB indicates an expected call of AdjFreqPPB
-func (mr *MockPHCIfaceMockRecorder) AdjFreqPPB(freq interface{}) *gomock.Call {
+func (mr *MockClockMockRecorder) AdjFreqPPB(freq interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdjFreqPPB", reflect.TypeOf((*MockPHCIface)(nil).AdjFreqPPB), freq)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdjFreqPPB", reflect.TypeOf((*MockClock)(nil).AdjFreqPPB), freq)
 }
 
 // Step mocks base method
-func (m *MockPHCIface) Step(step time.Duration) error {
+func (m *MockClock) Step(step time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Step", step)
 	ret0, _ := ret[0].(error)
@@ -72,13 +72,13 @@ func (m *MockPHCIface) Step(step time.Duration) error {
 }
 
 // Step indicates an expected call of Step
-func (mr *MockPHCIfaceMockRecorder) Step(step interface{}) *gomock.Call {
+func (mr *MockClockMockRecorder) Step(step interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Step", reflect.TypeOf((*MockPHCIface)(nil).Step), step)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Step", reflect.TypeOf((*MockClock)(nil).Step), step)
 }
 
 // FrequencyPPB mocks base method
-func (m *MockPHCIface) FrequencyPPB() (float64, error) {
+func (m *MockClock) FrequencyPPB() (float64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FrequencyPPB")
 	ret0, _ := ret[0].(float64)
@@ -87,13 +87,13 @@ func (m *MockPHCIface) FrequencyPPB() (float64, error) {
 }
 
 // FrequencyPPB indicates an expected call of FrequencyPPB
-func (mr *MockPHCIfaceMockRecorder) FrequencyPPB() *gomock.Call {
+func (mr *MockClockMockRecorder) FrequencyPPB() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FrequencyPPB", reflect.TypeOf((*MockPHCIface)(nil).FrequencyPPB))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FrequencyPPB", reflect.TypeOf((*MockClock)(nil).FrequencyPPB))
 }
 
 // MaxFreqPPB mocks base method
-func (m *MockPHCIface) MaxFreqPPB() (float64, error) {
+func (m *MockClock) MaxFreqPPB() (float64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MaxFreqPPB")
 	ret0, _ := ret[0].(float64)
@@ -102,7 +102,7 @@ func (m *MockPHCIface) MaxFreqPPB() (float64, error) {
 }
 
 // MaxFreqPPB indicates an expected call of MaxFreqPPB
-func (mr *MockPHCIfaceMockRecorder) MaxFreqPPB() *gomock.Call {
+func (mr *MockClockMockRecorder) MaxFreqPPB() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxFreqPPB", reflect.TypeOf((*MockPHCIface)(nil).MaxFreqPPB))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxFreqPPB", reflect.TypeOf((*MockClock)(nil).MaxFreqPPB))
 }
