@@ -78,13 +78,13 @@ func delayRespPkt(seq int, receiveTimestamp time.Time) *ptp.DelayResp {
 	}
 }
 
-func newTestTester() *Tester {
-	cfg := &TestConfig{
+func newTestTester() *PTP4lTester {
+	cfg := &PTP4lTestConfig{
 		Timeout:   500 * time.Millisecond,
 		Server:    "whatever",
 		Interface: "ethblah",
 	}
-	lt := &Tester{
+	lt := &PTP4lTester{
 		inChan: make(chan *inPacket, 10),
 		cfg:    cfg,
 		sendTS: make(map[uint16]time.Time),
@@ -105,6 +105,7 @@ func TestLinearizabilityTestRunTest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	lt := newTestTester()
+	lt.listenerRunning = true
 	txTime := time.Unix(0, 1653574589806120900)
 	rxTime := time.Unix(0, 1653574589806121900)
 	genConn := NewMockUDPConn(ctrl)
@@ -173,7 +174,7 @@ func TestLinearizabilityTestRunTest(t *testing.T) {
 	// this will run 'runSingleTest' without subscription request,
 	// then retry with subscription request after no response is received
 	result := lt.RunTest(ctx)
-	want := TestResult{
+	want := PTP4lTestResult{
 		Server:      lt.cfg.Server,
 		Error:       nil,
 		TXTimestamp: txTime,
@@ -186,6 +187,7 @@ func TestLinearizabilityTestRunTestTimeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	lt := newTestTester()
+	lt.listenerRunning = true
 	txTime := time.Unix(0, 1653574589806120900)
 	// rxTime := time.Unix(0, 1653574589806121900)
 	genConn := NewMockUDPConn(ctrl)
@@ -206,8 +208,8 @@ func TestLinearizabilityTestRunTestTimeout(t *testing.T) {
 	// this will run 'runSingleTest' without subscription request,
 	// then retry with subscription request after no response is received
 	result := lt.RunTest(ctx)
-	require.ErrorIs(t, result.Error, context.DeadlineExceeded)
-	want := TestResult{
+	require.ErrorIs(t, result.Err(), context.DeadlineExceeded)
+	want := PTP4lTestResult{
 		Server:      lt.cfg.Server,
 		Error:       context.DeadlineExceeded,
 		TXTimestamp: time.Time{},
@@ -220,6 +222,7 @@ func TestLinearizabilityTestRunSingleTest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	lt := newTestTester()
+	lt.listenerRunning = true
 	txTime := time.Unix(0, 1653574589806120900)
 	rxTime := time.Unix(0, 1653574589806121900)
 	genConn := NewMockUDPConn(ctrl)
@@ -282,7 +285,7 @@ func TestLinearizabilityTestRunSingleTest(t *testing.T) {
 	defer cancel()
 	err := lt.runSingleTest(ctx, time.Second)
 	require.NoError(t, err)
-	want := &TestResult{
+	want := &PTP4lTestResult{
 		Server:      lt.cfg.Server,
 		Error:       nil,
 		TXTimestamp: txTime,
@@ -295,6 +298,7 @@ func TestLinearizabilityTestRunSingleTestError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	lt := newTestTester()
+	lt.listenerRunning = true
 	genConn := NewMockUDPConn(ctrl)
 	genConn.EXPECT().WriteTo(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ net.Addr) (int, error) {
 		r := bytes.NewReader(b)
@@ -346,6 +350,7 @@ func TestLinearizabilityTestRunSingleTestNoSub(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	lt := newTestTester()
+	lt.listenerRunning = true
 	txTime := time.Unix(0, 1653574589806120900)
 	rxTime := time.Unix(0, 1653574589806121900)
 	genConn := NewMockUDPConn(ctrl)
@@ -373,7 +378,7 @@ func TestLinearizabilityTestRunSingleTestNoSub(t *testing.T) {
 	err := lt.runSingleTest(ctx, 0)
 	require.NoError(t, err)
 
-	want := &TestResult{
+	want := &PTP4lTestResult{
 		Server:      lt.cfg.Server,
 		Error:       nil,
 		TXTimestamp: txTime,
@@ -386,6 +391,7 @@ func TestLinearizabilityTestRunSingleTestTimeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	lt := newTestTester()
+	lt.listenerRunning = true
 
 	genConn := NewMockUDPConn(ctrl)
 	genConn.EXPECT().WriteTo(gomock.Any(), gomock.Any())
@@ -404,6 +410,7 @@ func TestLinearizabilityTestRunSingleTestTimeoutNoSub(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	lt := newTestTester()
+	lt.listenerRunning = true
 
 	genConn := NewMockUDPConn(ctrl)
 	lt.gConn = genConn
@@ -421,19 +428,13 @@ func TestLinearizabilityTestRunSingleTestTimeoutNoSub(t *testing.T) {
 func TestTestResultGood(t *testing.T) {
 	testCases := []struct {
 		name    string
-		in      *TestResult
+		in      PTP4lTestResult
 		want    bool
 		wantErr bool
 	}{
 		{
-			name:    "nil",
-			in:      nil,
-			want:    false,
-			wantErr: true,
-		},
-		{
 			name: "error",
-			in: &TestResult{
+			in: PTP4lTestResult{
 				Server:      "time01",
 				RXTimestamp: time.Time{},
 				TXTimestamp: time.Time{},
@@ -444,7 +445,7 @@ func TestTestResultGood(t *testing.T) {
 		},
 		{
 			name: "fail",
-			in: &TestResult{
+			in: PTP4lTestResult{
 				Server:      "time01",
 				RXTimestamp: time.Unix(0, 1647359186979431900),
 				TXTimestamp: time.Unix(0, 1647359186979432900),
@@ -455,7 +456,7 @@ func TestTestResultGood(t *testing.T) {
 		},
 		{
 			name: "pass",
-			in: &TestResult{
+			in: PTP4lTestResult{
 				Server:      "time01",
 				RXTimestamp: time.Unix(0, 1647359186979432900),
 				TXTimestamp: time.Unix(0, 1647359186979431900),
@@ -481,17 +482,12 @@ func TestTestResultGood(t *testing.T) {
 func TestTestResultExplain(t *testing.T) {
 	testCases := []struct {
 		name string
-		in   *TestResult
+		in   PTP4lTestResult
 		want string
 	}{
 		{
-			name: "nil",
-			in:   nil,
-			want: "linearizability test is nil",
-		},
-		{
 			name: "error",
-			in: &TestResult{
+			in: PTP4lTestResult{
 				Server:      "time01",
 				RXTimestamp: time.Time{},
 				TXTimestamp: time.Time{},
@@ -501,7 +497,7 @@ func TestTestResultExplain(t *testing.T) {
 		},
 		{
 			name: "fail",
-			in: &TestResult{
+			in: PTP4lTestResult{
 				Server:      "time01",
 				RXTimestamp: time.Unix(0, 1647359186979431900),
 				TXTimestamp: time.Unix(0, 1647359186979432900),
@@ -511,7 +507,7 @@ func TestTestResultExplain(t *testing.T) {
 		},
 		{
 			name: "pass",
-			in: &TestResult{
+			in: PTP4lTestResult{
 				Server:      "time01",
 				RXTimestamp: time.Unix(0, 1647359186979432900),
 				TXTimestamp: time.Unix(0, 1647359186979431900),
@@ -529,32 +525,32 @@ func TestTestResultExplain(t *testing.T) {
 }
 
 func TestProcessMonitoringResults(t *testing.T) {
-	results := map[string]*TestResult{
-		"server01.nha1": { // tests pass - TX before RX
+	results := map[string]TestResult{
+		"server01.nha1": PTP4lTestResult{ // tests pass - TX before RX
 			Server:      "192.168.0.10",
 			Error:       nil,
 			TXTimestamp: time.Unix(0, 1653574589806127700),
 			RXTimestamp: time.Unix(0, 1653574589806127800),
 		},
-		"server02.nha1": { // tests failed - TX after RX
+		"server02.nha1": PTP4lTestResult{ // tests failed - TX after RX
 			Server:      "192.168.0.11",
 			Error:       nil,
 			TXTimestamp: time.Unix(0, 1653574589806127730),
 			RXTimestamp: time.Unix(0, 1653574589806127600),
 		},
-		"server03.nha1": { // drained server
+		"server03.nha1": PTP4lTestResult{ // drained server
 			Server:      "192.168.0.12",
 			Error:       ErrGrantDenied,
 			TXTimestamp: time.Time{},
 			RXTimestamp: time.Time{},
 		},
-		"server04.nha1": { // tests pass - TX before RX
+		"server04.nha1": PTP4lTestResult{ // tests pass - TX before RX
 			Server:      "192.168.0.13",
 			Error:       nil,
 			TXTimestamp: time.Unix(0, 1653574589806127900),
 			RXTimestamp: time.Unix(0, 1653574589806127930),
 		},
-		"server05.nha1": { // failing server
+		"server05.nha1": PTP4lTestResult{ // failing server
 			Server:      "192.168.0.14",
 			Error:       fmt.Errorf("ooops"),
 			TXTimestamp: time.Time{},
