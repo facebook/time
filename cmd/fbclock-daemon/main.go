@@ -40,7 +40,6 @@ func main() {
 		csvPath        string
 		verbose        bool
 		monitoringPort int
-		isSPTP         bool
 	)
 
 	flag.Usage = func() {
@@ -51,7 +50,7 @@ func main() {
 
 	flag.StringVar(&cfg.Iface, "iface", "eth0", "Network interface to use PHC device from. Used for linearizability tests as well. Must match what PTP client is configured to use")
 	flag.StringVar(&cfg.PTPClientAddress, "ptpclientaddress", ptp.PTP4lSock, "Path to PTP client management address")
-	flag.BoolVar(&isSPTP, "sptp", false, "Connect to sptp instead ot ptp4l")
+	flag.BoolVar(&cfg.SPTP, "sptp", false, "Connect to sptp instead ot ptp4l")
 	flag.IntVar(&monitoringPort, "monitoringport", 21039, "Port to run monitoring server on")
 	flag.IntVar(&cfg.RingSize, "buffer", daemon.MathDefaultHistory, "Size of ring buffers, must be at least size of largest num of samples used in M and W formulas")
 	flag.StringVar(&cfg.Math.M, "m", daemon.MathDefaultM, "Math expression for M")
@@ -112,13 +111,7 @@ func main() {
 	}
 	stats := daemon.NewJSONStats()
 	go stats.Start(monitoringPort)
-	var fetcher daemon.DataFetcher
-	if isSPTP {
-		fetcher = &daemon.HTTPFetcher{}
-	} else {
-		fetcher = &daemon.SockFetcher{}
-	}
-	s, err := daemon.New(cfg, stats, l, fetcher)
+	s, err := daemon.New(cfg, stats, l)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -88,10 +88,7 @@ type DataFetcher interface {
 // does the math
 // and populates shared memory for client library to read from.
 type Daemon struct {
-	//*fb303.FacebookBase
-	//server thrift.Server
 	DataFetcher
-
 	cfg   *Config
 	state *daemonState
 	stats StatsServer
@@ -114,16 +111,21 @@ func minRingSize(configuredRingSize int, interval time.Duration) int {
 }
 
 // New creates new fbclock-daemon
-func New(cfg *Config, stats StatsServer, l Logger, dataFetcher DataFetcher) (*Daemon, error) {
+func New(cfg *Config, stats StatsServer, l Logger) (*Daemon, error) {
 	// we need at least 1m of samples for aggregate values
 	effectiveRingSize := minRingSize(cfg.RingSize, cfg.Interval)
 	s := &Daemon{
-		stats:       stats,
-		state:       newDaemonState(effectiveRingSize),
-		cfg:         cfg,
-		l:           l,
-		DataFetcher: dataFetcher,
+		stats: stats,
+		state: newDaemonState(effectiveRingSize),
+		cfg:   cfg,
+		l:     l,
 	}
+	if cfg.SPTP {
+		s.DataFetcher = &HTTPFetcher{}
+	} else {
+		s.DataFetcher = &SockFetcher{}
+	}
+
 	phcDevice, err := phc.IfaceToPHCDevice(cfg.Iface)
 	if err != nil {
 		return nil, fmt.Errorf("finding PHC device for %q: %w", cfg.Iface, err)
@@ -319,7 +321,7 @@ func targetsDiff(oldTargets []string, targets []string) (added []string, removed
 }
 
 func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
-	testers := map[string]*linearizability.Tester{}
+	testers := map[string]linearizability.Tester{}
 	oldTargets := []string{}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -330,11 +332,10 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 	defer ticker.Stop()
 	for ; true; <-ticker.C { // first run without delay, then at interval
 		eg := new(errgroup.Group)
-		currentResults := map[string]*linearizability.TestResult{}
-
+		currentResults := map[string]linearizability.TestResult{}
 		targets, err := s.DataFetcher.FetchGMs(s.cfg)
 		if err != nil {
-			log.Errorf("getting linearizability test targets from ptp4l: %v", err)
+			log.Errorf("getting linearizability test targets: %v", err)
 			continue
 		}
 		log.Debugf("targets: %v, err: %v", targets, err)
@@ -350,30 +351,22 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 			server := server
 			log.Debugf("talking to %s", server)
 			lt, found := testers[server]
-			if !found { // create tester and start listener only once
-				cfg := &linearizability.TestConfig{
-					Timeout:   time.Second,
-					Server:    server,
-					Interface: s.cfg.Iface,
+			if !found {
+				if s.cfg.SPTP {
+					lt, err = linearizability.NewSPTPTester(server, fmt.Sprintf("http://%s/", s.cfg.PTPClientAddress))
+				} else {
+					lt, err = linearizability.NewPTP4lTester(server, s.cfg.Iface)
 				}
-				lt, err = linearizability.NewTester(cfg)
 				if err != nil {
 					log.Errorf("creating tester: %v", err)
 					continue
 				}
 				testers[server] = lt
-				go func() {
-					server := server
-					lt := lt
-					if err := lt.RunListener(ctx); err != nil {
-						log.Errorf("running listener for %s: %v", server, err)
-					}
-				}()
 			}
 			eg.Go(func() error {
 				res := lt.RunTest(ctx)
 				m.Lock()
-				currentResults[server] = &res
+				currentResults[server] = res
 				m.Unlock()
 				return nil
 			})

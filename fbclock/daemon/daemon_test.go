@@ -53,18 +53,18 @@ func newTestDaemon(cfg *Config, stats StatsServer) *Daemon {
 func TestDaemonStateLinearizabilityRing(t *testing.T) {
 	s := newDaemonState(3)
 
-	probes := []*linearizability.TestResult{
-		{
+	probes := []linearizability.TestResult{
+		linearizability.PTP4lTestResult{
 			Server:      "server01",
 			TXTimestamp: time.Unix(0, 1647359186979431100),
 			RXTimestamp: time.Unix(0, 1647359186979431635),
 		},
-		{
+		linearizability.PTP4lTestResult{
 			Server:      "server02",
 			TXTimestamp: time.Unix(0, 1647359186979431200),
 			RXTimestamp: time.Unix(0, 1647359186979431735),
 		},
-		{
+		linearizability.PTP4lTestResult{
 			Server:      "server01",
 			TXTimestamp: time.Unix(0, 1647359186979431300),
 			RXTimestamp: time.Unix(0, 1647359186979431835),

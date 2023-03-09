@@ -32,6 +32,7 @@ type Config struct {
 	Interval                    time.Duration // how often do we poll ptp4l and update data in shm
 	Iface                       string        // network interface to use
 	LinearizabilityTestInterval time.Duration // perform the linearizability test every so often
+	SPTP                        bool          // wherever we run in sptp or ptp4l mode
 }
 
 // EvalAndValidate makes sure config is valid and evaluates expressions for further use.
