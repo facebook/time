@@ -34,6 +34,14 @@ const (
 	freqEstMargin = 0.001
 )
 
+type filterState uint8
+
+const (
+	filterNoSpike filterState = iota
+	filterSpike
+	filterReset
+)
+
 // PiServoCfg is an integral servo config
 type PiServoCfg struct {
 	PiKp         float64
@@ -111,6 +119,13 @@ func (s *PiServo) SetMaxFreq(freq float64) {
 	s.maxFreq = freq
 }
 
+func (s *PiServo) isSpike(offset int64, lastCorrection time.Time) filterState {
+	if s.filter == nil {
+		return filterNoSpike
+	}
+	return s.filter.isSpike(offset, lastCorrection)
+}
+
 // Sample function to calculate frequency based on the offset
 func (s *PiServo) Sample(offset int64, localTs uint64) (float64, State) {
 	var kiTerm, freqEstInterval, localDiff float64
@@ -182,10 +197,21 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, State) {
 			}
 			break
 		}
-		if s.filter != nil && s.filter.IsSpike(offset, s.lastCorrectionTime) {
-			ppb = s.filter.freqMean
+		fState := s.isSpike(offset, s.lastCorrectionTime)
+		if fState == filterSpike {
+			ppb = s.MeanFreq()
 			state = StateFilter
+			s.filter.skippedCount++ // it's safe because fState can only be filterNoSpike without filter
 			log.Warningf("servo filtered out offset %d", offset)
+			break
+		}
+		// if there were too many outstanding offsets, reset the filter and the servo
+		if fState == filterReset {
+			s.count = 0
+			s.drift = 0
+			s.filter.Reset() // it's safe because fState can only be filterNoSpike without filter
+			state = StateInit
+			log.Warning("servo was reset")
 			break
 		}
 		state = StateLocked
@@ -202,6 +228,8 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, State) {
 	s.lastFreq = ppb
 	if state == StateLocked && s.filter != nil {
 		s.filter.Sample(&PiServoFilterSample{offset: offset, freq: ppb})
+		s.filter.skippedCount = 0
+		s.lastCorrectionTime = time.Now()
 	}
 	if state == StateFilter {
 		state = StateLocked
@@ -222,21 +250,21 @@ func (s *PiServo) SyncInterval(interval float64) {
 	}
 }
 
-// IsSpike is used to check whether supplied offset is spike or not
-func (f *PiServoFilter) IsSpike(offset int64, lastCorrection time.Time) bool {
+// isSpike is used to check whether supplied offset is spike or not
+func (f *PiServoFilter) isSpike(offset int64, lastCorrection time.Time) filterState {
 	if f.skippedCount >= f.cfg.maxSkipCount {
-		f.Reset()
-		return false
+		return filterReset
 	}
 	maxOffsetLocked := int64(f.cfg.offsetStdevFactor * float64(f.offsetStdev))
-	// TODO: compensate sync delay wait time
-	//maxOffsetLocked += (time.Now() - lastCorrection) * f.cfg.freqStdevFactor * f.freqStdev +
+	secPassed := math.Round(time.Since(lastCorrection).Seconds())
+	waitFactor := secPassed * (f.cfg.freqStdevFactor*f.freqStdev + float64(f.cfg.maxFreqChange/2))
+
+	maxOffsetLocked += int64(waitFactor)
 
 	if offset > max(maxOffsetLocked, f.cfg.minOffsetLocked) && f.skippedCount < f.cfg.maxSkipCount {
-		f.skippedCount++
-		return true
+		return filterSpike
 	}
-	return false
+	return filterNoSpike
 }
 
 // Sample to add a sample to filter and recalculate value
