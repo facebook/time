@@ -441,7 +441,7 @@ func (lt *PTP4lTester) handleMsg(msg *inPacket) error {
 
 // runListener starts incoming packet listener.
 // It's meant to be run in a goroutine before issuing calls to RunTest.
-func (lt *PTP4lTester) runListener(ctx context.Context) error {
+func (lt *PTP4lTester) runListener(ctx context.Context) {
 	listen := func(conn UDPConn, expectedAddr net.IP) {
 		for {
 			response := make([]uint8, 1024)
@@ -464,7 +464,6 @@ func (lt *PTP4lTester) runListener(ctx context.Context) error {
 	lt.listenerRunning = true
 	<-ctx.Done()
 	log.Debugf("cancelled port receiver")
-	return ctx.Err()
 }
 
 // runSingleTest performs one Tester run and will exit on completion.
@@ -475,12 +474,9 @@ func (lt *PTP4lTester) runListener(ctx context.Context) error {
 // The result of the test will be stored in the lt.result variable, unless error was returned.
 func (lt *PTP4lTester) runSingleTest(ctx context.Context, subDuration time.Duration) error {
 	if !lt.listenerRunning {
-		go func() {
-			if err := lt.runListener(ctx); err != nil {
-				log.Fatal("failed to run PTP listenner")
-			}
-		}()
+		go lt.runListener(ctx)
 	}
+
 	lt.setState(stateInit)
 	var err error
 	ctx, cancel := context.WithTimeout(ctx, lt.cfg.Timeout)
@@ -532,11 +528,7 @@ func (lt *PTP4lTester) runSingleTest(ctx context.Context, subDuration time.Durat
 // The result of the test will be returned, including any error arising during the test.
 func (lt *PTP4lTester) RunTest(ctx context.Context) TestResult {
 	if !lt.listenerRunning {
-		go func() {
-			if err := lt.runListener(ctx); err != nil {
-				log.Fatal("failed to run PTP listenner")
-			}
-		}()
+		go lt.runListener(ctx)
 	}
 
 	result := PTP4lTestResult{

@@ -121,11 +121,16 @@ func (lt *SPTPTester) RunTest(ctx context.Context) TestResult {
 		Error:  nil,
 	}
 	log.Debugf("test starting %s", lt.cfg.Server)
+	found := false
 	for _, s := range lt.stats {
 		if s.GMAddress == lt.cfg.Server {
 			result.Offset = s.Offset
+			found = true
 			break
 		}
+	}
+	if !found {
+		result.Error = fmt.Errorf("failed to find offset results for %s ", lt.cfg.Server)
 	}
 	lt.result = &result
 
