@@ -104,10 +104,10 @@ func (c *Client) sendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
 	}
 	// send packet
 	_, hwts, err := c.eventConn.WriteToWithTS(b, c.eventAddr)
+	c.eventSequence++
 	if err != nil {
 		return 0, time.Time{}, err
 	}
-	c.eventSequence++
 
 	log.Debugf("sent packet via port %d to %v", ptp.PortEvent, c.eventAddr)
 	return seq, hwts, nil
