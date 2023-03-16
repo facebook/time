@@ -93,7 +93,7 @@ func TestClientRun(t *testing.T) {
 		err := ptp.FromBytes(b, delayReq)
 		require.Nil(t, err, "reading delayReq msg")
 
-		sync := syncPkt(0)
+		sync := syncPkt(int(delayReq.SequenceID))
 		syncBytes, err := ptp.Bytes(sync)
 		require.Nil(t, err)
 		c.inChan <- &inPacket{
@@ -105,7 +105,7 @@ func TestClientRun(t *testing.T) {
 			data: []byte{1, 2, 3, 4, 5},
 		}
 
-		announce = announcePkt(0)
+		announce = announcePkt(int(delayReq.SequenceID))
 		announceBytes, err := ptp.Bytes(announce)
 		require.Nil(t, err)
 		c.inChan <- &inPacket{

@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	rnd "math/rand"
 	"net"
 	"strings"
 	"time"
@@ -122,13 +123,14 @@ func newClient(target string, clockID ptp.ClockIdentity, eventConn UDPConnWithTS
 		return nil, err
 	}
 	c := &Client{
-		clockID:   clockID,
-		eventConn: eventConn,
-		eventAddr: eventAddr,
-		inChan:    make(chan *inPacket, 100),
-		server:    target,
-		m:         newMeasurements(mcfg),
-		stats:     stats,
+		clockID:       clockID,
+		eventSequence: uint16(rnd.Int31n(65536)),
+		eventConn:     eventConn,
+		eventAddr:     eventAddr,
+		inChan:        make(chan *inPacket, 100),
+		server:        target,
+		m:             newMeasurements(mcfg),
+		stats:         stats,
 	}
 	return c, nil
 }
