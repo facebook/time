@@ -95,6 +95,7 @@ func TestProcessResultsSingle(t *testing.T) {
 		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
+		cfg:   DefaultConfig(),
 	}
 	results := map[string]*RunResult{
 		"iamthebest": {
@@ -143,6 +144,7 @@ func TestProcessResultsMulti(t *testing.T) {
 		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
+		cfg:   DefaultConfig(),
 	}
 	announce0 := announcePkt(0)
 	announce0.GrandmasterIdentity = ptp.ClockIdentity(0x001)

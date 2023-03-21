@@ -277,8 +277,13 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 func (p *SPTP) processResults(results map[string]*RunResult) {
 	now := time.Now()
 	if !p.lastTick.IsZero() {
-		log.Infof("tick took %vms sys time", now.Sub(p.lastTick).Milliseconds())
-		p.stats.SetCounter("ptp.sptp.tick_duration_ns", int64(now.Sub(p.lastTick)))
+		tickDuration := now.Sub(p.lastTick)
+		log.Debugf("tick took %vms sys time", tickDuration.Milliseconds())
+		// +-10% of interval
+		if 100*tickDuration > 110*p.cfg.Interval || 100*tickDuration < 90*p.cfg.Interval {
+			log.Warningf("tick took %vms, which is outside of expected +-10%% from the interval %vms", tickDuration.Milliseconds(), p.cfg.Interval.Milliseconds())
+		}
+		p.stats.SetCounter("ptp.sptp.tick_duration_ns", int64(tickDuration))
 	}
 	p.lastTick = now
 	gmsTotal := len(results)
@@ -322,10 +327,9 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 		log.Warningf("new best master selected: %q (%s)", bestAddr, bm.Announce.GrandmasterIdentity)
 		p.bestGM = bestAddr
 	}
-
-	log.Infof("best master: %v, offset: %v, delay: %v", bestAddr, bm.Offset, bm.Delay)
+	log.Debugf("best master %q (%s)", bestAddr, bm.Announce.GrandmasterIdentity)
 	freqAdj, state := p.pi.Sample(int64(bm.Offset), uint64(bm.Timestamp.UnixNano()))
-	log.Infof("freqAdj: %v, state: %s(%d)", freqAdj, state, state)
+	log.Infof("offset %10d s%d freq %+7.0f path delay %10d", bm.Offset.Nanoseconds(), state, freqAdj, bm.Delay.Nanoseconds())
 	switch state {
 	case servo.StateJump:
 		if err := p.clock.Step(-1 * bm.Offset); err != nil {
