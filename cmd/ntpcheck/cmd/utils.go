@@ -238,11 +238,7 @@ func addFakeSecondZoneInfo(srcfile, dstfile string, offsetMonth int) error {
 
 	defer o.Close()
 
-	if err := leapsectz.Write(o, '2', ls, ""); err != nil {
-		return err
-	}
-
-	return nil
+	return leapsectz.Write(o, '2', ls, "")
 }
 
 // cli vars

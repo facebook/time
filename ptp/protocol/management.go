@@ -139,10 +139,7 @@ func (p *Management) MarshalBinaryToBuf(bytes io.Writer) error {
 		}
 		return binary.Write(bytes, binary.BigEndian, b)
 	}
-	if err := binary.Write(bytes, binary.BigEndian, p.TLV); err != nil {
-		return err
-	}
-	return nil
+	return binary.Write(bytes, binary.BigEndian, p.TLV)
 }
 
 // MarshalBinary converts packet to []bytes

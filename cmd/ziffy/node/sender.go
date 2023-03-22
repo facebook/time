@@ -243,10 +243,7 @@ func (s *Sender) sendEventMsg(p ptp.Packet, ptpConn int, ptpAddr unix.Sockaddr) 
 	if err != nil {
 		return err
 	}
-	if err := unix.Sendto(ptpConn, b, 0, ptpAddr); err != nil {
-		return err
-	}
-	return nil
+	return unix.Sendto(ptpConn, b, 0, ptpAddr)
 }
 
 func (s *Sender) monitorIcmp(conn net.PacketConn) {

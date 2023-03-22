@@ -60,7 +60,7 @@ func (j *JSONStats) toMap() (export map[string]int64) {
 }
 
 // handleRequest is a handler used for all http monitoring requests
-func (j *JSONStats) handleRequest(w http.ResponseWriter, r *http.Request) {
+func (j *JSONStats) handleRequest(w http.ResponseWriter, _ *http.Request) {
 	js, err := json.Marshal(j.toMap())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -114,11 +114,7 @@ func EnableSWTimestampsRx(connFd int) error {
 	flags := unix.SOF_TIMESTAMPING_RX_SOFTWARE |
 		unix.SOF_TIMESTAMPING_SOFTWARE
 	// Allow reading of SW timestamps via socket
-	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, timestamping, flags); err != nil {
-		return err
-	}
-
-	return nil
+	return unix.SetsockoptInt(connFd, unix.SOL_SOCKET, timestamping, flags)
 }
 
 // EnableSWTimestamps enables SW timestamps (TX and RX) on the socket
@@ -132,10 +128,7 @@ func EnableSWTimestamps(connFd int) error {
 		return err
 	}
 
-	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1); err != nil {
-		return err
-	}
-	return nil
+	return unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1)
 }
 
 // EnableHWTimestamps enables HW timestamps (TX and RX) on the socket
@@ -161,10 +154,7 @@ func EnableHWTimestamps(connFd int, iface string) error {
 		return err
 	}
 
-	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1); err != nil {
-		return err
-	}
-	return nil
+	return unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1)
 }
 
 func waitForHWTS(connFd int) error {

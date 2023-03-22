@@ -46,10 +46,7 @@ func (c *Config) EvalAndValidate() error {
 	if c.Interval > time.Minute {
 		return fmt.Errorf("bad config: 'interval' is over a minute")
 	}
-	if err := c.Math.Prepare(); err != nil {
-		return err
-	}
-	return nil
+	return c.Math.Prepare()
 }
 
 // ReadConfig reads config and unmarshals it from yaml into Config
