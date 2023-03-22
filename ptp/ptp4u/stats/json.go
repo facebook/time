@@ -75,7 +75,7 @@ func (s *JSONStats) Snapshot() {
 }
 
 // handleRequest is a handler used for all http monitoring requests
-func (s *JSONStats) handleRequest(w http.ResponseWriter, r *http.Request) {
+func (s *JSONStats) handleRequest(w http.ResponseWriter, _ *http.Request) {
 	js, err := json.Marshal(s.report.toMap())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

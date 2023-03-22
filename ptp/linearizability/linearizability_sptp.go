@@ -115,7 +115,7 @@ func (lt *SPTPTester) Close() error {
 // RunTest performs one Tester run and will exit on completion.
 // The result of the test will be returned, including any error arising during the test.
 // Warning: the listener must be started via RunListener before calling this function.
-func (lt *SPTPTester) RunTest(ctx context.Context) TestResult {
+func (lt *SPTPTester) RunTest(_ context.Context) TestResult {
 	result := SPTPTestResult{
 		Server: lt.cfg.Server,
 		Error:  nil,

@@ -56,10 +56,7 @@ func (c *chronyConn) Close() error {
 	if err := os.RemoveAll(c.local); err != nil {
 		return err
 	}
-	if err := c.Conn.Close(); err != nil {
-		return err
-	}
-	return nil
+	return c.Conn.Close()
 }
 
 type chronyClient interface {

@@ -16,3 +16,9 @@ linters:
     - unparam # unused function parameters
     - usestdlibvars # possibility to use variables/constants from the Go standard library
     - whitespace # leading and trailing whitespace
+issues:
+  exclude-rules:
+      # not worth it
+    - path: _test\.go
+      linters:
+        - revive

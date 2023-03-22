@@ -126,12 +126,12 @@ func (c *SysClock) MaxFreqPPB() (float64, error) {
 type FreeRunningClock struct{}
 
 // AdjFreqPPB adjusts PHC frequency
-func (c *FreeRunningClock) AdjFreqPPB(freqPPB float64) error {
+func (c *FreeRunningClock) AdjFreqPPB(_ float64) error {
 	return nil
 }
 
 // Step jumps time on PHC
-func (c *FreeRunningClock) Step(step time.Duration) error {
+func (c *FreeRunningClock) Step(_ time.Duration) error {
 	return nil
 }
 
