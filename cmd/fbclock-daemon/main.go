@@ -38,6 +38,7 @@ func main() {
 		manageDevice   bool
 		csvLog         bool
 		csvPath        string
+		logSampleRate  int
 		verbose        bool
 		monitoringPort int
 	)
@@ -63,6 +64,7 @@ func main() {
 	flag.BoolVar(&manageDevice, "manage", true, fmt.Sprintf("Manage device. This will setup %q as a copy of PHC device associated with given network interface", daemon.ManagedPTPDevicePath))
 	flag.BoolVar(&csvLog, "csvlog", true, "Log all the metrics as CSV to log")
 	flag.StringVar(&csvPath, "csvpath", "", "write CSV log into this file")
+	flag.IntVar(&logSampleRate, "logsamplerate", 1, "Sample metrics logs at this rate. 0 means metrics logging is turned off. 1 means every sample is logged, 100 means roughly one in 100 samples will be logged")
 	flag.BoolVar(&verbose, "verbose", false, "Verbose logging")
 
 	flag.Parse()
@@ -94,7 +96,7 @@ func main() {
 	// set up sample logging
 	w := log.StandardLogger().Writer()
 	defer w.Close()
-	var l daemon.Logger = daemon.NewDummyLogger(w)
+	var l daemon.Logger = daemon.NewDummyLogger(w, logSampleRate)
 	if csvLog {
 		csvW := io.Writer(w)
 		// set up logging of CSV samples to file
@@ -107,7 +109,7 @@ func main() {
 			// write both to stderr and file
 			csvW = io.MultiWriter(w, f)
 		}
-		l = daemon.NewCSVLogger(csvW)
+		l = daemon.NewCSVLogger(csvW, logSampleRate)
 	}
 	stats := daemon.NewJSONStats()
 	go stats.Start(monitoringPort)

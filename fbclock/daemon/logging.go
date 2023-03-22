@@ -20,6 +20,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"math/rand"
 	"strconv"
 	"time"
 )
@@ -59,6 +60,14 @@ var header = []string{
 	"clock_accuracy_mean",
 }
 
+func shouldLog(sampleRate int) bool {
+	if sampleRate < 1 {
+		return false
+	}
+	// randomized sampling
+	return rand.Intn(sampleRate) == 0
+}
+
 // CSVRecords returns all data from this sample as CSV. Must by synced with `header` variable.
 func (s *LogSample) CSVRecords() []string {
 	return []string{
@@ -87,13 +96,15 @@ type Logger interface {
 // CSVLogger logs Sample as CSV into given writer
 type CSVLogger struct {
 	csvwriter     *csv.Writer
+	sampleRate    int
 	printedHeader bool
 }
 
 // NewCSVLogger returns new CSVLogger
-func NewCSVLogger(w io.Writer) *CSVLogger {
+func NewCSVLogger(w io.Writer, sampleRate int) *CSVLogger {
 	return &CSVLogger{
-		csvwriter: csv.NewWriter(w),
+		csvwriter:  csv.NewWriter(w),
+		sampleRate: sampleRate,
 	}
 }
 
@@ -105,6 +116,9 @@ func (l *CSVLogger) Log(s *LogSample) error {
 		}
 		l.printedHeader = true
 	}
+	if !shouldLog(l.sampleRate) {
+		return nil
+	}
 	csv := s.CSVRecords()
 	if err := l.csvwriter.Write(csv); err != nil {
 		return err
@@ -115,16 +129,20 @@ func (l *CSVLogger) Log(s *LogSample) error {
 
 // DummyLogger logs M and W to given writer
 type DummyLogger struct {
-	w io.Writer
+	w          io.Writer
+	sampleRate int
 }
 
 // NewDummyLogger returns new DummyLogger
-func NewDummyLogger(w io.Writer) *DummyLogger {
-	return &DummyLogger{w: w}
+func NewDummyLogger(w io.Writer, sampleRate int) *DummyLogger {
+	return &DummyLogger{w: w, sampleRate: sampleRate}
 }
 
 // Log implements Logger interface
 func (l *DummyLogger) Log(s *LogSample) error {
+	if !shouldLog(l.sampleRate) {
+		return nil
+	}
 	_, err := fmt.Fprintf(l.w, "m = %v, w = %v\n", time.Duration(s.MeasurementNS), time.Duration(s.WindowNS))
 	return err
 }

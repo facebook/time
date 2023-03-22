@@ -58,6 +58,11 @@ var testSample1 = &LogSample{
 	ClockAccuracyMean:       100.1,
 }
 
+func TestShouldLog(t *testing.T) {
+	require.False(t, shouldLog(0))
+	require.True(t, shouldLog(1))
+}
+
 func TestLogSample_CSVRecords(t *testing.T) {
 	got := testSample0.CSVRecords()
 	want := []string{"1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2", "2.1", "2.2", "2.3", "25.1"}
@@ -70,7 +75,7 @@ func TestLogSample_CSVRecords(t *testing.T) {
 
 func TestCSVLogger_Log(t *testing.T) {
 	b := &bytes.Buffer{}
-	l := NewCSVLogger(b)
+	l := NewCSVLogger(b, 1)
 
 	err := l.Log(testSample0)
 	require.NoError(t, err)
