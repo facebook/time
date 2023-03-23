@@ -95,6 +95,10 @@ measurement:
   path_delay_filter: "median"
   path_delay_discard_filter_enabled: true
   path_delay_discard_below: 2us
+backoff:
+  mode: "linear"
+  step: 10
+  maxvalue: 60
 ```
 
 ## Server

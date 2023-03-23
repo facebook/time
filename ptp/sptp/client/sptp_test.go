@@ -61,13 +61,21 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
+
+	cfg := DefaultConfig()
+	cfg.Servers = map[string]int{
+		"192.168.0.10": 1,
+	}
 	p := &SPTP{
 		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
+		cfg:   cfg,
 	}
+	err := p.initClients()
+	require.NoError(t, err)
 	results := map[string]*RunResult{
-		"iamthebest": {},
+		"192.168.0.10": {},
 	}
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(0))
@@ -91,15 +99,20 @@ func TestProcessResultsSingle(t *testing.T) {
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(100))
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+
+	cfg := DefaultConfig()
+	cfg.Servers = map[string]int{
+		"192.168.0.10": 1,
+	}
 	p := &SPTP{
 		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
-		cfg:   DefaultConfig(),
+		cfg:   cfg,
 	}
 	results := map[string]*RunResult{
-		"iamthebest": {
-			Server: "iamthebest",
+		"192.168.0.10": {
+			Server: "192.168.0.10",
 			Measurement: &MeasurementResult{
 				Delay:              299995 * time.Microsecond,
 				ServerToClientDiff: 100,
@@ -109,18 +122,20 @@ func TestProcessResultsSingle(t *testing.T) {
 			},
 		},
 	}
+	err = p.initClients()
+	require.NoError(t, err)
 	// we step here
 	p.processResults(results)
-	require.Equal(t, "iamthebest", p.bestGM)
+	require.Equal(t, "192.168.0.10", p.bestGM)
 
-	results["iamthebest"].Measurement.Offset = -100001 * time.Microsecond
+	results["192.168.0.10"].Measurement.Offset = -100001 * time.Microsecond
 	// we adj here
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(100))
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.tick_duration_ns", gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	p.processResults(results)
-	require.Equal(t, "iamthebest", p.bestGM)
+	require.Equal(t, "192.168.0.10", p.bestGM)
 }
 
 func TestProcessResultsMulti(t *testing.T) {
@@ -140,12 +155,19 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 
+	cfg := DefaultConfig()
+	cfg.Servers = map[string]int{
+		"192.168.0.10": 1,
+		"192.168.0.11": 1,
+	}
 	p := &SPTP{
 		clock: mockClock,
 		pi:    mockServo,
 		stats: mockStatsServer,
-		cfg:   DefaultConfig(),
+		cfg:   cfg,
 	}
+	err = p.initClients()
+	require.NoError(t, err)
 	announce0 := announcePkt(0)
 	announce0.GrandmasterIdentity = ptp.ClockIdentity(0x001)
 	announce0.GrandmasterPriority2 = 2
@@ -153,8 +175,8 @@ func TestProcessResultsMulti(t *testing.T) {
 	announce1.GrandmasterIdentity = ptp.ClockIdentity(0x042)
 	announce1.GrandmasterPriority2 = 1
 	results := map[string]*RunResult{
-		"iamthebest": {
-			Server: "iamthebest",
+		"192.168.0.10": {
+			Server: "192.168.0.10",
 			Measurement: &MeasurementResult{
 				Delay:              299995 * time.Microsecond,
 				ServerToClientDiff: 100,
@@ -164,18 +186,18 @@ func TestProcessResultsMulti(t *testing.T) {
 				Announce:           *announce0,
 			},
 		},
-		"soontobebest": {
-			Server: "soontobebest",
+		"192.168.0.11": {
+			Server: "192.168.0.11",
 			Error:  fmt.Errorf("context deadline exceeded"),
 		},
 	}
 	// we step here
 	p.processResults(results)
-	require.Equal(t, "iamthebest", p.bestGM)
+	require.Equal(t, "192.168.0.10", p.bestGM)
 
-	results["iamthebest"].Measurement.Offset = -100001 * time.Microsecond
-	results["soontobebest"].Error = nil
-	results["soontobebest"].Measurement = &MeasurementResult{
+	results["192.168.0.10"].Measurement.Offset = -100001 * time.Microsecond
+	results["192.168.0.11"].Error = nil
+	results["192.168.0.11"].Measurement = &MeasurementResult{
 		Delay:              299995 * time.Microsecond,
 		ServerToClientDiff: 90,
 		ClientToServerDiff: 120,
@@ -190,7 +212,7 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	p.processResults(results)
-	require.Equal(t, "soontobebest", p.bestGM)
+	require.Equal(t, "192.168.0.11", p.bestGM)
 }
 
 func TestRunInternalAllDead(t *testing.T) {

@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -55,6 +56,7 @@ type SPTP struct {
 
 	clients    map[string]*Client
 	priorities map[string]int
+	backoff    map[string]*backoff
 	lastTick   time.Time
 
 	clockID ptp.ClockIdentity
@@ -81,6 +83,7 @@ func NewSPTP(cfg *Config, stats StatsServer) (*SPTP, error) {
 func (p *SPTP) initClients() error {
 	p.clients = map[string]*Client{}
 	p.priorities = map[string]int{}
+	p.backoff = map[string]*backoff{}
 	for server, prio := range p.cfg.Servers {
 		// normalize the address
 		ns := net.ParseIP(server).String()
@@ -90,6 +93,7 @@ func (p *SPTP) initClients() error {
 		}
 		p.clients[ns] = c
 		p.priorities[ns] = prio
+		p.backoff[ns] = newBackoff(p.cfg.Backoff)
 	}
 	return nil
 }
@@ -274,6 +278,19 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 	return eg.Wait()
 }
 
+func (p *SPTP) handleExchangeError(addr string, err error) {
+	if errors.Is(err, errBackoff) {
+		b := p.backoff[addr].tick()
+		log.Debugf("backoff %s: %d seconds", addr, b)
+	} else {
+		log.Errorf("result %s: %+v", addr, err)
+		b := p.backoff[addr].bump()
+		if b != 0 {
+			log.Warningf("backoff %s: extended by %d", addr, b)
+		}
+	}
+}
+
 func (p *SPTP) processResults(results map[string]*RunResult) {
 	now := time.Now()
 	if !p.lastTick.IsZero() {
@@ -295,9 +312,10 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 		s := runResultToStats(addr, res, p.priorities[addr], addr == p.bestGM)
 		p.stats.SetGMStats(s)
 		if res.Error == nil {
+			p.backoff[addr].reset()
 			log.Debugf("result %s: %+v", addr, res.Measurement)
 		} else {
-			log.Errorf("result %s: %+v", addr, res.Error)
+			p.handleExchangeError(addr, res.Error)
 			continue
 		}
 		if res.Measurement == nil {
@@ -357,6 +375,16 @@ func (p *SPTP) runInternal(ctx context.Context) error {
 		for addr, c := range p.clients {
 			addr := addr
 			c := c
+			if p.backoff[addr].active() {
+				// skip talking to this GM, we are in backoff mode
+				lock.Lock()
+				results[addr] = &RunResult{
+					Server: addr,
+					Error:  errBackoff,
+				}
+				lock.Unlock()
+				continue
+			}
 			eg.Go(func() error {
 				res := c.RunOnce(ictx, p.cfg.ExchangeTimeout)
 				lock.Lock()
