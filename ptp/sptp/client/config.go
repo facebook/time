@@ -26,6 +26,29 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+// BackoffConfig describes configuration for backoff in case of unavailable GM
+type BackoffConfig struct {
+	Mode     string
+	Step     int
+	MaxValue int
+}
+
+// Validate BackoffConfig is sane
+func (c *BackoffConfig) Validate() error {
+	if c.Mode != backoffNone && c.Mode != backoffFixed && c.Mode != backoffLinear && c.Mode != backoffExponential {
+		return fmt.Errorf("mode must be either %q, %q, %q or %q", backoffNone, backoffFixed, backoffLinear, backoffExponential)
+	}
+	if c.Mode != backoffNone {
+		if c.Step <= 0 {
+			return fmt.Errorf("step must be positive")
+		}
+		if c.Mode != backoffFixed && c.MaxValue <= 0 {
+			return fmt.Errorf("maxvalue must be positive")
+		}
+	}
+	return nil
+}
+
 // MeasurementConfig describes configuration for how we measure offset
 type MeasurementConfig struct {
 	PathDelayFilterLength         int           `yaml:"path_delay_filter_length"`          // over how many last path delays we filter
@@ -60,6 +83,7 @@ type Config struct {
 	AttemptsTXTS             int
 	TimeoutTXTS              time.Duration
 	FreeRunning              bool
+	Backoff                  BackoffConfig
 }
 
 // DefaultConfig returns Config initialized with default values
@@ -108,6 +132,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.Measurement.Validate(); err != nil {
 		return fmt.Errorf("invalid measurement config: %w", err)
+	}
+	if err := c.Backoff.Validate(); err != nil {
+		return fmt.Errorf("invalid backoff config: %w", err)
 	}
 	return nil
 }

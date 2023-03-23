@@ -99,6 +99,79 @@ measurement:
 	require.Equal(t, want, cfg)
 }
 
+func TestBackoffConfigValidate(t *testing.T) {
+	testCases := []struct {
+		name    string
+		in      BackoffConfig
+		wantErr bool
+	}{
+		{
+			name:    "empty",
+			in:      BackoffConfig{},
+			wantErr: false,
+		},
+		{
+			name: "zero step and maxvalue",
+			in: BackoffConfig{
+				Mode: backoffLinear,
+			},
+			wantErr: true,
+		},
+		{
+			name: "negative step",
+			in: BackoffConfig{
+				Mode:     backoffFixed,
+				Step:     -10,
+				MaxValue: 50,
+			},
+			wantErr: true,
+		},
+		{
+			name: "zero maxvalue",
+			in: BackoffConfig{
+				Mode: backoffLinear,
+				Step: 10,
+			},
+			wantErr: true,
+		},
+		{
+			name: "zero maxvalue, fixed mode",
+			in: BackoffConfig{
+				Mode: backoffFixed,
+				Step: 10,
+			},
+			wantErr: false,
+		},
+		{
+			name: "negative step",
+			in: BackoffConfig{
+				Mode:     backoffLinear,
+				Step:     10,
+				MaxValue: -10,
+			},
+			wantErr: true,
+		},
+		{
+			name: "unsupported mode",
+			in: BackoffConfig{
+				Mode: "blah",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.in.Validate()
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestMeasurementConfigValidate(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -346,6 +419,25 @@ func TestConfigValidate(t *testing.T) {
 				},
 				Measurement: MeasurementConfig{
 					PathDelayFilterLength: -1,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "bad backoff config",
+			in: Config{
+				Iface:                    "eth0",
+				Interval:                 time.Second,
+				ExchangeTimeout:          100 * time.Millisecond,
+				MetricsAggregationWindow: time.Duration(60) * time.Second,
+				AttemptsTXTS:             10,
+				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
+				Timestamping:             HWTIMESTAMP,
+				Servers: map[string]int{
+					"192.168.0.10": 0,
+				},
+				Backoff: BackoffConfig{
+					Mode: "fggl",
 				},
 			},
 			wantErr: true,
