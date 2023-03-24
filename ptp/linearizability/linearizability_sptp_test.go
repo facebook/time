@@ -119,10 +119,15 @@ func TestSPTPTestResultExplain(t *testing.T) {
 }
 
 func TestSPTPRunTest(t *testing.T) {
-	expected := SPTPTestResult{
+	expectedGood := SPTPTestResult{
+		Server: "127.0.0.1",
+		Offset: -42.42,
+		Error:  nil,
+	}
+	expectedBad := SPTPTestResult{
 		Server: "::1",
 		Offset: -43.43,
-		Error:  nil,
+		Error:  fmt.Errorf("oops"),
 	}
 	sampleResp := `
 	[
@@ -135,14 +140,25 @@ func TestSPTPRunTest(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	lt, err := NewSPTPTester("::1", ts.URL)
+	// Good
+	lt, err := NewSPTPTester("127.0.0.1", ts.URL)
 	require.NoError(t, err)
 
 	testResult := lt.RunTest(context.Background())
-	require.Equal(t, expected, testResult)
-	require.Equal(t, &expected, lt.result)
+	require.Equal(t, expectedGood, testResult)
+	require.Equal(t, &expectedGood, lt.result)
 	require.NoError(t, testResult.Err())
 
+	// Bad (error)
+	lt, err = NewSPTPTester("::1", ts.URL)
+	require.NoError(t, err)
+
+	testResult = lt.RunTest(context.Background())
+	require.Equal(t, expectedBad, testResult)
+	require.Equal(t, &expectedBad, lt.result)
+	require.Error(t, testResult.Err())
+
+	// Bad (can't connect)
 	lt, err = NewSPTPTester("::1", "blah")
 	require.Error(t, err)
 	require.Nil(t, lt)

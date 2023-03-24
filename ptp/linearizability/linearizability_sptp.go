@@ -125,6 +125,9 @@ func (lt *SPTPTester) RunTest(_ context.Context) TestResult {
 	for _, s := range lt.stats {
 		if s.GMAddress == lt.cfg.Server {
 			result.Offset = s.Offset
+			if s.Error != "" {
+				result.Error = fmt.Errorf(s.Error)
+			}
 			found = true
 			break
 		}
