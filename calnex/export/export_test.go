@@ -77,8 +77,8 @@ func TestExport(t *testing.T) {
 	calnexAPI.Client = ts.Client()
 
 	expected := []string{
-		fmt.Sprintf("{\"float\":{\"value\":-2.50504e-7},\"int\":{\"time\":1607961194},\"normal\":{\"channel\":\"VP1\",\"target\":\"127.0.0.1\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host),
-		fmt.Sprintf("{\"float\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"a\",\"target\":\"127.0.0.1\",\"protocol\":\"pps\",\"source\":\"%s\"}}\n", parsed.Host),
+		fmt.Sprintf("{\"double\":{\"value\":-2.50504e-7},\"int\":{\"time\":1607961194},\"normal\":{\"channel\":\"VP1\",\"target\":\"127.0.0.1\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host),
+		fmt.Sprintf("{\"double\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"a\",\"target\":\"127.0.0.1\",\"protocol\":\"pps\",\"source\":\"%s\"}}\n", parsed.Host),
 	}
 	err := Export(parsed.Host, true, true, []api.Channel{}, l)
 	require.NoError(t, err)

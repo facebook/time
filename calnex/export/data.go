@@ -23,7 +23,7 @@ import (
 
 // Entry is an entire line
 type Entry struct {
-	Float  *FloatData  `json:"float"`
+	Float  *FloatData  `json:"double"`
 	Int    *IntData    `json:"int"`
 	Normal *NormalData `json:"normal"`
 }
