@@ -72,7 +72,8 @@ func (tr SPTPTestResult) Err() error {
 
 // SPTPTestConfig is a configuration for Tester
 type SPTPTestConfig struct {
-	Server string
+	Server  string
+	sptpurl string
 }
 
 // Target sets the server to test
@@ -84,7 +85,6 @@ func (p *SPTPTestConfig) Target(server string) {
 type SPTPTester struct {
 	cfg *SPTPTestConfig
 
-	stats stats.Stats
 	// measurement result
 	result *SPTPTestResult
 }
@@ -92,17 +92,12 @@ type SPTPTester struct {
 // NewSPTPTester initializes a Tester
 func NewSPTPTester(server string, sptpurl string) (*SPTPTester, error) {
 	cfg := &SPTPTestConfig{
-		Server: server,
-	}
-
-	sm, err := stats.FetchStats(sptpurl)
-	if err != nil {
-		return nil, err
+		Server:  server,
+		sptpurl: sptpurl,
 	}
 
 	t := &SPTPTester{
-		cfg:   cfg,
-		stats: sm,
+		cfg: cfg,
 	}
 	return t, nil
 }
@@ -120,9 +115,16 @@ func (lt *SPTPTester) RunTest(_ context.Context) TestResult {
 		Server: lt.cfg.Server,
 		Error:  nil,
 	}
+
 	log.Debugf("test starting %s", lt.cfg.Server)
+	stats, err := stats.FetchStats(lt.cfg.sptpurl)
+	if err != nil {
+		result.Error = err
+		return result
+	}
+
 	found := false
-	for _, s := range lt.stats {
+	for _, s := range stats {
 		if s.GMAddress == lt.cfg.Server {
 			result.Offset = s.Offset
 			if s.Error != "" {

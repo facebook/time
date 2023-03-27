@@ -160,6 +160,8 @@ func TestSPTPRunTest(t *testing.T) {
 
 	// Bad (can't connect)
 	lt, err = NewSPTPTester("::1", "blah")
-	require.Error(t, err)
-	require.Nil(t, lt)
+	require.NoError(t, err)
+
+	testResult = lt.RunTest(context.Background())
+	require.Error(t, testResult.Err())
 }
