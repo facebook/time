@@ -56,22 +56,8 @@ func Dscmp2(a, b *ptp.Announce) ComparisonResult {
 	}
 }
 
-// Dscmp finds better Announce based on Announce response content
-func Dscmp(a *ptp.Announce, b *ptp.Announce) ComparisonResult {
-	if a.AnnounceBody == b.AnnounceBody {
-		return Unknown
-	}
-	diff := int64(a.AnnounceBody.GrandmasterIdentity) - int64(b.AnnounceBody.GrandmasterIdentity)
-	if diff == 0 {
-		return Dscmp2(a, b)
-	}
-	if a.AnnounceBody.GrandmasterPriority1 < b.AnnounceBody.GrandmasterPriority1 {
-		return ABetter
-	}
-	if a.AnnounceBody.GrandmasterPriority1 > b.AnnounceBody.GrandmasterPriority1 {
-		return BBetter
-	}
-
+// Base comparison on all attributes
+func dscmp(a *ptp.Announce, b *ptp.Announce) ComparisonResult {
 	if a.AnnounceBody.GrandmasterClockQuality.ClockClass < b.AnnounceBody.GrandmasterClockQuality.ClockClass {
 		return ABetter
 	}
@@ -96,13 +82,38 @@ func Dscmp(a *ptp.Announce, b *ptp.Announce) ComparisonResult {
 	if a.AnnounceBody.GrandmasterPriority2 > b.AnnounceBody.GrandmasterPriority2 {
 		return BBetter
 	}
+
+	return Unknown
+}
+
+// Dscmp finds better Announce based on Announce response content
+func Dscmp(a *ptp.Announce, b *ptp.Announce) ComparisonResult {
+	if a.AnnounceBody == b.AnnounceBody {
+		return Unknown
+	}
+	diff := int64(a.AnnounceBody.GrandmasterIdentity) - int64(b.AnnounceBody.GrandmasterIdentity)
+	if diff == 0 {
+		return Dscmp2(a, b)
+	}
+	if a.AnnounceBody.GrandmasterPriority1 < b.AnnounceBody.GrandmasterPriority1 {
+		return ABetter
+	}
+	if a.AnnounceBody.GrandmasterPriority1 > b.AnnounceBody.GrandmasterPriority1 {
+		return BBetter
+	}
+
+	// Base comparison on all attributes
+	if cr := dscmp(a, b); cr != Unknown {
+		return cr
+	}
+
 	if diff < 0 {
 		return ABetter
 	}
 	return BBetter
 }
 
-// TelcoDscmp Dscmp finds better Announce based on Announce response content and local priorities
+// TelcoDscmp finds better Announce based on Announce response content and local priorities
 func TelcoDscmp(a *ptp.Announce, b *ptp.Announce, localPrioA int, localPrioB int) ComparisonResult {
 	if a.AnnounceBody == b.AnnounceBody {
 		return Unknown
@@ -114,30 +125,11 @@ func TelcoDscmp(a *ptp.Announce, b *ptp.Announce, localPrioA int, localPrioB int
 		return BBetter
 	}
 
-	if a.AnnounceBody.GrandmasterClockQuality.ClockClass < b.AnnounceBody.GrandmasterClockQuality.ClockClass {
-		return ABetter
+	// Base comparison on all attributes
+	if cr := dscmp(a, b); cr != Unknown {
+		return cr
 	}
-	if a.AnnounceBody.GrandmasterClockQuality.ClockClass > b.AnnounceBody.GrandmasterClockQuality.ClockClass {
-		return BBetter
-	}
-	if a.AnnounceBody.GrandmasterClockQuality.ClockAccuracy < b.AnnounceBody.GrandmasterClockQuality.ClockAccuracy {
-		return ABetter
-	}
-	if a.AnnounceBody.GrandmasterClockQuality.ClockAccuracy > b.AnnounceBody.GrandmasterClockQuality.ClockAccuracy {
-		return BBetter
-	}
-	if a.AnnounceBody.GrandmasterClockQuality.OffsetScaledLogVariance < b.AnnounceBody.GrandmasterClockQuality.OffsetScaledLogVariance {
-		return ABetter
-	}
-	if a.AnnounceBody.GrandmasterClockQuality.OffsetScaledLogVariance > b.AnnounceBody.GrandmasterClockQuality.OffsetScaledLogVariance {
-		return BBetter
-	}
-	if a.AnnounceBody.GrandmasterPriority2 < b.AnnounceBody.GrandmasterPriority2 {
-		return ABetter
-	}
-	if a.GrandmasterPriority2 > b.AnnounceBody.GrandmasterPriority2 {
-		return BBetter
-	}
+
 	if localPrioA < localPrioB {
 		return ABetter
 	}
