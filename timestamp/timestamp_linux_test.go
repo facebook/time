@@ -216,6 +216,15 @@ func TestSocketControlMessageTimestamp(t *testing.T) {
 	require.Equal(t, int64(1628091622667374575), ts.UnixNano())
 }
 
+func TestSocketControlMessageTimestampFail(t *testing.T) {
+	if timestamping != unix.SO_TIMESTAMPING_NEW {
+		t.Skip("This test supports SO_TIMESTAMPING_NEW only. No sample of SO_TIMESTAMPING")
+	}
+
+	_, err := socketControlMessageTimestamp(make([]byte, 16))
+	require.ErrorIs(t, errNoTimestamp, err)
+}
+
 func TestReadPacketWithRXTimestamp(t *testing.T) {
 	request := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 42}
 	// listen to incoming udp packets

@@ -32,6 +32,8 @@ var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
 
 var timestamping = unix.SO_TIMESTAMPING_NEW
 
+var errNoTimestamp = errors.New("failed to find timestamp in socket control message")
+
 func init() {
 	// if kernel is older than 5, it doesn't support unix.SO_TIMESTAMPING_NEW
 	var uname unix.Utsname
@@ -242,11 +244,13 @@ func socketControlMessageTimestamp(b []byte) (time.Time, error) {
 	for i := 0; i < len(b); i += mlen {
 		h := (*unix.Cmsghdr)(unsafe.Pointer(&b[i]))
 		mlen = int(h.Len)
-
+		if mlen == 0 {
+			break
+		}
 		// depending on the kernel version, when we ask for SO_TIMESTAMPING_NEW we still might get messages with type SO_TIMESTAMPING
 		if h.Level == unix.SOL_SOCKET && int(h.Type) == unix.SO_TIMESTAMPING_NEW || int(h.Type) == unix.SO_TIMESTAMPING {
 			return scmDataToTime(b[i+socketControlMessageHeaderOffset : i+mlen])
 		}
 	}
-	return time.Time{}, fmt.Errorf("failed to find timestamp in socket control message")
+	return time.Time{}, errNoTimestamp
 }
