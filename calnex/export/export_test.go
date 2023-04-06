@@ -62,7 +62,7 @@ func TestExport(t *testing.T) {
 		} else if strings.Contains(r.URL.Path, "measure/ch9/ptp_synce/ntp/server_ip") {
 			// FetchChannelTarget NTP
 			fmt.Fprintln(w, "measure/ch9/ptp_synce/ntp/server_ip=127.0.0.1")
-		} else if r.URL.Query().Get("channel") == "a" {
+		} else if r.URL.Query().Get("channel") == "A" {
 			// FetchCsv PPS
 			fmt.Fprintln(w, "1607961193.773740,-000.000000250501")
 		} else if r.URL.Query().Get("channel") == "VP1" {
@@ -78,7 +78,7 @@ func TestExport(t *testing.T) {
 
 	expected := []string{
 		fmt.Sprintf("{\"double\":{\"value\":-2.50504e-7},\"int\":{\"time\":1607961194},\"normal\":{\"channel\":\"VP1\",\"target\":\"127.0.0.1\",\"protocol\":\"ntp\",\"source\":\"%s\"}}\n", parsed.Host),
-		fmt.Sprintf("{\"double\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"a\",\"target\":\"127.0.0.1\",\"protocol\":\"pps\",\"source\":\"%s\"}}\n", parsed.Host),
+		fmt.Sprintf("{\"double\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"A\",\"target\":\"127.0.0.1\",\"protocol\":\"pps\",\"source\":\"%s\"}}\n", parsed.Host),
 	}
 	err := Export(parsed.Host, true, true, []api.Channel{}, l)
 	require.NoError(t, err)

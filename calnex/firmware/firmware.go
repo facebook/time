@@ -19,7 +19,7 @@ package firmware
 import (
 	"strings"
 
-	"github.com/facebook/time/calnex/api"
+	calnexAPI "github.com/facebook/time/calnex/api"
 	version "github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 )
@@ -34,7 +34,7 @@ type FW interface {
 
 // Firmware checks target Calnex firmware version and upgrades if apply is specified
 func Firmware(target string, insecureTLS bool, fw FW, apply bool) error {
-	api := api.NewAPI(target, insecureTLS)
+	api := calnexAPI.NewAPI(target, insecureTLS)
 	cv, err := api.FetchVersion()
 	if err != nil {
 		return err
@@ -49,6 +49,15 @@ func Firmware(target string, insecureTLS bool, fw FW, apply bool) error {
 		return err
 	}
 	if calnexVersion.GreaterThanOrEqual(v) {
+		instrumentStatus, statusErr := api.FetchInstrumentStatus()
+		if statusErr != nil {
+			return statusErr
+		}
+		if instrumentStatus.Channels[calnexAPI.ChannelONE].Progress != -1 {
+			log.Infof("update %d%% complete", instrumentStatus.Channels[calnexAPI.ChannelONE].Progress)
+			return nil
+		}
+
 		log.Infof("no update is required")
 		return nil
 	}

@@ -59,6 +59,8 @@ func TestFirmware(t *testing.T) {
 		} else if strings.Contains(r.URL.Path, "updatefirmware") {
 			// PushVersion
 			fmt.Fprintln(w, "{\n\"result\": true\n}")
+		} else if strings.Contains(r.URL.Path, "instrument/status") {
+			fmt.Fprintln(w, "{\"Channels\":{\"1\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"2\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"C\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"},\"D\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"}},\"Modules\":{\"1\":{\"Channels\":[\"1\",\"2\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Packet Module (V2)\"},\"C\":{\"Channels\":[\"C\",\"D\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Clock Module\"}}}")
 		}
 	}))
 	defer ts.Close()

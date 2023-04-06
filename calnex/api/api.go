@@ -46,6 +46,28 @@ type Status struct {
 	MeasurementActive bool
 }
 
+// InstrumentStatus is a struct representing Calnex instrument status JSON response
+type InstrumentStatus struct {
+	Channels map[Channel]ChannelStatus
+	Modules  map[Channel]ModuleStatus
+}
+
+// ChannelStatus is a struct representing Calnex channel instrument status
+type ChannelStatus struct {
+	Progress int
+	Slot     string
+	State    string
+	Type     string
+}
+
+// ModuleStatus is a struct representing Calnex channel module status
+type ModuleStatus struct {
+	Channels []string
+	Progress int
+	State    string
+	Type     string
+}
+
 // Result is a struct representing Calnex result JSON response
 type Result struct {
 	Result  bool
@@ -174,12 +196,12 @@ var MeasureChannelDatatypeMap = map[Channel]string{
 
 // channelStringToCalnex is a map of String channels to a Calnex variant
 var channelStringToCalnex = map[string]Channel{
-	"a":    ChannelA,
-	"b":    ChannelB,
-	"c":    ChannelC,
-	"d":    ChannelD,
-	"e":    ChannelE,
-	"f":    ChannelF,
+	"A":    ChannelA,
+	"B":    ChannelB,
+	"C":    ChannelC,
+	"D":    ChannelD,
+	"E":    ChannelE,
+	"F":    ChannelF,
 	"1":    ChannelONE,
 	"2":    ChannelTWO,
 	"VP1":  ChannelVP1,
@@ -218,12 +240,12 @@ var channelStringToCalnex = map[string]Channel{
 
 // channelCalnexToString is a map of Calnex channels to a String variant
 var channelCalnexToString = map[Channel]string{
-	ChannelA:    "a",
-	ChannelB:    "b",
-	ChannelC:    "c",
-	ChannelD:    "d",
-	ChannelE:    "e",
-	ChannelF:    "f",
+	ChannelA:    "A",
+	ChannelB:    "B",
+	ChannelC:    "C",
+	ChannelD:    "D",
+	ChannelE:    "E",
+	ChannelF:    "F",
 	ChannelONE:  "1",
 	ChannelTWO:  "2",
 	ChannelVP1:  "VP1",
@@ -277,7 +299,8 @@ func (c Channel) String() string {
 
 // UnmarshalText channel from string version
 func (c *Channel) UnmarshalText(value []byte) error {
-	cr, err := ChannelFromString(string(value))
+	channel := strings.ToUpper(string(value))
+	cr, err := ChannelFromString(channel)
 	if err != nil {
 		return err
 	}
@@ -404,7 +427,8 @@ const (
 	certificateURL = "https://%s/api/installcertificate"
 	licenseURL     = "https://%s/api/option/load"
 
-	gnssURL = "https://%s/api/gnss/status"
+	gnssURL             = "https://%s/api/gnss/status"
+	instrumentStatusURL = "https://%s/api/instrument/status"
 )
 
 var (
@@ -588,6 +612,25 @@ func (a *API) FetchStatus() (*Status, error) {
 	}
 
 	return s, nil
+}
+
+// FetchInstrumentStatus returns the calnex instrument status
+func (a *API) FetchInstrumentStatus() (*InstrumentStatus, error) {
+	url := fmt.Sprintf(instrumentStatusURL, a.source)
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(http.StatusText(resp.StatusCode))
+	}
+	i := &InstrumentStatus{}
+	if err = json.NewDecoder(resp.Body).Decode(i); err != nil {
+		return nil, err
+	}
+	return i, nil
 }
 
 // FetchProblemReport saves a problem report
