@@ -36,8 +36,8 @@ func TestChannel(t *testing.T) {
 	legitChannelNamesToChannel := map[string]Channel{
 		"1":   ChannelONE,
 		"2":   ChannelTWO,
-		"c":   ChannelC,
-		"d":   ChannelD,
+		"C":   ChannelC,
+		"D":   ChannelD,
 		"VP1": ChannelVP1,
 	}
 	for channelS, channel := range legitChannelNamesToChannel {
@@ -323,6 +323,73 @@ func TestFetchStatus(t *testing.T) {
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchStatus()
+	require.NoError(t, err)
+	require.Equal(t, expected, f)
+}
+
+func TestFetchInstumentStatus(t *testing.T) {
+	sampleResp := "{\"Channels\":{\"1\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"2\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"C\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"},\"D\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"}},\"Modules\":{\"1\":{\"Channels\":[\"1\",\"2\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Packet Module (V2)\"},\"C\":{\"Channels\":[\"C\",\"D\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Clock Module\"}}}"
+	cm := make(map[Channel]ChannelStatus)
+	cm[ChannelONE] = ChannelStatus{
+		Progress: -1,
+		Slot:     "1",
+		State:    "Ready",
+		Type:     "10G Packet Module (V2)",
+	}
+	cm[ChannelTWO] = ChannelStatus{
+		Progress: -1,
+		Slot:     "1",
+		State:    "Ready",
+		Type:     "10G Packet Module (V2)",
+	}
+	cm[ChannelC] = ChannelStatus{
+		Progress: -1,
+		Slot:     "C",
+		State:    "Ready",
+		Type:     "Clock Module",
+	}
+	cm[ChannelD] = ChannelStatus{
+		Progress: -1,
+		Slot:     "C",
+		State:    "Ready",
+		Type:     "Clock Module",
+	}
+
+	mm := make(map[Channel]ModuleStatus)
+	mm[ChannelONE] = ModuleStatus{
+		Channels: []string{
+			"1",
+			"2",
+		},
+		Progress: -1,
+		State:    "Ready",
+		Type:     "Packet Module (V2)",
+	}
+	mm[ChannelC] = ModuleStatus{
+		Channels: []string{
+			"C",
+			"D",
+		},
+		Progress: -1,
+		State:    "Ready",
+		Type:     "Clock Module",
+	}
+	expected := &InstrumentStatus{
+		Channels: cm,
+		Modules:  mm,
+	}
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI.Client = ts.Client()
+
+	f, err := calnexAPI.FetchInstrumentStatus()
 	require.NoError(t, err)
 	require.Equal(t, expected, f)
 }
