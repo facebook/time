@@ -98,7 +98,7 @@ func TestSPTPTestResultExplain(t *testing.T) {
 				Offset: float64(time.Millisecond.Nanoseconds()),
 				Error:  nil,
 			},
-			want: "linearizability test against \"time01\" failed because the offset 1000000.00ns is > 1µs",
+			want: "linearizability test against \"time01\" failed because the offset 1000000.00ns is > 3µs",
 		},
 		{
 			name: "pass",

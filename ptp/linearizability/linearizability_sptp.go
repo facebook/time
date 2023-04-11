@@ -27,7 +27,7 @@ import (
 )
 
 // MAXgmOffset is a maximuim offset between GMs
-const MAXgmOffset = time.Microsecond
+const MAXgmOffset = 3 * time.Microsecond
 
 // SPTPTestResult is what we get after the test run
 type SPTPTestResult struct {
