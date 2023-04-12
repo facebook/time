@@ -103,7 +103,7 @@ const (
 const (
 	SourceStateSync        SourceStateType = 0
 	SourceStateUnreach     SourceStateType = 1
-	SourceStateFalseTicket SourceStateType = 2
+	SourceStateFalseTicker SourceStateType = 2
 	SourceStateJittery     SourceStateType = 3
 	SourceStateCandidate   SourceStateType = 4
 	SourceStateOutlier     SourceStateType = 5
@@ -183,7 +183,7 @@ func (r ResponseStatusType) String() string {
 var SourceStateDesc = [6]string{
 	"sync",
 	"unreach",
-	"falseticket",
+	"falseticker",
 	"jittery",
 	"candidate",
 	"outlier",
