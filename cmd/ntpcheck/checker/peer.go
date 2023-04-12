@@ -165,7 +165,7 @@ func NewPeerFromNTP(p *control.NTPControlMsg) (*Peer, error) {
 var chronyToPeerSelection = map[chrony.SourceStateType]uint8{
 	chrony.SourceStateSync:        control.SelSYSPeer,
 	chrony.SourceStateUnreach:     control.SelReject, // not a direct mapping
-	chrony.SourceStateFalseTicket: control.SelFalseTick,
+	chrony.SourceStateFalseTicker: control.SelFalseTick,
 	chrony.SourceStateJittery:     control.SelReject, // ditto
 	chrony.SourceStateCandidate:   control.SelCandidate,
 	chrony.SourceStateOutlier:     control.SelOutlier,
