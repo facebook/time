@@ -760,3 +760,40 @@ func TestPushLicenseError(t *testing.T) {
 
 	require.Equal(t, originalLicense, uploadedLicense)
 }
+
+type RebootError struct {
+	message string
+}
+
+func (e *RebootError) Error() string {
+	return fmt.Sprintf("Reboot error: %v", e.message)
+}
+
+func TestReboot(t *testing.T) {
+	// Test successful reboot
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		// fmt.Fprintln(w, "Calnex device will now reboot.")
+		fmt.Fprintln(w, "{\n\"result\": Calnex device will now reboot.\n}")
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI.Client = ts.Client()
+	err := calnexAPI.Reboot()
+	require.NoError(t, err)
+
+	// Test failed reboot
+	ts = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "reboot failed", http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	parsed, _ = url.Parse(ts.URL)
+	calnexAPI = NewAPI(parsed.Host, true)
+	calnexAPI.Client = ts.Client()
+
+	err = calnexAPI.Reboot()
+	require.NoError(t, err)
+}
