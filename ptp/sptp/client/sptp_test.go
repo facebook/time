@@ -260,6 +260,50 @@ func TestRunInternalAllDead(t *testing.T) {
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
+func TestRunFiltered(t *testing.T) {
+	ts, err := time.Parse(time.RFC3339, "2021-05-21T13:32:05+01:00")
+	require.Nil(t, err)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClock := NewMockClock(ctrl)
+	mockServo := NewMockServo(ctrl)
+	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.StateFilter)
+	mockStatsServer := NewMockStatsServer(ctrl)
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(100))
+	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+
+	cfg := DefaultConfig()
+	cfg.Servers = map[string]int{
+		"192.168.0.10": 1,
+	}
+	p := &SPTP{
+		clock: mockClock,
+		pi:    mockServo,
+		stats: mockStatsServer,
+		cfg:   cfg,
+	}
+	results := map[string]*RunResult{
+		"192.168.0.10": {
+			Server: "192.168.0.10",
+			Measurement: &MeasurementResult{
+
+				Delay:              299995 * time.Microsecond,
+				ServerToClientDiff: 100,
+				ClientToServerDiff: 110,
+				Offset:             -200002 * time.Microsecond,
+				Timestamp:          ts,
+			},
+		},
+	}
+	err = p.initClients()
+	require.NoError(t, err)
+	// we step here
+	p.processResults(results)
+	require.Equal(t, "192.168.0.10", p.bestGM)
+	require.Nil(t, nil, results["192.168.0.10"])
+}
+
 func TestRunListenerNoAddr(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
