@@ -60,6 +60,8 @@ firststepthreshold: 1s
 metricsaggregationwindow: 10s
 attemptstxts: 12
 timeouttxts: 40ms
+sequenceidmaskbits: 2
+sequenceidmaskvalue: 1
 servers:
   192.168.0.10: 2
   192.168.0.13: 3
@@ -81,22 +83,20 @@ measurement:
 		ExchangeTimeout:          200 * time.Millisecond,
 		DSCP:                     35,
 		FirstStepThreshold:       time.Second,
+		Servers:                  map[string]int{"192.168.0.10": 2, "192.168.0.13": 3, "192.168.0.15": 1},
+		Measurement:              MeasurementConfig{PathDelayFilterLength: 59, PathDelayFilter: "median", PathDelayDiscardFilterEnabled: true, PathDelayDiscardBelow: 2 * time.Microsecond},
 		MetricsAggregationWindow: 10 * time.Second,
-		Servers: map[string]int{
-			"192.168.0.10": 2,
-			"192.168.0.13": 3,
-			"192.168.0.15": 1,
-		},
-		AttemptsTXTS: 12,
-		TimeoutTXTS:  time.Duration(40) * time.Millisecond,
-		Measurement: MeasurementConfig{
-			PathDelayFilterLength:         59,
-			PathDelayFilter:               "median",
-			PathDelayDiscardFilterEnabled: true,
-			PathDelayDiscardBelow:         2 * time.Microsecond,
-		},
+		AttemptsTXTS:             12,
+		TimeoutTXTS:              time.Duration(40) * time.Millisecond,
+		FreeRunning:              false,
+		Backoff:                  BackoffConfig{},
+		SequenceIDMaskBits:       2,
+		SequenceIDMaskValue:      1,
 	}
 	require.Equal(t, want, cfg)
+	mask, value := cfg.GenerateMaskAndValue()
+	require.Equal(t, (uint16)(0x3FFF), mask)
+	require.Equal(t, (uint16)(0x4000), value)
 }
 
 func TestBackoffConfigValidate(t *testing.T) {
@@ -257,6 +257,60 @@ func TestConfigValidate(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name: "default, one server, iface, sequenceID masked",
+			in: Config{
+				Iface:                    "eth0",
+				Interval:                 time.Second,
+				ExchangeTimeout:          100 * time.Millisecond,
+				MetricsAggregationWindow: time.Duration(60) * time.Second,
+				AttemptsTXTS:             10,
+				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
+				Timestamping:             HWTIMESTAMP,
+				Servers: map[string]int{
+					"192.168.0.10": 0,
+				},
+				SequenceIDMaskBits:  2,
+				SequenceIDMaskValue: 1,
+			},
+			wantErr: false,
+		},
+		{
+			name: "default, one server, iface, sequenceID mask wrong",
+			in: Config{
+				Iface:                    "eth0",
+				Interval:                 time.Second,
+				ExchangeTimeout:          100 * time.Millisecond,
+				MetricsAggregationWindow: time.Duration(60) * time.Second,
+				AttemptsTXTS:             10,
+				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
+				Timestamping:             HWTIMESTAMP,
+				Servers: map[string]int{
+					"192.168.0.10": 0,
+				},
+				SequenceIDMaskBits:  16,
+				SequenceIDMaskValue: 1,
+			},
+			wantErr: true,
+		},
+		{
+			name: "default, one server, iface, sequenceID masked value wrong",
+			in: Config{
+				Iface:                    "eth0",
+				Interval:                 time.Second,
+				ExchangeTimeout:          100 * time.Millisecond,
+				MetricsAggregationWindow: time.Duration(60) * time.Second,
+				AttemptsTXTS:             10,
+				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
+				Timestamping:             HWTIMESTAMP,
+				Servers: map[string]int{
+					"192.168.0.10": 0,
+				},
+				SequenceIDMaskBits:  2,
+				SequenceIDMaskValue: 5,
+			},
+			wantErr: true,
 		},
 		{
 			name: "negative interval",

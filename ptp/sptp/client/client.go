@@ -79,7 +79,10 @@ type Client struct {
 	server string
 	// packet sequence counter
 	eventSequence uint16
-
+	// mask for sequence ID value
+	sequenceIDMask uint16
+	// const value for sequence ID
+	sequenceIDValue uint16
 	// chan for received packets regardless of port
 	inChan chan *inPacket
 	// listening connection on port 319
@@ -96,6 +99,11 @@ type Client struct {
 	stats StatsServer
 }
 
+func (c *Client) incrementSequence() {
+	c.eventSequence++
+	c.eventSequence = c.sequenceIDValue + (c.eventSequence & c.sequenceIDMask)
+}
+
 func (c *Client) sendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
 	seq := c.eventSequence
 	p.SetSequence(c.eventSequence)
@@ -105,7 +113,8 @@ func (c *Client) sendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
 	}
 	// send packet
 	_, hwts, err := c.eventConn.WriteToWithTS(b, c.eventAddr)
-	c.eventSequence++
+
+	c.incrementSequence()
 	if err != nil {
 		return 0, time.Time{}, err
 	}
@@ -115,22 +124,25 @@ func (c *Client) sendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
 }
 
 // newClient initializes sptp client
-func newClient(target string, clockID ptp.ClockIdentity, eventConn UDPConnWithTS, mcfg *MeasurementConfig, stats StatsServer) (*Client, error) {
+func newClient(target string, clockID ptp.ClockIdentity, eventConn UDPConnWithTS, cfg *Config, stats StatsServer) (*Client, error) {
 	// addresses
 	// where to send to
 	eventAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(target, fmt.Sprintf("%d", ptp.PortEvent)))
 	if err != nil {
 		return nil, err
 	}
+	sequenceIDMask, sequenceIDMaskedValue := cfg.GenerateMaskAndValue()
 	c := &Client{
-		clockID:       clockID,
-		eventSequence: uint16(rnd.Int31n(65536)),
-		eventConn:     eventConn,
-		eventAddr:     eventAddr,
-		inChan:        make(chan *inPacket, 100),
-		server:        target,
-		m:             newMeasurements(mcfg),
-		stats:         stats,
+		clockID:         clockID,
+		eventSequence:   uint16(rnd.Int31n(65536)) & sequenceIDMask,
+		sequenceIDMask:  sequenceIDMask,
+		sequenceIDValue: sequenceIDMaskedValue,
+		eventConn:       eventConn,
+		eventAddr:       eventAddr,
+		inChan:          make(chan *inPacket, 100),
+		server:          target,
+		m:               newMeasurements(&cfg.Measurement),
+		stats:           stats,
 	}
 	return c, nil
 }

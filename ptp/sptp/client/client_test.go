@@ -71,9 +71,16 @@ func TestClientRun(t *testing.T) {
 	cid := ptp.ClockIdentity(0xc42a1fffe6d7ca6)
 
 	eventConn := NewMockUDPConnWithTS(ctrl)
-	mcfg := &MeasurementConfig{}
+	cfg := Config{
+		Measurement: MeasurementConfig{
+			PathDelayFilterLength:         0,
+			PathDelayFilter:               "",
+			PathDelayDiscardFilterEnabled: false,
+			PathDelayDiscardBelow:         0,
+		},
+	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := newClient("127.0.0.1", cid, eventConn, mcfg, statsServer)
+	c, err := newClient("127.0.0.1", cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 
 	// put stuff into measurements to make sure it got cleaned before the run
@@ -137,9 +144,16 @@ func TestClientTimeout(t *testing.T) {
 	cid := ptp.ClockIdentity(0xc42a1fffe6d7ca6)
 
 	eventConn := NewMockUDPConnWithTS(ctrl)
-	mcfg := &MeasurementConfig{}
+	cfg := Config{
+		Measurement: MeasurementConfig{
+			PathDelayFilterLength:         0,
+			PathDelayFilter:               "",
+			PathDelayDiscardFilterEnabled: false,
+			PathDelayDiscardBelow:         0,
+		},
+	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := newClient("127.0.0.1", cid, eventConn, mcfg, statsServer)
+	c, err := newClient("127.0.0.1", cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.tx.delay_req", int64(1))
 	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any())
@@ -156,9 +170,16 @@ func TestClientBadPacket(t *testing.T) {
 	cid := ptp.ClockIdentity(0xc42a1fffe6d7ca6)
 
 	eventConn := NewMockUDPConnWithTS(ctrl)
-	mcfg := &MeasurementConfig{}
+	cfg := Config{
+		Measurement: MeasurementConfig{
+			PathDelayFilterLength:         0,
+			PathDelayFilter:               "",
+			PathDelayDiscardFilterEnabled: false,
+			PathDelayDiscardBelow:         0,
+		},
+	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := newClient("127.0.0.1", cid, eventConn, mcfg, statsServer)
+	c, err := newClient("127.0.0.1", cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 
 	// handle whatever client is sending over eventConn
@@ -180,4 +201,34 @@ func TestClientBadPacket(t *testing.T) {
 	require.NotNil(t, runResult)
 	require.Error(t, runResult.Error, "full client run should fail")
 	require.Equal(t, "127.0.0.1", runResult.Server, "run result should have correct server")
+}
+
+func TestClientIncrementSequence(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	cid := ptp.ClockIdentity(0xc42a1fffe6d7ca6)
+
+	eventConn := NewMockUDPConnWithTS(ctrl)
+	cfg := Config{
+		Measurement: MeasurementConfig{
+			PathDelayFilterLength:         0,
+			PathDelayFilter:               "",
+			PathDelayDiscardFilterEnabled: false,
+			PathDelayDiscardBelow:         0,
+		},
+		SequenceIDMaskBits:  2,
+		SequenceIDMaskValue: 3,
+	}
+	statsServer := NewMockStatsServer(ctrl)
+	c, err := newClient("127.0.0.1", cid, eventConn, &cfg, statsServer)
+	require.NoError(t, err)
+	require.Equal(t, uint16(0x3FFF), c.sequenceIDMask)
+	require.Equal(t, uint16(0xC000), c.sequenceIDValue)
+
+	c.eventSequence = c.sequenceIDValue + uint16(1)
+	c.incrementSequence()
+	require.Equal(t, uint16(0xC002), c.eventSequence)
+	c.eventSequence = uint16(0xFFFF)
+	c.incrementSequence()
+	require.Equal(t, uint16(0xC000), c.eventSequence)
 }

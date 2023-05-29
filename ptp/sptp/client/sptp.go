@@ -87,7 +87,7 @@ func (p *SPTP) initClients() error {
 	for server, prio := range p.cfg.Servers {
 		// normalize the address
 		ns := net.ParseIP(server).String()
-		c, err := newClient(ns, p.clockID, p.eventConn, &p.cfg.Measurement, p.stats)
+		c, err := newClient(ns, p.clockID, p.eventConn, p.cfg, p.stats)
 		if err != nil {
 			return fmt.Errorf("initializing client %q: %w", ns, err)
 		}

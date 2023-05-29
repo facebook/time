@@ -84,6 +84,8 @@ type Config struct {
 	TimeoutTXTS              time.Duration
 	FreeRunning              bool
 	Backoff                  BackoffConfig
+	SequenceIDMaskBits       uint
+	SequenceIDMaskValue      uint
 }
 
 // DefaultConfig returns Config initialized with default values
@@ -136,7 +138,20 @@ func (c *Config) Validate() error {
 	if err := c.Backoff.Validate(); err != nil {
 		return fmt.Errorf("invalid backoff config: %w", err)
 	}
+	if c.SequenceIDMaskBits > 15 {
+		return fmt.Errorf("invalid value for SequenceIDMaskBits: %d (must be 0 <= value < 16)", c.SequenceIDMaskBits)
+	}
+	if c.SequenceIDMaskValue & ^((1<<c.SequenceIDMaskBits)-1) > 0 {
+		return fmt.Errorf("invalid value for SequenceIDMaskValue: %d is more than mask %d can handle", c.SequenceIDMaskValue, c.SequenceIDMaskBits)
+	}
 	return nil
+}
+
+// GenerateMaskAndValue returns the mask that must be applied to sequence id and the constant value to use
+func (c *Config) GenerateMaskAndValue() (uint16, uint16) {
+	sequenceIDMask := (uint16)(^(((1 << c.SequenceIDMaskBits) - 1) << (16 - c.SequenceIDMaskBits)))
+	sequenceIDMaskedValue := (uint16)(c.SequenceIDMaskValue << (16 - c.SequenceIDMaskBits))
+	return sequenceIDMask, sequenceIDMaskedValue
 }
 
 // ReadConfig reads config from the file
