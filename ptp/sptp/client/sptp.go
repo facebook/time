@@ -292,6 +292,13 @@ func (p *SPTP) handleExchangeError(addr string, err error) {
 }
 
 func (p *SPTP) processResults(results map[string]*RunResult) {
+	defer func() {
+		for addr, res := range results {
+			s := runResultToStats(addr, res, p.priorities[addr], addr == p.bestGM)
+			p.stats.SetGMStats(s)
+		}
+	}()
+
 	now := time.Now()
 	if !p.lastTick.IsZero() {
 		tickDuration := now.Sub(p.lastTick)
@@ -309,8 +316,6 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	idsToClients := map[ptp.ClockIdentity]string{}
 	localPrioMap := map[ptp.ClockIdentity]int{}
 	for addr, res := range results {
-		s := runResultToStats(addr, res, p.priorities[addr], addr == p.bestGM)
-		p.stats.SetGMStats(s)
 		if res.Error == nil {
 			p.backoff[addr].reset()
 			log.Debugf("result %s: %+v", addr, res.Measurement)
@@ -353,6 +358,10 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 		if err := p.clock.Step(-1 * bm.Offset); err != nil {
 			log.Errorf("failed to step freq by %v: %v", -1*bm.Offset, err)
 		}
+	case servo.StateFilter:
+		// Filtered values void an entire measurement
+		log.Warningf("Ignoring measurement with filtered offset %d", bm.Offset.Nanoseconds())
+		results[bestAddr].Measurement = nil
 	case servo.StateLocked:
 		if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
 			log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)

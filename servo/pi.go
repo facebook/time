@@ -202,7 +202,6 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, State) {
 			ppb = s.MeanFreq()
 			state = StateFilter
 			s.filter.skippedCount++ // it's safe because fState can only be filterNoSpike without filter
-			log.Warningf("servo filtered out offset %d", offset)
 			break
 		}
 		// if there were too many outstanding offsets, reset the filter and the servo
@@ -231,9 +230,7 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, State) {
 		s.filter.skippedCount = 0
 		s.lastCorrectionTime = time.Now()
 	}
-	if state == StateFilter {
-		state = StateLocked
-	}
+
 	return ppb, state
 }
 

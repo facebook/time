@@ -115,13 +115,13 @@ func TestPiServoFilterSample(t *testing.T) {
 	freq, state = pi.Sample(919000, 1674148534671684215)
 	require.InEpsilon(t, -111441.130482, freq, 0.00001)
 	require.InEpsilon(t, f.freqMean, freq, 0.00001)
-	require.Equal(t, StateLocked, state)
+	require.Equal(t, StateFilter, state)
 	require.Equal(t, 1, f.skippedCount)
 
 	freq, state = pi.Sample(9190000, 1674148535671684215)
 	require.InEpsilon(t, -111441.130482, freq, 0.00001)
 	require.InEpsilon(t, f.freqMean, freq, 0.00001)
-	require.Equal(t, StateLocked, state)
+	require.Equal(t, StateFilter, state)
 	require.Equal(t, 2, f.skippedCount)
 
 	freq = pi.MeanFreq()
