@@ -53,18 +53,18 @@ func (d *mData) Complete() bool {
 
 // MeasurementResult is a single measured datapoint
 type MeasurementResult struct {
-	Delay              time.Duration
-	Offset             time.Duration
-	ServerToClientDiff time.Duration
-	ClientToServerDiff time.Duration
-	CorrectionFieldRX  time.Duration
-	CorrectionFieldTX  time.Duration
-	Timestamp          time.Time
-	Announce           ptp.Announce
-	T1                 time.Time
-	T2                 time.Time
-	T3                 time.Time
-	T4                 time.Time
+	Delay             time.Duration
+	Offset            time.Duration
+	S2CDelay          time.Duration
+	C2SDelay          time.Duration
+	CorrectionFieldRX time.Duration
+	CorrectionFieldTX time.Duration
+	Timestamp         time.Time
+	Announce          ptp.Announce
+	T1                time.Time
+	T2                time.Time
+	T3                time.Time
+	T4                time.Time
 }
 
 // measurements abstracts away tracking and calculation of various packet timestamps
@@ -178,26 +178,26 @@ func (m *measurements) latest() (*MeasurementResult, error) {
 	}
 	// offset = ((t2 − t1 − c1) − (t4 − t3 − c2))/2
 	// delay = ((t2 − t1 − c1) + (t4 − t3 − c2))/2
-	clientToServerDiff := lastData.t4.Sub(lastData.t3) - lastData.c2
-	serverToClientDiff := lastData.t2.Sub(lastData.t1) - lastData.c1
-	newDelay := (clientToServerDiff + serverToClientDiff) / 2
+	C2SDelay := lastData.t4.Sub(lastData.t3) - lastData.c2
+	S2CDelay := lastData.t2.Sub(lastData.t1) - lastData.c1
+	newDelay := (C2SDelay + S2CDelay) / 2
 	delay := m.delay(newDelay)
-	offset := serverToClientDiff - delay
+	offset := S2CDelay - delay
 	// or this expression of same formula
-	// offset := (serverToClientDiff - clientToServerDiff)/2
+	// offset := (S2CDelay - C2SDelay)/2
 	return &MeasurementResult{
-		Delay:              delay,
-		Offset:             offset,
-		ServerToClientDiff: serverToClientDiff,
-		ClientToServerDiff: clientToServerDiff,
-		CorrectionFieldRX:  lastData.c1,
-		CorrectionFieldTX:  lastData.c2,
-		Timestamp:          lastData.t2,
-		T1:                 lastData.t1,
-		T2:                 lastData.t2,
-		T3:                 lastData.t3,
-		T4:                 lastData.t4,
-		Announce:           m.announce,
+		Delay:             delay,
+		Offset:            offset,
+		S2CDelay:          S2CDelay,
+		C2SDelay:          C2SDelay,
+		CorrectionFieldRX: lastData.c1,
+		CorrectionFieldTX: lastData.c2,
+		Timestamp:         lastData.t2,
+		T1:                lastData.t1,
+		T2:                lastData.t2,
+		T3:                lastData.t3,
+		T4:                lastData.t4,
+		Announce:          m.announce,
 	}, nil
 }
 

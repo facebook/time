@@ -61,15 +61,15 @@ func TestMeasurementsFullRun(t *testing.T) {
 		got, err := m.latest()
 		require.Nil(t, err)
 		want := &MeasurementResult{
-			Delay:              netDelay,
-			ServerToClientDiff: netDelay,
-			ClientToServerDiff: netDelayBack,
-			Offset:             0,
-			Timestamp:          timeSyncReceived,
-			T1:                 timeSyncSent,
-			T2:                 timeSyncReceived,
-			T3:                 timeDelaySent,
-			T4:                 timeDelayReceived,
+			Delay:     netDelay,
+			S2CDelay:  netDelay,
+			C2SDelay:  netDelayBack,
+			Offset:    0,
+			Timestamp: timeSyncReceived,
+			T1:        timeSyncSent,
+			T2:        timeSyncReceived,
+			T3:        timeDelaySent,
+			T4:        timeDelayReceived,
 		}
 		assert.Equal(t, want, got)
 	})
@@ -107,15 +107,15 @@ func TestMeasurementsFullRun(t *testing.T) {
 		got, err := m.latest()
 		require.Nil(t, err)
 		want := &MeasurementResult{
-			Delay:              300 * time.Millisecond,
-			ServerToClientDiff: netDelay,
-			ClientToServerDiff: netDelayBack,
-			Offset:             -100 * time.Millisecond,
-			Timestamp:          timeSyncReceived,
-			T1:                 timeSyncSent,
-			T2:                 timeSyncReceived,
-			T3:                 timeDelaySent,
-			T4:                 timeDelayReceived,
+			Delay:     300 * time.Millisecond,
+			S2CDelay:  netDelay,
+			C2SDelay:  netDelayBack,
+			Offset:    -100 * time.Millisecond,
+			Timestamp: timeSyncReceived,
+			T1:        timeSyncSent,
+			T2:        timeSyncReceived,
+			T3:        timeDelaySent,
+			T4:        timeDelayReceived,
 		}
 		assert.Equal(t, want, got)
 	})
@@ -155,17 +155,17 @@ func TestMeasurementsFullRun(t *testing.T) {
 		got, err := m.latest()
 		require.Nil(t, err)
 		want := &MeasurementResult{
-			Delay:              299995 * time.Microsecond,
-			ServerToClientDiff: netDelay - netCorrection,
-			ClientToServerDiff: netDelayBack - netCorrectionBack,
-			Offset:             -100001 * time.Microsecond,
-			CorrectionFieldRX:  6 * time.Microsecond,
-			CorrectionFieldTX:  4 * time.Microsecond,
-			Timestamp:          timeSyncReceived,
-			T1:                 timeSyncSent,
-			T2:                 timeSyncReceived,
-			T3:                 timeDelaySent,
-			T4:                 timeDelayReceived,
+			Delay:             299995 * time.Microsecond,
+			S2CDelay:          netDelay - netCorrection,
+			C2SDelay:          netDelayBack - netCorrectionBack,
+			Offset:            -100001 * time.Microsecond,
+			CorrectionFieldRX: 6 * time.Microsecond,
+			CorrectionFieldTX: 4 * time.Microsecond,
+			Timestamp:         timeSyncReceived,
+			T1:                timeSyncSent,
+			T2:                timeSyncReceived,
+			T3:                timeDelaySent,
+			T4:                timeDelayReceived,
 		}
 		assert.Equal(t, want, got)
 	})
@@ -214,17 +214,17 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 	got, err := m.latest()
 	require.Nil(t, err)
 	want := &MeasurementResult{
-		Delay:              299995 * time.Microsecond,
-		ServerToClientDiff: netDelay - netCorrection,
-		ClientToServerDiff: netDelayBack - netCorrectionBack,
-		Offset:             -100001 * time.Microsecond,
-		CorrectionFieldRX:  6 * time.Microsecond,
-		CorrectionFieldTX:  4 * time.Microsecond,
-		Timestamp:          timeSyncReceived,
-		T1:                 timeSyncSent,
-		T2:                 timeSyncReceived,
-		T3:                 timeDelaySent,
-		T4:                 timeDelayReceived,
+		Delay:             299995 * time.Microsecond,
+		S2CDelay:          netDelay - netCorrection,
+		C2SDelay:          netDelayBack - netCorrectionBack,
+		Offset:            -100001 * time.Microsecond,
+		CorrectionFieldRX: 6 * time.Microsecond,
+		CorrectionFieldTX: 4 * time.Microsecond,
+		Timestamp:         timeSyncReceived,
+		T1:                timeSyncSent,
+		T2:                timeSyncReceived,
+		T3:                timeDelaySent,
+		T4:                timeDelayReceived,
 	}
 	assert.Equal(t, want, got, "initial measurements check")
 
@@ -252,17 +252,17 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 	got, err = m.latest()
 	require.Nil(t, err)
 	want = &MeasurementResult{
-		Delay:              199995 * time.Microsecond,
-		ServerToClientDiff: netDelay - netCorrection,
-		ClientToServerDiff: netDelayBack - netCorrectionBack,
-		Offset:             -1 * time.Microsecond,
-		CorrectionFieldRX:  6 * time.Microsecond,
-		CorrectionFieldTX:  4 * time.Microsecond,
-		Timestamp:          timeSyncReceived,
-		T1:                 timeSyncSent,
-		T2:                 timeSyncReceived,
-		T3:                 timeDelaySent,
-		T4:                 timeDelayReceived,
+		Delay:             199995 * time.Microsecond,
+		S2CDelay:          netDelay - netCorrection,
+		C2SDelay:          netDelayBack - netCorrectionBack,
+		Offset:            -1 * time.Microsecond,
+		CorrectionFieldRX: 6 * time.Microsecond,
+		CorrectionFieldTX: 4 * time.Microsecond,
+		Timestamp:         timeSyncReceived,
+		T1:                timeSyncSent,
+		T2:                timeSyncReceived,
+		T3:                timeDelaySent,
+		T4:                timeDelayReceived,
 	}
 	assert.Equal(t, want, got, "measurements after 6 more exchanges")
 
@@ -272,17 +272,17 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 	got, err = m.latest()
 	require.Nil(t, err)
 	want = &MeasurementResult{
-		Delay:              199995 * time.Microsecond,
-		ServerToClientDiff: netDelay - netCorrection,
-		ClientToServerDiff: netDelayBack - netCorrectionBack,
-		Offset:             -1 * time.Microsecond,
-		CorrectionFieldRX:  6 * time.Microsecond,
-		CorrectionFieldTX:  4 * time.Microsecond,
-		Timestamp:          timeSyncReceived,
-		T1:                 timeSyncSent,
-		T2:                 timeSyncReceived,
-		T3:                 timeDelaySent,
-		T4:                 timeDelayReceived,
+		Delay:             199995 * time.Microsecond,
+		S2CDelay:          netDelay - netCorrection,
+		C2SDelay:          netDelayBack - netCorrectionBack,
+		Offset:            -1 * time.Microsecond,
+		CorrectionFieldRX: 6 * time.Microsecond,
+		CorrectionFieldTX: 4 * time.Microsecond,
+		Timestamp:         timeSyncReceived,
+		T1:                timeSyncSent,
+		T2:                timeSyncReceived,
+		T3:                timeDelaySent,
+		T4:                timeDelayReceived,
 	}
 	assert.Equal(t, want, got, "measurements with median path delay filter")
 
@@ -291,17 +291,17 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 	got, err = m.latest()
 	require.Nil(t, err)
 	want = &MeasurementResult{
-		Delay:              224995 * time.Microsecond,
-		ServerToClientDiff: netDelay - netCorrection,
-		ClientToServerDiff: netDelayBack - netCorrectionBack,
-		Offset:             -25001 * time.Microsecond,
-		CorrectionFieldRX:  6 * time.Microsecond,
-		CorrectionFieldTX:  4 * time.Microsecond,
-		Timestamp:          timeSyncReceived,
-		T1:                 timeSyncSent,
-		T2:                 timeSyncReceived,
-		T3:                 timeDelaySent,
-		T4:                 timeDelayReceived,
+		Delay:             224995 * time.Microsecond,
+		S2CDelay:          netDelay - netCorrection,
+		C2SDelay:          netDelayBack - netCorrectionBack,
+		Offset:            -25001 * time.Microsecond,
+		CorrectionFieldRX: 6 * time.Microsecond,
+		CorrectionFieldTX: 4 * time.Microsecond,
+		Timestamp:         timeSyncReceived,
+		T1:                timeSyncSent,
+		T2:                timeSyncReceived,
+		T3:                timeDelaySent,
+		T4:                timeDelayReceived,
 	}
 	assert.Equal(t, want, got, "measurements with mean path delay filter")
 
@@ -322,17 +322,17 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 	got, err = m.latest()
 	require.Nil(t, err)
 	want = &MeasurementResult{
-		Delay:              224995 * time.Microsecond,
-		ServerToClientDiff: netDelay - netCorrection,
-		ClientToServerDiff: netDelayBack - netCorrectionBack,
-		Offset:             -25001 * time.Microsecond,
-		CorrectionFieldRX:  6 * time.Microsecond,
-		CorrectionFieldTX:  4 * time.Microsecond,
-		Timestamp:          timeSyncReceived,
-		T1:                 timeSyncSent,
-		T2:                 timeSyncReceived,
-		T3:                 timeDelaySent,
-		T4:                 timeDelayReceived,
+		Delay:             224995 * time.Microsecond,
+		S2CDelay:          netDelay - netCorrection,
+		C2SDelay:          netDelayBack - netCorrectionBack,
+		Offset:            -25001 * time.Microsecond,
+		CorrectionFieldRX: 6 * time.Microsecond,
+		CorrectionFieldTX: 4 * time.Microsecond,
+		Timestamp:         timeSyncReceived,
+		T1:                timeSyncSent,
+		T2:                timeSyncReceived,
+		T3:                timeDelaySent,
+		T4:                timeDelayReceived,
 	}
 	assert.Equal(t, want, got, "measurements with mean path delay filter and skipped path delay sample")
 }

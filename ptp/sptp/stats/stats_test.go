@@ -46,8 +46,8 @@ func TestStats(t *testing.T) {
 func TestFetchStats(t *testing.T) {
 	sampleResp := `
 [
-	{"gm_address": "127.0.0.1", "selected": false, "port_identity": "oleg", "clock_quality": {"clock_class": 6, "clock_accuracy": 33, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -42.42, "mean_path_delay": 42.42, "steps_removed": 3, "cf_rx": 10, "cf_tx": 20, "gm_present": 1, "error": ""},
-	{"gm_address": "::1", "selected": true, "port_identity": "oleg1", "clock_quality": {"clock_class": 7, "clock_accuracy": 34, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -43.43, "mean_path_delay": 43.43, "steps_removed": 3, "cf_rx": 100000, "cf_tx": 20000, "gm_present": 0, "error": "oops"}
+	{"gm_address": "127.0.0.1", "selected": false, "port_identity": "oleg", "clock_quality": {"clock_class": 6, "clock_accuracy": 33, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -42.42, "mean_path_delay": 42.42, "steps_removed": 3, "cf_rx": 10, "cf_tx": 20, "client_server_delay": 42, "server_client_delay": 24, "gm_present": 1, "error": ""},
+	{"gm_address": "::1", "selected": true, "port_identity": "oleg1", "clock_quality": {"clock_class": 7, "clock_accuracy": 34, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -43.43, "mean_path_delay": 43.43, "steps_removed": 3, "cf_rx": 100000, "cf_tx": 20000, "client_server_delay": 42, "server_client_delay": 24, "gm_present": 0, "error": "oops"}
 ]
 `
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -73,6 +73,8 @@ func TestFetchStats(t *testing.T) {
 			StepsRemoved:      3,
 			CorrectionFieldRX: 10,
 			CorrectionFieldTX: 20,
+			C2SDelay:          42,
+			S2CDelay:          24,
 			GMPresent:         1,
 		},
 		{
@@ -92,6 +94,8 @@ func TestFetchStats(t *testing.T) {
 			StepsRemoved:      3,
 			CorrectionFieldRX: 100000,
 			CorrectionFieldTX: 20000,
+			C2SDelay:          42,
+			S2CDelay:          24,
 			GMPresent:         0,
 			Error:             "oops",
 		},

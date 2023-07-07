@@ -86,14 +86,14 @@ func TestRunResultToStats(t *testing.T) {
 	r := &RunResult{
 		Server: "192.168.0.10",
 		Measurement: &MeasurementResult{
-			Delay:              299995 * time.Microsecond,
-			ServerToClientDiff: 10 * time.Microsecond,
-			ClientToServerDiff: 11 * time.Microsecond,
-			Offset:             -100001 * time.Microsecond,
-			CorrectionFieldRX:  6 * time.Microsecond,
-			CorrectionFieldTX:  4 * time.Microsecond,
-			Timestamp:          ts,
-			Announce:           statsAnnouncePkt,
+			Delay:             299995 * time.Microsecond,
+			S2CDelay:          10 * time.Microsecond,
+			C2SDelay:          11 * time.Microsecond,
+			Offset:            -100001 * time.Microsecond,
+			CorrectionFieldRX: 6 * time.Microsecond,
+			CorrectionFieldTX: 4 * time.Microsecond,
+			Timestamp:         ts,
+			Announce:          statsAnnouncePkt,
 		},
 	}
 
@@ -113,6 +113,8 @@ func TestRunResultToStats(t *testing.T) {
 		StepsRemoved:      1,
 		CorrectionFieldRX: int64(6 * time.Microsecond),
 		CorrectionFieldTX: int64(4 * time.Microsecond),
+		S2CDelay:          10000,
+		C2SDelay:          11000,
 	}
 
 	t.Run("not selected", func(t *testing.T) {

@@ -114,11 +114,11 @@ func TestProcessResultsSingle(t *testing.T) {
 		"192.168.0.10": {
 			Server: "192.168.0.10",
 			Measurement: &MeasurementResult{
-				Delay:              299995 * time.Microsecond,
-				ServerToClientDiff: 100,
-				ClientToServerDiff: 110,
-				Offset:             -200002 * time.Microsecond,
-				Timestamp:          ts,
+				Delay:     299995 * time.Microsecond,
+				S2CDelay:  100,
+				C2SDelay:  110,
+				Offset:    -200002 * time.Microsecond,
+				Timestamp: ts,
 			},
 		},
 	}
@@ -178,12 +178,12 @@ func TestProcessResultsMulti(t *testing.T) {
 		"192.168.0.10": {
 			Server: "192.168.0.10",
 			Measurement: &MeasurementResult{
-				Delay:              299995 * time.Microsecond,
-				ServerToClientDiff: 100,
-				ClientToServerDiff: 110,
-				Offset:             -200002 * time.Microsecond,
-				Timestamp:          ts,
-				Announce:           *announce0,
+				Delay:     299995 * time.Microsecond,
+				S2CDelay:  100,
+				C2SDelay:  110,
+				Offset:    -200002 * time.Microsecond,
+				Timestamp: ts,
+				Announce:  *announce0,
 			},
 		},
 		"192.168.0.11": {
@@ -198,12 +198,12 @@ func TestProcessResultsMulti(t *testing.T) {
 	results["192.168.0.10"].Measurement.Offset = -100001 * time.Microsecond
 	results["192.168.0.11"].Error = nil
 	results["192.168.0.11"].Measurement = &MeasurementResult{
-		Delay:              299995 * time.Microsecond,
-		ServerToClientDiff: 90,
-		ClientToServerDiff: 120,
-		Offset:             -104002 * time.Microsecond,
-		Timestamp:          ts,
-		Announce:           *announce1,
+		Delay:     299995 * time.Microsecond,
+		S2CDelay:  90,
+		C2SDelay:  120,
+		Offset:    -104002 * time.Microsecond,
+		Timestamp: ts,
+		Announce:  *announce1,
 	}
 	// we adj here, while also switching to new best GM
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(2))
@@ -288,11 +288,11 @@ func TestRunFiltered(t *testing.T) {
 			Server: "192.168.0.10",
 			Measurement: &MeasurementResult{
 
-				Delay:              299995 * time.Microsecond,
-				ServerToClientDiff: 100,
-				ClientToServerDiff: 110,
-				Offset:             -200002 * time.Microsecond,
-				Timestamp:          ts,
+				Delay:     299995 * time.Microsecond,
+				S2CDelay:  100,
+				C2SDelay:  110,
+				Offset:    -200002 * time.Microsecond,
+				Timestamp: ts,
 			},
 		},
 	}

@@ -130,8 +130,8 @@ func TestClientRun(t *testing.T) {
 	require.NotNil(t, runResult.Measurement, "run result should have measurements")
 	require.Equal(t, *announce, runResult.Measurement.Announce)
 	require.NotEqual(t, 0, runResult.Measurement.Delay)
-	require.NotEqual(t, 0, runResult.Measurement.ServerToClientDiff)
-	require.NotEqual(t, 0, runResult.Measurement.ClientToServerDiff)
+	require.NotEqual(t, 0, runResult.Measurement.S2CDelay)
+	require.NotEqual(t, 0, runResult.Measurement.C2SDelay)
 	require.False(t, runResult.Measurement.Timestamp.IsZero())
 	// make sure only latest measurements are stored, none of the previous stuff
 	require.Nil(t, c.m.data[123])

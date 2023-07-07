@@ -137,6 +137,8 @@ func runResultToStats(address string, r *RunResult, p3 int, selected bool) *gmst
 	s.IngressTime = r.Measurement.Timestamp.UnixNano()
 	s.CorrectionFieldRX = r.Measurement.CorrectionFieldRX.Nanoseconds()
 	s.CorrectionFieldTX = r.Measurement.CorrectionFieldTX.Nanoseconds()
+	s.C2SDelay = r.Measurement.C2SDelay.Nanoseconds()
+	s.S2CDelay = r.Measurement.S2CDelay.Nanoseconds()
 	if selected {
 		s.Selected = true
 	}
