@@ -308,6 +308,8 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 				} else {
 					// bump the subscription
 					sc.SetExpire(expire)
+					// sptp is stateless, port can change
+					sc.eclisa = eclisa
 				}
 				sc.UpdateSyncDelayReq(rxTS, dReq.SequenceID)
 				sc.UpdateAnnounceDelayReq(dReq.CorrectionField, dReq.SequenceID)
