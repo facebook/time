@@ -25,25 +25,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/facebook/time/dscp"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/ptp4u/stats"
 	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
-
-func enableDSCP(fd int, localAddr net.IP, dscp int) error {
-	if localAddr.To4() == nil {
-		if err := unix.SetsockoptInt(fd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, dscp<<2); err != nil {
-			return err
-		}
-	} else {
-		if err := unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_TOS, dscp<<2); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 // sendWorker monitors the queue of jobs
 type sendWorker struct {
@@ -106,7 +94,7 @@ func (s *sendWorker) listen() (eventFD, generalFD int, err error) {
 		log.Errorf("Unexpected local addr type %T", v)
 	}
 
-	if err = enableDSCP(eventFD, s.config.IP, s.config.DSCP); err != nil {
+	if err = dscp.Enable(eventFD, s.config.IP, s.config.DSCP); err != nil {
 		return -1, -1, fmt.Errorf("setting DSCP on event socket: %w", err)
 	}
 
@@ -139,7 +127,7 @@ func (s *sendWorker) listen() (eventFD, generalFD int, err error) {
 		return -1, -1, fmt.Errorf("binding event socket connection: %w", err)
 	}
 	// enable DSCP
-	if err = enableDSCP(generalFD, s.config.IP, s.config.DSCP); err != nil {
+	if err = dscp.Enable(generalFD, s.config.IP, s.config.DSCP); err != nil {
 		return -1, -1, fmt.Errorf("setting DSCP on general socket: %w", err)
 	}
 	return

@@ -28,6 +28,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/unix"
 
+	"github.com/facebook/time/dscp"
 	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/servo"
@@ -87,7 +88,7 @@ func (p *SPTP) initClients() error {
 	for server, prio := range p.cfg.Servers {
 		// normalize the address
 		ns := net.ParseIP(server).String()
-		c, err := newClient(ns, p.clockID, p.eventConn, p.cfg, p.stats)
+		c, err := NewClient(ns, ptp.PortEvent, p.clockID, p.eventConn, p.cfg, p.stats)
 		if err != nil {
 			return fmt.Errorf("initializing client %q: %w", ns, err)
 		}
@@ -130,7 +131,7 @@ func (p *SPTP) init() error {
 
 	localEventAddr := eventConn.LocalAddr()
 	localEventIP := localEventAddr.(*net.UDPAddr).IP
-	if err = enableDSCP(connFd, localEventIP, p.cfg.DSCP); err != nil {
+	if err = dscp.Enable(connFd, localEventIP, p.cfg.DSCP); err != nil {
 		return fmt.Errorf("setting DSCP on event socket: %w", err)
 	}
 
@@ -160,7 +161,7 @@ func (p *SPTP) init() error {
 	if err = unix.SetNonblock(connFd, false); err != nil {
 		return fmt.Errorf("failed to set event socket to blocking: %w", err)
 	}
-	p.eventConn = newUDPConnTS(eventConn, connFd)
+	p.eventConn = NewUDPConnTS(eventConn, connFd)
 
 	// Configure TX timestamp attempts and timemouts
 	timestamp.AttemptsTXTS = p.cfg.AttemptsTXTS
@@ -206,6 +207,24 @@ func (p *SPTP) init() error {
 	piFilterCfg := servo.DefaultPiServoFilterCfg()
 	servo.NewPiServoFilter(pi, piFilterCfg)
 	p.pi = pi
+	return nil
+}
+
+// ptping probing if packet is ptping before discarding it
+// It's used for external pingers such as ptping and not required for sptp itself
+func (p *SPTP) ptping(ctx context.Context, sourceIP net.IP, sourcePort int, response []byte, rxtx time.Time) error {
+	// Delay request from ptping
+	b := &ptp.SyncDelayReq{}
+	if err := ptp.FromBytes(response, b); err != nil {
+		return fmt.Errorf("failed to read delay request %v", err)
+	}
+	c, err := NewClient(sourceIP.String(), sourcePort, p.clockID, p.eventConn, p.cfg, p.stats)
+	if err != nil {
+		return fmt.Errorf("failed to respond to a delay request %v", err)
+	}
+	if err := c.handleDelayReq(b, rxtx); err != nil {
+		return fmt.Errorf("failed to respond to a delay request %v", err)
+	}
 	return nil
 }
 
@@ -260,7 +279,11 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 				ip := timestamp.SockaddrToIP(addr)
 				cc, found := p.clients[ip.String()]
 				if !found {
-					log.Warningf("ignoring packets from server %v", ip)
+					log.Warningf("ignoring packets from server %v. Trying ptping", ip)
+					// Try ptping
+					if err = p.ptping(ctx, ip, timestamp.SockaddrToPort(addr), response, rxtx); err != nil {
+						log.Warning(err)
+					}
 					continue
 				}
 				cc.inChan <- &inPacket{data: response, ts: rxtx}

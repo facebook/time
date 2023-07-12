@@ -450,15 +450,17 @@ LOOP:
 		case <-nctx.Done():
 			break LOOP
 		case p := <-p.clients["192.168.0.10"].inChan:
-			if p.data[0] == 1 {
+			switch p.data[0] {
+			case 1:
 				receivedEvent10++
-			} else if p.data[0] == 9 {
+			case 9:
 				receivedGen10++
 			}
 		case p := <-p.clients["192.168.0.11"].inChan:
-			if p.data[0] == 1 {
+			switch p.data[0] {
+			case 1:
 				receivedEvent11++
-			} else if p.data[0] == 9 {
+			case 9:
 				receivedGen11++
 			}
 		}
@@ -467,4 +469,33 @@ LOOP:
 	require.Equal(t, sentEvent/2+1, receivedEvent10, "expect to receive N event packets to client 192.168.0.10")
 	require.Equal(t, sentGen/2+1, receivedGen11, "expect to receive N general packets to client 192.168.0.11")
 	require.Equal(t, sentEvent/2, receivedEvent11, "expect to receive N event packets to client 192.168.0.11")
+}
+
+func TestPTPing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).Times(1)
+	mockClock := NewMockClock(ctrl)
+	mockServo := NewMockServo(ctrl)
+	mockStatsServer := NewMockStatsServer(ctrl)
+	p := &SPTP{
+		clock:     mockClock,
+		pi:        mockServo,
+		stats:     mockStatsServer,
+		cfg:       &Config{},
+		eventConn: mockEventConn,
+	}
+
+	response := []byte{}
+	ip := net.ParseIP("1.2.3.4")
+
+	err := p.ptping(context.Background(), ip, 1234, response, time.Time{})
+	require.Equal(t, fmt.Errorf("failed to read delay request not enough data to decode SyncDelayReq"), err)
+
+	b := &ptp.SyncDelayReq{}
+	response, err = b.MarshalBinary()
+	require.Nil(t, err)
+	err = p.ptping(context.Background(), ip, 1234, response, time.Time{})
+	require.Nil(t, err)
 }

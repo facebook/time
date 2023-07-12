@@ -203,23 +203,3 @@ func TestInventoryClients(t *testing.T) {
 	w.inventoryClients()
 	require.Equal(t, 0, len(w.clients[ptp.MessageSync]))
 }
-
-func TestEnableDSCP(t *testing.T) {
-	conn4, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	require.NoError(t, err)
-	defer conn4.Close()
-	// get connection file descriptor
-	fd4, err := timestamp.ConnFd(conn4)
-	require.NoError(t, err)
-	err = enableDSCP(fd4, net.ParseIP("127.0.0.1"), 42)
-	require.NoError(t, err)
-
-	conn6, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("::"), Port: 0})
-	require.NoError(t, err)
-	defer conn6.Close()
-	// get connection file descriptor
-	fd6, err := timestamp.ConnFd(conn6)
-	require.NoError(t, err)
-	err = enableDSCP(fd6, net.ParseIP("::"), 42)
-	require.NoError(t, err)
-}

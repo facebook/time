@@ -43,8 +43,8 @@ func corrToDuration(correction ptp.Correction) (corr time.Duration) {
 	return
 }
 
-// reqDelay is a helper to build ptp.SyncDelayReq
-func reqDelay(clockID ptp.ClockIdentity) *ptp.SyncDelayReq {
+// ReqDelay is a helper to build ptp.SyncDelayReq
+func ReqDelay(clockID ptp.ClockIdentity, portID uint16) *ptp.SyncDelayReq {
 	return &ptp.SyncDelayReq{
 		Header: ptp.Header{
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageDelayReq, 0),
@@ -53,7 +53,7 @@ func reqDelay(clockID ptp.ClockIdentity) *ptp.SyncDelayReq {
 			MessageLength:   uint16(binary.Size(ptp.SyncDelayReq{})),
 			FlagField:       ptp.FlagUnicast | ptp.FlagProfileSpecific1,
 			SourcePortIdentity: ptp.PortIdentity{
-				PortNumber:    1,
+				PortNumber:    portID,
 				ClockIdentity: clockID,
 			},
 			LogMessageInterval: 0x7f,
@@ -104,7 +104,8 @@ func (c *Client) incrementSequence() {
 	c.eventSequence = c.sequenceIDValue + (c.eventSequence & c.sequenceIDMask)
 }
 
-func (c *Client) sendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
+// SendEventMsg sends an event message via event socket
+func (c *Client) SendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
 	seq := c.eventSequence
 	p.SetSequence(c.eventSequence)
 	b, err := ptp.Bytes(p)
@@ -119,15 +120,15 @@ func (c *Client) sendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
 		return 0, time.Time{}, err
 	}
 
-	log.Debugf("sent packet via port %d to %v", ptp.PortEvent, c.eventAddr)
+	log.Debugf("sent packet to %v", c.eventAddr)
 	return seq, hwts, nil
 }
 
-// newClient initializes sptp client
-func newClient(target string, clockID ptp.ClockIdentity, eventConn UDPConnWithTS, cfg *Config, stats StatsServer) (*Client, error) {
+// NewClient initializes sptp client
+func NewClient(target string, targetPort int, clockID ptp.ClockIdentity, eventConn UDPConnWithTS, cfg *Config, stats StatsServer) (*Client, error) {
 	// addresses
 	// where to send to
-	eventAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(target, fmt.Sprintf("%d", ptp.PortEvent)))
+	eventAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(target, fmt.Sprintf("%d", targetPort)))
 	if err != nil {
 		return nil, err
 	}
@@ -206,6 +207,15 @@ func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) error {
 	return nil
 }
 
+// handleDelayReq handles Delay Reqest packet and responds with SYNC
+// It's used for external pingers such as ptping and not required for sptp itself
+func (c *Client) handleDelayReq(b *ptp.SyncDelayReq, ts time.Time) error {
+	sync := ReqDelay(c.clockID, 1)
+	sync.OriginTimestamp = ptp.NewTimestamp(ts)
+	_, _, err := c.SendEventMsg(sync)
+	return err
+}
+
 // RunOnce produces one client-server exchange
 func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -219,7 +229,7 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 
 	eg.Go(func() error {
 		// ask for delay
-		seq, hwts, err := c.sendEventMsg(reqDelay(c.clockID))
+		seq, hwts, err := c.SendEventMsg(ReqDelay(c.clockID, 1))
 		if err != nil {
 			return err
 		}

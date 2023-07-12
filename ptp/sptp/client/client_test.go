@@ -80,7 +80,7 @@ func TestClientRun(t *testing.T) {
 		},
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := newClient("127.0.0.1", cid, eventConn, &cfg, statsServer)
+	c, err := NewClient("127.0.0.1", ptp.PortEvent, cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 
 	// put stuff into measurements to make sure it got cleaned before the run
@@ -153,7 +153,7 @@ func TestClientTimeout(t *testing.T) {
 		},
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := newClient("127.0.0.1", cid, eventConn, &cfg, statsServer)
+	c, err := NewClient("127.0.0.1", ptp.PortEvent, cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.tx.delay_req", int64(1))
 	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any())
@@ -179,7 +179,7 @@ func TestClientBadPacket(t *testing.T) {
 		},
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := newClient("127.0.0.1", cid, eventConn, &cfg, statsServer)
+	c, err := NewClient("127.0.0.1", ptp.PortEvent, cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 
 	// handle whatever client is sending over eventConn
@@ -220,7 +220,7 @@ func TestClientIncrementSequence(t *testing.T) {
 		SequenceIDMaskValue: 3,
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := newClient("127.0.0.1", cid, eventConn, &cfg, statsServer)
+	c, err := NewClient("127.0.0.1", ptp.PortEvent, cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 	require.Equal(t, uint16(0x3FFF), c.sequenceIDMask)
 	require.Equal(t, uint16(0xC000), c.sequenceIDValue)

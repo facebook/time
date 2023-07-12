@@ -136,3 +136,15 @@ func SockaddrToIP(sa unix.Sockaddr) net.IP {
 	}
 	return nil
 }
+
+// SockaddrToPort converts socket address to an IP
+// Somewhat copy from https://github.com/golang/go/blob/658b5e66ecbc41a49e6fb5aa63c5d9c804cf305f/src/net/udpsock_posix.go#L15
+func SockaddrToPort(sa unix.Sockaddr) int {
+	switch sa := sa.(type) {
+	case *unix.SockaddrInet4:
+		return sa.Port
+	case *unix.SockaddrInet6:
+		return sa.Port
+	}
+	return 0
+}

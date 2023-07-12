@@ -76,3 +76,15 @@ func TestSockaddrToIP(t *testing.T) {
 	require.Equal(t, ip4.String(), SockaddrToIP(sa4).String())
 	require.Equal(t, ip6.String(), SockaddrToIP(sa6).String())
 }
+
+func TestSockaddrToPort(t *testing.T) {
+	ip4 := net.ParseIP("127.0.0.1")
+	ip6 := net.ParseIP("::1")
+	port := 123
+
+	sa4 := IPToSockaddr(ip4, port)
+	sa6 := IPToSockaddr(ip6, port)
+
+	require.Equal(t, port, SockaddrToPort(sa4))
+	require.Equal(t, port, SockaddrToPort(sa6))
+}

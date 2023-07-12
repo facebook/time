@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+package dscp
 
 import (
 	"net"
@@ -22,7 +22,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func enableDSCP(fd int, localAddr net.IP, dscp int) error {
+// Enable dscp on the fd
+func Enable(fd int, localAddr net.IP, dscp int) error {
 	if localAddr.To4() == nil {
 		if err := unix.SetsockoptInt(fd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, dscp<<2); err != nil {
 			return err

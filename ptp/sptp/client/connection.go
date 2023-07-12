@@ -49,20 +49,23 @@ type UDPConnWithTS interface {
 	ReadPacketWithRXTimestamp() ([]byte, unix.Sockaddr, time.Time, error)
 }
 
-type udpConnTS struct {
+// UDPConnTS is a wrapper around udp connection and a corresponding fd
+type UDPConnTS struct {
 	*net.UDPConn
 	connFd int
 	l      sync.Mutex
 }
 
-func newUDPConnTS(conn *net.UDPConn, connFd int) *udpConnTS {
-	return &udpConnTS{
+// NewUDPConnTS initialises a new struct UDPConnTS
+func NewUDPConnTS(conn *net.UDPConn, connFd int) *UDPConnTS {
+	return &UDPConnTS{
 		UDPConn: conn,
 		connFd:  connFd,
 	}
 }
 
-func (c *udpConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, error) {
+// WriteToWithTS writes bytes to addr via underlying UDPConn
+func (c *UDPConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 	n, err := c.WriteTo(b, addr)
@@ -76,6 +79,7 @@ func (c *udpConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, erro
 	return n, hwts, nil
 }
 
-func (c *udpConnTS) ReadPacketWithRXTimestamp() ([]byte, unix.Sockaddr, time.Time, error) {
+// ReadPacketWithRXTimestamp reads bytes and a timestamp from underlying fd
+func (c *UDPConnTS) ReadPacketWithRXTimestamp() ([]byte, unix.Sockaddr, time.Time, error) {
 	return timestamp.ReadPacketWithRXTimestamp(c.connFd)
 }

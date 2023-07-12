@@ -215,7 +215,8 @@ func (c ClockIdentity) MAC() net.HardwareAddr {
 func NewClockIdentity(mac net.HardwareAddr) (ClockIdentity, error) {
 	b := [8]byte{}
 	macLen := len(mac)
-	if macLen == 6 { // EUI-48
+	switch macLen {
+	case 6: // EUI-48
 		b[0] = mac[0]
 		b[1] = mac[1]
 		b[2] = mac[2]
@@ -224,9 +225,9 @@ func NewClockIdentity(mac net.HardwareAddr) (ClockIdentity, error) {
 		b[5] = mac[3]
 		b[6] = mac[4]
 		b[7] = mac[5]
-	} else if macLen == 8 { // EUI-64
+	case 8: // EUI-64
 		copy(b[:], mac)
-	} else {
+	default:
 		return 0, fmt.Errorf("unsupported MAC %v, must be either EUI48 or EUI64", mac)
 	}
 	return ClockIdentity(binary.BigEndian.Uint64(b[:])), nil
