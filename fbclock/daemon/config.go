@@ -26,13 +26,14 @@ import (
 
 // Config represents configuration we expect to read from file
 type Config struct {
-	PTPClientAddress            string        // where should fbclock connect to
-	RingSize                    int           // must be at least the size of N samples we use in expressions
-	Math                        Math          // configuration for calculation we'll be doing
-	Interval                    time.Duration // how often do we poll ptp4l and update data in shm
-	Iface                       string        // network interface to use
-	LinearizabilityTestInterval time.Duration // perform the linearizability test every so often
-	SPTP                        bool          // wherever we run in sptp or ptp4l mode
+	PTPClientAddress               string        // where should fbclock connect to
+	RingSize                       int           // must be at least the size of N samples we use in expressions
+	Math                           Math          // configuration for calculation we'll be doing
+	Interval                       time.Duration // how often do we poll ptp4l and update data in shm
+	Iface                          string        // network interface to use
+	LinearizabilityTestInterval    time.Duration // perform the linearizability test every so often
+	SPTP                           bool          // wherever we run in sptp or ptp4l mode
+	LinearizabilityTestMaxGMOffset time.Duration // max offset between GMs before linearizability test considered failed
 }
 
 // EvalAndValidate makes sure config is valid and evaluates expressions for further use.
@@ -43,8 +44,16 @@ func (c *Config) EvalAndValidate() error {
 	if c.RingSize <= 0 {
 		return fmt.Errorf("bad config: 'ringsize' must be >0")
 	}
-	if c.Interval > time.Minute {
-		return fmt.Errorf("bad config: 'interval' is over a minute")
+	if c.Interval <= 0 || c.Interval > time.Minute {
+		return fmt.Errorf("bad config: 'interval' must be between 0 and 1 minute")
+	}
+
+	if c.LinearizabilityTestInterval < 0 {
+		return fmt.Errorf("bad config: 'test interval' must be positive")
+	}
+
+	if c.LinearizabilityTestMaxGMOffset < 0 {
+		return fmt.Errorf("bad config: 'offset' must be positive")
 	}
 	return c.Math.Prepare()
 }

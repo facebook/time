@@ -353,7 +353,7 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 			lt, found := testers[server]
 			if !found {
 				if s.cfg.SPTP {
-					lt, err = linearizability.NewSPTPTester(server, fmt.Sprintf("http://%s/", s.cfg.PTPClientAddress))
+					lt, err = linearizability.NewSPTPTester(server, fmt.Sprintf("http://%s/", s.cfg.PTPClientAddress), s.cfg.LinearizabilityTestMaxGMOffset)
 				} else {
 					lt, err = linearizability.NewPTP4lTester(server, s.cfg.Iface)
 				}

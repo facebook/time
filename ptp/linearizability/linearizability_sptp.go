@@ -26,19 +26,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// MAXgmOffset is a maximuim offset between GMs
-const MAXgmOffset = 3 * time.Microsecond
-
 // SPTPTestResult is what we get after the test run
 type SPTPTestResult struct {
-	Server string
+	Config SPTPTestConfig
 	Offset float64
 	Error  error
 }
 
 // Target returns value of server
 func (tr SPTPTestResult) Target() string {
-	return tr.Server
+	return tr.Config.Server
 }
 
 // Good check if the test passed
@@ -46,7 +43,7 @@ func (tr SPTPTestResult) Good() (bool, error) {
 	if tr.Error != nil {
 		return false, tr.Error
 	}
-	if math.Abs(tr.Offset) > float64(MAXgmOffset.Nanoseconds()) {
+	if math.Abs(tr.Offset) > float64(tr.Config.LinearizabilityTestMaxGMOffset.Nanoseconds()) {
 		return false, nil
 	}
 	return true, nil
@@ -54,7 +51,7 @@ func (tr SPTPTestResult) Good() (bool, error) {
 
 // Explain provides plain text explanation of linearizability test result
 func (tr SPTPTestResult) Explain() string {
-	msg := fmt.Sprintf("linearizability test against %q", tr.Server)
+	msg := fmt.Sprintf("linearizability test against %q", tr.Config.Server)
 	good, err := tr.Good()
 	if good {
 		return fmt.Sprintf("%s passed", msg)
@@ -62,7 +59,7 @@ func (tr SPTPTestResult) Explain() string {
 	if err != nil {
 		return fmt.Sprintf("%s couldn't be completed because of error: %v", msg, tr.Error)
 	}
-	return fmt.Sprintf("%s failed because the offset %.2fns is > %v", msg, tr.Offset, MAXgmOffset)
+	return fmt.Sprintf("%s failed because the offset %.2fns is > %v", msg, tr.Offset, tr.Config.LinearizabilityTestMaxGMOffset)
 }
 
 // Err returns an error value of the PTP4lTestResult
@@ -72,8 +69,9 @@ func (tr SPTPTestResult) Err() error {
 
 // SPTPTestConfig is a configuration for Tester
 type SPTPTestConfig struct {
-	Server  string
-	sptpurl string
+	Server                         string
+	sptpurl                        string
+	LinearizabilityTestMaxGMOffset time.Duration
 }
 
 // Target sets the server to test
@@ -90,10 +88,11 @@ type SPTPTester struct {
 }
 
 // NewSPTPTester initializes a Tester
-func NewSPTPTester(server string, sptpurl string) (*SPTPTester, error) {
+func NewSPTPTester(server string, sptpurl string, linearizabilityTestMaxGMOffset time.Duration) (*SPTPTester, error) {
 	cfg := &SPTPTestConfig{
-		Server:  server,
-		sptpurl: sptpurl,
+		Server:                         server,
+		sptpurl:                        sptpurl,
+		LinearizabilityTestMaxGMOffset: linearizabilityTestMaxGMOffset,
 	}
 
 	t := &SPTPTester{
@@ -112,7 +111,7 @@ func (lt *SPTPTester) Close() error {
 // Warning: the listener must be started via RunListener before calling this function.
 func (lt *SPTPTester) RunTest(_ context.Context) TestResult {
 	result := SPTPTestResult{
-		Server: lt.cfg.Server,
+		Config: *lt.cfg,
 		Error:  nil,
 	}
 

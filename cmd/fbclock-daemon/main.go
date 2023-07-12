@@ -59,7 +59,7 @@ func main() {
 	flag.StringVar(&cfg.Math.Drift, "drift", daemon.MathDefaultDrift, "Math expression for Drift PPB")
 	flag.DurationVar(&cfg.Interval, "i", time.Second, "Interval at which we talk to PTP client and update data in shm")
 	flag.DurationVar(&cfg.LinearizabilityTestInterval, "I", time.Minute, "Interval at which we run linearizability tests. 0 means disabled.")
-
+	flag.DurationVar(&cfg.LinearizabilityTestMaxGMOffset, "o", 10*time.Microsecond, "Max offset between GMs before linearizability test considered failed.")
 	flag.StringVar(&cfgPath, "cfg", "", "Path to config")
 	flag.BoolVar(&manageDevice, "manage", true, fmt.Sprintf("Manage device. This will setup %q as a copy of PHC device associated with given network interface", daemon.ManagedPTPDevicePath))
 	flag.BoolVar(&csvLog, "csvlog", true, "Log all the metrics as CSV to log")
