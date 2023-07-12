@@ -212,18 +212,18 @@ func (p *SPTP) init() error {
 
 // ptping probing if packet is ptping before discarding it
 // It's used for external pingers such as ptping and not required for sptp itself
-func (p *SPTP) ptping(ctx context.Context, sourceIP net.IP, sourcePort int, response []byte, rxtx time.Time) error {
+func (p *SPTP) ptping(sourceIP net.IP, sourcePort int, response []byte, rxtx time.Time) error {
 	// Delay request from ptping
 	b := &ptp.SyncDelayReq{}
 	if err := ptp.FromBytes(response, b); err != nil {
-		return fmt.Errorf("failed to read delay request %v", err)
+		return fmt.Errorf("failed to read delay request %w", err)
 	}
 	c, err := NewClient(sourceIP.String(), sourcePort, p.clockID, p.eventConn, p.cfg, p.stats)
 	if err != nil {
-		return fmt.Errorf("failed to respond to a delay request %v", err)
+		return fmt.Errorf("failed to respond to a delay request %w", err)
 	}
 	if err := c.handleDelayReq(b, rxtx); err != nil {
-		return fmt.Errorf("failed to respond to a delay request %v", err)
+		return fmt.Errorf("failed to respond to a delay request %w", err)
 	}
 	return nil
 }
@@ -281,7 +281,7 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 				if !found {
 					log.Warningf("ignoring packets from server %v. Trying ptping", ip)
 					// Try ptping
-					if err = p.ptping(ctx, ip, timestamp.SockaddrToPort(addr), response, rxtx); err != nil {
+					if err = p.ptping(ip, timestamp.SockaddrToPort(addr), response, rxtx); err != nil {
 						log.Warning(err)
 					}
 					continue

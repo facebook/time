@@ -490,12 +490,12 @@ func TestPTPing(t *testing.T) {
 	response := []byte{}
 	ip := net.ParseIP("1.2.3.4")
 
-	err := p.ptping(context.Background(), ip, 1234, response, time.Time{})
-	require.Equal(t, fmt.Errorf("failed to read delay request not enough data to decode SyncDelayReq"), err)
+	err := p.ptping(ip, 1234, response, time.Time{})
+	require.ErrorContains(t, err, "failed to read delay request not enough data to decode SyncDelayReq")
 
 	b := &ptp.SyncDelayReq{}
 	response, err = b.MarshalBinary()
 	require.Nil(t, err)
-	err = p.ptping(context.Background(), ip, 1234, response, time.Time{})
+	err = p.ptping(ip, 1234, response, time.Time{})
 	require.Nil(t, err)
 }
