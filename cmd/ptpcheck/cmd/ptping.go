@@ -185,6 +185,10 @@ var ptpingCmd = &cobra.Command{
 	Run: func(c *cobra.Command, args []string) {
 		ConfigureVerbosity()
 
+		if serverf == "" {
+			log.Fatal("remote server must be specified")
+		}
+
 		if err := ptpingRun(ifacef, dscpf, serverf, countf, timeoutf); err != nil {
 			log.Fatal(err)
 		}
