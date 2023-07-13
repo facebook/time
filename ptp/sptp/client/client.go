@@ -209,7 +209,7 @@ func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) error {
 
 // handleDelayReq handles Delay Reqest packet and responds with SYNC
 // It's used for external pingers such as ptping and not required for sptp itself
-func (c *Client) handleDelayReq(b *ptp.SyncDelayReq, ts time.Time) error {
+func (c *Client) handleDelayReq(ts time.Time) error {
 	sync := ReqDelay(c.clockID, 1)
 	sync.OriginTimestamp = ptp.NewTimestamp(ts)
 	_, _, err := c.SendEventMsg(sync)

@@ -491,7 +491,7 @@ func TestPTPing(t *testing.T) {
 	ip := net.ParseIP("1.2.3.4")
 
 	err := p.ptping(ip, 1234, response, time.Time{})
-	require.ErrorContains(t, err, "failed to read delay request not enough data to decode SyncDelayReq")
+	require.Equal(t, "failed to read delay request not enough data to decode SyncDelayReq", err.Error())
 
 	b := &ptp.SyncDelayReq{}
 	response, err = b.MarshalBinary()
