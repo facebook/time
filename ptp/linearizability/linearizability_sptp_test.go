@@ -119,7 +119,6 @@ func TestSPTPTestResultExplain(t *testing.T) {
 }
 
 func TestSPTPRunTest(t *testing.T) {
-
 	sampleResp := `
 	[
 		{"gm_address": "127.0.0.1", "selected": false, "port_identity": "oleg", "clock_quality": {"clock_class": 6, "clock_accuracy": 33, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -42.42, "mean_path_delay": 42.42, "steps_removed": 3, "cf_rx": 10, "cf_tx": 20, "gm_present": 1, "error": ""},

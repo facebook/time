@@ -213,7 +213,7 @@ func (p *SPTP) init() error {
 // ptping probing if packet is ptping before discarding it
 // It's used for external pingers such as ptping and not required for sptp itself
 func (p *SPTP) ptping(sourceIP net.IP, sourcePort int, response []byte, rxtx time.Time) error {
-	// Delay request from ptping
+	// Has to be a delay request from ptping
 	b := &ptp.SyncDelayReq{}
 	if err := ptp.FromBytes(response, b); err != nil {
 		return fmt.Errorf("failed to read delay request %w", err)
@@ -222,7 +222,7 @@ func (p *SPTP) ptping(sourceIP net.IP, sourcePort int, response []byte, rxtx tim
 	if err != nil {
 		return fmt.Errorf("failed to respond to a delay request %w", err)
 	}
-	if err := c.handleDelayReq(b, rxtx); err != nil {
+	if err := c.handleDelayReq(rxtx); err != nil {
 		return fmt.Errorf("failed to respond to a delay request %w", err)
 	}
 	return nil
