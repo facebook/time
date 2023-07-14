@@ -60,5 +60,4 @@ func TestTimestamps(t *testing.T) {
 	require.Equal(t, now.Nanosecond(), t1.Nanosecond())
 	require.Equal(t, now.Nanosecond(), t2.Nanosecond())
 	require.Equal(t, now.Nanosecond(), t4.Nanosecond())
-
 }
