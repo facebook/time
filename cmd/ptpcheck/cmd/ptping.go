@@ -35,7 +35,6 @@ import (
 // flags
 var (
 	ifacef   string
-	serverf  string
 	countf   int
 	dscpf    int
 	timeoutf time.Duration
@@ -44,7 +43,6 @@ var (
 func init() {
 	RootCmd.AddCommand(ptpingCmd)
 	ptpingCmd.Flags().StringVarP(&ifacef, "iface", "i", "eth0", "network interface to use")
-	ptpingCmd.Flags().StringVarP(&serverf, "server", "S", "", "remote sptp server to connect to")
 	ptpingCmd.Flags().IntVarP(&countf, "count", "c", 5, "number of probes to send")
 	ptpingCmd.Flags().IntVarP(&dscpf, "dscp", "d", 35, "dscp value (QoS)")
 	ptpingCmd.Flags().DurationVarP(&timeoutf, "timeout", "t", time.Second, "request timeout/interval")
@@ -58,6 +56,8 @@ type ptping struct {
 	clockID   ptp.ClockIdentity
 	eventConn client.UDPConnWithTS
 	client    *client.Client
+
+	inChan chan *client.InPacket
 }
 
 func (p *ptping) init() error {
@@ -101,49 +101,59 @@ func (p *ptping) init() error {
 	}
 
 	p.eventConn = client.NewUDPConnTS(eventConn, connFd)
+	timestamp.AttemptsTXTS = 5
+	timestamp.TimeoutTXTS = 100 * time.Millisecond
 	p.client, err = client.NewClient(p.target, ptp.PortEvent, p.clockID, p.eventConn, &client.Config{}, &client.JSONStats{})
+	go p.runReader()
+
 	return err
 }
 
-func (p *ptping) t4(timeout time.Duration) (time.Time, error) {
+// timestamps returns t1, t2, t4
+func (p *ptping) timestamps(timeout time.Duration) (time.Time, time.Time, time.Time, error) {
+	var t1 time.Time
+	var t2 time.Time
 	var t4 time.Time
-	doneChan := make(chan error, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	go func() {
-		response, _, _, err := p.eventConn.ReadPacketWithRXTimestamp()
-		if err != nil {
-			doneChan <- err
-			return
-		}
-		var msgType ptp.MessageType
-		msgType, err = ptp.ProbeMsgType(response)
-		if err != nil {
-			doneChan <- err
-			return
-		}
-		switch msgType {
-		case ptp.MessageSync, ptp.MessageDelayReq:
-			b := &ptp.SyncDelayReq{}
-			if err = ptp.FromBytes(response, b); err != nil {
-				doneChan <- fmt.Errorf("reading sync msg: %w", err)
-				return
+	for {
+		select {
+		case <-ctx.Done():
+			return t1, t2, t4, fmt.Errorf("timeout waiting")
+		case p := <-p.inChan:
+			msgType, err := ptp.ProbeMsgType(p.Data())
+			if err != nil {
+				return t1, t2, t4, err
 			}
-			t4 = b.OriginTimestamp.Time()
-			doneChan <- nil
-			return
-		default:
-			doneChan <- fmt.Errorf("got unsupported packet: %v", msgType)
-			return
-		}
-	}()
+			switch msgType {
+			case ptp.MessageSync, ptp.MessageDelayReq:
+				t2 = p.TS()
+				b := &ptp.SyncDelayReq{}
+				if err = ptp.FromBytes(p.Data(), b); err != nil {
+					return t1, t2, t4, fmt.Errorf("reading sync msg: %w", err)
+				}
+				t4 = b.OriginTimestamp.Time()
+				continue
 
-	select {
-	case <-ctx.Done():
-		return t4, fmt.Errorf("tired of waiting for a response")
-	case err := <-doneChan:
-		return t4, err
+			case ptp.MessageAnnounce:
+				b := &ptp.Announce{}
+				if err = ptp.FromBytes(p.Data(), b); err != nil {
+					return t1, t2, t4, fmt.Errorf("reading announce msg: %w", err)
+				}
+				t1 = b.OriginTimestamp.Time()
+				continue
+			default:
+				log.Infof("got unsupported packet %v:", msgType)
+			}
+		}
+	}
+}
+
+func (p *ptping) runReader() {
+	for {
+		response, _, rxts, _ := p.eventConn.ReadPacketWithRXTimestamp()
+		p.inChan <- client.NewInPacket(response, rxts)
 	}
 }
 
@@ -152,6 +162,7 @@ func ptpingRun(iface string, dscp int, server string, count int, timeout time.Du
 		iface:  iface,
 		dscp:   dscp,
 		target: server,
+		inChan: make(chan *client.InPacket),
 	}
 
 	if err := p.init(); err != nil {
@@ -159,6 +170,8 @@ func ptpingRun(iface string, dscp int, server string, count int, timeout time.Du
 	}
 	// We want to avoid first 10 which may be used by other tools
 	portID := uint16(rand.Intn(10+65535) - 10)
+	intervalTicker := time.NewTicker(timeout)
+	defer intervalTicker.Stop()
 
 	for c := 1; c <= count; c++ {
 		_, t3, err := p.client.SendEventMsg(client.ReqDelay(p.clockID, portID))
@@ -167,29 +180,35 @@ func ptpingRun(iface string, dscp int, server string, count int, timeout time.Du
 			continue
 		}
 
-		t4, err := p.t4(timeout)
+		t1, t2, t4, err := p.timestamps(timeout)
 		if err != nil {
-			log.Errorf("failed to read response: %s", err)
-		} else {
-			fmt.Printf("%s: seq=%d time=%s\n", server, c, t4.Sub(t3))
+			if t4.IsZero() {
+				log.Errorf("failed to read sync response: %v", err)
+				continue
+			}
 		}
-		time.Sleep(timeout)
+		fw := t4.Sub(t3)
+		bk := t2.Sub(t1)
+		if t1.IsZero() {
+			bk = 0
+		}
+
+		fmt.Printf("%s: seq=%d time=%s\t(->%s + <-%s)\n", server, c, fw+bk, fw, bk)
+		<-intervalTicker.C
 	}
 	return nil
 }
 
 var ptpingCmd = &cobra.Command{
-	Use:   "ptping",
-	Short: "sptp-based ping",
-	Long:  "measure real network latency between 2 sptp-enabled hosts",
+	Use:        "ptping {server}",
+	Short:      "sptp-based ping",
+	Long:       "measure real network latency between 2 sptp-enabled hosts",
+	Args:       cobra.ExactArgs(1),
+	ArgAliases: []string{"server"},
 	Run: func(c *cobra.Command, args []string) {
 		ConfigureVerbosity()
 
-		if serverf == "" {
-			log.Fatal("remote server must be specified")
-		}
-
-		if err := ptpingRun(ifacef, dscpf, serverf, countf, timeoutf); err != nil {
+		if err := ptpingRun(ifacef, dscpf, args[0], countf, timeoutf); err != nil {
 			log.Fatal(err)
 		}
 	},

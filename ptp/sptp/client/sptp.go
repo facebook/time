@@ -253,7 +253,7 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					log.Warningf("ignoring packets from server %v", addr)
 					continue
 				}
-				cc.inChan <- &inPacket{data: response[:n]}
+				cc.inChan <- &InPacket{data: response[:n]}
 			}
 		}()
 		select {
@@ -286,7 +286,7 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					}
 					continue
 				}
-				cc.inChan <- &inPacket{data: response, ts: rxtx}
+				cc.inChan <- &InPacket{data: response, ts: rxtx}
 			}
 		}()
 		select {

@@ -103,19 +103,19 @@ func TestClientRun(t *testing.T) {
 		sync := syncPkt(int(delayReq.SequenceID))
 		syncBytes, err := ptp.Bytes(sync)
 		require.Nil(t, err)
-		c.inChan <- &inPacket{
+		c.inChan <- &InPacket{
 			data: syncBytes,
 			ts:   time.Now(),
 		}
 		// send in irrelevant packet client should ignore
-		c.inChan <- &inPacket{
+		c.inChan <- &InPacket{
 			data: []byte{1, 2, 3, 4, 5},
 		}
 
 		announce = announcePkt(int(delayReq.SequenceID))
 		announceBytes, err := ptp.Bytes(announce)
 		require.Nil(t, err)
-		c.inChan <- &inPacket{
+		c.inChan <- &InPacket{
 			data: announceBytes,
 		}
 
@@ -188,7 +188,7 @@ func TestClientBadPacket(t *testing.T) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
 		require.Nil(t, err, "reading delayReq msg")
-		c.inChan <- &inPacket{
+		c.inChan <- &InPacket{
 			data: []byte{},
 			ts:   time.Now(),
 		}
@@ -231,4 +231,18 @@ func TestClientIncrementSequence(t *testing.T) {
 	c.eventSequence = uint16(0xFFFF)
 	c.incrementSequence()
 	require.Equal(t, uint16(0xC000), c.eventSequence)
+}
+
+func TestReqAnnounce(t *testing.T) {
+	now := time.Now()
+	a := ReqAnnounce(ptp.ClockIdentity(0xc42a1fffe6d7ca6), 1, now)
+	require.Equal(t, now.Nanosecond(), a.OriginTimestamp.Time().Nanosecond())
+}
+
+func TestInPacket(t *testing.T) {
+	data := []byte("test")
+	ts := time.Now()
+	p := NewInPacket(data, ts)
+	require.Equal(t, data, p.Data())
+	require.Equal(t, ts, p.TS())
 }

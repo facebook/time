@@ -475,7 +475,7 @@ func TestPTPing(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).Times(1)
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).Times(2)
 	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)

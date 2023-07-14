@@ -61,6 +61,27 @@ func ReqDelay(clockID ptp.ClockIdentity, portID uint16) *ptp.SyncDelayReq {
 	}
 }
 
+// ReqAnnounce is a helper to build ptp.Announce
+// It's used for external pingers such as ptping and not required for sptp itself
+func ReqAnnounce(clockID ptp.ClockIdentity, portID uint16, ts time.Time) *ptp.Announce {
+	return &ptp.Announce{
+		Header: ptp.Header{
+			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageAnnounce, 0),
+			Version:         ptp.Version,
+			SequenceID:      0, // will be populated on sending
+			MessageLength:   uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.AnnounceBody{})),
+			SourcePortIdentity: ptp.PortIdentity{
+				PortNumber:    portID,
+				ClockIdentity: clockID,
+			},
+			LogMessageInterval: 0x7f,
+		},
+		AnnounceBody: ptp.AnnounceBody{
+			OriginTimestamp: ptp.NewTimestamp(ts),
+		},
+	}
+}
+
 // RunResult is what we return from single client-server interaction
 type RunResult struct {
 	Server      string
@@ -68,10 +89,25 @@ type RunResult struct {
 	Error       error
 }
 
-// inPacket is input packet data + receive timestamp
-type inPacket struct {
+// InPacket is input packet data + receive timestamp
+type InPacket struct {
 	data []byte
 	ts   time.Time
+}
+
+// NewInPacket returns a new instance of InPacket
+func NewInPacket(data []byte, ts time.Time) *InPacket {
+	return &InPacket{data: data, ts: ts}
+}
+
+// Data returns data
+func (i *InPacket) Data() []byte {
+	return i.data
+}
+
+// TS returns timestamp
+func (i *InPacket) TS() time.Time {
+	return i.ts
 }
 
 // Client is a part of PTPNG that talks to only one server
@@ -84,7 +120,7 @@ type Client struct {
 	// const value for sequence ID
 	sequenceIDValue uint16
 	// chan for received packets regardless of port
-	inChan chan *inPacket
+	inChan chan *InPacket
 	// listening connection on port 319
 	eventConn UDPConnWithTS
 	// our clockID derived from MAC address
@@ -140,7 +176,7 @@ func NewClient(target string, targetPort int, clockID ptp.ClockIdentity, eventCo
 		sequenceIDValue: sequenceIDMaskedValue,
 		eventConn:       eventConn,
 		eventAddr:       eventAddr,
-		inChan:          make(chan *inPacket, 100),
+		inChan:          make(chan *InPacket, 100),
 		server:          target,
 		m:               newMeasurements(&cfg.Measurement),
 		stats:           stats,
@@ -149,7 +185,7 @@ func NewClient(target string, targetPort int, clockID ptp.ClockIdentity, eventCo
 }
 
 // dispatch handler based on msg type
-func (c *Client) handleMsg(msg *inPacket) error {
+func (c *Client) handleMsg(msg *InPacket) error {
 	msgType, err := ptp.ProbeMsgType(msg.data)
 	if err != nil {
 		return err
@@ -212,7 +248,12 @@ func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) error {
 func (c *Client) handleDelayReq(ts time.Time) error {
 	sync := ReqDelay(c.clockID, 1)
 	sync.OriginTimestamp = ptp.NewTimestamp(ts)
-	_, _, err := c.SendEventMsg(sync)
+	_, txts, err := c.SendEventMsg(sync)
+	if err != nil {
+		return err
+	}
+	announce := ReqAnnounce(c.clockID, 1, txts)
+	_, _, err = c.SendEventMsg(announce)
 	return err
 }
 
