@@ -120,7 +120,10 @@ func (p *ptping) timestamps(timeout time.Duration) (time.Time, time.Time, time.T
 	for {
 		select {
 		case <-ctx.Done():
-			return t1, t2, t4, fmt.Errorf("timeout waiting")
+			if t4.IsZero() {
+				return t1, t2, t4, fmt.Errorf("timeout waiting")
+			}
+			return t1, t2, t4, nil
 		case p := <-p.inChan:
 			msgType, err := ptp.ProbeMsgType(p.Data())
 			if err != nil {
@@ -170,8 +173,6 @@ func ptpingRun(iface string, dscp int, server string, count int, timeout time.Du
 	}
 	// We want to avoid first 10 which may be used by other tools
 	portID := uint16(rand.Intn(10+65535) - 10)
-	intervalTicker := time.NewTicker(timeout)
-	defer intervalTicker.Stop()
 
 	for c := 1; c <= count; c++ {
 		_, t3, err := p.client.SendEventMsg(client.ReqDelay(p.clockID, portID))
@@ -182,10 +183,8 @@ func ptpingRun(iface string, dscp int, server string, count int, timeout time.Du
 
 		t1, t2, t4, err := p.timestamps(timeout)
 		if err != nil {
-			if t4.IsZero() {
-				log.Errorf("failed to read sync response: %v", err)
-				continue
-			}
+			log.Errorf("failed to read sync response: %v", err)
+			continue
 		}
 		fw := t4.Sub(t3)
 		bk := t2.Sub(t1)
@@ -194,7 +193,6 @@ func ptpingRun(iface string, dscp int, server string, count int, timeout time.Du
 		}
 
 		fmt.Printf("%s: seq=%d time=%s\t(->%s + <-%s)\n", server, c, fw+bk, fw, bk)
-		<-intervalTicker.C
 	}
 	return nil
 }
