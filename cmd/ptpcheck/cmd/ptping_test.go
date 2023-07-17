@@ -48,7 +48,7 @@ func TestTimestamps(t *testing.T) {
 
 	p.inChan <- client.NewInPacket(sb, now)
 	_, t2, t4, err := p.timestamps(timeout)
-	require.Equal(t, fmt.Errorf("timeout waiting"), err)
+	require.NoError(t, err)
 	require.Equal(t, now.Nanosecond(), t2.Nanosecond())
 	require.Equal(t, now.Nanosecond(), t4.Nanosecond())
 
@@ -56,7 +56,7 @@ func TestTimestamps(t *testing.T) {
 	p.inChan <- client.NewInPacket(sb, now)
 
 	t1, t2, t4, err := p.timestamps(timeout)
-	require.Equal(t, fmt.Errorf("timeout waiting"), err)
+	require.NoError(t, err)
 	require.Equal(t, now.Nanosecond(), t1.Nanosecond())
 	require.Equal(t, now.Nanosecond(), t2.Nanosecond())
 	require.Equal(t, now.Nanosecond(), t4.Nanosecond())
