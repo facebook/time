@@ -252,6 +252,9 @@ func (f *PiServoFilter) isSpike(offset int64, lastCorrection time.Time) filterSt
 	if f.skippedCount >= f.cfg.maxSkipCount {
 		return filterReset
 	}
+	if f.samplesCount != f.cfg.ringSize {
+		return filterNoSpike
+	}
 	maxOffsetLocked := int64(f.cfg.offsetStdevFactor * float64(f.offsetStdev))
 	secPassed := math.Round(time.Since(lastCorrection).Seconds())
 	waitFactor := secPassed * (f.cfg.freqStdevFactor*f.freqStdev + float64(f.cfg.maxFreqChange/2))

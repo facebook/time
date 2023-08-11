@@ -88,7 +88,7 @@ func TestPiServoFilterSample(t *testing.T) {
 	pi := NewPiServo(DefaultServoConfig(), DefaultPiServoCfg(), -111288.406372)
 	pi.SyncInterval(1)
 	piFilterCfg := DefaultPiServoFilterCfg()
-	piFilterCfg.ringSize = 4
+	piFilterCfg.ringSize = 3
 	piFilterCfg.maxSkipCount = 2
 	f := NewPiServoFilter(pi, piFilterCfg)
 
@@ -131,6 +131,42 @@ func TestPiServoFilterSample(t *testing.T) {
 	require.InEpsilon(t, -111441.130482, freq, 0.00001)
 	require.Equal(t, f.freqMean, 0.0)
 	require.Equal(t, StateInit, state)
+}
+
+func TestPiServoNoFilterSample(t *testing.T) {
+	pi := NewPiServo(DefaultServoConfig(), DefaultPiServoCfg(), -111288.406372)
+	pi.SyncInterval(1)
+	piFilterCfg := DefaultPiServoFilterCfg()
+	piFilterCfg.ringSize = 8
+	piFilterCfg.maxSkipCount = 2
+	f := NewPiServoFilter(pi, piFilterCfg)
+
+	require.InEpsilon(t, -111288.406372, pi.lastFreq, 0.00001)
+	require.InEpsilon(t, -111288.406372, pi.drift, 0.00001)
+
+	freq, state := pi.Sample(1191, 1674148530671467104)
+	require.InEpsilon(t, -111288.406372, freq, 0.00001)
+	require.Equal(t, StateInit, state)
+
+	freq, state = pi.Sample(225, 1674148531671518924)
+	require.InEpsilon(t, -112254.463816, freq, 0.00001)
+	require.Equal(t, StateLocked, state)
+
+	freq, state = pi.Sample(1170, 1674148532671555647)
+	require.InEpsilon(t, -111084.463816, freq, 0.00001)
+	require.Equal(t, StateLocked, state)
+
+	freq, state = pi.Sample(919, 1674148533671484215)
+	require.InEpsilon(t, -110984.463816, freq, 0.00001)
+	require.Equal(t, StateLocked, state)
+	require.Equal(t, 0, pi.filter.skippedCount)
+
+	freq, state = pi.Sample(919000, 1674148534671684215)
+	require.Equal(t, StateLocked, state)
+
+	freq, state = pi.Sample(9090000, 1674148535671684215)
+	require.Equal(t, StateLocked, state)
+	require.Equal(t, 0, f.skippedCount)
 }
 
 func TestPiServoSetFreq(t *testing.T) {
