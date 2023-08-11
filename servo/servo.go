@@ -32,10 +32,11 @@ type State uint8
 
 // All the states of servo
 const (
-	StateInit   State = 0
-	StateJump   State = 1
-	StateLocked State = 2
-	StateFilter State = 3
+	StateInit     State = 0
+	StateJump     State = 1
+	StateLocked   State = 2
+	StateFilter   State = 3
+	StateHoldover State = 4
 )
 
 func (s State) String() string {
@@ -48,6 +49,8 @@ func (s State) String() string {
 		return "LOCKED"
 	case StateFilter:
 		return "FILTER"
+	case StateHoldover:
+		return "HOLDOVER"
 	}
 	return "UNSUPPORTED"
 }

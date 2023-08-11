@@ -365,6 +365,12 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	if best == nil {
 		log.Warningf("no Best Master selected")
 		p.bestGM = ""
+		freqAdj := p.pi.MeanFreq()
+		state := servo.StateHoldover
+		if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
+			log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
+		}
+		log.Infof("offset Unknown s%d freq %+7.0f path delay Unknown", state, freqAdj)
 		return
 	}
 	bestAddr := idsToClients[best.GrandmasterIdentity]

@@ -42,12 +42,16 @@ func TestProcessResultsNoResults(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClock := NewMockClock(ctrl)
+	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
 	p := &SPTP{
 		clock: mockClock,
+		pi:    mockServo,
 		stats: mockStatsServer,
 	}
 	results := map[string]*RunResult{}
+	mockServo.EXPECT().MeanFreq()
+	mockClock.EXPECT().AdjFreqPPB(gomock.Any())
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(0))
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(0))
 	p.processResults(results)
@@ -77,6 +81,8 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	results := map[string]*RunResult{
 		"192.168.0.10": {},
 	}
+	mockServo.EXPECT().MeanFreq()
+	mockClock.EXPECT().AdjFreqPPB(gomock.Any())
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(0))
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
@@ -221,10 +227,10 @@ func TestRunInternalAllDead(t *testing.T) {
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).Times(4)
 	mockClock := NewMockClock(ctrl)
-	mockClock.EXPECT().AdjFreqPPB((float64(0)))
+	mockClock.EXPECT().AdjFreqPPB((float64(0))).Times(3)
 	mockServo := NewMockServo(ctrl)
 	mockServo.EXPECT().SyncInterval(float64(1))
-	mockServo.EXPECT().MeanFreq()
+	mockServo.EXPECT().MeanFreq().Times(3)
 	mockStatsServer := NewMockStatsServer(ctrl)
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(2)).Times(2)
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(0)).Times(2)
