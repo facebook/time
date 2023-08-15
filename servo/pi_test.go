@@ -161,10 +161,10 @@ func TestPiServoNoFilterSample(t *testing.T) {
 	require.Equal(t, StateLocked, state)
 	require.Equal(t, 0, pi.filter.skippedCount)
 
-	freq, state = pi.Sample(919000, 1674148534671684215)
+	_, state = pi.Sample(919000, 1674148534671684215)
 	require.Equal(t, StateLocked, state)
 
-	freq, state = pi.Sample(9090000, 1674148535671684215)
+	_, state = pi.Sample(9090000, 1674148535671684215)
 	require.Equal(t, StateLocked, state)
 	require.Equal(t, 0, f.skippedCount)
 }
