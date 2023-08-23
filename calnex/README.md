@@ -7,6 +7,7 @@ Cli Supports several basic commands such as:
 * Device reboot
 * Device clear
 * Device problem report export
+* Device verify
 
 ```
 $ calnex firmware --target calnex01.example.com --file ~/go/github.com/facebook/time/calnex/testdata/sentinel_fw_v3.0.tar
