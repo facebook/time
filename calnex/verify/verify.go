@@ -29,7 +29,7 @@ type VF struct {
 // Verify runs health checks and report diagnosis
 func Verify(target string, insecureTLS bool, verify *VF, apply bool) error {
 	for _, c := range verify.Checks {
-		if err := c.Run(target); err != nil {
+		if err := c.Run(target, insecureTLS); err != nil {
 			log.Warningf("%s check fail: %v", c.Name(), err)
 			if apply {
 				result, err := c.Remediate()

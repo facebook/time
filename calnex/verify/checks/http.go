@@ -33,8 +33,8 @@ func (p *HTTP) Name() string {
 }
 
 // Run executes the check
-func (p *HTTP) Run(name string) error {
-	api := api.NewAPI(name, true)
+func (p *HTTP) Run(name string, insecureTLS bool) error {
+	api := api.NewAPI(name, insecureTLS)
 
 	_, err := api.FetchStatus()
 	if err != nil {
