@@ -27,7 +27,7 @@ func TestGNSS(t *testing.T) {
 	c := GNSS{Remediation: r}
 	require.Equal(t, "GNSS", c.Name())
 
-	err := c.Run("1.2.3.4")
+	err := c.Run("1.2.3.4", false)
 	require.Error(t, err)
 
 	want, _ := r.Remediate()
@@ -41,7 +41,7 @@ func TestHTTP(t *testing.T) {
 	c := HTTP{Remediation: r}
 	require.Equal(t, "HTTP", c.Name())
 
-	err := c.Run("1.2.3.4")
+	err := c.Run("1.2.3.4", false)
 	require.Error(t, err)
 
 	want, _ := r.Remediate()
@@ -55,7 +55,21 @@ func TestPing(t *testing.T) {
 	c := Ping{Remediation: r}
 	require.Equal(t, "Ping", c.Name())
 
-	err := c.Run("1.2.3.4")
+	err := c.Run("1.2.3.4", false)
+	require.Error(t, err)
+
+	want, _ := r.Remediate()
+	got, err := c.Remediation.Remediate()
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
+
+func TestPSU(t *testing.T) {
+	r := PSURemediation{}
+	c := PSU{Remediation: r}
+	require.Equal(t, "PSU", c.Name())
+
+	err := c.Run("1.2.3.4", false)
 	require.Error(t, err)
 
 	want, _ := r.Remediate()

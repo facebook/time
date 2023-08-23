@@ -21,45 +21,45 @@ import (
 	"github.com/facebook/time/calnex/api"
 )
 
-const ok = "OK"
-
-// GNSS check
-type GNSS struct {
+// PSU check
+type PSU struct {
 	Remediation Remediation
 }
 
 // Name returns the name of the check
-func (p *GNSS) Name() string {
-	return "GNSS"
+func (p *PSU) Name() string {
+	return "PSU"
 }
 
 // Run executes the check
-func (p *GNSS) Run(target string, insecureTLS bool) error {
+func (p *PSU) Run(target string, insecureTLS bool) error {
 	api := api.NewAPI(target, insecureTLS)
 
-	g, err := api.GnssStatus()
+	pu, err := api.PowerSupplyStatus()
 	if err != nil {
 		return err
 	}
 
-	if g.LockedSatellites < 4 {
-		return fmt.Errorf("gnss: not enough satellites")
-	} else if g.AntennaStatus != ok {
-		return fmt.Errorf("gnss: antenna status is: %s", g.AntennaStatus)
+	if !pu.PowerSupplyGood {
+		for i, psu := range pu.Supplies {
+			if !psu.StatusGood {
+				return fmt.Errorf("psu: failed power supply #%d: %s", i, psu.Name)
+			}
+		}
 	}
 
 	return nil
 }
 
 // Remediate the check
-func (p *GNSS) Remediate() (string, error) {
+func (p *PSU) Remediate() (string, error) {
 	return p.Remediation.Remediate()
 }
 
-// GNSSRemediation is an open source remediation for GNSS check
-type GNSSRemediation struct{}
+// PSURemediation is an open source remediation for PSU check
+type PSURemediation struct{}
 
-// Remediate remediates the GNSS check failure
-func (a GNSSRemediation) Remediate() (string, error) {
-	return "Check antenna cabling", nil
+// Remediate remediates the PSU check failure
+func (a PSURemediation) Remediate() (string, error) {
+	return "Replace failed PSU", nil
 }

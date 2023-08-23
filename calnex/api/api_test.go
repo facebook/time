@@ -760,3 +760,57 @@ func TestPushLicenseError(t *testing.T) {
 
 	require.Equal(t, originalLicense, uploadedLicense)
 }
+
+func TestPowerSupplyStatus(t *testing.T) {
+	sampleResp := "{\"power_supply_good\":false,\"supplies\":[{\"comms_good\":true,\"name\":\"PSU_module_A\",\"status_good\":true},{\"comms_good\":true,\"name\":\"PSU_module_B\",\"status_good\":false}]}"
+	expected := &PowerSupplyStatus{
+		PowerSupplyGood: false,
+		Supplies: []PowerSupply{
+			{
+				CommsGood:  true,
+				Name:       "PSU_module_A",
+				StatusGood: true,
+			},
+			{
+				CommsGood:  true,
+				Name:       "PSU_module_B",
+				StatusGood: false,
+			},
+		},
+	}
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI.Client = ts.Client()
+
+	g, err := calnexAPI.PowerSupplyStatus()
+	require.NoError(t, err)
+	require.Equal(t, expected, g)
+}
+
+func TestPowerSupplyStatusSentinel(t *testing.T) {
+	expected := &PowerSupplyStatus{
+		PowerSupplyGood: true,
+	}
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		w.WriteHeader(http.StatusNotImplemented)
+	}))
+
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI.Client = ts.Client()
+
+	g, err := calnexAPI.PowerSupplyStatus()
+	require.NoError(t, err)
+	require.Equal(t, expected, g)
+}

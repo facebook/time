@@ -34,7 +34,7 @@ func (p *Ping) Name() string {
 }
 
 // Run executes the check
-func (p *Ping) Run(target string) error {
+func (p *Ping) Run(target string, _ bool) error {
 	pinger, err := ping.NewPinger(target)
 	if err != nil {
 		return err

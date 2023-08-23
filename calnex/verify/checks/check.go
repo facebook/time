@@ -19,7 +19,7 @@ package checks
 // Check abstracts the checks to be executed
 type Check interface {
 	Name() string
-	Run(name string) error
+	Run(name string, insecureTLS bool) error
 	Remediate() (string, error)
 }
 

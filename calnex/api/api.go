@@ -88,6 +88,19 @@ type GNSS struct {
 	SurveyPercentComplete int
 }
 
+// PowerSupply is a struct representing a single power supply unit
+type PowerSupply struct {
+	CommsGood  bool `json:"comms_good"`
+	Name       string
+	StatusGood bool `json:"status_good"`
+}
+
+// PowerSupplyStatus is a struct representing Calnex Power Supply JSON response
+type PowerSupplyStatus struct {
+	PowerSupplyGood bool `json:"power_supply_good"`
+	Supplies        []PowerSupply
+}
+
 // Channel is a Calnex channel object
 type Channel int
 
@@ -429,6 +442,7 @@ const (
 
 	gnssURL             = "https://%s/api/gnss/status"
 	instrumentStatusURL = "https://%s/api/instrument/status"
+	powerSupplyURL      = "https://%s/api/getpowersupplyinfo"
 )
 
 var (
@@ -856,4 +870,30 @@ func (a *API) GnssStatus() (*GNSS, error) {
 	}
 
 	return g, nil
+}
+
+// PowerSupplyStatus returns current PSU status
+func (a *API) PowerSupplyStatus() (*PowerSupplyStatus, error) {
+	url := fmt.Sprintf(powerSupplyURL, a.source)
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// TODO: remove once Sentinels support PSU status
+	if resp.StatusCode == http.StatusNotImplemented {
+		return &PowerSupplyStatus{PowerSupplyGood: true}, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(http.StatusText(resp.StatusCode))
+	}
+
+	p := &PowerSupplyStatus{}
+	if err = json.NewDecoder(resp.Body).Decode(p); err != nil {
+		return nil, err
+	}
+
+	return p, nil
 }
