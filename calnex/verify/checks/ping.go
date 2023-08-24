@@ -17,11 +17,15 @@ limitations under the License.
 package checks
 
 import (
-	"errors"
+	"fmt"
+	"net"
 	"time"
 
-	"github.com/go-ping/ping"
+	"golang.org/x/net/icmp"
+	"golang.org/x/net/ipv6"
 )
+
+const ipv6ICMP = 58
 
 // Ping check
 type Ping struct {
@@ -35,24 +39,61 @@ func (p *Ping) Name() string {
 
 // Run executes the check
 func (p *Ping) Run(target string, _ bool) error {
-	pinger, err := ping.NewPinger(target)
+	ip, err := net.ResolveIPAddr("ip", target)
+	if err != nil {
+		return err
+	}
+	dst := &net.UDPAddr{IP: ip.IP, Zone: ip.Zone}
+
+	conn, err := icmp.ListenPacket("udp6", "::")
 	if err != nil {
 		return err
 	}
 
-	pinger.Count = 3
-	pinger.Timeout = time.Second
-	err = pinger.Run()
-	if err != nil {
-		return err
+	response := make([]byte, 32)
+	request := make([]byte, 32)
+
+	for i := 0; i < 3; i++ {
+		// Write
+		msg := &icmp.Message{
+			Type: ipv6.ICMPTypeEchoRequest,
+			Code: 0,
+			Body: &icmp.Echo{
+				ID:   i,
+				Seq:  i,
+				Data: request,
+			},
+		}
+		b, err := msg.Marshal(nil)
+		if err != nil {
+			return err
+		}
+
+		if _, err = conn.WriteTo(b, dst); err != nil {
+			return err
+		}
+
+		// Read
+		if err = conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+			return err
+		}
+		_, _, err = conn.ReadFrom(response)
+		if err != nil {
+			return err
+		}
+
+		r, err := icmp.ParseMessage(ipv6ICMP, response)
+		if err != nil {
+			return err
+		}
+
+		if r.Type != ipv6.ICMPTypeEchoReply {
+			// Not an echo response!
+			return fmt.Errorf("malformed response")
+		}
 	}
 
-	stats := pinger.Statistics()
-	if stats.PacketLoss != 100 {
-		return nil
-	}
-
-	return errors.New("ping: unreachable")
+	return nil
 }
 
 // Remediate the check
