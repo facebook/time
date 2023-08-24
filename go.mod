@@ -8,7 +8,6 @@ require (
 	github.com/eclesh/welford v0.0.0-20150116075914-eec62615b1f0
 	github.com/fatih/color v1.13.0
 	github.com/go-ini/ini v1.66.4
-	github.com/go-ping/ping v1.1.0
 	github.com/golang/mock v1.6.0
 	github.com/google/gopacket v1.1.19
 	github.com/hashicorp/go-version v1.5.0
@@ -33,7 +32,6 @@ require (
 	github.com/creack/goselect v0.1.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/google/go-cmp v0.5.8 // indirect
-	github.com/google/uuid v1.2.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/josharian/native v1.0.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
