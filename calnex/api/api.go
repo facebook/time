@@ -121,47 +121,47 @@ const (
 
 // Available Calnex channels
 const (
-	ChannelA Channel = iota
-	ChannelB
-	ChannelC
-	ChannelD
-	ChannelE
-	ChannelF
-	ChannelONE
-	ChannelTWO
-	ChannelREF
-	ChannelVP1
-	ChannelVP2
-	ChannelVP3
-	ChannelVP4
-	ChannelVP5
-	ChannelVP6
-	ChannelVP7
-	ChannelVP8
-	ChannelVP9
-	ChannelVP10
-	ChannelVP11
-	ChannelVP12
-	ChannelVP13
-	ChannelVP14
-	ChannelVP15
-	ChannelVP16
-	ChannelVP17
-	ChannelVP18
-	ChannelVP19
-	ChannelVP20
-	ChannelVP21
-	ChannelVP22
-	ChannelVP23
-	ChannelVP24
-	ChannelVP25
-	ChannelVP26
-	ChannelVP27
-	ChannelVP28
-	ChannelVP29
-	ChannelVP30
-	ChannelVP31
-	ChannelVP32
+	ChannelA    Channel = 0
+	ChannelB    Channel = 1
+	ChannelC    Channel = 2
+	ChannelD    Channel = 3
+	ChannelE    Channel = 4
+	ChannelF    Channel = 5
+	ChannelONE  Channel = 6
+	ChannelTWO  Channel = 7
+	ChannelREF  Channel = 8
+	ChannelVP1  Channel = 9
+	ChannelVP2  Channel = 10
+	ChannelVP3  Channel = 11
+	ChannelVP4  Channel = 12
+	ChannelVP5  Channel = 13
+	ChannelVP6  Channel = 14
+	ChannelVP7  Channel = 15
+	ChannelVP8  Channel = 16
+	ChannelVP9  Channel = 17
+	ChannelVP10 Channel = 18
+	ChannelVP11 Channel = 19
+	ChannelVP12 Channel = 20
+	ChannelVP13 Channel = 21
+	ChannelVP14 Channel = 22
+	ChannelVP15 Channel = 23
+	ChannelVP16 Channel = 24
+	ChannelVP17 Channel = 25
+	ChannelVP18 Channel = 26
+	ChannelVP19 Channel = 27
+	ChannelVP20 Channel = 28
+	ChannelVP21 Channel = 29
+	ChannelVP22 Channel = 30
+	ChannelVP23 Channel = 31
+	ChannelVP24 Channel = 32
+	ChannelVP25 Channel = 33
+	ChannelVP26 Channel = 34
+	ChannelVP27 Channel = 35
+	ChannelVP28 Channel = 36
+	ChannelVP29 Channel = 37
+	ChannelVP30 Channel = 38
+	ChannelVP31 Channel = 39
+	ChannelVP32 Channel = 40
 )
 
 // MeasureChannelDatatypeMap is a Map of the measurement channels to the data type.
