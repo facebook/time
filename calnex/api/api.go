@@ -117,6 +117,9 @@ const (
 	TE       = "te"
 	TWOWAYTE = "2wayte"
 	RSFEC    = "RS-FEC"
+	INTERVAL = "1 packet/16 s"
+	CHANNEL1 = "Channel 1"
+	IPV6     = "UDP/IPv6"
 )
 
 // Available Calnex channels

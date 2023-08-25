@@ -72,7 +72,7 @@ func (c *config) measureConfig(s *ini.Section, mc map[api.Channel]MeasureConfig)
 
 			c.set(s, fmt.Sprintf("%s\\protocol_enabled", ch.CalnexAPI()), api.ON)
 			// Set Virtual Port to use Physical channel 1
-			c.set(s, fmt.Sprintf("%s\\ptp_synce\\physical_packet_channel", ch.CalnexAPI()), "Channel 1")
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\physical_packet_channel", ch.CalnexAPI()), api.CHANNEL1)
 
 			// Set target we measure
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\server_ip", ch.CalnexAPI()), m.Target)
@@ -81,27 +81,27 @@ func (c *config) measureConfig(s *ini.Section, mc map[api.Channel]MeasureConfig)
 			// show raw metrics
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\normalize_delays", ch.CalnexAPI()), api.OFF)
 			// use ipv6
-			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\protocol_level", ch.CalnexAPI()), "UDP/IPv6")
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\protocol_level", ch.CalnexAPI()), api.IPV6)
 			// ntp 1 packet per 64 second
-			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\poll_log_interval", ch.CalnexAPI()), "1 packet/16 s")
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\poll_log_interval", ch.CalnexAPI()), api.INTERVAL)
 		case api.ProbePTP:
 			probe = fmt.Sprintf("%s\\ptp_synce\\mode\\probe_type", ch.CalnexAPI())
 
 			c.set(s, fmt.Sprintf("%s\\protocol_enabled", ch.CalnexAPI()), api.ON)
 			// Set Virtual Port to use Physical channel 1
-			c.set(s, fmt.Sprintf("%s\\ptp_synce\\physical_packet_channel", ch.CalnexAPI()), "Channel 1")
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\physical_packet_channel", ch.CalnexAPI()), api.CHANNEL1)
 
 			// Set target we measure
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\master_ip", ch.CalnexAPI()), m.Target)
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\master_ip_ipv6", ch.CalnexAPI()), m.Target)
 
 			// use ipv6
-			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\protocol_level", ch.CalnexAPI()), "UDP/IPv6")
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\protocol_level", ch.CalnexAPI()), api.IPV6)
 
 			// ptp 1 packet per 1 second
-			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_announce_int", ch.CalnexAPI()), "1 packet/16 s")
-			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_delay_req_int", ch.CalnexAPI()), "1 packet/16 s")
-			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_sync_int", ch.CalnexAPI()), "1 packet/16 s")
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_announce_int", ch.CalnexAPI()), api.INTERVAL)
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_delay_req_int", ch.CalnexAPI()), api.INTERVAL)
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_sync_int", ch.CalnexAPI()), api.INTERVAL)
 
 			// ptp unicast mode
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\stack_mode", ch.CalnexAPI()), "Unicast")
