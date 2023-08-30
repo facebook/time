@@ -470,7 +470,7 @@ func NewAPI(source string, insecureTLS bool) *API {
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: insecureTLS},
 			},
-			Timeout: 2 * time.Minute,
+			Timeout: 5 * time.Minute,
 		},
 		source: source,
 	}
