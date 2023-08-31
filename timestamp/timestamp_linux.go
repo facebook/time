@@ -84,6 +84,36 @@ func byteToTime(data []byte) (time.Time, error) {
 	return time.Unix(sec, nsec), nil
 }
 
+func ioctlHWTimestampCaps(fd int, ifname string) (int32, int32, error) {
+	// empty config, will be populated after we call SIOCETHTOOL
+	hw := &hwtstampCaps{
+		cmd: EthtoolGetTSInfo,
+	}
+	var rxFilter int32
+	var txFilter int32
+
+	i := &ifreq{data: uintptr(unsafe.Pointer(hw))}
+	copy(i.name[:unix.IFNAMSIZ-1], ifname)
+	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SIOCETHTOOL, uintptr(unsafe.Pointer(i))); errno != 0 {
+		return rxFilter, txFilter, fmt.Errorf("failed to run ioctl SIOCETHTOOL to see what is supported: %s (%w)", unix.ErrnoName(errno), errno)
+	}
+
+	if hw.txTypes&(1<<hwtstampTXON) > 0 {
+		txFilter = hwtstampTXON
+	}
+
+	if hw.rxFilters&(1<<hwtstampFilterAll) > 0 {
+		rxFilter = hwtstampFilterAll
+	} else if hw.rxFilters&(1<<hwtstampFilterPTPv2Event) > 0 {
+		rxFilter = hwtstampFilterPTPv2Event
+	}
+
+	if txFilter == 0 || rxFilter == 0 {
+		return rxFilter, txFilter, fmt.Errorf("hardware timestamping is not supported for the interface %s", ifname)
+	}
+	return rxFilter, txFilter, nil
+}
+
 func ioctlTimestamp(fd int, ifname string, filter int32) error {
 	// empty config, will be populated after we call SIOCGHWTSTAMP
 	hw := &hwtstampConfig{
@@ -135,15 +165,14 @@ func EnableSWTimestamps(connFd int) error {
 
 // EnableHWTimestamps enables HW timestamps (TX and RX) on the socket
 func EnableHWTimestamps(connFd int, iface string) error {
-	if err := ioctlTimestamp(connFd, iface, hwtstampFilterAll); err != nil {
-		// no permissions - we are done here
-		if errors.Is(err, syscall.EPERM) {
-			return err
-		}
-		// try again with more narrow filter
-		if err := ioctlTimestamp(connFd, iface, hwtstampFilterPTPv2Event); err != nil {
-			return err
-		}
+	var rxFilter int32
+
+	rxFilter, _, err := ioctlHWTimestampCaps(connFd, iface)
+	if err != nil {
+		return err
+	}
+	if err := ioctlTimestamp(connFd, iface, rxFilter); err != nil {
+		return err
 	}
 
 	// Enable hardware timestamp capabilities on socket
