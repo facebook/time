@@ -300,3 +300,20 @@ func TestReadPacketWithRXTXTimestamp(t *testing.T) {
 	require.Equal(t, 1, attempts)
 	require.Nil(t, err)
 }
+
+func TestReadHWTimestampCaps(t *testing.T) {
+	// listen to incoming udp packets
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("localhost"), Port: 0})
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// get connection file descriptor
+	connFd, err := ConnFd(conn)
+	require.NoError(t, err)
+
+	rxFilters, txType, err := ioctlHWTimestampCaps(connFd, "lo")
+	require.Error(t, err)
+	// hw timestamps are disabled for lo
+	require.Equal(t, int32(0), txType)
+	require.Equal(t, int32(0), rxFilters)
+}
