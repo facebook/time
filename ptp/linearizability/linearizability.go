@@ -68,14 +68,5 @@ func ProcessMonitoringResults(prefix string, results map[string]TestResult) map[
 	output[fmt.Sprintf("%sskipped_tests", prefix)] = skipped
 	output[fmt.Sprintf("%stotal_tests", prefix)] = len(results)
 	output[fmt.Sprintf("%spassed_tests", prefix)] = len(results) - skipped - failed - broken
-	if len(results) == 0 {
-		output[fmt.Sprintf("%sfailed_pct", prefix)] = 0
-		output[fmt.Sprintf("%sbroken_pct", prefix)] = 0
-		output[fmt.Sprintf("%sskipped_pct", prefix)] = 0
-	} else {
-		output[fmt.Sprintf("%sfailed_pct", prefix)] = int(100.0 * float64(failed) / float64(len(results)))
-		output[fmt.Sprintf("%sbroken_pct", prefix)] = int(100.0 * float64(broken) / float64(len(results)))
-		output[fmt.Sprintf("%sskipped_pct", prefix)] = int(100.0 * float64(skipped) / float64(len(results)))
-	}
 	return output
 }

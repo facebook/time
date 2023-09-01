@@ -558,12 +558,9 @@ func TestProcessMonitoringResults(t *testing.T) {
 		},
 	}
 	want := map[string]int{
-		"ptp.linearizability.broken_pct":    20.0,
 		"ptp.linearizability.broken_tests":  1,
-		"ptp.linearizability.failed_pct":    20.0,
 		"ptp.linearizability.failed_tests":  1,
 		"ptp.linearizability.passed_tests":  2,
-		"ptp.linearizability.skipped_pct":   20.0,
 		"ptp.linearizability.skipped_tests": 1,
 		"ptp.linearizability.total_tests":   5,
 	}
