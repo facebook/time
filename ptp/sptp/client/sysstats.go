@@ -54,12 +54,10 @@ func (s *SysStats) CollectRuntimeStats(interval time.Duration) (map[string]uint6
 	if err != nil {
 		return nil, err
 	}
-	stats["process.alive_since"] = uint64(procStartTime.Unix())
 	stats["process.uptime"] = uint64(time.Now().Unix() - procStartTime.Unix())
 
 	if val, err := proc.Percent(0); err == nil {
 		stats[fmt.Sprintf("process.cpu_pct.avg.%d", int(interval.Seconds()))] = uint64(val * 100)
-		stats[fmt.Sprintf("process.cpu_permil.avg.%d", int(interval.Seconds()))] = uint64(val * 1000)
 	}
 
 	if val, err := proc.MemoryInfo(); err == nil {
