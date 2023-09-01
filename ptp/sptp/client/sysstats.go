@@ -54,7 +54,6 @@ func (s *SysStats) CollectRuntimeStats(interval time.Duration) (map[string]uint6
 	if err != nil {
 		return nil, err
 	}
-	stats["process.alive"] = uint64(1)
 	stats["process.alive_since"] = uint64(procStartTime.Unix())
 	stats["process.uptime"] = uint64(time.Now().Unix() - procStartTime.Unix())
 
