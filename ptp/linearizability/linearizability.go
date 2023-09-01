@@ -18,10 +18,7 @@ package linearizability
 
 import (
 	"context"
-	"errors"
 	"fmt"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // TestResult is what we get after the test run
@@ -44,17 +41,11 @@ type Tester interface {
 func ProcessMonitoringResults(prefix string, results map[string]TestResult) map[string]int {
 	failed := 0
 	broken := 0
-	skipped := 0
 
 	for _, tr := range results {
 		good, err := tr.Good()
 		if err != nil {
-			if errors.Is(err, ErrGrantDenied) {
-				log.Debugf("denied grant is just drained GM")
-				skipped++
-			} else {
-				broken++
-			}
+			broken++
 		} else {
 			if !good {
 				failed++
@@ -65,8 +56,7 @@ func ProcessMonitoringResults(prefix string, results map[string]TestResult) map[
 	output := map[string]int{}
 	output[fmt.Sprintf("%sfailed_tests", prefix)] = failed
 	output[fmt.Sprintf("%sbroken_tests", prefix)] = broken
-	output[fmt.Sprintf("%sskipped_tests", prefix)] = skipped
 	output[fmt.Sprintf("%stotal_tests", prefix)] = len(results)
-	output[fmt.Sprintf("%spassed_tests", prefix)] = len(results) - skipped - failed - broken
+	output[fmt.Sprintf("%spassed_tests", prefix)] = len(results) - failed - broken
 	return output
 }
