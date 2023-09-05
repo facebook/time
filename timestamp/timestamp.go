@@ -32,6 +32,8 @@ const (
 	hwtstampTXON int32 = 0x00000001
 	// HWTSTAMP_FILTER_ALL int 1
 	hwtstampFilterAll int32 = 0x00000001
+	//HWTSTAMP_FILTER_PTP_V2_L4_EVENT int 6
+	hwtstampFilterPTPv2L4Event int32 = 0x00000006
 	// HWTSTAMP_FILTER_PTP_V2_EVENT int 12
 	hwtstampFilterPTPv2Event int32 = 0x0000000c
 )
