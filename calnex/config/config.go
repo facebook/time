@@ -83,7 +83,7 @@ func (c *config) measureConfig(s *ini.Section, mc map[api.Channel]MeasureConfig)
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\normalize_delays", ch.CalnexAPI()), api.OFF)
 			// use ipv6
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\protocol_level", ch.CalnexAPI()), api.IPV6)
-			// ntp 1 packet per 64 second
+			// ntp 1 packet per 16 seconds
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ntp\\poll_log_interval", ch.CalnexAPI()), api.INTERVAL)
 		case api.ProbePTP:
 			probe = fmt.Sprintf("%s\\ptp_synce\\mode\\probe_type", ch.CalnexAPI())
@@ -99,7 +99,7 @@ func (c *config) measureConfig(s *ini.Section, mc map[api.Channel]MeasureConfig)
 			// use ipv6
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\protocol_level", ch.CalnexAPI()), api.IPV6)
 
-			// ptp 1 packet per 1 second
+			// ptp 1 packet per 16 seconds
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_announce_int", ch.CalnexAPI()), api.INTERVAL)
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_delay_req_int", ch.CalnexAPI()), api.INTERVAL)
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\log_sync_int", ch.CalnexAPI()), api.INTERVAL)
@@ -141,6 +141,9 @@ func (c *config) baseConfig(measure *ini.Section, gnss *ini.Section, antennaDela
 
 	// continuous measurement
 	c.set(measure, "continuous", api.ON)
+
+	// continuous measurement
+	c.set(measure, "reference", api.INTERNAL)
 
 	// 25h measurement
 	c.set(measure, "meas_time", "1 days 1 hours")

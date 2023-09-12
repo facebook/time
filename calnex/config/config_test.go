@@ -68,6 +68,7 @@ func TestBaseConfig(t *testing.T) {
 antenna_delay=42 ns
 [measure]
 continuous=Off
+reference=Auto
 meas_time=10 minutes
 tie_mode=TIE
 ch8\used=No
@@ -77,6 +78,7 @@ ch8\used=No
 antenna_delay=42 ns
 [measure]
 continuous=On
+reference=Internal
 meas_time=1 days 1 hours
 tie_mode=TIE + 1 PPS Alignment
 ch8\used=Yes
@@ -416,6 +418,7 @@ func TestConfig(t *testing.T) {
 antenna_delay=42 ns
 [measure]
 continuous=On
+reference=Internal
 meas_time=1 days 1 hours
 tie_mode=TIE + 1 PPS Alignment
 ch0\used=Yes

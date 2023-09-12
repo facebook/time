@@ -123,6 +123,7 @@ const (
 	INTERVAL = "1 packet/16 s"
 	CHANNEL1 = "Channel 1"
 	IPV6     = "UDP/IPv6"
+	INTERNAL = "Internal"
 )
 
 // Available Calnex channels
