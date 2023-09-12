@@ -43,8 +43,9 @@ type config struct {
 
 // chSet modifies a config on several channels
 func (c *config) chSet(s *ini.Section, start, end api.Channel, keyf, value string) {
-	for i := start; i <= end; i++ {
-		name := fmt.Sprintf(keyf, i.CalnexAPI())
+	for i := start.Calnex(); i <= end.Calnex(); i++ {
+		ch, _ := api.ChannelFromInt(i)
+		name := fmt.Sprintf(keyf, ch.CalnexAPI())
 		c.set(s, name, value)
 	}
 }

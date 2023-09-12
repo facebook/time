@@ -17,6 +17,7 @@ limitations under the License.
 package cmd
 
 import (
+	"github.com/facebook/time/calnex/api"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -30,7 +31,7 @@ var RootCmd = &cobra.Command{
 var (
 	allData     bool
 	apply       bool
-	channels    []string
+	channels    api.Channels
 	dir         string
 	insecureTLS bool
 	source      string

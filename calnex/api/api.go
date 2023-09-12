@@ -102,7 +102,10 @@ type PowerSupplyStatus struct {
 }
 
 // Channel is a Calnex channel object
-type Channel int
+type Channel string
+
+// Channels is a list of Channel
+type Channels []Channel
 
 // Calnex Status constants
 const (
@@ -124,47 +127,47 @@ const (
 
 // Available Calnex channels
 const (
-	ChannelA    Channel = 0
-	ChannelB    Channel = 1
-	ChannelC    Channel = 2
-	ChannelD    Channel = 3
-	ChannelE    Channel = 4
-	ChannelF    Channel = 5
-	ChannelONE  Channel = 6
-	ChannelTWO  Channel = 7
-	ChannelREF  Channel = 8
-	ChannelVP1  Channel = 9
-	ChannelVP2  Channel = 10
-	ChannelVP3  Channel = 11
-	ChannelVP4  Channel = 12
-	ChannelVP5  Channel = 13
-	ChannelVP6  Channel = 14
-	ChannelVP7  Channel = 15
-	ChannelVP8  Channel = 16
-	ChannelVP9  Channel = 17
-	ChannelVP10 Channel = 18
-	ChannelVP11 Channel = 19
-	ChannelVP12 Channel = 20
-	ChannelVP13 Channel = 21
-	ChannelVP14 Channel = 22
-	ChannelVP15 Channel = 23
-	ChannelVP16 Channel = 24
-	ChannelVP17 Channel = 25
-	ChannelVP18 Channel = 26
-	ChannelVP19 Channel = 27
-	ChannelVP20 Channel = 28
-	ChannelVP21 Channel = 29
-	ChannelVP22 Channel = 30
-	ChannelVP23 Channel = 31
-	ChannelVP24 Channel = 32
-	ChannelVP25 Channel = 33
-	ChannelVP26 Channel = 34
-	ChannelVP27 Channel = 35
-	ChannelVP28 Channel = 36
-	ChannelVP29 Channel = 37
-	ChannelVP30 Channel = 38
-	ChannelVP31 Channel = 39
-	ChannelVP32 Channel = 40
+	ChannelA    Channel = "A"
+	ChannelB    Channel = "B"
+	ChannelC    Channel = "C"
+	ChannelD    Channel = "D"
+	ChannelE    Channel = "E"
+	ChannelF    Channel = "F"
+	ChannelONE  Channel = "1"
+	ChannelTWO  Channel = "2"
+	ChannelREF  Channel = "REF"
+	ChannelVP1  Channel = "VP1"
+	ChannelVP2  Channel = "VP2"
+	ChannelVP3  Channel = "VP3"
+	ChannelVP4  Channel = "VP4"
+	ChannelVP5  Channel = "VP5"
+	ChannelVP6  Channel = "VP6"
+	ChannelVP7  Channel = "VP7"
+	ChannelVP8  Channel = "VP8"
+	ChannelVP9  Channel = "VP9"
+	ChannelVP10 Channel = "VP10"
+	ChannelVP11 Channel = "VP11"
+	ChannelVP12 Channel = "VP12"
+	ChannelVP13 Channel = "VP13"
+	ChannelVP14 Channel = "VP14"
+	ChannelVP15 Channel = "VP15"
+	ChannelVP16 Channel = "VP16"
+	ChannelVP17 Channel = "VP17"
+	ChannelVP18 Channel = "VP18"
+	ChannelVP19 Channel = "VP19"
+	ChannelVP20 Channel = "VP20"
+	ChannelVP21 Channel = "VP21"
+	ChannelVP22 Channel = "VP22"
+	ChannelVP23 Channel = "VP23"
+	ChannelVP24 Channel = "VP24"
+	ChannelVP25 Channel = "VP25"
+	ChannelVP26 Channel = "VP26"
+	ChannelVP27 Channel = "VP27"
+	ChannelVP28 Channel = "VP28"
+	ChannelVP29 Channel = "VP29"
+	ChannelVP30 Channel = "VP30"
+	ChannelVP31 Channel = "VP31"
+	ChannelVP32 Channel = "VP32"
 )
 
 // MeasureChannelDatatypeMap is a Map of the measurement channels to the data type.
@@ -210,123 +213,127 @@ var MeasureChannelDatatypeMap = map[Channel]string{
 	ChannelVP32: TWOWAYTE,
 }
 
-// channelStringToCalnex is a map of String channels to a Calnex variant
-var channelStringToCalnex = map[string]Channel{
-	"A":    ChannelA,
-	"B":    ChannelB,
-	"C":    ChannelC,
-	"D":    ChannelD,
-	"E":    ChannelE,
-	"F":    ChannelF,
-	"1":    ChannelONE,
-	"2":    ChannelTWO,
-	"VP1":  ChannelVP1,
-	"VP2":  ChannelVP2,
-	"VP3":  ChannelVP3,
-	"VP4":  ChannelVP4,
-	"VP5":  ChannelVP5,
-	"VP6":  ChannelVP6,
-	"VP7":  ChannelVP7,
-	"VP8":  ChannelVP8,
-	"VP9":  ChannelVP9,
-	"VP10": ChannelVP10,
-	"VP11": ChannelVP11,
-	"VP12": ChannelVP12,
-	"VP13": ChannelVP13,
-	"VP14": ChannelVP14,
-	"VP15": ChannelVP15,
-	"VP16": ChannelVP16,
-	"VP17": ChannelVP17,
-	"VP18": ChannelVP18,
-	"VP19": ChannelVP19,
-	"VP20": ChannelVP20,
-	"VP21": ChannelVP21,
-	"VP22": ChannelVP22,
-	"VP23": ChannelVP23,
-	"VP24": ChannelVP24,
-	"VP25": ChannelVP25,
-	"VP26": ChannelVP26,
-	"VP27": ChannelVP27,
-	"VP28": ChannelVP28,
-	"VP29": ChannelVP29,
-	"VP30": ChannelVP30,
-	"VP31": ChannelVP31,
-	"VP32": ChannelVP32,
+// channelCalnexToInt is a map of Calnex channels to a int variant
+var channelCalnexToInt = map[Channel]int{
+	ChannelA:    0,
+	ChannelB:    1,
+	ChannelC:    2,
+	ChannelD:    3,
+	ChannelE:    4,
+	ChannelF:    5,
+	ChannelONE:  6,
+	ChannelTWO:  7,
+	ChannelREF:  8,
+	ChannelVP1:  9,
+	ChannelVP2:  10,
+	ChannelVP3:  11,
+	ChannelVP4:  12,
+	ChannelVP5:  13,
+	ChannelVP6:  14,
+	ChannelVP7:  15,
+	ChannelVP8:  16,
+	ChannelVP9:  17,
+	ChannelVP10: 18,
+	ChannelVP11: 19,
+	ChannelVP12: 20,
+	ChannelVP13: 21,
+	ChannelVP14: 22,
+	ChannelVP15: 23,
+	ChannelVP16: 24,
+	ChannelVP17: 25,
+	ChannelVP18: 26,
+	ChannelVP19: 27,
+	ChannelVP20: 28,
+	ChannelVP21: 29,
+	ChannelVP22: 30,
+	ChannelVP23: 31,
+	ChannelVP24: 32,
+	ChannelVP25: 33,
+	ChannelVP26: 34,
+	ChannelVP27: 35,
+	ChannelVP28: 36,
+	ChannelVP29: 37,
+	ChannelVP30: 38,
+	ChannelVP31: 39,
+	ChannelVP32: 40,
 }
 
-// channelCalnexToString is a map of Calnex channels to a String variant
-var channelCalnexToString = map[Channel]string{
-	ChannelA:    "A",
-	ChannelB:    "B",
-	ChannelC:    "C",
-	ChannelD:    "D",
-	ChannelE:    "E",
-	ChannelF:    "F",
-	ChannelONE:  "1",
-	ChannelTWO:  "2",
-	ChannelVP1:  "VP1",
-	ChannelVP2:  "VP2",
-	ChannelVP3:  "VP3",
-	ChannelVP4:  "VP4",
-	ChannelVP5:  "VP5",
-	ChannelVP6:  "VP6",
-	ChannelVP7:  "VP7",
-	ChannelVP8:  "VP8",
-	ChannelVP9:  "VP9",
-	ChannelVP10: "VP10",
-	ChannelVP11: "VP11",
-	ChannelVP12: "VP12",
-	ChannelVP13: "VP13",
-	ChannelVP14: "VP14",
-	ChannelVP15: "VP15",
-	ChannelVP16: "VP16",
-	ChannelVP17: "VP17",
-	ChannelVP18: "VP18",
-	ChannelVP19: "VP19",
-	ChannelVP20: "VP20",
-	ChannelVP21: "VP21",
-	ChannelVP22: "VP22",
-	ChannelVP23: "VP23",
-	ChannelVP24: "VP24",
-	ChannelVP25: "VP25",
-	ChannelVP26: "VP26",
-	ChannelVP27: "VP27",
-	ChannelVP28: "VP28",
-	ChannelVP29: "VP29",
-	ChannelVP30: "VP30",
-	ChannelVP31: "VP31",
-	ChannelVP32: "VP32",
+// channelFromInt is a map of String channels to a Calnex variant
+var channelFromInt = map[int]Channel{
+	0:  ChannelA,
+	1:  ChannelB,
+	2:  ChannelC,
+	3:  ChannelD,
+	4:  ChannelE,
+	5:  ChannelF,
+	6:  ChannelONE,
+	7:  ChannelTWO,
+	8:  ChannelREF,
+	9:  ChannelVP1,
+	10: ChannelVP2,
+	11: ChannelVP3,
+	12: ChannelVP4,
+	13: ChannelVP5,
+	14: ChannelVP6,
+	15: ChannelVP7,
+	16: ChannelVP8,
+	17: ChannelVP9,
+	18: ChannelVP10,
+	19: ChannelVP11,
+	20: ChannelVP12,
+	21: ChannelVP13,
+	22: ChannelVP14,
+	23: ChannelVP15,
+	24: ChannelVP16,
+	25: ChannelVP17,
+	26: ChannelVP18,
+	27: ChannelVP19,
+	28: ChannelVP20,
+	29: ChannelVP21,
+	30: ChannelVP22,
+	31: ChannelVP23,
+	32: ChannelVP24,
+	33: ChannelVP25,
+	34: ChannelVP26,
+	35: ChannelVP27,
+	36: ChannelVP28,
+	37: ChannelVP29,
+	38: ChannelVP30,
+	39: ChannelVP31,
+	40: ChannelVP32,
 }
 
-// ChannelFromString returns Channel object from String version
-func ChannelFromString(value string) (*Channel, error) {
-	c, ok := channelStringToCalnex[value]
+// ChannelFromInt returns channel from int
+func ChannelFromInt(value int) (*Channel, error) {
+	c, ok := channelFromInt[value]
 	if !ok {
 		return nil, errBadChannel
 	}
-
 	return &c, nil
 }
 
-// String returns String friendly channel name like "a" or "2"
-func (c Channel) String() string {
-	return channelCalnexToString[c]
+// ChannelFromString returns channel from string
+func ChannelFromString(value string) (*Channel, error) {
+	c := Channel(strings.ToUpper(value))
+	if _, ok := channelCalnexToInt[c]; !ok {
+		return nil, errBadChannel
+	}
+	return &c, nil
 }
 
 // UnmarshalText channel from string version
 func (c *Channel) UnmarshalText(value []byte) error {
-	channel := strings.ToUpper(string(value))
-	cr, err := ChannelFromString(channel)
+	channel, err := ChannelFromString(string(value))
 	if err != nil {
 		return err
 	}
-	*c = *cr
+	*c = *channel
 	return nil
 }
 
 // Calnex returns calnex friendly channel name like 1 or 7
 func (c Channel) Calnex() int {
-	return int(c)
+	return channelCalnexToInt[c]
 }
 
 // CalnexAPI returns channel name in API format like "ch2"
@@ -334,14 +341,38 @@ func (c Channel) CalnexAPI() string {
 	return fmt.Sprintf("ch%d", c.Calnex())
 }
 
+// Set Channel to Channels
+func (cs *Channels) Set(channel string) error {
+	c, err := ChannelFromString(channel)
+	if err != nil {
+		return err
+	}
+	*cs = append(*cs, *c)
+	return nil
+}
+
+// String returns all channels
+func (cs *Channels) String() string {
+	channels := make([]string, 0, len(*cs))
+	for _, c := range *cs {
+		channels = append(channels, string(c))
+	}
+	return strings.Join(channels, ", ")
+}
+
+// Type is required by the cobra.Value interface
+func (cs *Channels) Type() string {
+	return "channel"
+}
+
 // Probe is a Calnex probe protocol
-type Probe int
+type Probe string
 
 // Probe numbers by calnex
 const (
-	ProbePTP Probe = 0
-	ProbeNTP Probe = 2
-	ProbePPS Probe = 3
+	ProbePTP Probe = "PTP"
+	ProbeNTP Probe = "NTP"
+	ProbePPS Probe = "PPS"
 )
 
 // probeStringToProbe is a map of String probe to a Calnex variant
@@ -353,16 +384,9 @@ var probeStringToProbe = map[string]Probe{
 
 // probeCalnexToProbe is a map of Calnex to a probe variant
 var probeCalnexAPIToProbe = map[string]Probe{
-	fmt.Sprintf("%d", int(ProbePTP)): ProbePTP,
-	fmt.Sprintf("%d", int(ProbeNTP)): ProbeNTP,
-	"1 PPS":                          ProbePPS,
-}
-
-// probeToString is a map of probe to String variant
-var probeToString = map[Probe]string{
-	ProbePTP: "ptp",
-	ProbeNTP: "ntp",
-	ProbePPS: "pps",
+	"0":     ProbePTP,
+	"2":     ProbeNTP,
+	"1 PPS": ProbePPS,
 }
 
 // probeToCalnexName is a map of probe to a Calnex specific name
@@ -381,8 +405,8 @@ var probeToServerType = map[Probe]string{
 
 // ProbeFromString returns Channel object from String version
 func ProbeFromString(value string) (*Probe, error) {
-	p, ok := probeStringToProbe[value]
-	if !ok {
+	p := Probe(strings.ToUpper(value))
+	if _, ok := probeToCalnexName[p]; !ok {
 		return nil, errBadProbe
 	}
 	return &p, nil
@@ -397,11 +421,6 @@ func ProbeFromCalnex(calnex string) (*Probe, error) {
 	return &p, nil
 }
 
-// String returns String friendly probe name like "ntp" or "ptp"
-func (p Probe) String() string {
-	return probeToString[p]
-}
-
 // UnmarshalText probe from string version
 func (p *Probe) UnmarshalText(value []byte) error {
 	pr, err := ProbeFromString(string(value))
@@ -410,6 +429,11 @@ func (p *Probe) UnmarshalText(value []byte) error {
 	}
 	*p = *pr
 	return nil
+}
+
+// CalnexAPI returns probe name (lower case)
+func (p Probe) CalnexAPI() string {
+	return strings.ToLower(string(p))
 }
 
 // ServerType returns server type like "server_ip" or "master_ip"
@@ -510,7 +534,7 @@ func (a *API) FetchCsv(channel Channel, allData bool) ([][]string, error) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return nil, fmt.Errorf("failed to parse csv for data from channel %s: %w", channel.String(), err)
+			return nil, fmt.Errorf("failed to parse csv for data from channel %s: %w", channel, err)
 		}
 		res = append(res, csvLine)
 	}
@@ -550,7 +574,7 @@ func (a *API) FetchChannelProbe(channel Channel) (*Probe, error) {
 
 // FetchChannelTarget returns the measure target of the server monitored on the channel
 func (a *API) FetchChannelTarget(channel Channel, probe Probe) (string, error) {
-	pth := path.Join(channel.CalnexAPI(), "ptp_synce", probe.String(), probe.ServerType())
+	pth := path.Join(channel.CalnexAPI(), "ptp_synce", probe.CalnexAPI(), probe.ServerType())
 	if MeasureChannelDatatypeMap[channel] == TE {
 		pth = path.Join(channel.CalnexAPI(), probe.ServerType())
 	}

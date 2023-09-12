@@ -61,7 +61,7 @@ func Export(source string, insecureTLS bool, allData bool, channels []api.Channe
 		}
 
 		for _, csvLine := range csvLines {
-			entry, err := entryFromCSV(csvLine, channel.String(), target, probe.String(), source)
+			entry, err := entryFromCSV(csvLine, string(channel), target, string(*probe), source)
 			if err != nil {
 				printSuccess = false
 				success = success || printSuccess

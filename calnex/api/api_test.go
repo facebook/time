@@ -631,16 +631,22 @@ func TestParseResponse(t *testing.T) {
 
 func TestMeasureChannelDatatypeMap(t *testing.T) {
 	for i := 0; i <= 5; i++ {
-		require.Equal(t, TE, MeasureChannelDatatypeMap[Channel(i)])
+		ch, err := ChannelFromInt(i)
+		require.NoError(t, err)
+		require.Equal(t, TE, MeasureChannelDatatypeMap[*ch])
 	}
 
 	for i := 6; i <= 8; i++ {
-		_, ok := MeasureChannelDatatypeMap[Channel(i)]
+		ch, err := ChannelFromInt(i)
+		require.NoError(t, err)
+		_, ok := MeasureChannelDatatypeMap[*ch]
 		require.False(t, ok)
 	}
 
 	for i := 9; i <= 40; i++ {
-		require.Equal(t, TWOWAYTE, MeasureChannelDatatypeMap[Channel(i)])
+		ch, err := ChannelFromInt(i)
+		require.NoError(t, err)
+		require.Equal(t, TWOWAYTE, MeasureChannelDatatypeMap[*ch])
 	}
 }
 

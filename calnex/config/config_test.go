@@ -614,7 +614,7 @@ func TestConfigFail(t *testing.T) {
 }
 
 func TestJSONExport(t *testing.T) {
-	expected := `{"measure":{"0":{"target":"1 PPS","probe":3,"name":""},"30":{"target":"fd00:3016:3109:face:0:1:0","probe":0,"name":""},"9":{"target":"fd00:3226:301b::3f","probe":2,"name":""}},"antennaDelayNS":42}`
+	expected := `{"measure":{"A":{"target":"1 PPS","probe":"PPS","name":""},"VP1":{"target":"fd00:3226:301b::3f","probe":"NTP","name":""},"VP22":{"target":"fd00:3016:3109:face:0:1:0","probe":"PTP","name":""}},"antennaDelayNS":42}`
 	cc := CalnexConfig{
 		AntennaDelayNS: 42,
 		Measure: map[api.Channel]MeasureConfig{
