@@ -24,6 +24,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Calnexes is a map of devices to CalnexConfig
+type Calnexes map[string]*CalnexConfig
+
 // CalnexConfig is a config representation of calnex
 type CalnexConfig struct {
 	Measure        map[api.Channel]MeasureConfig `json:"measure"`

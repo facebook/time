@@ -48,12 +48,12 @@ func TestUnmarshalConfig(t *testing.T) {
 	}
 `
 
-	var cs calnexes
+	var cs config.Calnexes
 	err := json.Unmarshal([]byte(testConfig), &cs)
 	require.NoError(t, err)
 
-	expected := calnexes{}
-	expected["calnex01.example.com"] = config.CalnexConfig{
+	expected := config.Calnexes{}
+	expected["calnex01.example.com"] = &config.CalnexConfig{
 		AntennaDelayNS: 42,
 		Measure: map[api.Channel]config.MeasureConfig{
 			api.ChannelA: {
