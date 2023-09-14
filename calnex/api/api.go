@@ -376,13 +376,6 @@ const (
 	ProbePPS Probe = "PPS"
 )
 
-// probeStringToProbe is a map of String probe to a Calnex variant
-var probeStringToProbe = map[string]Probe{
-	"ptp": ProbePTP,
-	"ntp": ProbeNTP,
-	"pps": ProbePPS,
-}
-
 // probeCalnexToProbe is a map of Calnex to a probe variant
 var probeCalnexAPIToProbe = map[string]Probe{
 	"0":     ProbePTP,
