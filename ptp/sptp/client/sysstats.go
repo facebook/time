@@ -32,14 +32,13 @@ type SysStats struct {
 	memstats *runtime.MemStats
 }
 
-// setRate is a helper function to make a crude rate/diff
-func setRate(name string, counts map[string]uint64, cur, prev uint64, interval time.Duration) {
+// setDiff is a helper function to make a crude diff
+func setDiff(name string, counts map[string]uint64, cur, prev uint64, interval time.Duration) {
 	if prev > cur {
 		return
 	}
 	secs := uint64(interval.Seconds())
 	counts[fmt.Sprintf("%s.sum.%d", name, secs)] = cur - prev
-	counts[fmt.Sprintf("%s.rate.%d", name, secs)] = (cur - prev) / secs
 }
 
 // CollectRuntimeStats gathers cpu, mem, gc statistics
@@ -106,14 +105,14 @@ func (s *SysStats) CollectRuntimeStats(interval time.Duration) (map[string]uint6
 	stats["runtime.mem.gc.pause"] = m.PauseNs[(m.NumGC+255)%256]
 	stats["runtime.mem.gc.count"] = uint64(m.NumGC)
 	if lastStats != nil {
-		setRate("runtime.lookups", stats, m.Lookups, lastStats.Lookups, interval)
+		setDiff("runtime.lookups", stats, m.Lookups, lastStats.Lookups, interval)
 
-		setRate("runtime.mem.total_alloc", stats, m.Mallocs, lastStats.Mallocs, interval)
-		setRate("runtime.mem.mallocs", stats, m.Mallocs, lastStats.Mallocs, interval)
-		setRate("runtime.mem.frees", stats, m.Frees, lastStats.Frees, interval)
+		setDiff("runtime.mem.total_alloc", stats, m.Mallocs, lastStats.Mallocs, interval)
+		setDiff("runtime.mem.mallocs", stats, m.Mallocs, lastStats.Mallocs, interval)
+		setDiff("runtime.mem.frees", stats, m.Frees, lastStats.Frees, interval)
 
-		setRate("runtime.gc.pause_ns", stats, m.PauseTotalNs, lastStats.PauseTotalNs, interval)
-		setRate("runtime.gc.count", stats, uint64(m.NumGC), uint64(lastStats.NumGC), interval)
+		setDiff("runtime.gc.pause_ns", stats, m.PauseTotalNs, lastStats.PauseTotalNs, interval)
+		setDiff("runtime.gc.count", stats, uint64(m.NumGC), uint64(lastStats.NumGC), interval)
 	}
 	s.memstats = m
 	return stats, nil
