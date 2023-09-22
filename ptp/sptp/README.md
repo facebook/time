@@ -18,13 +18,13 @@ There are currently several issues that could be optimized:
 ![SPTP exchange](/ptp/sptp/sptp.png)
 
 Packet exchange sequence:
-1. Client sends *DELAY_REQ* effectively initiating an exchange with the Server. The Client records timestamp **T3**
+1. Client sends *DELAY_REQ* (with *ProfileSpecific1* flag set) effectively initiating an exchange with the Server. The Client records timestamp **T3**
 2. Server records **CF_2** from *DELAY_REQ*
 3. Server records the RX timestamp **T4**
 4. Server sends *SYNC*. The server adds timestamp **T4** in the `originTimestamp` field and records the TX timestamp **T1**
-5. Server sends *ANNOUNCE* with a TX timestamp **T1** of the *SYNC* in `originTimestamp` field and **CF_2** from *DELAY_REQ* in a `correctionField`.
+5. Server sends *ANNOUNCE* with a TX timestamp **T1** of the *SYNC* in `originTimestamp` field and **CF_2** from *DELAY_REQ* in a `correctionField`
 6. Client records **T2** of the received *SYNC* packet, and also **CF_1**
-7. Client records data from *ANNOUNCE* packet, and also **CF_2**.
+7. Client records data from *ANNOUNCE* packet, and also **CF_2**
 
 As a result of this exahange the client has access to **T1, T2, T3, T4, CF_1, CF_2** to calculate mean path delay and offset metrics.
 And *ANNOUNCE* message content allows traditional BMC to be used for best master selection.
