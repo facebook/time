@@ -902,11 +902,6 @@ func (a *API) PowerSupplyStatus() (*PowerSupplyStatus, error) {
 	}
 	defer resp.Body.Close()
 
-	// TODO: remove once Sentinels support PSU status
-	if resp.StatusCode == http.StatusNotImplemented {
-		return &PowerSupplyStatus{PowerSupplyGood: true}, nil
-	}
-
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New(http.StatusText(resp.StatusCode))
 	}

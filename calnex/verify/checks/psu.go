@@ -46,6 +46,7 @@ func (p *PSU) Run(target string, insecureTLS bool) error {
 				return fmt.Errorf("psu: failed power supply #%d: %s", i, psu.Name)
 			}
 		}
+		return fmt.Errorf("psu: failed power supply")
 	}
 
 	return nil

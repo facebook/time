@@ -801,15 +801,15 @@ func TestPowerSupplyStatus(t *testing.T) {
 }
 
 func TestPowerSupplyStatusSentinel(t *testing.T) {
+	sampleResp := "{\"power_supply_good\":false}"
 	expected := &PowerSupplyStatus{
-		PowerSupplyGood: true,
+		PowerSupplyGood: false,
 	}
 
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
-		w.WriteHeader(http.StatusNotImplemented)
+		fmt.Fprintln(w, sampleResp)
 	}))
-
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
