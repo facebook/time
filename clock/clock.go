@@ -78,8 +78,8 @@ func FrequencyPPB(clockid int32) (freqPPB float64, state int, err error) {
 // AdjFreqPPB adjusts clock frequency in PPB
 func AdjFreqPPB(clockid int32, freqPPB float64) (state int, err error) {
 	tx := &unix.Timex{}
-	// man(2) clock_adjtime, turn ppb to ppm
-	tx.Freq = int64(freqPPB * PPBToTimexPPM)
+	// this way we can have platform-dependent code isolated
+	setFreq(tx, freqPPB)
 	tx.Modes = AdjFrequency
 	return Adjtime(clockid, tx)
 }
@@ -93,8 +93,10 @@ func Step(clockid int32, step time.Duration) (state int, err error) {
 	}
 	tx := &unix.Timex{}
 	tx.Modes = AdjSetOffset | AdjNano
-	tx.Time.Sec = int64(float64(sign) * (float64(step) / float64(time.Second)))
-	tx.Time.Usec = int64(time.Duration(sign) * (step % time.Second))
+	sec := time.Duration(float64(sign) * (float64(step) / float64(time.Second)))
+	usec := time.Duration(sign) * (step % time.Second)
+	// this way we can have platform-dependent code isolated
+	setTime(tx, sec, usec)
 	/*
 	 * The value of a timeval is the sum of its fields, but the
 	 * field tv_usec must always be non-negative.
