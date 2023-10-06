@@ -54,7 +54,7 @@ func doAdjFreq(device string, freq float64) error {
 	}
 
 	if freq < -maxFreq || freq > maxFreq {
-		return fmt.Errorf("Frequncy %f is out supported range", freq)
+		return fmt.Errorf("frequncy %f is out supported range", freq)
 	}
 
 	log.Infof("Setting new frequency value %f", freq)
