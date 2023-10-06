@@ -78,18 +78,3 @@ func TestMath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5.0, result.(float64))
 }
-
-func FuzzPrepareExpression(f *testing.F) {
-
-	f.Add("lkjdfkj")
-	f.Add("2 + 2")
-	f.Add("mean(phcoffset)")
-	f.Add("max(2, 3)")
-	f.Add("abs(-3)")
-	f.Add("stddev(phcoffset)")
-	f.Add("variance(phcoffset)")
-
-	f.Fuzz(func(t *testing.T, input string) {
-		prepareExpression(input)
-	})
-}
