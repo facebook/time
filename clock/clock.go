@@ -17,6 +17,7 @@ limitations under the License.
 package clock
 
 import (
+	"fmt"
 	"time"
 	"unsafe"
 
@@ -121,4 +122,17 @@ func MaxFreqPPB(clockid int32) (freqPPB float64, state int, err error) {
 		freqPPB = 500000
 	}
 	return freqPPB, state, nil
+}
+
+// SetSync sets clock status to TIME_OK
+func SetSync() error {
+	tx := &unix.Timex{}
+	// man(2) clock_adjtime, turn ppb to ppm
+	tx.Modes = AdjStatus | AdjMaxError
+	state, err := Adjtime(unix.CLOCK_REALTIME, tx)
+
+	if err == nil && state != unix.TIME_OK {
+		return fmt.Errorf("clock state %d is not TIME_OK after setting sync state", state)
+	}
+	return err
 }

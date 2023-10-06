@@ -82,19 +82,6 @@ func (c *SysClock) AdjFreqPPB(freqPPB float64) error {
 	return err
 }
 
-// SetSync sets clock status to TIME_OK
-func (c *SysClock) SetSync() error {
-	tx := &unix.Timex{}
-	// man(2) clock_adjtime, turn ppb to ppm
-	tx.Modes = clock.AdjStatus | clock.AdjMaxError
-	state, err := clock.Adjtime(unix.CLOCK_REALTIME, tx)
-
-	if err == nil && state != unix.TIME_OK {
-		return fmt.Errorf("clock state %d is not TIME_OK after setting sync state", state)
-	}
-	return err
-}
-
 // Step jumps time on PHC
 func (c *SysClock) Step(step time.Duration) error {
 	state, err := clock.Step(unix.CLOCK_REALTIME, step)

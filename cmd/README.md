@@ -31,6 +31,7 @@ CLI and library to perform various PTP-related tasks, including:
 * running human-readable diagnostics for basic problems with PTP based on data from local PTP client (ptp4l).
 * comparing system time with PHC time
 * mapping PHC devices to network cards and vice versa
+* sync 2 PHCs
 
 ### Quick Installation
 ```console
