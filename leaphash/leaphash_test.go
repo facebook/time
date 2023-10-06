@@ -29,3 +29,10 @@ func TestHashShouldMatch(t *testing.T) {
 		t.Fatalf("invalid hash value, got '%s', expected '%s'", hash, expected)
 	}
 }
+
+func FuzzCompute(f *testing.F) {
+
+	f.Fuzz(func(t *testing.T, input string) {
+		Compute(input)
+	})
+}
