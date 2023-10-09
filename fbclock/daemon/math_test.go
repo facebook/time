@@ -126,12 +126,11 @@ func TestPrepareExpressionNotEnoughValues(t *testing.T) {
 }
 
 func FuzzPrepareExpression(f *testing.F) {
-
 	f.Add("mean(clockaccuracy, 5) + abs(mean(offset, 5)) + 1.0 * stddev(offset, 4) + 1.0 * stddev(delay, 4) + 1.0 * stddev(freq, 5)")
 	f.Add("abs(mean(offset, 5)) + 1.0 * stddev(missing, 4)")
 	f.Add("mean(offset, 50)")
 
 	f.Fuzz(func(t *testing.T, input string) {
-		prepareExpression(input)
+		_, _ = prepareExpression(input)
 	})
 }

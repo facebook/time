@@ -31,8 +31,7 @@ func TestHashShouldMatch(t *testing.T) {
 }
 
 func FuzzCompute(f *testing.F) {
-
 	f.Fuzz(func(t *testing.T, input string) {
-		Compute(input)
+		_ = Compute(input)
 	})
 }

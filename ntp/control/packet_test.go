@@ -227,7 +227,6 @@ func TestNTPControlMsg_GetAssociations(t *testing.T) {
 }
 
 func FuzzNormalizeData(f *testing.F) {
-
 	data_0 := []byte(
 		`version="ntpd 4.2.6p5@1.2349-o Fri Apr 13 12:52:27 UTC 2018 (1)",
 processor="x86_64", system="Linux/4.11.3-61_fbk16_3934_gd064a3c",
@@ -251,6 +250,6 @@ filtdisp= 0.00 1.95 3.87 5.79 7.79 9.78 11.72 13.71
 	f.Add(data_1)
 
 	f.Fuzz(func(t *testing.T, input []byte) {
-		NormalizeData(input)
+		_, _ = NormalizeData(input)
 	})
 }
