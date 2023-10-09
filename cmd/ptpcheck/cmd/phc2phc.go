@@ -24,6 +24,7 @@ import (
 	"github.com/facebook/time/servo"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -93,7 +94,7 @@ func phc2phcRun(srcDevice string, dstDevice string, interval time.Duration, step
 				log.Errorf("failed to adjust freq to %v: %v", -freqAdj, err)
 				continue
 			}
-			if err := clock.SetSync(); err != nil {
+			if err := clock.SetSync(unix.CLOCK_REALTIME); err != nil {
 				log.Errorf("failed to set sys clock sync state: %v", err)
 			}
 		}

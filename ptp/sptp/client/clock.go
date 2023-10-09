@@ -32,6 +32,7 @@ type Clock interface {
 	Step(step time.Duration) error
 	FrequencyPPB() (float64, error)
 	MaxFreqPPB() (float64, error)
+	SetSync() error
 }
 
 // PHC groups methods for interactions with PHC devices
@@ -70,6 +71,11 @@ func (p *PHC) MaxFreqPPB() (float64, error) {
 	return phc.MaxFreqAdjPPBFromDevice(p.devicePath)
 }
 
+// SetSync is a no-op for PHC
+func (p *PHC) SetSync() error {
+	return nil
+}
+
 // SysClock groups methods for interacting with system clock
 type SysClock struct{}
 
@@ -80,6 +86,11 @@ func (c *SysClock) AdjFreqPPB(freqPPB float64) error {
 		log.Warningf("clock state %d is not TIME_OK after adjusting frequency", state)
 	}
 	return err
+}
+
+// SetSync sets clock status to TIME_OK
+func (c *SysClock) SetSync() error {
+	return clock.SetSync(unix.CLOCK_REALTIME)
 }
 
 // Step jumps time on PHC
@@ -130,4 +141,9 @@ func (c *FreeRunningClock) FrequencyPPB() (float64, error) {
 // MaxFreqPPB returns maximum frequency adjustment supported by PHC
 func (c *FreeRunningClock) MaxFreqPPB() (float64, error) {
 	return 0.0, nil
+}
+
+// SetSync sets clock status to TIME_OK
+func (c *FreeRunningClock) SetSync() error {
+	return nil
 }

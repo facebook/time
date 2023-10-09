@@ -81,8 +81,9 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	results := map[string]*RunResult{
 		"192.168.0.10": {},
 	}
-	mockServo.EXPECT().MeanFreq()
-	mockClock.EXPECT().AdjFreqPPB(gomock.Any())
+	meanFreq := 10.2
+	mockServo.EXPECT().MeanFreq().Return(meanFreq)
+	mockClock.EXPECT().AdjFreqPPB(-1 * meanFreq)
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(0))
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
@@ -98,6 +99,7 @@ func TestProcessResultsSingle(t *testing.T) {
 	mockClock := NewMockClock(ctrl)
 	mockClock.EXPECT().AdjFreqPPB(gomock.Any()).Return(nil)
 	mockClock.EXPECT().Step(gomock.Any()).Return(nil)
+	mockClock.EXPECT().SetSync()
 	mockServo := NewMockServo(ctrl)
 	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.StateJump)
 	mockServo.EXPECT().Sample(int64(-100001000), gomock.Any()).Return(14.2, servo.StateLocked)
@@ -152,6 +154,7 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockClock := NewMockClock(ctrl)
 	mockClock.EXPECT().AdjFreqPPB(gomock.Any()).Return(nil)
 	mockClock.EXPECT().Step(gomock.Any()).Return(nil)
+	mockClock.EXPECT().SetSync()
 	mockServo := NewMockServo(ctrl)
 	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.StateJump)
 	mockServo.EXPECT().Sample(int64(-104002000), gomock.Any()).Return(14.2, servo.StateLocked)

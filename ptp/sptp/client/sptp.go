@@ -28,7 +28,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/unix"
 
-	"github.com/facebook/time/clock"
 	"github.com/facebook/time/dscp"
 	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -396,8 +395,8 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 		if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
 			log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
 		}
-		if err := clock.SetSync(); err != nil {
-			log.Errorf("failed to set sys clock sync state")
+		if err := p.clock.SetSync(); err != nil {
+			log.Errorf("failed to set clock sync state")
 		}
 	}
 }

@@ -106,3 +106,17 @@ func (mr *MockClockMockRecorder) MaxFreqPPB() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxFreqPPB", reflect.TypeOf((*MockClock)(nil).MaxFreqPPB))
 }
+
+// SetSync mocks base method
+func (m *MockClock) SetSync() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetSync")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetSync indicates an expected call of AdSetSyncjFreqPPB
+func (mr *MockClockMockRecorder) SetSync() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSync", reflect.TypeOf((*MockClock)(nil).AdjFreqPPB))
+}

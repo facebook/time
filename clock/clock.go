@@ -125,11 +125,10 @@ func MaxFreqPPB(clockid int32) (freqPPB float64, state int, err error) {
 }
 
 // SetSync sets clock status to TIME_OK
-func SetSync() error {
+func SetSync(clockid int32) error {
 	tx := &unix.Timex{}
-	// man(2) clock_adjtime, turn ppb to ppm
 	tx.Modes = AdjStatus | AdjMaxError
-	state, err := Adjtime(unix.CLOCK_REALTIME, tx)
+	state, err := Adjtime(clockid, tx)
 
 	if err == nil && state != unix.TIME_OK {
 		return fmt.Errorf("clock state %d is not TIME_OK after setting sync state", state)
