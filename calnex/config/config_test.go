@@ -82,6 +82,7 @@ reference=Internal
 meas_time=1 days 1 hours
 tie_mode=TIE + 1 PPS Alignment
 ch8\used=Yes
+device_name=leoleovich.com
 ch6\synce_enabled=Off
 ch7\synce_enabled=Off
 ch6\ptp_synce\ptp\dscp=0
@@ -106,7 +107,7 @@ ch6\virtual_channels_enabled=On
 	s := f.Section("measure")
 	g := f.Section("gnss")
 
-	c.baseConfig(s, g, 42)
+	c.baseConfig(s, g, "leoleovich.com", 42)
 	require.True(t, c.changed)
 
 	buf, err := api.ToBuffer(f)
@@ -418,6 +419,7 @@ func TestConfig(t *testing.T) {
 	expectedConfig := `[gnss]
 antenna_delay=42 ns
 [measure]
+device_name=%s
 continuous=On
 reference=Internal
 meas_time=1 days 1 hours
@@ -588,6 +590,7 @@ ch30\ptp_synce\ptp\domain=0
 	parsed, _ := url.Parse(ts.URL)
 	calnexAPI := api.NewAPI(parsed.Host, true)
 	calnexAPI.Client = ts.Client()
+	expectedConfig = fmt.Sprintf(expectedConfig, parsed.Host)
 
 	cc := &CalnexConfig{
 		AntennaDelayNS: 42,
