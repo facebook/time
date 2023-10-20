@@ -41,9 +41,12 @@ type API struct {
 
 // Status is a struct representing Calnex status JSON response
 type Status struct {
-	ReferenceReady    bool
-	ModulesReady      bool
+	ChannelLinksReady bool
+	IPAddressReady    bool
 	MeasurementActive bool
+	MeasurementReady  bool
+	ModulesReady      bool
+	ReferenceReady    bool
 }
 
 // InstrumentStatus is a struct representing Calnex instrument status JSON response

@@ -305,11 +305,14 @@ func TestFetchSettings(t *testing.T) {
 }
 
 func TestFetchStatus(t *testing.T) {
-	sampleResp := "{\n\"referenceReady\": true,\n\"modulesReady\": true,\n\"measurementActive\": false\n}"
+	sampleResp := "{\"channelLinksReady\":true,\"ipAddressReady\":true,\"measurementActive\":true,\"measurementReady\":true,\"modulesReady\":true,\"referenceReady\":true}"
 	expected := &Status{
+		ChannelLinksReady: true,
+		IPAddressReady:    true,
+		MeasurementActive: true,
+		MeasurementReady:  true,
 		ModulesReady:      true,
 		ReferenceReady:    true,
-		MeasurementActive: false,
 	}
 
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
