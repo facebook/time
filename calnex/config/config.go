@@ -138,7 +138,10 @@ func (c *config) measureConfig(s *ini.Section, mc map[api.Channel]MeasureConfig)
 	}
 }
 
-func (c *config) baseConfig(measure *ini.Section, gnss *ini.Section, antennaDelayNS int) {
+func (c *config) baseConfig(measure *ini.Section, gnss *ini.Section, target string, antennaDelayNS int) {
+	// device hostname
+	c.set(measure, "device_name", target)
+
 	// gnss antenna compensation
 	c.set(gnss, "antenna_delay", fmt.Sprintf("%d ns", antennaDelayNS))
 
@@ -196,7 +199,7 @@ func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error
 	g := f.Section("gnss")
 
 	// set base config
-	c.baseConfig(m, g, cc.AntennaDelayNS)
+	c.baseConfig(m, g, target, cc.AntennaDelayNS)
 
 	// set measure config
 	c.measureConfig(m, cc.Measure)
