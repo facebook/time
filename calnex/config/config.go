@@ -126,7 +126,7 @@ func (c *config) measureConfig(s *ini.Section, mc map[api.Channel]MeasureConfig)
 		c.set(s, probe, m.Probe.CalnexName())
 	}
 
-	// Disable unused channels and enable used
+	// Disable unused channels
 	for ch, datatype := range api.MeasureChannelDatatypeMap {
 		if !channelEnabled[ch] {
 			c.set(s, fmt.Sprintf("%s\\used", ch.CalnexAPI()), api.NO)
@@ -170,9 +170,16 @@ func (c *config) baseConfig(measure *ini.Section, gnss *ini.Section, antennaDela
 	// enable QSFP FEC for 100G links (first channel only)
 	c.chSet(measure, api.ChannelONE, api.ChannelONE, "%s\\ptp_synce\\ethernet\\qsfp_fec", api.RSFEC)
 
+	// Enable 1st Physical channel
+	c.set(measure, fmt.Sprintf("%s\\used", api.ChannelONE.CalnexAPI()), api.YES)
 	// Disable 2nd Physical channel
-	c.chSet(measure, api.ChannelONE, api.ChannelTWO, "%s\\used", api.NO)
+	c.set(measure, fmt.Sprintf("%s\\used", api.ChannelTWO.CalnexAPI()), api.NO)
+
+	// Disable packet measurement on the two physical channel measurements
 	c.chSet(measure, api.ChannelONE, api.ChannelTWO, "%s\\protocol_enabled", api.OFF)
+
+	// Enable virtual channel measurements for channel 1
+	c.set(measure, fmt.Sprintf("%s\\virtual_channels_enabled", api.ChannelONE.CalnexAPI()), api.ON)
 }
 
 // Config configures target Calnex with Network/Calnex configs if apply is specified
