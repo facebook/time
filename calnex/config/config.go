@@ -121,7 +121,7 @@ func (c *config) measureConfig(s *ini.Section, mc map[api.Channel]MeasureConfig)
 			c.set(s, fmt.Sprintf("%s\\suppress_steps", ch.CalnexAPI()), api.YES)
 		}
 
-		// enable PTP/NTP channels
+		// enable NTP/PTP/PPS channels
 		c.set(s, fmt.Sprintf("%s\\used", ch.CalnexAPI()), api.YES)
 		c.set(s, probe, m.Probe.CalnexName())
 	}
@@ -174,7 +174,8 @@ func (c *config) baseConfig(measure *ini.Section, gnss *ini.Section, target stri
 	c.chSet(measure, api.ChannelONE, api.ChannelONE, "%s\\ptp_synce\\ethernet\\qsfp_fec", api.RSFEC)
 
 	// Enable 1st Physical channel
-	c.set(measure, fmt.Sprintf("%s\\used", api.ChannelONE.CalnexAPI()), api.YES)
+	// TODO: leoleovich enable once 1.19 FW deployed
+	// c.set(measure, fmt.Sprintf("%s\\used", api.ChannelONE.CalnexAPI()), api.YES)
 	// Disable 2nd Physical channel
 	c.set(measure, fmt.Sprintf("%s\\used", api.ChannelTWO.CalnexAPI()), api.NO)
 

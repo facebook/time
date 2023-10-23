@@ -71,6 +71,7 @@ continuous=Off
 reference=Auto
 meas_time=10 minutes
 tie_mode=TIE
+ch6\used=Yes
 ch8\used=No
 `
 
@@ -81,6 +82,7 @@ continuous=On
 reference=Internal
 meas_time=1 days 1 hours
 tie_mode=TIE + 1 PPS Alignment
+ch6\used=Yes
 ch8\used=Yes
 device_name=leoleovich.com
 ch6\synce_enabled=Off
@@ -92,7 +94,6 @@ ch7\ptp_synce\ethernet\dhcp_v6=DHCP
 ch6\ptp_synce\ethernet\dhcp_v4=Disabled
 ch7\ptp_synce\ethernet\dhcp_v4=Disabled
 ch6\ptp_synce\ethernet\qsfp_fec=RS-FEC
-ch6\used=Yes
 ch7\used=No
 ch6\protocol_enabled=Off
 ch7\protocol_enabled=Off
