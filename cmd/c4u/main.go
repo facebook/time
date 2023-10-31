@@ -83,6 +83,9 @@ func main() {
 	if err := c4u.Run(c, rb, st); err != nil {
 		log.Fatal(err)
 	}
+	if err := c4u.SdNotify(); err != nil {
+		log.Errorf("failed to send sd_notify: %v", err)
+	}
 
 	for it := time.NewTicker(interval); !once; <-it.C {
 		if err := c4u.Run(c, rb, st); err != nil {
