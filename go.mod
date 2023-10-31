@@ -29,6 +29,7 @@ require (
 )
 
 require (
+	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/creack/goselect v0.1.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/google/go-cmp v0.5.8 // indirect

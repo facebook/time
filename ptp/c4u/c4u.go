@@ -19,6 +19,7 @@ package c4u
 import (
 	"time"
 
+	"github.com/coreos/go-systemd/daemon"
 	"github.com/facebook/time/ptp/c4u/clock"
 	"github.com/facebook/time/ptp/c4u/stats"
 	"github.com/facebook/time/ptp/c4u/utcoffset"
@@ -27,6 +28,23 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
+
+// SdNotify notifies systemd about service successful start
+func SdNotify() error {
+	// daemon.SdNotify returns one of the following:
+	// (false, nil) - notification not supported (i.e. NOTIFY_SOCKET is unset)
+	// (false, err) - notification supported, but failure happened (e.g. error connecting to NOTIFY_SOCKET or while sending data)
+	// (true, nil) - notification supported, data has been sent
+	supported, err := daemon.SdNotify(false, daemon.SdNotifyReady)
+	if !supported && err != nil {
+		return err
+	} else if !supported {
+		log.Warningf("sd_notify not supported")
+	} else {
+		log.Infof("successfully sent sd_notify event")
+	}
+	return nil
+}
 
 // Config is a struct representing the config of the c4u
 type Config struct {
