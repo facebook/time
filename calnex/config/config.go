@@ -174,8 +174,7 @@ func (c *config) baseConfig(measure *ini.Section, gnss *ini.Section, target stri
 	c.chSet(measure, api.ChannelONE, api.ChannelONE, "%s\\ptp_synce\\ethernet\\qsfp_fec", api.RSFEC)
 
 	// Enable 1st Physical channel
-	// TODO: leoleovich enable once 1.19 FW deployed
-	// c.set(measure, fmt.Sprintf("%s\\used", api.ChannelONE.CalnexAPI()), api.YES)
+	c.set(measure, fmt.Sprintf("%s\\used", api.ChannelONE.CalnexAPI()), api.YES)
 	// Disable 2nd Physical channel
 	c.set(measure, fmt.Sprintf("%s\\used", api.ChannelTWO.CalnexAPI()), api.NO)
 
