@@ -137,7 +137,6 @@ func New(cfg *Config, stats StatsServer, l Logger) (*Daemon, error) {
 	s.stats.SetCounter("m_ns", 0)
 	s.stats.SetCounter("w_ns", 0)
 	s.stats.SetCounter("drift_ppb", 0)
-	s.stats.SetCounter("time_since_ingress_ns", 0)
 	// error counters
 	s.stats.SetCounter("data_error", 0)
 	s.stats.SetCounter("phc_error", 0)
@@ -276,7 +275,6 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 		it := s.state.ingressTimeNS()
 		if it > 0 {
 			timeSinceIngress := phcTime.UnixNano() - it
-			s.stats.SetCounter("time_since_ingress_ns", timeSinceIngress)
 			log.Debugf("Time since ingress: %dns", timeSinceIngress)
 		} else {
 			log.Warningf("No data for time since ingress")

@@ -494,7 +494,6 @@ func TestDaemonDoWork(t *testing.T) {
 		require.Error(t, err, "not enough data should give us error when calculating shm state")
 		// not enough data for those
 		require.Equal(t, int64(0), stats.counters["ingress_time_ns"])
-		require.Equal(t, int64(0), stats.counters["time_since_ingress_ns"])
 		require.Equal(t, int64(0), stats.counters["master_offset_ns"])
 		require.Equal(t, int64(0), stats.counters["path_delay_ns"])
 		require.Equal(t, int64(0), stats.counters["freq_adj_ppb"])
@@ -525,7 +524,6 @@ func TestDaemonDoWork(t *testing.T) {
 		require.NoError(t, err, "not enough data should give us error when calculating shm state, which we log and continue")
 		// check exported stats
 		require.Equal(t, int64(tme), stats.counters["ingress_time_ns"])
-		require.Equal(t, int64(time.Microsecond), stats.counters["time_since_ingress_ns"])
 		require.Equal(t, int64(d.MasterOffsetNS), stats.counters["master_offset_ns"])
 		require.Equal(t, int64(d.PathDelayNS), stats.counters["path_delay_ns"])
 		require.Equal(t, int64(d.FreqAdjustmentPPB), stats.counters["freq_adj_ppb"])
@@ -558,7 +556,6 @@ func TestDaemonDoWork(t *testing.T) {
 	require.NoError(t, err)
 	// check that we have proper stats reported
 	require.Equal(t, int64(startTime+61*time.Second), stats.counters["ingress_time_ns"], "ingress_time_ns after good data")
-	require.Equal(t, int64(time.Second), stats.counters["time_since_ingress_ns"], "time_since_ingress_ns after good data")
 	require.Equal(t, int64(d.MasterOffsetNS), stats.counters["master_offset_ns"], "master_offset_ns after good data")
 	require.Equal(t, int64(d.PathDelayNS), stats.counters["path_delay_ns"], "path_delay_ns after good data")
 	require.Equal(t, int64(d.FreqAdjustmentPPB), stats.counters["freq_adj_ppb"], "freq_adj_ppb after good data")
@@ -597,13 +594,12 @@ func TestDaemonDoWork(t *testing.T) {
 	require.Error(t, err, "data point fails sanity check")
 	// check that we have proper stats reported
 	require.Equal(t, int64(0), stats.counters["ingress_time_ns"], "ingress_time_ns after bad data")
-	require.Equal(t, int64(2*time.Second), stats.counters["time_since_ingress_ns"], "time_since_ingress_ns after bad data")
 	require.Equal(t, int64(d.MasterOffsetNS), stats.counters["master_offset_ns"], "master_offset_ns after bad data")
 	require.Equal(t, int64(d.PathDelayNS), stats.counters["path_delay_ns"], "path_delay_ns after bad data")
 	require.Equal(t, int64(d.FreqAdjustmentPPB), stats.counters["freq_adj_ppb"], "freq_adj_ppb after bad data")
 	require.Equal(t, int64(48), stats.counters["m_ns"], "m_ns after bad data")
 	require.Equal(t, int64(48), stats.counters["w_ns"], "w_ns after bad data")
-	require.Equal(t, int64(64), stats.counters["drift_ppb"], "w_ns after bad data")
+	require.Equal(t, int64(64), stats.counters["drift_ppb"], "drift_ppb after bad data")
 	require.Equal(t, int64(23), stats.counters["master_offset_ns.60.abs_max"], "master_offset_ns.60.abs_max after bad data")
 	require.Equal(t, int64(213), stats.counters["path_delay_ns.60.abs_max"], "path_delay_ns.60.abs_max after bad data")
 	require.Equal(t, int64(212159), stats.counters["freq_adj_ppb.60.abs_max"], "freq_adj_ppb.60.abs_max after bad data")
