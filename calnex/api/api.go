@@ -127,6 +127,7 @@ const (
 	CHANNEL1 = "Channel 1"
 	IPV6     = "UDP/IPv6"
 	INTERNAL = "Internal"
+	SPTP     = "SPTP_V2.1"
 )
 
 // Available Calnex channels

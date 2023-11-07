@@ -95,6 +95,9 @@ func (c *config) measureConfig(s *ini.Section, mc map[api.Channel]MeasureConfig)
 			// Set Virtual Port to use Physical channel 1
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\physical_packet_channel", ch.CalnexAPI()), api.CHANNEL1)
 
+			// Use SPTP instead of PTPv2
+			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\version", ch.CalnexAPI()), api.SPTP)
+
 			// Set target we measure
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\master_ip", ch.CalnexAPI()), m.Target)
 			c.set(s, fmt.Sprintf("%s\\ptp_synce\\ptp\\master_ip_ipv6", ch.CalnexAPI()), m.Target)
