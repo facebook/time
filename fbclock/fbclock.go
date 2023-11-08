@@ -87,3 +87,17 @@ func (f *FBClock) GetTime() (*TrueTime, error) {
 
 	return &TrueTime{Earliest: earliest, Latest: latest}, nil
 }
+
+// GetTimeUTC returns TrueTime in UTC
+func (f *FBClock) GetTimeUTC() (*TrueTime, error) {
+	tt := &C.fbclock_truetime{}
+	errCode := C.fbclock_gettime_utc(f.cFBClock, tt)
+	if errCode != 0 {
+		return nil, fmt.Errorf("reading FBClock TrueTime UTC: %s", strerror(errCode))
+	}
+
+	earliest := time.Unix(0, int64(tt.earliest_ns))
+	latest := time.Unix(0, int64(tt.latest_ns))
+
+	return &TrueTime{Earliest: earliest, Latest: latest}, nil
+}

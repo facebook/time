@@ -221,6 +221,24 @@ int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
       error_bound, h_value, state.ingress_time_ns, res.ts, truetime);
 }
 
+void fbclock_apply_utc_offset(fbclock_truetime* truetime) {
+  truetime->earliest_ns += UTC_TAI_OFFSET;
+  truetime->latest_ns += UTC_TAI_OFFSET;
+}
+
+// When/if new leap second is announced, we would need to update this function
+// to do smearing, and fetch offset from fbclock daemon.
+// For now, we apply the offset, as leap seconds will be abandoned by 2035
+// and it is possible we won't have any at all.
+int fbclock_gettime_utc(fbclock_lib* lib, fbclock_truetime* truetime) {
+  int rcode = fbclock_gettime(lib, truetime);
+  if (rcode != 0) {
+    return rcode;
+  }
+  fbclock_apply_utc_offset(truetime);
+  return 0;
+}
+
 const char* fbclock_strerror(int err_code) {
   const char* err_info = "unknown error";
   switch (err_code) {

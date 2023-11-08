@@ -35,6 +35,9 @@ typedef atomic_uint_fast64_t atomic_uint64;
 #define FBCLOCK_E_WOU_TOO_BIG -6
 #define FBCLOCK_E_PHC_IN_THE_PAST -7
 
+// until new leap second is introduced, UTC is exactly 37 seconds behind TAI
+#define UTC_TAI_OFFSET (int64_t)(-37e9)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -85,11 +88,13 @@ int fbclock_calculate_time(
     int64_t ingress_time_ns,
     int64_t phctime_ns,
     fbclock_truetime* truetime);
+void fbclock_apply_utc_offset(fbclock_truetime* truetime);
 
 // methods we provide to end users
 int fbclock_init(fbclock_lib* lib, const char* shm_path);
 int fbclock_destroy(fbclock_lib* lib);
 int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime);
+int fbclock_gettime_utc(fbclock_lib* lib, fbclock_truetime* truetime);
 // turn error code into err msg
 const char* fbclock_strerror(int err_code);
 

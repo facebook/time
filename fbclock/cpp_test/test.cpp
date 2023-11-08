@@ -193,6 +193,18 @@ TEST(fbclock_test, test_fbclock_calculate_time) {
   EXPECT_EQ(truetime.latest_ns, 1647290691804195223);
 }
 
+TEST(fbclock_test, test_fbclock_apply_utc_offset) {
+  int err;
+  fbclock_truetime truetime;
+  truetime.earliest_ns = 1647269091803102338;
+  truetime.latest_ns = 1647269091803103576;
+
+  fbclock_apply_utc_offset(&truetime);
+
+  EXPECT_EQ(truetime.earliest_ns, 1647269054803102338);
+  EXPECT_EQ(truetime.latest_ns, 1647269054803103576);
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
