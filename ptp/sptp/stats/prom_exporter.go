@@ -28,7 +28,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-//PrometheusExporter holds the exporter details
+// PrometheusExporter holds the exporter details
 type PrometheusExporter struct {
 	registry   *prometheus.Registry
 	listenPort int
@@ -36,12 +36,12 @@ type PrometheusExporter struct {
 	interval   time.Duration
 }
 
-//NewPrometheusExporter creates a new instance of PrometheusExporter
+// NewPrometheusExporter creates a new instance of PrometheusExporter
 func NewPrometheusExporter(listenPort int, sptpPort int, scrapeInterval time.Duration) *PrometheusExporter {
 	return &PrometheusExporter{registry: prometheus.NewRegistry(), interval: scrapeInterval, listenPort: listenPort, sptpPort: sptpPort}
 }
 
-//Start starts the exporter
+// Start starts the exporter
 func (e *PrometheusExporter) Start() {
 	go func() {
 		e.scrapeMetrics()
