@@ -27,14 +27,20 @@ const testIP = "1.2.3.4"
 
 func TestAddIPToInterfaceError(t *testing.T) {
 	lc := ListenConfig{Iface: "lol-does-not-exist"}
-	s := &Server{ListenConfig: lc}
+	s := &Server{
+		ListenConfig:   lc,
+		ManageLoopback: true,
+	}
 	err := s.addIPToInterface(net.ParseIP(testIP))
 	require.NotNil(t, err)
 }
 
 func TestDeleteIPFromInterfaceError(t *testing.T) {
 	lc := ListenConfig{Iface: "lol-does-not-exist"}
-	s := &Server{ListenConfig: lc}
+	s := &Server{
+		ListenConfig:   lc,
+		ManageLoopback: true,
+	}
 	err := s.deleteIPFromInterface(net.ParseIP(testIP))
 	require.NotNil(t, err)
 }

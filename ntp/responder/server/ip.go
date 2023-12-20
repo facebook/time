@@ -31,6 +31,9 @@ const ipv6Mask = 64
 
 // AddIPOnInterface adds ip to interface
 func (s *Server) addIPToInterface(vip net.IP) error {
+	if !s.ManageLoopback {
+		return nil
+	}
 	log.Infof("Adding %s to %s", vip, s.ListenConfig.Iface)
 	// Add IPs to the interface
 	iface, err := net.InterfaceByName(s.ListenConfig.Iface)
@@ -43,6 +46,9 @@ func (s *Server) addIPToInterface(vip net.IP) error {
 
 // deleteIPFromInterface deletes ip from interface
 func (s *Server) deleteIPFromInterface(vip net.IP) error {
+	if !s.ManageLoopback {
+		return nil
+	}
 	log.Infof("Deleting %s to %s", vip, s.ListenConfig.Iface)
 	// Delete IPs to the interface
 	iface, err := net.InterfaceByName(s.ListenConfig.Iface)

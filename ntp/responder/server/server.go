@@ -44,15 +44,16 @@ type task struct {
 
 // Server is a type for UDP server which handles connections.
 type Server struct {
-	ListenConfig ListenConfig
-	Workers      int
-	Announce     Announce
-	Stats        Stats
-	Checker      Checker
-	tasks        chan task
-	ExtraOffset  time.Duration
-	RefID        string
-	Stratum      int
+	ListenConfig   ListenConfig
+	Workers        int
+	Announce       Announce
+	Stats          Stats
+	Checker        Checker
+	tasks          chan task
+	ExtraOffset    time.Duration
+	RefID          string
+	Stratum        int
+	ManageLoopback bool
 }
 
 // Start UDP server.

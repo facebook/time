@@ -56,6 +56,7 @@ func main() {
 	flag.BoolVar(&debugger, "pprof", false, "Enable pprof")
 	flag.BoolVar(&s.ListenConfig.ShouldAnnounce, "announce", false, "Advertize IPs")
 	flag.DurationVar(&s.ExtraOffset, "extraoffset", 0, "Extra offset to return to clients")
+	flag.BoolVar(&s.ManageLoopback, "manage-loopback", true, "Add/remove IPs. If false, these must be managed elsewhere")
 
 	flag.Parse()
 	s.ListenConfig.IPs.SetDefault()
