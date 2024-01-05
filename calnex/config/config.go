@@ -193,19 +193,11 @@ func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error
 	var c config
 	api := api.NewAPI(target, insecureTLS)
 
-	f, err := api.FetchSettings()
+	f, err := prepare(&c, api, target, cc)
+
 	if err != nil {
 		return err
 	}
-
-	m := f.Section("measure")
-	g := f.Section("gnss")
-
-	// set base config
-	c.baseConfig(m, g, target, cc.AntennaDelayNS)
-
-	// set measure config
-	c.measureConfig(m, cc.Measure)
 
 	if !apply {
 		log.Info("dry run. Exiting")
@@ -245,4 +237,42 @@ func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error
 	}
 
 	return nil
+}
+
+// Save saves the Network/Calnex configs to file
+func Save(target string, insecureTLS bool, cc *CalnexConfig, saveConfig string) error {
+	var c config
+	api := api.NewAPI(target, insecureTLS)
+
+	f, err := prepare(&c, api, target, cc)
+
+	if err != nil {
+		return err
+	}
+
+	err = f.SaveTo(saveConfig)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func prepare(c *config, api *api.API, target string, cc *CalnexConfig) (*ini.File, error) {
+	f, err := api.FetchSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	m := f.Section("measure")
+	g := f.Section("gnss")
+
+	// set base config
+	c.baseConfig(m, g, target, cc.AntennaDelayNS)
+
+	// set measure config
+	c.measureConfig(m, cc.Measure)
+
+	return f, nil
 }
