@@ -32,12 +32,14 @@ func init() {
 	configCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
 	configCmd.Flags().StringVar(&target, "target", "", "device to configure")
 	configCmd.Flags().StringVar(&source, "file", "", "configuration file")
+	configCmd.Flags().StringVar(&saveConfig, "save", "", "save configuration to the specified path")
 	if err := configCmd.MarkFlagRequired("target"); err != nil {
 		log.Fatal(err)
 	}
 	if err := configCmd.MarkFlagRequired("file"); err != nil {
 		log.Fatal(err)
 	}
+	configCmd.MarkFlagsMutuallyExclusive("apply", "save")
 }
 
 var configCmd = &cobra.Command{
@@ -65,8 +67,14 @@ var configCmd = &cobra.Command{
 			log.Fatalf("Failed to find config for %s in %s", target, source)
 		}
 
-		if err := config.Config(target, insecureTLS, dc, apply); err != nil {
-			log.Fatal(err)
+		if saveConfig != "" {
+			if err := config.Save(target, insecureTLS, dc, saveConfig); err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			if err := config.Config(target, insecureTLS, dc, apply); err != nil {
+				log.Fatal(err)
+			}
 		}
 	},
 }
