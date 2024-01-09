@@ -18,6 +18,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/facebook/time/calnex/api"
 	"github.com/go-ini/ini"
@@ -242,17 +243,19 @@ func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error
 // Save saves the Network/Calnex configs to file
 func Save(target string, insecureTLS bool, cc *CalnexConfig, saveConfig string) error {
 	var c config
-	api := api.NewAPI(target, insecureTLS)
+	calnexAPI := api.NewAPI(target, insecureTLS)
 
-	f, err := prepare(&c, api, target, cc)
-
+	f, err := prepare(&c, calnexAPI, target, cc)
 	if err != nil {
 		return err
 	}
 
-	err = f.SaveTo(saveConfig)
-
+	buf, err := api.ToBuffer(f)
 	if err != nil {
+		return err
+	}
+
+	if err = os.WriteFile(saveConfig, buf.Bytes(), 0644); err != nil {
 		return err
 	}
 
