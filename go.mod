@@ -19,7 +19,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.8.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.8.4
 	github.com/vtolstov/go-ioctl v0.0.0-20151206205506-6be9cced4810
 	go.bug.st/serial v1.5.0
 	golang.org/x/exp v0.0.0-20220518171630-0b5c67f07fdf
