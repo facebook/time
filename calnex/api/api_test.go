@@ -27,6 +27,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-ini/ini"
 	"github.com/stretchr/testify/require"
@@ -117,14 +118,14 @@ func TestCalnexName(t *testing.T) {
 }
 
 func TestTLSSetting(t *testing.T) {
-	calnexAPI := NewAPI("localhost", false)
+	calnexAPI := NewAPI("localhost", false, time.Second)
 	// Never ever ever allow insecure over https
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
 	}
 	require.Equal(t, transport, calnexAPI.Client.Transport)
 
-	calnexAPI = NewAPI("localhost", true)
+	calnexAPI = NewAPI("localhost", true, time.Second)
 	transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -142,7 +143,7 @@ func TestFetchCsv(t *testing.T) {
 	legitChannelNames := []Channel{ChannelONE, ChannelTWO, ChannelC, ChannelD, ChannelVP22}
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 	for _, channel := range legitChannelNames {
 		lines, err := calnexAPI.FetchCsv(channel, true)
@@ -160,7 +161,7 @@ func TestFetchCsvNoData(t *testing.T) {
 	}))
 	defer ts.Close()
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 	lines, err := calnexAPI.FetchCsv(ChannelVP22, true)
 	require.Error(t, err)
@@ -176,7 +177,7 @@ func TestFetchChannelProtocol_NTP(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	probe, err := calnexAPI.FetchChannelProbe(ChannelVP1)
@@ -193,7 +194,7 @@ func TestFetchChannelProtocol_PTP(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	probe, err := calnexAPI.FetchChannelProbe(ChannelVP2)
@@ -210,7 +211,7 @@ func TestFetchChannelProtocol_PPS(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	probe, err := calnexAPI.FetchChannelProbe(ChannelA)
@@ -227,7 +228,7 @@ func TestFetchChannelTarget_NTP(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	target, err := calnexAPI.FetchChannelTarget(ChannelVP1, ProbeNTP)
@@ -244,7 +245,7 @@ func TestFetchChannelTarget_PTP(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	target, err := calnexAPI.FetchChannelTarget(ChannelVP1, ProbePTP)
@@ -261,7 +262,7 @@ func TestFetchChannelTarget_PPS(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	target, err := calnexAPI.FetchChannelTarget(ChannelA, ProbePPS)
@@ -278,7 +279,7 @@ func TestFetchUsedChannels(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	expected := []Channel{ChannelA, ChannelVP22}
@@ -296,7 +297,7 @@ func TestFetchSettings(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchSettings()
@@ -322,7 +323,7 @@ func TestFetchStatus(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchStatus()
@@ -389,7 +390,7 @@ func TestFetchInstumentStatus(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchInstrumentStatus()
@@ -406,7 +407,7 @@ func TestPushSettings(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	sampleConfig := "[measure]\nch0\\synce_enabled=Off\n"
@@ -430,7 +431,7 @@ func TestFetchVersion(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchVersion()
@@ -469,7 +470,7 @@ func TestPushVersion(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	r, err := calnexAPI.PushVersion(fw.Name())
@@ -504,7 +505,7 @@ func TestPost(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	buf := bytes.NewBuffer(postData)
@@ -527,7 +528,7 @@ func TestGet(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	err := calnexAPI.StartMeasure()
@@ -551,7 +552,7 @@ func TestHTTPError(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	f := ini.Empty()
@@ -568,7 +569,7 @@ func TestFetchProblemReport(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	dir, err := os.MkdirTemp("/tmp", "calnex")
@@ -609,7 +610,7 @@ func TestPushCert(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	r, err := calnexAPI.PushCert(cert)
@@ -670,7 +671,7 @@ func TestGnssStatus(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	g, err := calnexAPI.GnssStatus()
@@ -709,7 +710,7 @@ func TestPushLicense(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	r, err := calnexAPI.PushLicense(license.Name())
@@ -754,7 +755,7 @@ func TestPushLicenseError(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	r, err := calnexAPI.PushLicense(license.Name())
@@ -795,7 +796,7 @@ func TestPowerSupplyStatus(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	g, err := calnexAPI.PowerSupplyStatus()
@@ -816,7 +817,7 @@ func TestPowerSupplyStatusSentinel(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	g, err := calnexAPI.PowerSupplyStatus()

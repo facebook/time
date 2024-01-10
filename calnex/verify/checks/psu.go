@@ -18,6 +18,8 @@ package checks
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/facebook/time/calnex/api"
 )
 
@@ -33,7 +35,7 @@ func (p *PSU) Name() string {
 
 // Run executes the check
 func (p *PSU) Run(target string, insecureTLS bool) error {
-	api := api.NewAPI(target, insecureTLS)
+	api := api.NewAPI(target, insecureTLS, 10*time.Second)
 
 	pu, err := api.PowerSupplyStatus()
 	if err != nil {
