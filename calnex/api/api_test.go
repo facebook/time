@@ -64,6 +64,17 @@ func TestChannel(t *testing.T) {
 	}
 }
 
+func TestChannels(t *testing.T) {
+	cs := Channels{}
+	require.Equal(t, "channel", cs.Type())
+
+	err := cs.Set("1")
+	require.NoError(t, err)
+	err = cs.Set("A")
+	require.NoError(t, err)
+	require.Equal(t, "1, A", cs.String())
+}
+
 func TestProbe(t *testing.T) {
 	legitProbeNamesToProbe := map[string]Probe{
 		"ntp": ProbeNTP,
