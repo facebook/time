@@ -17,6 +17,8 @@ limitations under the License.
 package cmd
 
 import (
+	"time"
+
 	"github.com/facebook/time/calnex/api"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -37,7 +39,7 @@ func init() {
 }
 
 func licenseFunc() error {
-	api := api.NewAPI(target, insecureTLS)
+	api := api.NewAPI(target, insecureTLS, time.Minute)
 	_, err := api.PushLicense(source)
 	return err
 }

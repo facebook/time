@@ -18,6 +18,7 @@ package firmware
 
 import (
 	"strings"
+	"time"
 
 	calnexAPI "github.com/facebook/time/calnex/api"
 	version "github.com/hashicorp/go-version"
@@ -34,7 +35,7 @@ type FW interface {
 
 // Firmware checks target Calnex firmware version and upgrades if apply is specified
 func Firmware(target string, insecureTLS bool, fw FW, apply bool) error {
-	api := calnexAPI.NewAPI(target, insecureTLS)
+	api := calnexAPI.NewAPI(target, insecureTLS, 4*time.Minute)
 	cv, err := api.FetchVersion()
 	if err != nil {
 		return err

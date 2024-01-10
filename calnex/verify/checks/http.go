@@ -18,6 +18,7 @@ package checks
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/facebook/time/calnex/api"
 )
@@ -34,7 +35,7 @@ func (p *HTTP) Name() string {
 
 // Run executes the check
 func (p *HTTP) Run(target string, insecureTLS bool) error {
-	api := api.NewAPI(target, insecureTLS)
+	api := api.NewAPI(target, insecureTLS, 10*time.Second)
 
 	_, err := api.FetchStatus()
 	if err != nil {

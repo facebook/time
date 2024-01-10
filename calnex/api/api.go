@@ -486,13 +486,13 @@ func parseResponse(response string) (string, error) {
 }
 
 // NewAPI returns an pointer of API struct with default values.
-func NewAPI(source string, insecureTLS bool) *API {
+func NewAPI(source string, insecureTLS bool, timeout time.Duration) *API {
 	return &API{
 		Client: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: insecureTLS},
 			},
-			Timeout: 4 * time.Minute,
+			Timeout: timeout,
 		},
 		source: source,
 	}

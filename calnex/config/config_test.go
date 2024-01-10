@@ -26,6 +26,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/facebook/time/calnex/api"
 	"github.com/go-ini/ini"
@@ -593,7 +594,7 @@ ch30\ptp_synce\ptp\domain=0
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true)
+	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 	expectedConfig = fmt.Sprintf(expectedConfig, parsed.Host)
 
@@ -807,7 +808,7 @@ antenna_delay=42 ns
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true)
+	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 	expectedConfig = fmt.Sprintf(expectedConfig, parsed.Host)
 	cc := &CalnexConfig{
@@ -1156,7 +1157,7 @@ ch6\virtual_channels_enabled=On
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true)
+	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 	cc := &CalnexConfig{
 		AntennaDelayNS: 42,

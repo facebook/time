@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/facebook/time/calnex/api"
 	"github.com/stretchr/testify/require"
@@ -73,7 +74,7 @@ func TestExport(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true)
+	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	expected := []string{

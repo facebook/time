@@ -25,6 +25,7 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/facebook/time/calnex/api"
 	"github.com/stretchr/testify/require"
@@ -66,7 +67,7 @@ func TestFirmware(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true)
+	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
 	err = Firmware(parsed.Host, true, fw, true)

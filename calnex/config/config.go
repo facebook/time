@@ -19,6 +19,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/facebook/time/calnex/api"
 	"github.com/go-ini/ini"
@@ -192,10 +193,9 @@ func (c *config) baseConfig(measure *ini.Section, gnss *ini.Section, target stri
 // Config configures target Calnex with Network/Calnex configs if apply is specified
 func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error {
 	var c config
-	api := api.NewAPI(target, insecureTLS)
+	api := api.NewAPI(target, insecureTLS, 4*time.Minute)
 
 	f, err := prepare(&c, api, target, cc)
-
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error
 // Save saves the Network/Calnex configs to file
 func Save(target string, insecureTLS bool, cc *CalnexConfig, saveConfig string) error {
 	var c config
-	calnexAPI := api.NewAPI(target, insecureTLS)
+	calnexAPI := api.NewAPI(target, insecureTLS, time.Minute)
 
 	f, err := prepare(&c, calnexAPI, target, cc)
 	if err != nil {

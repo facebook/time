@@ -17,6 +17,8 @@ limitations under the License.
 package cmd
 
 import (
+	"time"
+
 	"github.com/facebook/time/calnex/api"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -38,7 +40,7 @@ func clear() error {
 		return nil
 	}
 
-	api := api.NewAPI(target, insecureTLS)
+	api := api.NewAPI(target, insecureTLS, time.Minute)
 	if err := api.ClearDevice(); err != nil {
 		return err
 	}

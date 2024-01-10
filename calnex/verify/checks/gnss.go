@@ -18,6 +18,8 @@ package checks
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/facebook/time/calnex/api"
 )
 
@@ -35,7 +37,7 @@ func (p *GNSS) Name() string {
 
 // Run executes the check
 func (p *GNSS) Run(target string, insecureTLS bool) error {
-	api := api.NewAPI(target, insecureTLS)
+	api := api.NewAPI(target, insecureTLS, 10*time.Second)
 
 	g, err := api.GnssStatus()
 	if err != nil {
