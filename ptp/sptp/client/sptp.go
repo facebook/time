@@ -314,6 +314,14 @@ func (p *SPTP) handleExchangeError(addr string, err error) {
 	}
 }
 
+func (p *SPTP) setMeanFreq() (float64, servo.State) {
+	freqAdj := p.pi.MeanFreq()
+	if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
+		log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
+	}
+	return freqAdj, servo.StateHoldover
+}
+
 func (p *SPTP) processResults(results map[string]*RunResult) {
 	defer func() {
 		for addr, res := range results {
@@ -322,15 +330,17 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 		}
 	}()
 
+	isBadTick := false
 	now := time.Now()
 	if !p.lastTick.IsZero() {
 		tickDuration := now.Sub(p.lastTick)
 		log.Debugf("tick took %vms sys time", tickDuration.Milliseconds())
 		// +-10% of interval
+		p.stats.SetCounter("ptp.sptp.tick_duration_ns", int64(tickDuration))
 		if 100*tickDuration > 110*p.cfg.Interval || 100*tickDuration < 90*p.cfg.Interval {
 			log.Warningf("tick took %vms, which is outside of expected +-10%% from the interval %vms", tickDuration.Milliseconds(), p.cfg.Interval.Milliseconds())
+			isBadTick = true
 		}
-		p.stats.SetCounter("ptp.sptp.tick_duration_ns", int64(tickDuration))
 	}
 	p.lastTick = now
 	gmsTotal := len(results)
@@ -365,11 +375,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	if best == nil {
 		log.Warningf("no Best Master selected")
 		p.bestGM = ""
-		freqAdj := p.pi.MeanFreq()
-		state := servo.StateHoldover
-		if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
-			log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
-		}
+		freqAdj, state := p.setMeanFreq()
 		log.Infof("offset Unknown s%d freq %+7.0f path delay Unknown", state, freqAdj)
 		return
 	}
@@ -380,6 +386,11 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 		p.bestGM = bestAddr
 	}
 	log.Debugf("best master %q (%s)", bestAddr, bm.Announce.GrandmasterIdentity)
+	if isBadTick {
+		freqAdj, state := p.setMeanFreq()
+		log.Infof("offset %10d s%d freq %+7.0f path delay %10d", bm.Offset.Nanoseconds(), state, freqAdj, bm.Delay.Nanoseconds())
+		return
+	}
 	freqAdj, state := p.pi.Sample(int64(bm.Offset), uint64(bm.Timestamp.UnixNano()))
 	log.Infof("offset %10d s%d freq %+7.0f path delay %10d", bm.Offset.Nanoseconds(), state, freqAdj, bm.Delay.Nanoseconds())
 	switch state {

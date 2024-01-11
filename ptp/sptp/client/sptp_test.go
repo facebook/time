@@ -136,8 +136,63 @@ func TestProcessResultsSingle(t *testing.T) {
 	p.processResults(results)
 	require.Equal(t, "192.168.0.10", p.bestGM)
 
+	// we have to wait a second to avoid "samples are too fast" error
+	time.Sleep(time.Second)
 	results["192.168.0.10"].Measurement.Offset = -100001 * time.Microsecond
 	// we adj here
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(100))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.tick_duration_ns", gomock.Any())
+	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+	p.processResults(results)
+	require.Equal(t, "192.168.0.10", p.bestGM)
+}
+
+func TestProcessResultsFastSamples(t *testing.T) {
+	ts, err := time.Parse(time.RFC3339, "2021-05-21T13:32:05+01:00")
+	require.Nil(t, err)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClock := NewMockClock(ctrl)
+	mockClock.EXPECT().AdjFreqPPB(gomock.Any()).Return(nil)
+	mockClock.EXPECT().Step(gomock.Any()).Return(nil)
+	mockServo := NewMockServo(ctrl)
+	mockServo.EXPECT().Sample(int64(-200002000), gomock.Any()).Return(12.3, servo.StateJump)
+	mockServo.EXPECT().MeanFreq().Return(12.3)
+	mockStatsServer := NewMockStatsServer(ctrl)
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
+	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(100))
+	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+
+	cfg := DefaultConfig()
+	cfg.Servers = map[string]int{
+		"192.168.0.10": 1,
+	}
+	p := &SPTP{
+		clock: mockClock,
+		pi:    mockServo,
+		stats: mockStatsServer,
+		cfg:   cfg,
+	}
+	results := map[string]*RunResult{
+		"192.168.0.10": {
+			Server: "192.168.0.10",
+			Measurement: &MeasurementResult{
+				Delay:     299995 * time.Microsecond,
+				S2CDelay:  100,
+				C2SDelay:  110,
+				Offset:    -200002 * time.Microsecond,
+				Timestamp: ts,
+			},
+		},
+	}
+	err = p.initClients()
+	require.NoError(t, err)
+	// we step here
+	p.processResults(results)
+	require.Equal(t, "192.168.0.10", p.bestGM)
+
+	// we stick to holdover mode and mean freq
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.total", int64(1))
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.gms.available_pct", int64(100))
 	mockStatsServer.EXPECT().SetCounter("ptp.sptp.tick_duration_ns", gomock.Any())
@@ -203,6 +258,9 @@ func TestProcessResultsMulti(t *testing.T) {
 	// we step here
 	p.processResults(results)
 	require.Equal(t, "192.168.0.10", p.bestGM)
+
+	// we have to wait a second to avoid "samples are too fast" error
+	time.Sleep(time.Second)
 
 	results["192.168.0.10"].Measurement.Offset = -100001 * time.Microsecond
 	results["192.168.0.11"].Error = nil
