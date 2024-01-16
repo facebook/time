@@ -90,6 +90,7 @@ func TestPiServoFilterSample(t *testing.T) {
 	piFilterCfg := DefaultPiServoFilterCfg()
 	piFilterCfg.ringSize = 3
 	piFilterCfg.maxSkipCount = 2
+	piFilterCfg.offsetRange = 100000
 	f := NewPiServoFilter(pi, piFilterCfg)
 
 	require.InEpsilon(t, -111288.406372, pi.lastFreq, 0.00001)
@@ -175,4 +176,53 @@ func TestPiServoSetFreq(t *testing.T) {
 
 	require.InEpsilon(t, 11111.0025, pi.lastFreq, 0.00001)
 	require.InEpsilon(t, 11111.0025, pi.drift, 0.00001)
+}
+
+func TestPiServoFilterMeanFreq(t *testing.T) {
+	pi := NewPiServo(DefaultServoConfig(), DefaultPiServoCfg(), -111288.406372)
+	pi.SyncInterval(1)
+	piFilterCfg := DefaultPiServoFilterCfg()
+	piFilterCfg.ringSize = 3
+	piFilterCfg.maxSkipCount = 2
+	piFilterCfg.offsetRange = 1000
+	f := NewPiServoFilter(pi, piFilterCfg)
+
+	require.InEpsilon(t, -111288.406372, pi.lastFreq, 0.00001)
+	require.InEpsilon(t, -111288.406372, pi.drift, 0.00001)
+
+	freq, state := pi.Sample(1191, 1674148530671467104)
+	require.InEpsilon(t, -111288.406372, freq, 0.00001)
+	require.Equal(t, StateInit, state)
+
+	freq, state = pi.Sample(225, 1674148531671518924)
+	require.InEpsilon(t, -112254.463816, freq, 0.00001)
+	require.Equal(t, StateLocked, state)
+
+	freq, state = pi.Sample(-170, 1674148532671555647)
+	require.InEpsilon(t, -112424.463816, freq, 0.00001)
+	require.Equal(t, StateLocked, state)
+
+	freq, state = pi.Sample(68, 1674148533671484215)
+	require.InEpsilon(t, -112237.463816, freq, 0.00001)
+	require.Equal(t, StateLocked, state)
+	require.Equal(t, 0, pi.filter.skippedCount)
+
+	freq, state = pi.Sample(919000, 1674148534671684215)
+	require.InEpsilon(t, -112305.463816, freq, 0.00001)
+	require.InEpsilon(t, f.freqMean, freq, 0.00001)
+	require.Equal(t, StateFilter, state)
+	require.Equal(t, 1, f.skippedCount)
+
+	freq = pi.MeanFreq()
+	require.InEpsilon(t, -112305.463816, freq, 0.00001)
+
+	freq, state = pi.Sample(1921000, 1674148535771674067)
+	require.InEpsilon(t, -112305.463816, freq, 0.00001)
+	require.Equal(t, StateFilter, state)
+	require.Equal(t, 2, f.skippedCount)
+
+	freq, state = pi.Sample(1921000, 1674148535771674067)
+	require.InEpsilon(t, -112305.463816, freq, 0.00001)
+	require.Equal(t, f.freqMean, 0.0)
+	require.Equal(t, StateInit, state)
 }

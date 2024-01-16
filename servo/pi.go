@@ -60,6 +60,7 @@ type PiServoFilterCfg struct {
 	maxFreqChange     int64   // The amount of ppb the oscillator can drift per 1s
 	maxSkipCount      int     // The amount of samples to skip via filter
 	maxOffsetInit     int64   // The initial value above which sample is treated as outlier
+	offsetRange       int64   // The range of values within which we consider the sample as valid
 	offsetStdevFactor float64 // Standard deviation factor for offset stddev calculations
 	freqStdevFactor   float64 // Standard deviation factor for frequency stddev calculations
 	ringSize          int     // The amount of samples we have to collect to activate filter
@@ -73,16 +74,19 @@ type PiServoFilterSample struct {
 
 // PiServoFilter is a filter state structure
 type PiServoFilter struct {
-	offsetStdev   int64
-	offsetSigmaSq int64
-	offsetMean    int64
-	freqStdev     float64
-	freqSigmaSq   float64
-	freqMean      float64
-	skippedCount  int
-	samples       *ring.Ring
-	samplesCount  int
-	cfg           *PiServoFilterCfg
+	offsetStdev        int64
+	offsetSigmaSq      int64
+	offsetMean         int64
+	lastOffset         int64
+	freqStdev          float64
+	freqSigmaSq        float64
+	freqMean           float64
+	skippedCount       int
+	offsetSamples      *ring.Ring
+	offsetSamplesCount int
+	freqSamples        *ring.Ring
+	freqSamplesCount   int
+	cfg                *PiServoFilterCfg
 }
 
 // PiServo is an integral servo
@@ -252,7 +256,7 @@ func (f *PiServoFilter) isSpike(offset int64, lastCorrection time.Time) filterSt
 	if f.skippedCount >= f.cfg.maxSkipCount {
 		return filterReset
 	}
-	if f.samplesCount != f.cfg.ringSize {
+	if f.offsetSamplesCount != f.cfg.ringSize {
 		return filterNoSpike
 	}
 	maxOffsetLocked := int64(f.cfg.offsetStdevFactor * float64(f.offsetStdev))
@@ -267,16 +271,23 @@ func (f *PiServoFilter) isSpike(offset int64, lastCorrection time.Time) filterSt
 	return filterNoSpike
 }
 
+func inRange(value, min, max int64) bool {
+	if value >= min && value <= max {
+		return true
+	}
+	return false
+}
+
 // Sample to add a sample to filter and recalculate value
 func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
-	f.samples.Value = s
-	f.samples = f.samples.Next()
-	if f.samplesCount != f.cfg.ringSize {
-		f.samplesCount++
+	f.offsetSamples.Value = s
+	f.offsetSamples = f.offsetSamples.Next()
+	if f.offsetSamplesCount != f.cfg.ringSize {
+		f.offsetSamplesCount++
 	}
 	var offsetSigmaSq, offsetMean int64
-	var freqSigmaSq, freqMean float64
-	f.samples.Do(func(val any) {
+	var freqSigmaSq float64
+	f.offsetSamples.Do(func(val any) {
 		if val == nil {
 			return
 		}
@@ -284,18 +295,40 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 		offsetSigmaSq += v.offset * v.offset
 		offsetMean += v.offset
 		freqSigmaSq += v.freq * v.freq
-		freqMean += v.freq
 	})
-	f.offsetMean = offsetMean / int64(f.samplesCount)
-	f.offsetStdev = int64(math.Sqrt(float64(offsetSigmaSq) / float64(f.samplesCount)))
+	f.offsetMean = offsetMean / int64(f.offsetSamplesCount)
+	f.offsetStdev = int64(math.Sqrt(float64(offsetSigmaSq) / float64(f.offsetSamplesCount)))
+	f.freqStdev = math.Sqrt(freqSigmaSq / float64(f.offsetSamplesCount))
 
-	f.freqMean = freqMean / float64(f.samplesCount)
-	f.freqStdev = math.Sqrt(freqSigmaSq / float64(f.samplesCount))
+	/*
+	 * Mean frequency is heavily affected by the values used to compensate for offsets in case of
+	 * recovering after holdover state. If we have to go to holdover again while recovering from
+	 * previous holdover, we may apply bad frequency which will cause PHC going off pretty fast.
+	 * Let's calculate mean frequency only when we are sure that PHC is running more or less stable.
+	 */
+	if inRange(f.lastOffset, -f.cfg.offsetRange, f.cfg.offsetRange) && inRange(s.offset, -f.cfg.offsetRange, f.cfg.offsetRange) {
+		var freqMean float64
+		f.freqSamples.Value = s
+		f.freqSamples = f.freqSamples.Next()
+		if f.freqSamplesCount != f.cfg.ringSize {
+			f.freqSamplesCount++
+		}
+		f.freqSamples.Do(func(val any) {
+			if val == nil {
+				return
+			}
+			v := val.(*PiServoFilterSample)
+			freqMean += v.freq
+		})
+		f.freqMean = freqMean / float64(f.freqSamplesCount)
+	}
+	f.lastOffset = s.offset
 }
 
 // Reset - cleanup and restart filter
 func (f *PiServoFilter) Reset() {
-	f.samples = ring.New(f.cfg.ringSize)
+	f.offsetSamples = ring.New(f.cfg.ringSize)
+	f.freqSamples = ring.New(f.cfg.ringSize)
 	f.offsetStdev = 0
 	f.offsetSigmaSq = 0
 	f.offsetMean = 0
@@ -303,7 +336,13 @@ func (f *PiServoFilter) Reset() {
 	f.freqSigmaSq = 0.0
 	f.freqMean = 0.0
 	f.skippedCount = 0
-	f.samplesCount = 0
+	f.offsetSamplesCount = 0
+	f.freqSamplesCount = 0
+}
+
+// HasMeanFreq to check if filter has enough samples to calculate mean frequency
+func (f *PiServoFilter) HasMeanFreq() bool {
+	return f.freqSamplesCount != 0
 }
 
 // MeanFreq to return best calculated frequency
@@ -313,7 +352,7 @@ func (f *PiServoFilter) MeanFreq() float64 {
 
 // MeanFreq to return best calculated frequency from filter
 func (s *PiServo) MeanFreq() float64 {
-	if s.filter != nil {
+	if s.filter != nil && s.filter.HasMeanFreq() {
 		return s.filter.MeanFreq()
 	}
 	return s.lastFreq
@@ -362,6 +401,7 @@ func DefaultPiServoFilterCfg() *PiServoFilterCfg {
 		maxFreqChange:     40,
 		maxSkipCount:      15,
 		maxOffsetInit:     500000,
+		offsetRange:       100, // the range of the offset values that are considered "normal"
 		offsetStdevFactor: 3.0,
 		freqStdevFactor:   3.0,
 		ringSize:          30,
