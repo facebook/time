@@ -36,5 +36,8 @@ func bmca(msgs []*ptp.Announce, prios map[ptp.ClockIdentity]int) *ptp.Announce {
 			best = b
 		}
 	}
+	if best.AnnounceBody.GrandmasterClockQuality.ClockClass >= ptp.ClockClass52 {
+		return nil
+	}
 	return best
 }
