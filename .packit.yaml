@@ -10,7 +10,7 @@ upstream_package_name: time
 downstream_package_name: golang-github-facebook-time
 actions:
   # Fetch the specfile from Rawhide, remove the snapshot and drop any patches
-  post-upstream-clone: "bash -c \"curl -s https://src.fedoraproject.org/rpms/golang-github-facebook-time/raw/main/f/golang-github-facebook-time.spec | sed -e '/^%global commit/d' -e '/^Patch[0-9]/d' > golang-github-facebook-time.spec\""
+  post-upstream-clone: "bash -c \"curl -s https://src.fedoraproject.org/rpms/golang-github-facebook-time/raw/main/f/golang-github-facebook-time.spec | sed -e '/^%global date/d' -e '/^%global commit/d' -e '/^%global shortcommit/d' -e '/^Patch[0-9]/d' -e 's/^Version:.*/Version:        0/' -e '/^%undefine distprefix/d' > golang-github-facebook-time.spec\""
 
 srpm_build_deps:
   - bash
