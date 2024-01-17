@@ -71,6 +71,49 @@ func TestRun(t *testing.T) {
 	require.Equal(t, expected, dc)
 }
 
+func TestRunNilDatapoint(t *testing.T) {
+	// We don't really care about UTCOffset here - just to be the same result as in c4u.Run()
+	utcoffset, _ := utcoffset.Run()
+
+	expected := &server.DynamicConfig{
+		ClockClass:     ptp.ClockClass52,
+		ClockAccuracy:  254,
+		DrainInterval:  30 * time.Second,
+		MaxSubDuration: 1 * time.Hour,
+		MetricInterval: 1 * time.Minute,
+		MinSubInterval: 1 * time.Second,
+		UTCOffset:      utcoffset,
+	}
+
+	cfg, err := os.CreateTemp("", "c4u")
+	require.NoError(t, err)
+	defer os.Remove(cfg.Name())
+
+	c := &Config{
+		Path:         cfg.Name(),
+		Sample:       3,
+		Apply:        true,
+		AccuracyExpr: "1",
+		ClassExpr:    "p99(oscillatorclass)",
+	}
+
+	st := stats.NewJSONStats()
+	rb := clock.NewRingBuffer(2)
+	dp := &clock.DataPoint{
+		PHCOffset:            time.Microsecond,
+		OscillatorOffset:     time.Microsecond,
+		OscillatorClockClass: clock.ClockClassHoldover,
+	}
+	rb.Write(dp)
+	err = Run(c, rb, st)
+	require.NoError(t, err)
+
+	dc, err := server.ReadDynamicConfig(c.Path)
+	require.NoError(t, err)
+	// must make sure nil entry results in ClockClass = 52
+	require.Equal(t, expected, dc)
+}
+
 func TestEvaluateClockQuality(t *testing.T) {
 	c := &Config{
 		LockBaseLine:        ptp.ClockAccuracyMicrosecond1,
