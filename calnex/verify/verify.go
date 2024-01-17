@@ -33,10 +33,12 @@ func Verify(target string, insecureTLS bool, verify *VF, apply bool) error {
 			log.Warningf("%s check fail: %v", c.Name(), err)
 			if apply {
 				result, err := c.Remediate()
+				if result != "" {
+					log.Warningf(result)
+				}
 				if err != nil {
 					return err
 				}
-				log.Warningf(result)
 				break
 			}
 		} else {
