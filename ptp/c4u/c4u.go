@@ -104,17 +104,18 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 		log.Errorf("Failed to collect clock data: %v", err)
 		dataError = true
 	}
-	// To avoid stale data always continue to fill the ring buffer
-	// even with nil values
+
+	// If DP is missing - assume the worst
+	if dp == nil {
+		dp = &clock.DataPoint{
+			OscillatorClockClass: clock.ClockClassUncalibrated,
+		}
+	}
+
 	rb.Write(dp)
 	// stats
-	if dp != nil {
-		st.SetPHCOffsetNS(int64(dp.PHCOffset))
-		st.SetOscillatorOffsetNS(int64(dp.OscillatorOffset))
-	} else {
-		st.SetPHCOffsetNS(0)
-		st.SetOscillatorOffsetNS(0)
-	}
+	st.SetPHCOffsetNS(int64(dp.PHCOffset))
+	st.SetOscillatorOffsetNS(int64(dp.OscillatorOffset))
 
 	w, err := clock.Worst(rb.Data(), config.AccuracyExpr, config.ClassExpr)
 	if err != nil {
