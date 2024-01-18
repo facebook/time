@@ -35,3 +35,10 @@ func TestBmcaProperlyUsesLocalPriority(t *testing.T) {
 	selected := bmca([]*ptp.Announce{&best, &worse}, map[ptp.ClockIdentity]int{1: 1, 2: 2})
 	require.Equal(t, best, *selected)
 }
+
+func TestBmcaNoMasterForCalibrating(t *testing.T) {
+	best := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass52}}}
+	worse := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass13}}}
+	selected := bmca([]*ptp.Announce{&best, &worse}, map[ptp.ClockIdentity]int{1: 2, 2: 1})
+	require.Empty(t, selected)
+}
