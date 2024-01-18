@@ -265,6 +265,8 @@ func (f *PiServoFilter) isSpike(offset int64, lastCorrection time.Time) filterSt
 
 	maxOffsetLocked += int64(waitFactor)
 
+	log.Debugf("Filter.isSpike: offset stdev %d, wait factor %0.3f, max offset locked %d", f.offsetStdev, waitFactor, maxOffsetLocked)
+
 	if offset > max(maxOffsetLocked, f.cfg.minOffsetLocked) && f.skippedCount < f.cfg.maxSkipCount {
 		return filterSpike
 	}
@@ -280,25 +282,35 @@ func inRange(value, min, max int64) bool {
 
 // Sample to add a sample to filter and recalculate value
 func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
+	if f.offsetSamples.Value != nil {
+		v := f.offsetSamples.Value.(*PiServoFilterSample)
+		f.offsetMean -= v.offset / int64(f.offsetSamplesCount)
+	}
 	f.offsetSamples.Value = s
 	f.offsetSamples = f.offsetSamples.Next()
 	if f.offsetSamplesCount != f.cfg.ringSize {
 		f.offsetSamplesCount++
+		f.offsetMean = -1 * (s.offset / int64(f.offsetSamplesCount))
+		f.offsetSamples.Do(func(val any) {
+			if val == nil {
+				return
+			}
+			v := val.(*PiServoFilterSample)
+			f.offsetMean += v.offset / int64(f.offsetSamplesCount)
+		})
 	}
-	var offsetSigmaSq, offsetMean int64
-	var freqSigmaSq float64
+	f.offsetMean += s.offset / int64(f.offsetSamplesCount)
+	var offsetSigmaSq int64
 	f.offsetSamples.Do(func(val any) {
 		if val == nil {
 			return
 		}
 		v := val.(*PiServoFilterSample)
-		offsetSigmaSq += v.offset * v.offset
-		offsetMean += v.offset
-		freqSigmaSq += v.freq * v.freq
+		offsetSigmaSq += (v.offset - f.offsetMean) * (v.offset - f.offsetMean)
 	})
-	f.offsetMean = offsetMean / int64(f.offsetSamplesCount)
 	f.offsetStdev = int64(math.Sqrt(float64(offsetSigmaSq) / float64(f.offsetSamplesCount)))
-	f.freqStdev = math.Sqrt(freqSigmaSq / float64(f.offsetSamplesCount))
+
+	log.Debugf("Filter.Sample: offset stdev %d, offset mean %d, freq stdev %0.3f", f.offsetStdev, f.offsetMean, f.freqStdev)
 
 	/*
 	 * Mean frequency is heavily affected by the values used to compensate for offsets in case of
@@ -307,20 +319,34 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 	 * Let's calculate mean frequency only when we are sure that PHC is running more or less stable.
 	 */
 	if inRange(f.lastOffset, -f.cfg.offsetRange, f.cfg.offsetRange) && inRange(s.offset, -f.cfg.offsetRange, f.cfg.offsetRange) {
-		var freqMean float64
+		var freqSigmaSq float64
+		if f.freqSamples.Value != nil {
+			v := f.freqSamples.Value.(*PiServoFilterSample)
+			f.freqMean -= v.freq / float64(f.freqSamplesCount)
+		}
 		f.freqSamples.Value = s
 		f.freqSamples = f.freqSamples.Next()
 		if f.freqSamplesCount != f.cfg.ringSize {
 			f.freqSamplesCount++
+			f.freqMean = -1 * (s.freq / float64(f.freqSamplesCount))
+			f.freqSamples.Do(func(val any) {
+				if val == nil {
+					return
+				}
+				v := val.(*PiServoFilterSample)
+				f.freqMean += v.freq / float64(f.freqSamplesCount)
+			})
 		}
+		f.freqMean += s.freq / float64(f.freqSamplesCount)
 		f.freqSamples.Do(func(val any) {
 			if val == nil {
 				return
 			}
 			v := val.(*PiServoFilterSample)
-			freqMean += v.freq
+			freqSigmaSq += (v.freq - f.freqMean) * (v.freq - f.freqMean)
 		})
-		f.freqMean = freqMean / float64(f.freqSamplesCount)
+		f.freqStdev = math.Sqrt(freqSigmaSq / float64(f.offsetSamplesCount))
+
 	}
 	f.lastOffset = s.offset
 }
