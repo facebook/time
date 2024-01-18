@@ -30,7 +30,7 @@ var errNoTarget = errors.New("no target succeeds")
 // Export data from the device about specified channels to the specified output
 func Export(source string, insecureTLS bool, allData bool, channels []api.Channel, l Logger) (err error) {
 	var success bool
-	calnexAPI := api.NewAPI(source, insecureTLS, 4*time.Minute)
+	calnexAPI := api.NewAPI(source, insecureTLS, time.Minute)
 
 	if len(channels) == 0 {
 		channels, err = calnexAPI.FetchUsedChannels()
