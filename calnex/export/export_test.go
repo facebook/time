@@ -18,9 +18,11 @@ package export
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -90,6 +92,36 @@ func TestExportFail(t *testing.T) {
 	err := Export("localhost", true, true, []api.Channel{}, nil)
 	require.ErrorIs(t, errNoUsedChannels, err)
 
-	err = Export("localhost", true, true, []api.Channel{api.ChannelONE}, nil)
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		if strings.Contains(r.URL.Path, "getsettings") {
+			// FetchUsedChannels
+			fmt.Fprintln(w, "[measure]\nch0\\used=Yes\nch0\\installed=1\nch1\\used=No\nch1\\installed=0\nch9\\used=Yes\nch9\\installed=1\nch10\\used=No\nch10\\installed=1")
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI.Client = ts.Client()
+
+	err = Export(parsed.Host, true, true, []api.Channel{api.ChannelONE}, nil)
 	require.ErrorIs(t, errNoTarget, err)
+
+	err = Export("localhost", true, true, []api.Channel{api.ChannelONE}, nil)
+	require.Error(t, err)
+	require.True(t, isHardFailure(err), "error should be hard failure")
+}
+
+func TestIsHardFailure(t *testing.T) {
+	var err error
+	require.False(t, isHardFailure(err), "hardFailure should be false for nil error")
+
+	err = errNoTarget
+	require.False(t, isHardFailure(err), "irrelevant issue is not a hard failure")
+
+	err = &net.OpError{Op: "read", Net: "tcp", Source: &net.TCPAddr{}, Addr: &net.TCPAddr{}, Err: os.ErrDeadlineExceeded}
+	require.True(t, isHardFailure(err), "dial timeout is a hard failure")
 }

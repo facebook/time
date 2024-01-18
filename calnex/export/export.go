@@ -18,6 +18,7 @@ package export
 
 import (
 	"errors"
+	"net"
 	"time"
 
 	"github.com/facebook/time/calnex/api"
@@ -26,6 +27,17 @@ import (
 
 var errNoUsedChannels = errors.New("no used channels")
 var errNoTarget = errors.New("no target succeeds")
+
+// returns true if the error is a hard failure
+func isHardFailure(err error) bool {
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		if opErr.Timeout() || !opErr.Temporary() {
+			return true
+		}
+	}
+	return false
+}
 
 // Export data from the device about specified channels to the specified output
 func Export(source string, insecureTLS bool, allData bool, channels []api.Channel, l Logger) (err error) {
@@ -46,18 +58,27 @@ func Export(source string, insecureTLS bool, allData bool, channels []api.Channe
 		if err != nil {
 			log.Errorf("Failed to fetch protocol from %s, channel %s: %v", source, channel, err)
 			success = success || false
+			if isHardFailure(err) {
+				return err
+			}
 			continue
 		}
 		target, err := calnexAPI.FetchChannelTarget(channel, *probe)
 		if err != nil {
 			log.Errorf("Failed to fetch target from %s, channel %s: %v", source, channel, err)
 			success = success || false
+			if isHardFailure(err) {
+				return err
+			}
 			continue
 		}
 		csvLines, err := calnexAPI.FetchCsv(channel, allData)
 		if err != nil {
 			log.Errorf("Failed to fetch data from %s, channel %s: %v", source, channel, err)
 			success = success || false
+			if isHardFailure(err) {
+				return err
+			}
 			continue
 		}
 
