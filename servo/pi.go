@@ -346,7 +346,6 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 			freqSigmaSq += (v.freq - f.freqMean) * (v.freq - f.freqMean)
 		})
 		f.freqStdev = math.Sqrt(freqSigmaSq / float64(f.offsetSamplesCount))
-
 	}
 	f.lastOffset = s.offset
 }
