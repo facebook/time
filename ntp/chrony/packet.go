@@ -70,26 +70,28 @@ func (t PacketType) String() string {
 
 // request types. Only those we support, there are more
 const (
-	reqNSources    CommandType = 14
-	reqSourceData  CommandType = 15
-	reqTracking    CommandType = 33
-	reqSourceStats CommandType = 34
-	reqActivity    CommandType = 44
-	reqServerStats CommandType = 54
-	reqNTPData     CommandType = 57
+	reqNSources      CommandType = 14
+	reqSourceData    CommandType = 15
+	reqTracking      CommandType = 33
+	reqSourceStats   CommandType = 34
+	reqActivity      CommandType = 44
+	reqServerStats   CommandType = 54
+	reqNTPData       CommandType = 57
+	reqNTPSourceName CommandType = 65
 )
 
 // reply types
 const (
-	rpyNSources     ReplyType = 2
-	rpySourceData   ReplyType = 3
-	rpyTracking     ReplyType = 5
-	rpySourceStats  ReplyType = 6
-	rpyActivity     ReplyType = 12
-	rpyServerStats  ReplyType = 14
-	rpyNTPData      ReplyType = 16
-	rpyServerStats2 ReplyType = 22
-	rpyServerStats3 ReplyType = 24
+	rpyNSources      ReplyType = 2
+	rpySourceData    ReplyType = 3
+	rpyTracking      ReplyType = 5
+	rpySourceStats   ReplyType = 6
+	rpyActivity      ReplyType = 12
+	rpyServerStats   ReplyType = 14
+	rpyNTPData       ReplyType = 16
+	rpyNTPSourceName ReplyType = 19
+	rpyServerStats2  ReplyType = 22
+	rpyServerStats3  ReplyType = 24
 )
 
 // source modes
@@ -266,6 +268,15 @@ type RequestSourceData struct {
 // RequestNTPData - packet to request NTP data for peer IP.
 // As of now, it's only allowed by Chrony over unix socket connection.
 type RequestNTPData struct {
+	RequestHead
+	IPAddr ipAddr
+	EOR    int32
+	// we pass at max ipv6 addr - 16 bytes
+	data [maxDataLen - 16]uint8
+}
+
+// RequestNTPSourceName - packet to request source name for peer IP.
+type RequestNTPSourceName struct {
 	RequestHead
 	IPAddr ipAddr
 	EOR    int32
@@ -590,10 +601,31 @@ func newNTPData(r *replyNTPDataContent) *NTPData {
 	}
 }
 
-// ReplyNTPData is a what end user will get for of 'ntp data' response
+// ReplyNTPData is a what end user will get in 'ntp data' response
 type ReplyNTPData struct {
 	ReplyHead
 	NTPData
+}
+
+type replyNTPSourceNameContent struct {
+	Name [256]uint8
+}
+
+// NTPSourceName contains parsed version of 'sourcename' reply
+type NTPSourceName struct {
+	Name [256]uint8
+}
+
+func newNTPSourceName(r *replyNTPSourceNameContent) *NTPSourceName {
+	return &NTPSourceName{
+		Name: r.Name,
+	}
+}
+
+// ReplyNTPSourceName is a what end user will get in 'sourcename' response
+type ReplyNTPSourceName struct {
+	ReplyHead
+	NTPSourceName
 }
 
 // Activity contains parsed version of 'activity' reply
@@ -730,6 +762,19 @@ func NewNTPDataPacket(ip net.IP) *RequestNTPData {
 	}
 }
 
+// NewNTPSourceNamePacket creates new packet to request 'source name' information for given peer IP
+func NewNTPSourceNamePacket(ip net.IP) *RequestNTPSourceName {
+	return &RequestNTPSourceName{
+		RequestHead: RequestHead{
+			Version: protoVersionNumber,
+			PKTType: pktTypeCmdRequest,
+			Command: reqNTPSourceName,
+		},
+		IPAddr: *newIPAddr(ip),
+		data:   [maxDataLen - 16]uint8{},
+	}
+}
+
 // NewServerStatsPacket creates new packet to request 'serverstats' information
 func NewServerStatsPacket() *RequestServerStats {
 	return &RequestServerStats{
@@ -836,6 +881,16 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		return &ReplyNTPData{
 			ReplyHead: *head,
 			NTPData:   *newNTPData(data),
+		}, nil
+	case rpyNTPSourceName:
+		data := new(replyNTPSourceNameContent)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplyNTPSourceName{
+			ReplyHead:     *head,
+			NTPSourceName: *newNTPSourceName(data),
 		}, nil
 	case rpyServerStats2:
 		data := new(ServerStats2)
