@@ -32,6 +32,7 @@ var RootCmd = &cobra.Command{
 
 var verbose bool
 var server string
+var noDNS bool
 
 func init() {
 	RootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")

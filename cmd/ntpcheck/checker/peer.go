@@ -17,6 +17,7 @@ limitations under the License.
 package checker
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 
@@ -38,6 +39,7 @@ type Peer struct {
 	// from variables
 	SRCAdr     string
 	SRCPort    int
+	Hostname   string
 	DSTAdr     string
 	DSTPort    int
 	Leap       int
@@ -171,8 +173,8 @@ var chronyToPeerSelection = map[chrony.SourceStateType]uint8{
 	chrony.SourceStateOutlier:     control.SelOutlier,
 }
 
-// NewPeerFromChrony constructs Peer from two chrony packets
-func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.ReplyNTPData) (*Peer, error) {
+// NewPeerFromChrony constructs Peer from three chrony packets
+func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.ReplyNTPData, n *chrony.ReplyNTPSourceName) (*Peer, error) {
 	if s == nil {
 		return nil, fmt.Errorf("no ReplySourceData to create Peer")
 	}
@@ -225,6 +227,11 @@ func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.ReplyNTPData) (*Peer
 		peer.Delay = secToMS(p.PeerDelay)
 		peer.RootDisp = secToMS(p.RootDispersion)
 	}
+	if n != nil {
+		// this field is zero padded in chrony, so we need to trim it
+		peer.Hostname = string(bytes.TrimRight(n.Name[:], "\x00"))
+	}
+
 	// no need for sanity check as we are not parsing k=v pairs in case of chrony proto
 	return &peer, nil
 }

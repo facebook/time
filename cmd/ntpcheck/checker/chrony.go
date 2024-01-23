@@ -136,7 +136,20 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 				return nil, errors.Errorf("Got wrong 'ntpdata' response %+v", packet)
 			}
 		}
-		peer, err := NewPeerFromChrony(sourceData, ntpData)
+		// get peer sourcename using a unix socket
+		var ntpSourceName *chrony.ReplyNTPSourceName
+		if sourceData.Mode != chrony.SourceModeRef {
+			ntpSourceNameReq := chrony.NewNTPSourceNamePacket(sourceData.IPAddr)
+			packet, err = n.Client.Communicate(ntpSourceNameReq)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to get 'sourcename' response for source #%d", i)
+			}
+			ntpSourceName, ok = packet.(*chrony.ReplyNTPSourceName)
+			if !ok {
+				return nil, errors.Errorf("Got wrong 'sourcename' response %+v", packet)
+			}
+		}
+		peer, err := NewPeerFromChrony(sourceData, ntpData, ntpSourceName)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to create Peer structure from response packet for peer=%s", sourceData.IPAddr)
 		}

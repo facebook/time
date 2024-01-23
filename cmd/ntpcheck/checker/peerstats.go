@@ -26,7 +26,7 @@ import (
 )
 
 // NewNTPPeerStats constructs NTPStats from NTPCheckResult
-func NewNTPPeerStats(r *NTPCheckResult) (map[string]any, error) {
+func NewNTPPeerStats(r *NTPCheckResult, noDNS bool) (map[string]any, error) {
 	if r.SysVars == nil {
 		return nil, errors.New("no system variables to output stats")
 	}
@@ -40,10 +40,7 @@ func NewNTPPeerStats(r *NTPCheckResult) (map[string]any, error) {
 		if ip == nil || ip.IsUnspecified() {
 			continue
 		}
-		hostnames, err := net.LookupAddr(peer.SRCAdr)
-		if err != nil || len(hostnames) == 0 {
-			hostnames = []string{peer.SRCAdr}
-		}
+		hostnames := peerName(peer, noDNS)
 		// Replace "." and ":" for "_"
 		hostname := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSuffix(hostnames[0], "."), ".", "_"), ":", "_")
 
@@ -55,4 +52,18 @@ func NewNTPPeerStats(r *NTPCheckResult) (map[string]any, error) {
 	}
 
 	return result, nil
+}
+
+func peerName(p *Peer, noDNS bool) []string {
+	if noDNS {
+		if len(p.Hostname) != 0 {
+			return []string{p.Hostname}
+		}
+		return []string{p.SRCAdr}
+	}
+	hostnames, err := net.LookupAddr(p.SRCAdr)
+	if err != nil || len(hostnames) == 0 {
+		hostnames = []string{p.SRCAdr}
+	}
+	return hostnames
 }

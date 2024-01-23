@@ -110,10 +110,12 @@ func TestNewPeerFromChrony(t *testing.T) {
 	ntpData.Poll = 10
 	ntpData.RefID = 123456
 	ntpData.RefTime = time.Unix(1587738257, 0)
+	ntpSourceName := &chrony.ReplyNTPSourceName{}
 	tests := []struct {
 		name    string
 		s       *chrony.ReplySourceData
 		p       *chrony.ReplyNTPData
+		n       *chrony.ReplyNTPSourceName
 		want    *Peer
 		wantErr bool
 	}{
@@ -121,6 +123,7 @@ func TestNewPeerFromChrony(t *testing.T) {
 			name:    "no data",
 			s:       nil,
 			p:       nil,
+			n:       nil,
 			want:    nil,
 			wantErr: true,
 		},
@@ -147,6 +150,7 @@ func TestNewPeerFromChrony(t *testing.T) {
 			name: "full data",
 			s:    sourceData,
 			p:    ntpData,
+			n:    ntpSourceName,
 			want: &Peer{
 				Stratum:    3,
 				Offset:     -0,
@@ -162,13 +166,14 @@ func TestNewPeerFromChrony(t *testing.T) {
 				DSTAdr:     "<nil>",
 				RefID:      "0001E240",
 				RefTime:    ntpData.RefTime.String(),
+				Hostname:   "",
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewPeerFromChrony(tt.s, tt.p)
+			got, err := NewPeerFromChrony(tt.s, tt.p, tt.n)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewPeerFromChrony() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -25,8 +25,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func printPeerStats(r *checker.NTPCheckResult) error {
-	output, err := checker.NewNTPPeerStats(r)
+func printPeerStats(r *checker.NTPCheckResult, noDNS bool) error {
+	output, err := checker.NewNTPPeerStats(r, noDNS)
 	if err != nil {
 		return err
 	}
@@ -41,6 +41,7 @@ func printPeerStats(r *checker.NTPCheckResult) error {
 func init() {
 	RootCmd.AddCommand(peerstatsCmd)
 	peerstatsCmd.Flags().StringVarP(&server, "server", "S", "", "server to connect to")
+	peerstatsCmd.Flags().BoolVarP(&noDNS, "no-resolving", "n", true, "disable resolving of NTP peer addresses to hostnames")
 }
 
 var peerstatsCmd = &cobra.Command{
@@ -53,7 +54,7 @@ var peerstatsCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = printPeerStats(result)
+		err = printPeerStats(result, noDNS)
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -37,7 +37,8 @@ func TestNTPPeerStatsNoSysVars(t *testing.T) {
 			},
 		},
 	}
-	_, err := NewNTPPeerStats(r)
+	noDNS := false
+	_, err := NewNTPPeerStats(r, noDNS)
 	require.EqualError(t, err, "no system variables to output stats")
 }
 
@@ -47,7 +48,8 @@ func TestNTPPeerStatsNoPeers(t *testing.T) {
 		SysVars: &s,
 		Peers:   map[uint16]*Peer{},
 	}
-	peerStats, err := NewNTPPeerStats(r)
+	noDNS := true
+	peerStats, err := NewNTPPeerStats(r, noDNS)
 	require.NoError(t, err)
 	want := map[string]any{}
 	require.Equal(t, want, peerStats)
@@ -84,7 +86,8 @@ func TestNTPPeerStatsWithSysPeer(t *testing.T) {
 			},
 		},
 	}
-	peerStats, err := NewNTPPeerStats(r)
+	noDNS := true
+	peerStats, err := NewNTPPeerStats(r, noDNS)
 	require.NoError(t, err)
 	want := map[string]any{
 		"ntp.peers.192_168_0_2.delay":   2.01,
