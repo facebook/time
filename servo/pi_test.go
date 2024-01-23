@@ -114,25 +114,26 @@ func TestPiServoFilterSample(t *testing.T) {
 	require.Equal(t, StateLocked, state)
 	require.Equal(t, 0, pi.filter.skippedCount)
 
-	freq, state = pi.Sample(919000, 1674148534671684215)
+	spike := pi.IsSpike(919000)
+	require.Equal(t, true, spike)
+	freq = pi.MeanFreq()
+	fmt.Println(freq)
 	require.InEpsilon(t, -111441.130482, freq, 0.00001)
 	require.InEpsilon(t, f.freqMean, freq, 0.00001)
-	require.Equal(t, StateFilter, state)
 	require.Equal(t, 1, f.skippedCount)
 
-	freq, state = pi.Sample(9190000, 1674148535671684215)
+	require.True(t, pi.IsSpike(919000))
+	freq = pi.MeanFreq()
+	fmt.Println(freq)
 	require.InEpsilon(t, -111441.130482, freq, 0.00001)
 	require.InEpsilon(t, f.freqMean, freq, 0.00001)
-	require.Equal(t, StateFilter, state)
 	require.Equal(t, 2, f.skippedCount)
 
+	require.True(t, pi.IsSpike(921000))
 	freq = pi.MeanFreq()
+	fmt.Println(freq)
 	require.InEpsilon(t, -111441.130482, freq, 0.00001)
-
-	freq, state = pi.Sample(921000, 1674148535771674067)
-	require.InEpsilon(t, -111441.130482, freq, 0.00001)
-	require.Equal(t, f.freqMean, 0.0)
-	require.Equal(t, StateInit, state)
+	require.Equal(t, 0, pi.count)
 }
 
 func TestPiServoNoFilterSample(t *testing.T) {
@@ -146,26 +147,33 @@ func TestPiServoNoFilterSample(t *testing.T) {
 	require.InEpsilon(t, -111288.406372, pi.lastFreq, 0.00001)
 	require.InEpsilon(t, -111288.406372, pi.drift, 0.00001)
 
+	require.False(t, pi.IsSpike(1191))
+
 	freq, state := pi.Sample(1191, 1674148530671467104)
 	require.InEpsilon(t, -111288.406372, freq, 0.00001)
 	require.Equal(t, StateInit, state)
 
+	require.False(t, pi.IsSpike(225))
 	freq, state = pi.Sample(225, 1674148531671518924)
 	require.InEpsilon(t, -112254.463816, freq, 0.00001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(1170))
 	freq, state = pi.Sample(1170, 1674148532671555647)
 	require.InEpsilon(t, -111084.463816, freq, 0.00001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(919))
 	freq, state = pi.Sample(919, 1674148533671484215)
 	require.InEpsilon(t, -110984.463816, freq, 0.00001)
 	require.Equal(t, StateLocked, state)
 	require.Equal(t, 0, pi.filter.skippedCount)
 
+	require.False(t, pi.IsSpike(919000))
 	_, state = pi.Sample(919000, 1674148534671684215)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(909000))
 	_, state = pi.Sample(9090000, 1674148535671684215)
 	require.Equal(t, StateLocked, state)
 	require.Equal(t, 0, f.skippedCount)
@@ -173,7 +181,7 @@ func TestPiServoNoFilterSample(t *testing.T) {
 
 func TestPiServoSetFreq(t *testing.T) {
 	pi := NewPiServo(DefaultServoConfig(), DefaultPiServoCfg(), -111288.406372)
-	pi.SetLastFreq(11111.0025)
+	pi.InitLastFreq(11111.0025)
 
 	require.InEpsilon(t, 11111.0025, pi.lastFreq, 0.00001)
 	require.InEpsilon(t, 11111.0025, pi.drift, 0.00001)
@@ -212,27 +220,23 @@ func TestPiServoFilterMeanFreq(t *testing.T) {
 	require.Equal(t, 0, pi.filter.skippedCount)
 	fmt.Printf("freq: %f, meanFreq %f\n", freq, pi.MeanFreq())
 
-	freq, state = pi.Sample(919000, 1674148534671684215)
+	require.True(t, pi.IsSpike(919000))
+	freq = pi.MeanFreq()
+	//freq, state = pi.Sample(919000, 1674148534671684215)
 	require.InEpsilon(t, -112305.463816, freq, 0.00001)
-	require.InEpsilon(t, f.freqMean, freq, 0.00001)
-	require.Equal(t, StateFilter, state)
 	require.Equal(t, 1, f.skippedCount)
 	fmt.Printf("freq: %f, meanFreq %f\n", freq, pi.MeanFreq())
 
+	require.True(t, pi.IsSpike(1921000))
 	freq = pi.MeanFreq()
 	require.InEpsilon(t, -112305.463816, freq, 0.00001)
-	fmt.Printf("freq: %f, meanFreq %f\n", freq, pi.MeanFreq())
-
-	freq, state = pi.Sample(1921000, 1674148535771674067)
-	require.InEpsilon(t, -112305.463816, freq, 0.00001)
-	require.Equal(t, StateFilter, state)
 	require.Equal(t, 2, f.skippedCount)
 	fmt.Printf("freq: %f, meanFreq %f\n", freq, pi.MeanFreq())
 
-	freq, state = pi.Sample(1921000, 1674148535771674067)
+	require.True(t, pi.IsSpike(1921000))
+	freq = pi.MeanFreq()
 	require.InEpsilon(t, -112305.463816, freq, 0.00001)
 	require.Equal(t, f.freqMean, 0.0)
-	require.Equal(t, StateInit, state)
 	fmt.Printf("freq: %f, meanFreq %f\n", freq, pi.MeanFreq())
 }
 
@@ -301,231 +305,291 @@ func TestPiServoFilterSample2(t *testing.T) {
 	piFilterCfg.maxSkipCount = 15
 	_ = NewPiServoFilter(pi, piFilterCfg)
 
-	freq, state := pi.Sample(-1, 1705509028124002000)
+	require.False(t, pi.IsSpike(-1))
 
+	freq, state := pi.Sample(-1, 1705509028124002000)
 	require.InEpsilon(t, -23186.0, freq, 0.00001)
 	require.Equal(t, StateInit, state)
 
+	require.False(t, pi.IsSpike(-13))
 	freq, state = pi.Sample(-13, 1705509029124866000)
 	require.InEpsilon(t, -23198.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(2))
 	freq, state = pi.Sample(2, 1705509030124943000)
 	require.InEpsilon(t, -23187.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-28))
 	freq, state = pi.Sample(-28, 1705509031126138000)
 	require.InEpsilon(t, -23216.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-7))
 	freq, state = pi.Sample(-7, 1705509032126981000)
 	require.InEpsilon(t, -23204.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(14))
 	freq, state = pi.Sample(14, 1705509033128078000)
 	require.InEpsilon(t, -23185.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(5))
 	freq, state = pi.Sample(5, 1705509034128960000)
 	require.InEpsilon(t, -23190.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-14))
 	freq, state = pi.Sample(-14, 1705509035129991000)
 	require.InEpsilon(t, -23207.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-1))
 	freq, state = pi.Sample(-1, 1705509036130273000)
 	require.InEpsilon(t, -23198.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(23))
 	freq, state = pi.Sample(23, 1705509037131229000)
 	require.InEpsilon(t, -23175.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-17))
 	freq, state = pi.Sample(-17, 1705509038132353000)
 	require.InEpsilon(t, -23208.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(1))
 	freq, state = pi.Sample(1, 1705509039133252000)
 	require.InEpsilon(t, -23195.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-24))
 	freq, state = pi.Sample(-24, 1705509040134036000)
 	require.InEpsilon(t, -23220.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(3))
 	freq, state = pi.Sample(3, 1705509041134984000)
 	require.InEpsilon(t, -23200.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(34))
 	freq, state = pi.Sample(34, 1705509042136087000)
 	require.InEpsilon(t, -23168.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(1))
 	freq, state = pi.Sample(1, 1705509043137061000)
 	require.InEpsilon(t, -23191.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(16))
 	freq, state = pi.Sample(16, 1705509044137951000)
 	require.InEpsilon(t, -23175.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-9))
 	freq, state = pi.Sample(-9, 1705509045138549000)
 	require.InEpsilon(t, -23196.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-10))
 	freq, state = pi.Sample(-10, 1705509046138969000)
 	require.InEpsilon(t, -23199.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(15))
 	freq, state = pi.Sample(15, 1705509047140065000)
 	require.InEpsilon(t, -23177.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(1))
 	freq, state = pi.Sample(1, 1705509048141196000)
 	require.InEpsilon(t, -23187.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-24))
 	freq, state = pi.Sample(-24, 1705509049141153000)
 	require.InEpsilon(t, -23212.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-6))
 	freq, state = pi.Sample(-6, 1705509050142218000)
 	require.InEpsilon(t, -23201.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-3))
 	freq, state = pi.Sample(-3, 1705509051143105000)
 	require.InEpsilon(t, -23200.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(21))
 	freq, state = pi.Sample(21, 1705509052144188000)
 	require.InEpsilon(t, -23176.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(11))
 	freq, state = pi.Sample(11, 1705509053145134000)
 	require.InEpsilon(t, -23180.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-15))
 	freq, state = pi.Sample(-15, 1705509054145250000)
 	require.InEpsilon(t, -23203.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-6))
 	freq, state = pi.Sample(-6, 1705509055146215000)
 	require.InEpsilon(t, -23198.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-3))
 	freq, state = pi.Sample(-3, 1705509056147176000)
 	require.InEpsilon(t, -23197.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(18))
 	freq, state = pi.Sample(18, 1705509057147938000)
 	require.InEpsilon(t, -23177.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(14))
 	freq, state = pi.Sample(14, 1705509058148857000)
 	require.InEpsilon(t, -23176.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-3))
 	freq, state = pi.Sample(-3, 1705509059149155000)
 	require.InEpsilon(t, -23188.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-27))
 	freq, state = pi.Sample(-27, 1705509060150073000)
 	require.InEpsilon(t, -23213.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-11))
 	freq, state = pi.Sample(-11, 1705509061151095000)
 	require.InEpsilon(t, -23205.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-13))
 	freq, state = pi.Sample(-13, 1705509062152144000)
 	require.InEpsilon(t, -23211.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(37))
 	freq, state = pi.Sample(37, 1705509063152956000)
 	require.InEpsilon(t, -23165.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(25))
 	freq, state = pi.Sample(25, 1705509064153914000)
 	require.InEpsilon(t, -23166.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-10))
 	freq, state = pi.Sample(-10, 1705509065155252000)
 	require.InEpsilon(t, -23193.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-18))
 	freq, state = pi.Sample(-18, 1705509066156531000)
 	require.InEpsilon(t, -23204.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-22))
 	freq, state = pi.Sample(-22, 1705509067157337000)
 	require.InEpsilon(t, -23213.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(17))
 	freq, state = pi.Sample(17, 1705509068157934000)
 	require.InEpsilon(t, -23181.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(3))
 	freq, state = pi.Sample(3, 1705509069158955000)
 	require.InEpsilon(t, -23190.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-26))
 	freq, state = pi.Sample(-26, 1705509070160033000)
 	require.InEpsilon(t, -23218.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(11))
 	freq, state = pi.Sample(11, 1705509071161056000)
 	require.InEpsilon(t, -23189.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-20))
 	freq, state = pi.Sample(-20, 1705509072161972000)
 	require.InEpsilon(t, -23217.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(22))
 	freq, state = pi.Sample(22, 1705509073163181000)
 	require.InEpsilon(t, -23181.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-8))
 	freq, state = pi.Sample(-8, 1705509074163961000)
 	require.InEpsilon(t, -23204.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(0))
 	freq, state = pi.Sample(0, 1705509075165209000)
 	require.InEpsilon(t, -23198.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-27))
 	freq, state = pi.Sample(-27, 1705509076166091000)
 	require.InEpsilon(t, -23225.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-3))
 	freq, state = pi.Sample(-3, 1705509077167153000)
 	require.InEpsilon(t, -23209.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(23))
 	freq, state = pi.Sample(23, 1705509078168353000)
 	require.InEpsilon(t, -23184.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-5))
 	freq, state = pi.Sample(-5, 1705509079169090000)
 	require.InEpsilon(t, -23205.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-5))
 	freq, state = pi.Sample(-5, 1705509080170178000)
 	require.InEpsilon(t, -23207.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
+	require.False(t, pi.IsSpike(-23))
 	freq, state = pi.Sample(-23, 1705509081170962000)
 	require.InEpsilon(t, -23226.000, freq, 0.001)
 	require.Equal(t, StateLocked, state)
 
-	freq, state = pi.Sample(175101, 1705509082172252000)
+	require.True(t, pi.IsSpike(175101))
+	/* pi.Sample should not be called after IsSpike is true
+	   freq, state = pi.Sample(175101, 1705509082172252000)
+	*/
+	freq = pi.MeanFreq()
 	require.InEpsilon(t, -23197.000, freq, 0.001)
-	require.Equal(t, StateFilter, state)
 
 	/*
 		I0117 08:31:23.173349 161053 sptp.go:395] offset      96571 s2 freq  +73361 path delay       4495
 	*/
-	freq, state = pi.Sample(96571, 1705509083173349000)
+	require.True(t, pi.IsSpike(96571))
+	/* pi.Sample should not be called after IsSpike is true
+	   freq, state = pi.Sample(96571, 1705509083173349000)
+	*/
+	freq = pi.MeanFreq()
 	require.InEpsilon(t, -23197.000, freq, 0.001)
-	require.Equal(t, StateFilter, state)
 }

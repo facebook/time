@@ -112,8 +112,13 @@ func max(a int64, b int64) int64 {
 	return b
 }
 
-// SetLastFreq function to reset last freq
+// SetLastFreq function to set last freq
 func (s *PiServo) SetLastFreq(freq float64) {
+	s.lastFreq = freq
+}
+
+// InitLastFreq function to reset last freq and drift
+func (s *PiServo) InitLastFreq(freq float64) {
 	s.lastFreq = freq
 	s.drift = freq
 }
@@ -123,11 +128,27 @@ func (s *PiServo) SetMaxFreq(freq float64) {
 	s.maxFreq = freq
 }
 
-func (s *PiServo) isSpike(offset int64, lastCorrection time.Time) filterState {
-	if s.filter == nil {
-		return filterNoSpike
+// IsSpike function to check if offset is considered as spike
+func (s *PiServo) IsSpike(offset int64) bool {
+	if s.filter == nil || s.count < 2 {
+		return false
 	}
-	return s.filter.isSpike(offset, lastCorrection)
+	fState := s.filter.isSpike(offset, s.lastCorrectionTime)
+	if fState == filterSpike {
+		s.lastFreq = s.filter.freqMean
+		s.filter.skippedCount++ // it's safe because fState can only be filterNoSpike without filter
+		return true
+	}
+	// if there were too many outstanding offsets, reset the filter and the servo
+	if fState == filterReset {
+		s.lastFreq = s.filter.freqMean
+		s.count = 0
+		s.drift = 0
+		s.filter.Reset() // it's safe because fState can only be filterNoSpike without filter
+		log.Warning("servo was reset")
+		return true
+	}
+	return false
 }
 
 // Sample function to calculate frequency based on the offset
@@ -201,22 +222,6 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, State) {
 			}
 			break
 		}
-		fState := s.isSpike(offset, s.lastCorrectionTime)
-		if fState == filterSpike {
-			ppb = s.MeanFreq()
-			state = StateFilter
-			s.filter.skippedCount++ // it's safe because fState can only be filterNoSpike without filter
-			break
-		}
-		// if there were too many outstanding offsets, reset the filter and the servo
-		if fState == filterReset {
-			s.count = 0
-			s.drift = 0
-			s.filter.Reset() // it's safe because fState can only be filterNoSpike without filter
-			state = StateInit
-			log.Warning("servo was reset")
-			break
-		}
 		state = StateLocked
 		kiTerm = s.ki * float64(offset)
 		ppb = s.kp*float64(offset) + s.drift + kiTerm
@@ -248,6 +253,18 @@ func (s *PiServo) SyncInterval(interval float64) {
 	s.ki = s.cfg.PiKiScale * math.Pow(interval, s.cfg.PiKiExponent)
 	if s.ki > s.cfg.PiKiNormMax/interval {
 		s.ki = s.cfg.PiKiNormMax / interval
+	}
+}
+
+// GetState returns current state of PiServo
+func (s *PiServo) GetState() State {
+	switch s.count {
+	case 0:
+		return StateInit
+	case 1:
+		return StateJump
+	default:
+		return StateLocked
 	}
 }
 

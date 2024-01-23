@@ -101,3 +101,43 @@ func (mr *MockServoMockRecorder) MeanFreq() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MeanFreq", reflect.TypeOf((*MockServo)(nil).MeanFreq))
 }
+
+// IsSpike mocks base method
+func (m *MockServo) IsSpike(arg0 int64) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsSpike", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsSpike indicates an expected call of IsSpike
+func (mr *MockServoMockRecorder) IsSpike(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSpike", reflect.TypeOf((*MockServo)(nil).IsSpike), arg0)
+}
+
+// SetLastFreq mocks base method
+func (m *MockServo) SetLastFreq(arg0 float64) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetLastFreq", arg0)
+}
+
+// SetLastFreq indicates an expected call of SetLastFreq
+func (mr *MockServoMockRecorder) SetLastFreq(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLastFreq", reflect.TypeOf((*MockServo)(nil).IsSpike), arg0)
+}
+
+// GetState mocks base method
+func (m *MockServo) GetState() servo.State {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetState")
+	ret0, _ := ret[0].(servo.State)
+	return ret0
+}
+
+// GetState indicates an expected call of GetState
+func (mr *MockServoMockRecorder) GetState() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetState", reflect.TypeOf((*MockServo)(nil).GetState))
+}

@@ -40,7 +40,10 @@ type Servo interface {
 	SyncInterval(float64)
 	Sample(offset int64, localTs uint64) (float64, servo.State)
 	SetMaxFreq(float64)
+	SetLastFreq(float64)
 	MeanFreq() float64
+	IsSpike(offset int64) bool
+	GetState() servo.State
 }
 
 // SPTP is a Simple Unicast PTP client
@@ -314,12 +317,13 @@ func (p *SPTP) handleExchangeError(addr string, err error) {
 	}
 }
 
-func (p *SPTP) setMeanFreq() (float64, servo.State) {
+func (p *SPTP) setMeanFreq() float64 {
 	freqAdj := p.pi.MeanFreq()
+	p.pi.SetLastFreq(freqAdj)
 	if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
 		log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
 	}
-	return freqAdj, servo.StateHoldover
+	return freqAdj
 }
 
 func (p *SPTP) processResults(results map[string]*RunResult) {
@@ -375,8 +379,8 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	if best == nil {
 		log.Warningf("no Best Master selected")
 		p.bestGM = ""
-		freqAdj, state := p.setMeanFreq()
-		log.Infof("offset Unknown s%d freq %+7.0f path delay Unknown", state, freqAdj)
+		freqAdj := p.setMeanFreq()
+		log.Infof("offset Unknown s%d freq %+7.0f path delay Unknown", servo.StateHoldover, freqAdj)
 		return
 	}
 	bestAddr := idsToClients[best.GrandmasterIdentity]
@@ -385,23 +389,32 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 		log.Warningf("new best master selected: %q (%s)", bestAddr, bm.Announce.GrandmasterIdentity)
 		p.bestGM = bestAddr
 	}
+	bmOffset := int64(bm.Offset)
+	bmDelay := bm.Delay.Nanoseconds()
 	log.Debugf("best master %q (%s)", bestAddr, bm.Announce.GrandmasterIdentity)
-	if isBadTick {
-		freqAdj, state := p.setMeanFreq()
-		log.Infof("offset %10d s%d freq %+7.0f path delay %10d", bm.Offset.Nanoseconds(), state, freqAdj, bm.Delay.Nanoseconds())
-		return
+	isSpike := p.pi.IsSpike(bmOffset)
+	var state servo.State
+	var freqAdj float64
+	if isSpike {
+		freqAdj = p.setMeanFreq()
+		if p.pi.GetState() == servo.StateLocked {
+			state = servo.StateFilter
+		} else {
+			state = servo.StateInit
+		}
+		results[bestAddr].Measurement = nil
+	} else if isBadTick {
+		freqAdj = p.setMeanFreq()
+		state = servo.StateHoldover
+	} else {
+		freqAdj, state = p.pi.Sample(bmOffset, uint64(bm.Timestamp.UnixNano()))
 	}
-	freqAdj, state := p.pi.Sample(int64(bm.Offset), uint64(bm.Timestamp.UnixNano()))
-	log.Infof("offset %10d s%d freq %+7.0f path delay %10d", bm.Offset.Nanoseconds(), state, freqAdj, bm.Delay.Nanoseconds())
+	log.Infof("offset %10d s%d freq %+7.0f path delay %10d", bmOffset, state, freqAdj, bmDelay)
 	switch state {
 	case servo.StateJump:
 		if err := p.clock.Step(-1 * bm.Offset); err != nil {
 			log.Errorf("failed to step freq by %v: %v", -1*bm.Offset, err)
 		}
-	case servo.StateFilter:
-		// Filtered values void an entire measurement
-		log.Warningf("Ignoring measurement with filtered offset %d", bm.Offset.Nanoseconds())
-		results[bestAddr].Measurement = nil
 	case servo.StateLocked:
 		if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
 			log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
