@@ -283,7 +283,10 @@ func (f *PiServoFilter) isSpike(offset int64, lastCorrection time.Time) filterSt
 	maxOffsetLocked += int64(waitFactor)
 
 	log.Debugf("Filter.isSpike: offset stdev %d, wait factor %0.3f, max offset locked %d", f.offsetStdev, waitFactor, maxOffsetLocked)
-
+	// offset can be negative, we have to check absolute value
+	if offset < 0 {
+		offset *= -1
+	}
 	if offset > max(maxOffsetLocked, f.cfg.minOffsetLocked) && f.skippedCount < f.cfg.maxSkipCount {
 		return filterSpike
 	}
