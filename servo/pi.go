@@ -329,8 +329,9 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 		offsetSigmaSq += (v.offset - f.offsetMean) * (v.offset - f.offsetMean)
 	})
 	f.offsetStdev = int64(math.Sqrt(float64(offsetSigmaSq) / float64(f.offsetSamplesCount)))
+	f.lastOffset = s.offset
 
-	log.Debugf("Filter.Sample: offset stdev %d, offset mean %d, freq stdev %0.3f", f.offsetStdev, f.offsetMean, f.freqStdev)
+	log.Infof("Filter.Sample: offset stdev %d, offset mean %d, freq stdev %0.3f", f.offsetStdev, f.offsetMean, f.freqStdev)
 
 	/*
 	 * Mean frequency is heavily affected by the values used to compensate for offsets in case of
@@ -341,23 +342,33 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 	if inRange(f.lastOffset, -f.cfg.offsetRange, f.cfg.offsetRange) && inRange(s.offset, -f.cfg.offsetRange, f.cfg.offsetRange) {
 		var freqSigmaSq float64
 		if f.freqSamples.Value != nil {
+			// this means that ring buffer is fully filled
 			v := f.freqSamples.Value.(*PiServoFilterSample)
 			f.freqMean -= v.freq / float64(f.freqSamplesCount)
-		}
-		f.freqSamples.Value = s
-		f.freqSamples = f.freqSamples.Next()
-		if f.freqSamplesCount != f.cfg.ringSize {
+			f.freqSamples.Value = s
+			f.freqSamples = f.freqSamples.Next()
+			f.freqMean += s.freq / float64(f.freqSamplesCount)
+			log.Infof("Filter.Sample: ring is full, new freq %0.3f, new freq mean %0.3f", s.freq, f.freqMean)
+		} else {
+			// the ring wasn't full yet
+			log.Infof("Filter.Sample: ring is not full, new freq %0.3f, samples count %d", s.freq, f.freqSamplesCount)
+			f.freqSamples.Value = s
+			f.freqSamples = f.freqSamples.Next()
 			f.freqSamplesCount++
-			f.freqMean = -1 * (s.freq / float64(f.freqSamplesCount))
-			f.freqSamples.Do(func(val any) {
-				if val == nil {
-					return
-				}
-				v := val.(*PiServoFilterSample)
-				f.freqMean += v.freq / float64(f.freqSamplesCount)
-			})
+			if f.freqSamples.Value != nil {
+				log.Infof("Filter.Sample: ring is full NOW, new freq %0.3f, samples count %d", s.freq, f.freqSamplesCount)
+				// we have to calculate mean frequency here for the first time
+				f.freqMean = float64(0)
+				f.freqSamples.Do(func(val any) {
+					if val == nil {
+						return
+					}
+					v := val.(*PiServoFilterSample)
+					f.freqMean += v.freq / float64(f.freqSamplesCount)
+				})
+				log.Infof("Filter.Sample: ring is full NOW, mean freq %0.3f, samples count %d", f.freqMean, f.freqSamplesCount)
+			}
 		}
-		f.freqMean += s.freq / float64(f.freqSamplesCount)
 		f.freqSamples.Do(func(val any) {
 			if val == nil {
 				return
@@ -367,7 +378,6 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 		})
 		f.freqStdev = math.Sqrt(freqSigmaSq / float64(f.offsetSamplesCount))
 	}
-	f.lastOffset = s.offset
 }
 
 // Reset - cleanup and restart filter
@@ -379,15 +389,11 @@ func (f *PiServoFilter) Reset() {
 	f.offsetMean = 0
 	f.freqStdev = 0.0
 	f.freqSigmaSq = 0.0
-	f.freqMean = 0.0
 	f.skippedCount = 0
 	f.offsetSamplesCount = 0
 	f.freqSamplesCount = 0
-}
-
-// HasMeanFreq to check if filter has enough samples to calculate mean frequency
-func (f *PiServoFilter) HasMeanFreq() bool {
-	return f.freqSamplesCount != 0
+	// Does not reset freqMean (mean frequency). It's either good enough from previous iteration
+	// or it's last used mean frequency read during restart
 }
 
 // MeanFreq to return best calculated frequency
@@ -397,7 +403,7 @@ func (f *PiServoFilter) MeanFreq() float64 {
 
 // MeanFreq to return best calculated frequency from filter
 func (s *PiServo) MeanFreq() float64 {
-	if s.filter != nil && s.filter.HasMeanFreq() {
+	if s.filter != nil {
 		return s.filter.MeanFreq()
 	}
 	return s.lastFreq
@@ -421,6 +427,7 @@ func NewPiServoFilter(s *PiServo, cfg *PiServoFilterCfg) *PiServoFilter {
 		cfg: cfg,
 	}
 	filter.Reset()
+	filter.freqMean = s.lastFreq
 	s.filter = filter
 	return filter
 }

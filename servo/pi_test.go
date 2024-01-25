@@ -198,6 +198,7 @@ func TestPiServoFilterMeanFreq(t *testing.T) {
 
 	require.InEpsilon(t, -111288.406372, pi.lastFreq, 0.00001)
 	require.InEpsilon(t, -111288.406372, pi.drift, 0.00001)
+	require.InEpsilon(t, -111288.406372, pi.filter.freqMean, 0.00001)
 
 	freq, state := pi.Sample(1191, 1674148530671467104)
 	require.InEpsilon(t, -111288.406372, freq, 0.00001)
@@ -236,7 +237,7 @@ func TestPiServoFilterMeanFreq(t *testing.T) {
 	require.True(t, pi.IsSpike(1921000))
 	freq = pi.MeanFreq()
 	require.InEpsilon(t, -112305.463816, freq, 0.00001)
-	require.Equal(t, f.freqMean, 0.0)
+	require.Equal(t, f.freqMean, freq)
 	fmt.Printf("freq: %f, meanFreq %f\n", freq, pi.MeanFreq())
 }
 
