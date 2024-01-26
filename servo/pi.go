@@ -348,15 +348,12 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 			f.freqSamples.Value = s
 			f.freqSamples = f.freqSamples.Next()
 			f.freqMean += s.freq / float64(f.freqSamplesCount)
-			log.Infof("Filter.Sample: ring is full, new freq %0.3f, new freq mean %0.3f", s.freq, f.freqMean)
 		} else {
 			// the ring wasn't full yet
-			log.Infof("Filter.Sample: ring is not full, new freq %0.3f, samples count %d", s.freq, f.freqSamplesCount)
 			f.freqSamples.Value = s
 			f.freqSamples = f.freqSamples.Next()
 			f.freqSamplesCount++
 			if f.freqSamples.Value != nil {
-				log.Infof("Filter.Sample: ring is full NOW, new freq %0.3f, samples count %d", s.freq, f.freqSamplesCount)
 				// we have to calculate mean frequency here for the first time
 				f.freqMean = float64(0)
 				f.freqSamples.Do(func(val any) {
@@ -366,7 +363,6 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 					v := val.(*PiServoFilterSample)
 					f.freqMean += v.freq / float64(f.freqSamplesCount)
 				})
-				log.Infof("Filter.Sample: ring is full NOW, mean freq %0.3f, samples count %d", f.freqMean, f.freqSamplesCount)
 			}
 		}
 		f.freqSamples.Do(func(val any) {
