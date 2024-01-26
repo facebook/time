@@ -101,7 +101,7 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 	dataError := false
 	dp, err := clock.Run()
 	if err != nil {
-		log.Errorf("Failed to collect clock data: %v", err)
+		log.Warningf("Failed to collect clock data: %v", err)
 		dataError = true
 	}
 
