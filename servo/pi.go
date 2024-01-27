@@ -331,8 +331,6 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 	f.offsetStdev = int64(math.Sqrt(float64(offsetSigmaSq) / float64(f.offsetSamplesCount)))
 	f.lastOffset = s.offset
 
-	log.Infof("Filter.Sample: offset stdev %d, offset mean %d, freq stdev %0.3f", f.offsetStdev, f.offsetMean, f.freqStdev)
-
 	/*
 	 * Mean frequency is heavily affected by the values used to compensate for offsets in case of
 	 * recovering after holdover state. If we have to go to holdover again while recovering from
