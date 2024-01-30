@@ -326,6 +326,19 @@ func (p *SPTP) setMeanFreq() float64 {
 	return freqAdj
 }
 
+// reprioritize is pushing former "best gm" to the back of the list
+func (p *SPTP) reprioritize(bestAddr string) {
+	// by how much we should shift the list
+	k := p.priorities[bestAddr] - 1
+	for addr, prio := range p.priorities {
+		p.priorities[addr] = prio - k
+		if p.priorities[addr] < 1 {
+			// 0 -> 4, -1 -> 3...
+			p.priorities[addr] = p.priorities[addr] + len(p.priorities)
+		}
+	}
+}
+
 func (p *SPTP) processResults(results map[string]*RunResult) {
 	defer func() {
 		for addr, res := range results {
@@ -386,6 +399,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	bestAddr := idsToClients[best.GrandmasterIdentity]
 	bm := results[bestAddr].Measurement
 	if p.bestGM != bestAddr {
+		p.reprioritize(bestAddr)
 		log.Warningf("new best master selected: %q (%s)", bestAddr, bm.Announce.GrandmasterIdentity)
 		p.bestGM = bestAddr
 	}
