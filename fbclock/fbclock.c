@@ -78,7 +78,7 @@ int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data) {
   memcpy(&shmp->data, data, FBCLOCK_CLOCKDATA_SIZE);
   atomic_store(&shmp->crc, crc);
   munmap(shmp, FBCLOCK_SHMDATA_SIZE);
-  return 0;
+  return FBCLOCK_E_NO_ERROR;
 }
 
 int fbclock_clockdata_load_data(
@@ -90,10 +90,10 @@ int fbclock_clockdata_load_data(
     uint64_t our_crc = fbclock_clockdata_crc(data);
     if (our_crc == crc) {
       fbclock_debug_print("reading clock data took %d tries\n", i + 1);
-      break;
+      return FBCLOCK_E_NO_ERROR;
     }
   }
-  return 0;
+  return FBCLOCK_E_NO_ERROR;
 }
 
 static inline int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
@@ -146,14 +146,14 @@ int fbclock_init(fbclock_lib* lib, const char* shm_path) {
     return FBCLOCK_E_SHMEM_MAP_FAILED;
   }
   lib->shmp = shmp;
-  return 0;
+  return FBCLOCK_E_NO_ERROR;
 }
 
 int fbclock_destroy(fbclock_lib* lib) {
   munmap(lib->shmp, FBCLOCK_SHMDATA_SIZE);
   close(lib->dev_fd);
   close(lib->shm_fd);
-  return 0;
+  return FBCLOCK_E_NO_ERROR;
   // we don't want to unlink it, others might still use it
 }
 
@@ -188,14 +188,14 @@ int fbclock_calculate_time(
       fbclock_window_of_uncertainty(seconds, error_bound_ns, h_value_ns);
   truetime->earliest_ns = phctime_ns - (uint64_t)wou_ns;
   truetime->latest_ns = phctime_ns + (uint64_t)wou_ns;
-  return 0;
+  return FBCLOCK_E_NO_ERROR;
 }
 
 int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
   struct phc_time_res res;
   fbclock_clockdata state;
   int rcode = fbclock_clockdata_load_data(lib->shmp, &state);
-  if (rcode != 0) {
+  if (rcode != FBCLOCK_E_NO_ERROR) {
     return rcode;
   }
 
@@ -232,11 +232,11 @@ void fbclock_apply_utc_offset(fbclock_truetime* truetime) {
 // and it is possible we won't have any at all.
 int fbclock_gettime_utc(fbclock_lib* lib, fbclock_truetime* truetime) {
   int rcode = fbclock_gettime(lib, truetime);
-  if (rcode != 0) {
+  if (rcode != FBCLOCK_E_NO_ERROR) {
     return rcode;
   }
   fbclock_apply_utc_offset(truetime);
-  return 0;
+  return FBCLOCK_E_NO_ERROR;
 }
 
 const char* fbclock_strerror(int err_code) {
@@ -263,7 +263,7 @@ const char* fbclock_strerror(int err_code) {
     case FBCLOCK_E_PHC_IN_THE_PAST:
       err_info = "PHC jumped back in time";
       break;
-    case 0:
+    case FBCLOCK_E_NO_ERROR:
       err_info = "no error";
       break;
     default:

@@ -27,6 +27,7 @@ typedef atomic_uint_fast64_t atomic_uint64;
 #include <stdint.h> /* for proper fixed width types */
 
 // error codes
+#define FBCLOCK_E_NO_ERROR 0
 #define FBCLOCK_E_SHMEM_MAP_FAILED -1
 #define FBCLOCK_E_SHMEM_OPEN -2
 #define FBCLOCK_E_PTP_READ_OFFSET -3
