@@ -93,6 +93,10 @@ int fbclock_clockdata_load_data(
       return FBCLOCK_E_NO_ERROR;
     }
   }
+  fbclock_debug_print(
+      "failed to read clock data after %d tries\n", FBCLOCK_MAX_READ_TRIES);
+  // TODO: Enable mismatch error.
+  // return FBCLOCK_E_CRC_MISMATCH;
   return FBCLOCK_E_NO_ERROR;
 }
 
@@ -262,6 +266,9 @@ const char* fbclock_strerror(int err_code) {
       break;
     case FBCLOCK_E_PHC_IN_THE_PAST:
       err_info = "PHC jumped back in time";
+      break;
+    case FBCLOCK_E_CRC_MISMATCH:
+      err_info = "CRC check failed all tries";
       break;
     case FBCLOCK_E_NO_ERROR:
       err_info = "no error";

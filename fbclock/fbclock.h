@@ -35,6 +35,7 @@ typedef atomic_uint_fast64_t atomic_uint64;
 #define FBCLOCK_E_NO_DATA -5
 #define FBCLOCK_E_WOU_TOO_BIG -6
 #define FBCLOCK_E_PHC_IN_THE_PAST -7
+#define FBCLOCK_E_CRC_MISMATCH -8
 
 // until new leap second is introduced, UTC is exactly 37 seconds behind TAI
 #define UTC_TAI_OFFSET (int64_t)(-37e9)
