@@ -60,11 +60,20 @@ struct phc_time_res {
   int64_t delay; // mean delay of several requests
 };
 
-static inline uint64_t fbclock_clockdata_crc(fbclock_clockdata* value) {
+static inline uint64_t fbclock_clockdata_crc_DEPRECATED(
+    fbclock_clockdata* value) {
+  // TODO: Remove deprecated function after phase is rolled out.
   uint64_t counter = fbclock_crc64(value->ingress_time_ns, 0x04C11DB7);
   counter = fbclock_crc64(value->error_bound_ns, counter);
   counter = fbclock_crc64(value->holdover_multiplier_ns, counter);
   return counter;
+}
+
+static inline uint64_t fbclock_clockdata_crc(fbclock_clockdata* value) {
+  uint64_t counter = fbclock_crc64(0xFFFFFFFF, value->ingress_time_ns);
+  counter = fbclock_crc64(counter, value->error_bound_ns);
+  counter = fbclock_crc64(counter, value->holdover_multiplier_ns);
+  return counter ^ 0xFFFFFFFF;
 }
 
 // fbclock_clockdata_store_data is used in shmem.go to store timing data
@@ -74,7 +83,10 @@ int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data) {
   if (shmp == MAP_FAILED) {
     return FBCLOCK_E_SHMEM_MAP_FAILED;
   }
-  uint64_t crc = fbclock_clockdata_crc(data);
+  uint64_t crc = fbclock_clockdata_crc_DEPRECATED(data);
+  // TODO: Switch to storing using new crc function after all readers are
+  // updated.
+  // uint64_t crc = fbclock_clockdata_crc(data);
   memcpy(&shmp->data, data, FBCLOCK_CLOCKDATA_SIZE);
   atomic_store(&shmp->crc, crc);
   munmap(shmp, FBCLOCK_SHMDATA_SIZE);
@@ -90,6 +102,12 @@ int fbclock_clockdata_load_data(
     uint64_t our_crc = fbclock_clockdata_crc(data);
     if (our_crc == crc) {
       fbclock_debug_print("reading clock data took %d tries\n", i + 1);
+      return FBCLOCK_E_NO_ERROR;
+    }
+    // TODO: Remove deprecated block after phase is rolled out.
+    uint64_t our_crc_DEPRECATED = fbclock_clockdata_crc_DEPRECATED(data);
+    if (our_crc_DEPRECATED == crc) {
+      fbclock_debug_print("reading clock data took %d tries (old)\n", i + 1);
       return FBCLOCK_E_NO_ERROR;
     }
   }
