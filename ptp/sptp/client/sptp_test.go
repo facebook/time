@@ -577,3 +577,33 @@ func TestPTPing(t *testing.T) {
 	err = p.ptping(ip, 1234, response, time.Time{})
 	require.Nil(t, err)
 }
+
+func TestShiftPriorities(t *testing.T) {
+	p := &SPTP{
+		priorities: map[string]int{
+			"O": 1,
+			"L": 2,
+			"E": 3,
+			"G": 4,
+		},
+	}
+
+	p.reprioritize("L")
+	require.Equal(t, 1, p.priorities["L"])
+	require.Equal(t, 2, p.priorities["E"])
+	require.Equal(t, 3, p.priorities["G"])
+	require.Equal(t, 4, p.priorities["O"])
+
+	p.reprioritize("O")
+	require.Equal(t, 1, p.priorities["O"])
+	require.Equal(t, 2, p.priorities["L"])
+	require.Equal(t, 3, p.priorities["E"])
+	require.Equal(t, 4, p.priorities["G"])
+
+	// Shift by 0 (no change)
+	p.reprioritize("O")
+	require.Equal(t, 1, p.priorities["O"])
+	require.Equal(t, 2, p.priorities["L"])
+	require.Equal(t, 3, p.priorities["E"])
+	require.Equal(t, 4, p.priorities["G"])
+}
