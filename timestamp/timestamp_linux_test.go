@@ -64,7 +64,8 @@ func Test_ReadTXtimestamp(t *testing.T) {
 	duration := time.Since(start)
 	require.Equal(t, time.Time{}, txts)
 	require.Equal(t, defaultTXTS, attempts)
-	require.Equal(t, fmt.Errorf("no TX timestamp found after %d tries", defaultTXTS), err)
+	errStr := fmt.Sprintf("no TX timestamp found after %d tries", defaultTXTS)
+	require.ErrorContains(t, err, errStr)
 	require.GreaterOrEqual(t, duration, time.Duration(AttemptsTXTS)*TimeoutTXTS)
 
 	AttemptsTXTS = 10
@@ -75,7 +76,8 @@ func Test_ReadTXtimestamp(t *testing.T) {
 	duration = time.Since(start)
 	require.Equal(t, time.Time{}, txts)
 	require.Equal(t, 10, attempts)
-	require.Equal(t, fmt.Errorf("no TX timestamp found after %d tries", 10), err)
+	errStr = fmt.Sprintf("no TX timestamp found after %d tries", 10)
+	require.ErrorContains(t, err, errStr)
 	require.GreaterOrEqual(t, duration, time.Duration(AttemptsTXTS)*TimeoutTXTS)
 
 	addr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 12345}

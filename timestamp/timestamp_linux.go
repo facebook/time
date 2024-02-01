@@ -227,6 +227,7 @@ func ReadTXtimestampBuf(connFd int, oob, toob []byte) (time.Time, int, error) {
 	// We need to empty it and completely otherwise we end up with a shifted queue read:
 	// Sync is out -> read TS from the previous Sync
 	// Because we always perform at least 2 tries we start with 0 so on success we are at 1.
+	timeStart := time.Now()
 	attempts := 0
 	for ; attempts < AttemptsTXTS; attempts++ {
 		if !txfound {
@@ -251,7 +252,8 @@ func ReadTXtimestampBuf(connFd int, oob, toob []byte) (time.Time, int, error) {
 	}
 
 	if !txfound {
-		return time.Time{}, attempts, fmt.Errorf("no TX timestamp found after %d tries", AttemptsTXTS)
+		timeout := time.Since(timeStart)
+		return time.Time{}, attempts, fmt.Errorf("no TX timestamp found after %d tries (%d ms)", AttemptsTXTS, timeout.Milliseconds())
 	}
 	timestamp, err := socketControlMessageTimestamp(oob[:boob])
 	return timestamp, attempts, err

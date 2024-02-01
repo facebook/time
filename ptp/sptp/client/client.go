@@ -153,6 +153,7 @@ func (c *Client) SendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
 
 	c.incrementSequence()
 	if err != nil {
+		log.Warnf("Error sending packet with SeqID = %04x: %v", seq, err)
 		return 0, time.Time{}, err
 	}
 

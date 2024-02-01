@@ -188,6 +188,7 @@ func (c *Client) sendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
 	// send packet
 	_, hwts, err := c.eventConn.WriteToWithTS(b, c.eventAddr)
 	if err != nil {
+		log.Warnf("Error sending packet with SeqID = %04x: %v", seq, err)
 		return 0, time.Time{}, err
 	}
 	c.eventSequence++
