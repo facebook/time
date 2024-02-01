@@ -22,6 +22,7 @@ import (
 	"os"
 	"time"
 
+	ptp "github.com/facebook/time/ptp/protocol"
 	log "github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -68,7 +69,7 @@ func (c *MeasurementConfig) Validate() error {
 	return nil
 }
 
-// Config specifies PTPNG run options
+// Config specifies SPTP run options
 type Config struct {
 	Iface                    string
 	Timestamping             string
@@ -78,6 +79,8 @@ type Config struct {
 	DSCP                     int
 	FirstStepThreshold       time.Duration
 	Servers                  map[string]int
+	MaxClockClass            ptp.ClockClass
+	MaxClockAccuracy         ptp.ClockAccuracy
 	Measurement              MeasurementConfig
 	MetricsAggregationWindow time.Duration
 	AttemptsTXTS             int
@@ -93,6 +96,8 @@ func DefaultConfig() *Config {
 	return &Config{
 		Interval:                 time.Second,
 		ExchangeTimeout:          100 * time.Millisecond,
+		MaxClockClass:            ptp.ClockClass7,
+		MaxClockAccuracy:         ptp.ClockAccuracyMicrosecond10,
 		MetricsAggregationWindow: time.Duration(60) * time.Second,
 		AttemptsTXTS:             10,
 		TimeoutTXTS:              time.Duration(50) * time.Millisecond,
@@ -110,6 +115,12 @@ func (c *Config) Validate() error {
 	}
 	if c.TimeoutTXTS <= 0 {
 		return fmt.Errorf("timeouttxts must be greater than zero")
+	}
+	if c.MaxClockClass < ptp.ClockClass6 || c.MaxClockClass > ptp.ClockClass58 {
+		return fmt.Errorf("invalid range of allowed clock class")
+	}
+	if c.MaxClockAccuracy < ptp.ClockAccuracyNanosecond25 || c.MaxClockAccuracy > ptp.ClockAccuracySecondGreater10 {
+		return fmt.Errorf("invalid range of allowed clock accuracy")
 	}
 	if c.MetricsAggregationWindow <= 0 {
 		return fmt.Errorf("metricsaggregationwindow must be greater than zero")
