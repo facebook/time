@@ -85,6 +85,8 @@ monitoringport: 4269
 dscp: 35
 firststepthreshold: 1s
 metricsaggregationwindow: 60s
+maxclockclass: 7
+maxclockaccuracy: 37
 attemptstxts: 100
 timeouttxts: 1ms
 servers:
