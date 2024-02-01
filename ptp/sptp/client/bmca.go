@@ -36,7 +36,8 @@ func bmca(msgs []*ptp.Announce, prios map[ptp.ClockIdentity]int) *ptp.Announce {
 			best = b
 		}
 	}
-	if best.AnnounceBody.GrandmasterClockQuality.ClockClass >= ptp.ClockClass13 {
+	// Never select GM in worse than holdover status or with clock quality worse than 10 microseconds
+	if best.AnnounceBody.GrandmasterClockQuality.ClockClass > ptp.ClockClass7 || best.AnnounceBody.GrandmasterClockQuality.ClockAccuracy > ptp.ClockAccuracyMicrosecond10 {
 		return nil
 	}
 	return best

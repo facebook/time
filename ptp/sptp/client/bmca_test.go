@@ -37,8 +37,15 @@ func TestBmcaProperlyUsesLocalPriority(t *testing.T) {
 }
 
 func TestBmcaNoMasterForCalibrating(t *testing.T) {
-	best := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass52}}}
-	worse := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass13}}}
+	best := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass13}}}
+	worse := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass52}}}
+	selected := bmca([]*ptp.Announce{&best, &worse}, map[ptp.ClockIdentity]int{1: 2, 2: 1})
+	require.Empty(t, selected)
+}
+
+func TestBmcaNoMasterForLowAccuracy(t *testing.T) {
+	best := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockAccuracy: ptp.ClockAccuracyMicrosecond100}}}
+	worse := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockAccuracy: ptp.ClockAccuracySecond10}}}
 	selected := bmca([]*ptp.Announce{&best, &worse}, map[ptp.ClockIdentity]int{1: 2, 2: 1})
 	require.Empty(t, selected)
 }
