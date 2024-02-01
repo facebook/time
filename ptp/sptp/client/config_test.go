@@ -42,6 +42,8 @@ func TestReadConfigDefaults(t *testing.T) {
 		AttemptsTXTS:             10,
 		TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 		Timestamping:             HWTIMESTAMP,
+		MaxClockClass:            7,
+		MaxClockAccuracy:         37,
 	}
 	require.Equal(t, want, cfg)
 }
@@ -92,6 +94,8 @@ measurement:
 		Backoff:                  BackoffConfig{},
 		SequenceIDMaskBits:       2,
 		SequenceIDMaskValue:      1,
+		MaxClockClass:            7,
+		MaxClockAccuracy:         37,
 	}
 	require.Equal(t, want, cfg)
 	mask, value := cfg.GenerateMaskAndValue()
@@ -236,6 +240,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -252,6 +258,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -268,6 +276,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -286,6 +296,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -304,6 +316,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -322,6 +336,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -338,6 +354,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             -10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -354,6 +372,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(-50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -370,6 +390,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -386,6 +408,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -403,6 +427,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -420,6 +446,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             "blah",
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -436,6 +464,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -452,6 +482,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -468,6 +500,8 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -487,6 +521,50 @@ func TestConfigValidate(t *testing.T) {
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         37,
+				Servers: map[string]int{
+					"192.168.0.10": 0,
+				},
+				Backoff: BackoffConfig{
+					Mode: "fggl",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "bad clock class config",
+			in: Config{
+				Iface:                    "eth0",
+				Interval:                 time.Second,
+				ExchangeTimeout:          100 * time.Millisecond,
+				MetricsAggregationWindow: time.Duration(60) * time.Second,
+				AttemptsTXTS:             10,
+				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
+				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            2,
+				MaxClockAccuracy:         37,
+				Servers: map[string]int{
+					"192.168.0.10": 0,
+				},
+				Backoff: BackoffConfig{
+					Mode: "fggl",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "bad clock accuracy config",
+			in: Config{
+				Iface:                    "eth0",
+				Interval:                 time.Second,
+				ExchangeTimeout:          100 * time.Millisecond,
+				MetricsAggregationWindow: time.Duration(60) * time.Second,
+				AttemptsTXTS:             10,
+				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
+				Timestamping:             HWTIMESTAMP,
+				MaxClockClass:            7,
+				MaxClockAccuracy:         10,
 				Servers: map[string]int{
 					"192.168.0.10": 0,
 				},
@@ -524,6 +602,8 @@ firststepthreshold: 1s
 metricsaggregationwindow: 10s
 attemptstxts: 12
 timeouttxts: 40ms
+maxclockclass: 6
+maxclockaccuracy: 32
 servers:
   192.168.0.10: 2
   192.168.0.13: 3
@@ -546,6 +626,8 @@ measurement:
 		DSCP:                     42,
 		FirstStepThreshold:       time.Second,
 		MetricsAggregationWindow: 10 * time.Second,
+		MaxClockClass:            6,
+		MaxClockAccuracy:         32,
 		Servers: map[string]int{
 			"192.168.0.10": 2,
 			"192.168.0.13": 3,
@@ -575,6 +657,8 @@ func TestPrepareConfigDefaults(t *testing.T) {
 		DSCP:                     42,
 		FirstStepThreshold:       0,
 		MetricsAggregationWindow: 60 * time.Second,
+		MaxClockClass:            7,
+		MaxClockAccuracy:         37,
 		Servers: map[string]int{
 			"192.168.0.10": 0,
 		},

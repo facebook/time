@@ -22,7 +22,7 @@ import (
 	"github.com/facebook/time/ptp/sptp/bmc"
 )
 
-func bmca(msgs []*ptp.Announce, prios map[ptp.ClockIdentity]int) *ptp.Announce {
+func bmca(msgs []*ptp.Announce, prios map[ptp.ClockIdentity]int, cfg *Config) *ptp.Announce {
 	if len(msgs) == 0 {
 		return nil
 	}
@@ -36,8 +36,8 @@ func bmca(msgs []*ptp.Announce, prios map[ptp.ClockIdentity]int) *ptp.Announce {
 			best = b
 		}
 	}
-	// Never select GM in worse than holdover status or with clock quality worse than 10 microseconds
-	if best.AnnounceBody.GrandmasterClockQuality.ClockClass > ptp.ClockClass7 || best.AnnounceBody.GrandmasterClockQuality.ClockAccuracy > ptp.ClockAccuracyMicrosecond10 {
+	// Never select GM if worse (greater) than MaxClockClass or with clock accuracy worse than MaxClockAccuracy
+	if best.AnnounceBody.GrandmasterClockQuality.ClockClass > cfg.MaxClockClass || best.AnnounceBody.GrandmasterClockQuality.ClockAccuracy > cfg.MaxClockAccuracy {
 		return nil
 	}
 	return best

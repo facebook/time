@@ -388,7 +388,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	} else {
 		p.stats.SetCounter("ptp.sptp.gms.available_pct", int64(0))
 	}
-	best := bmca(announces, localPrioMap)
+	best := bmca(announces, localPrioMap, p.cfg)
 	if best == nil {
 		log.Warningf("no Best Master selected")
 		p.bestGM = ""
