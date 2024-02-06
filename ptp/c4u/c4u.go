@@ -143,7 +143,7 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 
 	current, err := server.ReadDynamicConfig(config.Path)
 	if err != nil {
-		log.Errorf("Failed read current ptp4u config: %v. Using defaults", err)
+		log.Warningf("Failed read current ptp4u config: %v. Using defaults", err)
 		current = defaultConfig
 	}
 	pending := &server.DynamicConfig{}
