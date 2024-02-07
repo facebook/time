@@ -3,7 +3,7 @@
 <img width="50%"
 align="right"
 style="display: block; margin:40px auto;"
-src="https://engineering.fb.com/wp-content/uploads/2024/02/SPTP_image2.jpg"/>
+src="https://raw.githubusercontent.com/leoleovich/images/master/PTP.png"/>
 
 Collection of Facebook's PTP libraries.
 
