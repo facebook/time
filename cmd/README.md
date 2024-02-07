@@ -41,23 +41,27 @@ go install github.com/facebook/time/cmd/ptpcheck@latest
 ## ptp4u
 Scalable unicast PTP server.
 
-## c4u
-Config generator for ptp4u.
-
 ### Quick Installation
 ```console
 go install github.com/facebook/time/cmd/ptp4u@latest
 ```
 
-# Calnex
-Command line tool for a Calnex Sentinel device
-Cli Supports several basic commands such as:
-* Firmware upgrade
-* Configuration of the device
-* Measurement data export
-* Device reboot
-* Device clear
-* Device problem report export
+## sptp
+Scalable unicast SPTP client.
+
+### Quick Installation
+```console
+go install github.com/facebook/time/cmd/sptp@latest
+```
+
+## c4u
+Config generator for ptp4u.
+
+### Quick Installation
+```console
+go install github.com/facebook/time/cmd/c4u@latest
+```
+
 
 # fbclock
 ## fbclock-daemon
@@ -75,4 +79,19 @@ Simple binary written in C that uses client part of fbclock service.
 ```console
 cd cmd/fbclock-bin
 make
+```
+
+# Calnex
+Command line tool for a Calnex Sentinel device
+Cli Supports several basic commands such as:
+* Firmware upgrade
+* Configuration of the device
+* Measurement data export
+* Device reboot
+* Device clear
+* Device problem report export
+
+### Quick Installation
+```console
+go install github.com/facebook/time/cmd/calnex@latest
 ```
