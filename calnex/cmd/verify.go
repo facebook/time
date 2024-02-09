@@ -42,6 +42,7 @@ var verifyCmd = &cobra.Command{
 			&checks.HTTP{Remediation: checks.HTTPRemediation{}},
 			&checks.GNSS{Remediation: checks.GNSSRemediation{}},
 			&checks.PSU{Remediation: checks.PSURemediation{}},
+			&checks.Module{Remediation: checks.ModuleRemediation{}},
 		}}
 		if err := verify.Verify(target, insecureTLS, v, apply); err != nil {
 			log.Fatal(err)
