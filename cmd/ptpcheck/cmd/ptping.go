@@ -203,7 +203,7 @@ var ptpingCmd = &cobra.Command{
 	Long:       "measure real network latency between 2 sptp-enabled hosts",
 	Args:       cobra.ExactArgs(1),
 	ArgAliases: []string{"server"},
-	Run: func(c *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ConfigureVerbosity()
 
 		if err := ptpingRun(ifacef, dscpf, args[0], countf, timeoutf); err != nil {

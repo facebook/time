@@ -95,7 +95,7 @@ var clockStateCmd = &cobra.Command{
 	Short: "Print kernel clock state with description.",
 	Long: `Print kernel clock state with description.
 Useful for checking if kernel noticed leap second. Uses adjtimex(2) to get info.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		clockState()
 	},
@@ -105,7 +105,7 @@ var ntpTimeCmd = &cobra.Command{
 	Use:   "ntptime",
 	Short: "Print OS kernel output that is similar to ntp_gettime() and ntp_adjtime() output of 'ntptime' utility.",
 	Long:  "'ntptime' utility is a part of ntp package. This command produces similar output.",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		ntpTime()
 	},

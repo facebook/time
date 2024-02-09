@@ -50,7 +50,7 @@ func report() error {
 var reportCmd = &cobra.Command{
 	Use:   "report",
 	Short: "get problem report",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		if err := report(); err != nil {
 			log.Fatal(err)
 		}

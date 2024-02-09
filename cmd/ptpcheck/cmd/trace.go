@@ -132,7 +132,7 @@ Once negotiation is done, client and server exchange messages:
 When the duration client requested to receive messages passes, server may send CANCEL_UNICAST_TRANSMISSION packet to client
 to notify about this event. Clients responds with ACKNOWLEDGE_CANCEL_UNICAST_TRANSMISSION and that's all.
 `,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
 		if traceRemoteServerFlag == "" {

@@ -67,7 +67,7 @@ func init() {
 var statsCmd = &cobra.Command{
 	Use:   "stats",
 	Short: "Print PTP stats in JSON format",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
 		result, err := checker.RunCheck(rootClientFlag)

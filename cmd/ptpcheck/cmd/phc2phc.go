@@ -104,7 +104,7 @@ func phc2phcRun(srcDevice string, dstDevice string, interval time.Duration, step
 var phc2phcCmd = &cobra.Command{
 	Use:   "phc2phc",
 	Short: "Sync 2 PHCs",
-	Run: func(c *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		if err := phc2phcRun(srcDeviceFlag, dstDeviceFlag, intervalFlag, stepthFlag); err != nil {
 			log.Fatal(err)

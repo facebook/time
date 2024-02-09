@@ -90,7 +90,7 @@ Legend:
   * Mono raw diff - monotonic raw time elapsed since the start
   * Offset mono - offset between monotonic and wall elapsed
   * Offset mono raw - offset between monotonic raw and wall elapsed`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		track(trackInterval)
 	},

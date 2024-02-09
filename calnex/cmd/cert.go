@@ -82,7 +82,7 @@ func certFunc() error {
 var certCmd = &cobra.Command{
 	Use:   "cert",
 	Short: "install device certificate",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		if err := certFunc(); err != nil {
 			log.Fatal(err)
 		}

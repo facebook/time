@@ -45,7 +45,7 @@ func init() {
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "configure a calnex appliance",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		configFile, err := os.Open(source)
 		if err != nil {
 			log.Fatal(err)

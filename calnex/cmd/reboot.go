@@ -53,7 +53,7 @@ func reboot() error {
 var rebootCmd = &cobra.Command{
 	Use:   "reboot",
 	Short: "reboot the device",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		if err := reboot(); err != nil {
 			log.Fatal(err)
 		}

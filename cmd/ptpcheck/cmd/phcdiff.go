@@ -77,7 +77,7 @@ func phcdiffRun(deviceA, deviceB string, isJSON bool) error {
 var phcdiffCmd = &cobra.Command{
 	Use:   "phcdiff",
 	Short: "Print diff in ns between 2 PHCs",
-	Run: func(c *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		if err := phcdiffRun(phcDiffDeviceA, phcDiffDeviceB, phcDiffIsJSON); err != nil {
 			log.Fatal(err)

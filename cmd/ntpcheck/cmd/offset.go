@@ -41,7 +41,7 @@ func init() {
 var offsetCmd = &cobra.Command{
 	Use:   "offset",
 	Short: "Print NTP offset (in ms) to stdout",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
 		result, err := checker.RunCheck(server)

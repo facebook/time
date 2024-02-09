@@ -286,7 +286,7 @@ var utilsCmd = &cobra.Command{
 var refidCmd = &cobra.Command{
 	Use:   "refid",
 	Short: "Converts IP address to refid",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		err := refID(refidIP)
 		if err != nil {
@@ -300,7 +300,7 @@ var fakeSecondsCmd = &cobra.Command{
 	Use:   "fakeseconds",
 	Short: "Prints some fake seconds.",
 	Long:  `Prints some fake seconds (potential slots when leap seconds might happen in leap-seconds format. For reference: https://www.ietf.org/timezones/data/leap-seconds.list`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		fakeSeconds(fsCount)
 	},
@@ -309,7 +309,7 @@ var fakeSecondsCmd = &cobra.Command{
 var signFileCmd = &cobra.Command{
 	Use:   "signfile",
 	Short: "Generate hash signature for leap-seconds.list",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		signFile(signFileName)
 	},
@@ -319,7 +319,7 @@ var ntpdateCmd = &cobra.Command{
 	Use:   "ntpdate",
 	Short: "Sends NTP request(s) to a remote NTP server. Similar to ntpdate -q",
 	Long:  "'ntpdate' will poll remote NTP server and will report metrics including local clock offset and roundtrip delay based on response from server",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		if remoteServerAddr == "" {
 			fmt.Println("server must be specified")
@@ -335,7 +335,7 @@ var ntpdateCmd = &cobra.Command{
 var printLeapCmd = &cobra.Command{
 	Use:   "printleap",
 	Short: "Prints leap second information from the system timezone database",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		if err := printLeap(sourceLeapSeconds); err != nil {
 			fmt.Println(err)
@@ -349,7 +349,7 @@ var addFakeSecondZoneInfoCmd = &cobra.Command{
 	Short: "Adds fake second to zoneinfo database",
 	Long: `'addfakesecond' will read current zoneinfo leap second file from srcfile, add fake second
 	in the end of the month (plus offset provided by -m) and write new file to dstfile`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		if err := addFakeSecondZoneInfo(sourceLeapSeconds, destLeapSeconds, offsetMonth); err != nil {
 			fmt.Println(err)
