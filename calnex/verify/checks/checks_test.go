@@ -232,3 +232,57 @@ func TestPSUError(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }
+
+func TestModule(t *testing.T) {
+	r := ModuleRemediation{}
+	c := Module{Remediation: r}
+	require.Equal(t, "Module", c.Name())
+
+	sampleResp := "{\"Channels\":{\"1\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"2\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"C\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"},\"D\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"}},\"Modules\":{\"1\":{\"Channels\":[\"1\",\"2\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Packet Module (V2)\"},\"C\":{\"Channels\":[\"C\",\"D\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Clock Module\"}}}"
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI.Client = ts.Client()
+
+	err := c.Run(parsed.Host, true)
+	require.NoError(t, err)
+}
+
+func TestModuleBad(t *testing.T) {
+	r := ModuleRemediation{}
+	c := Module{Remediation: r}
+	require.Equal(t, "Module", c.Name())
+
+	sampleResp := "{\"Channels\":{\"1\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"2\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"C\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"},\"D\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"}},\"Modules\":{\"1\":{\"Channels\":[\"1\",\"2\"],\"Progress\":-1,\"State\":\"Fault\",\"Type\":\"Packet Module (V2)\"},\"C\":{\"Channels\":[\"C\",\"D\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Clock Module\"}}}"
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI.Client = ts.Client()
+
+	err := c.Run(parsed.Host, true)
+	require.ErrorContains(t, err, "module: failed module 1: state: Fault")
+}
+
+func TestModuleError(t *testing.T) {
+	r := ModuleRemediation{}
+	c := Module{Remediation: r}
+	require.Equal(t, "Module", c.Name())
+
+	err := c.Run("1.2.3.4", false)
+	require.Error(t, err)
+
+	want, _ := r.Remediate()
+	got, err := c.Remediate()
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
