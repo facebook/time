@@ -189,7 +189,7 @@ var sourcesCmd = &cobra.Command{
 	Use:   "sources",
 	Short: "Print PTP client unicast master table",
 	Long:  "Print PTP client unicast master table. Like `chronyc sources`, but for PTP.",
-	Run: func(c *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
 		if err := sourcesRun(rootClientFlag, sourcesNoDNSFlag); err != nil {

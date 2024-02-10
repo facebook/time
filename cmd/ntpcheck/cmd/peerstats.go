@@ -47,7 +47,7 @@ func init() {
 var peerstatsCmd = &cobra.Command{
 	Use:   "peerstats",
 	Short: "Print all NTP peers stats in JSON format",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
 		result, err := checker.RunCheck(server)

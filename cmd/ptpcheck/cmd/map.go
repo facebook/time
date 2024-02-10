@@ -117,7 +117,7 @@ func init() {
 var mapCmd = &cobra.Command{
 	Use:   "map [ptp device/network interface]...",
 	Short: "Find network interfaces for ptp devices and vice versa",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ConfigureVerbosity()
 		// no args - just print map of all ptp devices to all interfaces
 		if len(args) == 0 {

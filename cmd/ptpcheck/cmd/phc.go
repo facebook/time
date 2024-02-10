@@ -63,7 +63,7 @@ func printPHC(device string, method phc.TimeMethod) error {
 var phcCmd = &cobra.Command{
 	Use:   "phc",
 	Short: "Print PHC clock information. Use `phc_ctl` cli for richer functionality",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
 		if err := printPHC(device, phc.TimeMethod(method)); err != nil {

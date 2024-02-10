@@ -217,7 +217,7 @@ func portServiceStatsDiagnosers(r *checker.PTPCheckResult) []diagnoser {
 	for _, check := range checks {
 		var f diagnoser
 		check := check // capture loop variable
-		f = func(r *checker.PTPCheckResult) (status, string) {
+		f = func(_ *checker.PTPCheckResult) (status, string) {
 			return checkAgainstThreshold(
 				check.name,
 				check.value,
@@ -285,7 +285,7 @@ var diagCmd = &cobra.Command{
 Runs a set of checks against the PTP client, and prints the results.
 Exit code will be equal to sum of failed check, or 127 in case of critical problem.
 `,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
 		result, err := checker.RunCheck(rootClientFlag)

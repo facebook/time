@@ -54,7 +54,7 @@ func init() {
 var portStatsCmd = &cobra.Command{
 	Use:   "portstats",
 	Short: "Print PTP port stats in JSON format",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
 		result, err := checker.RunCheck(rootClientFlag)

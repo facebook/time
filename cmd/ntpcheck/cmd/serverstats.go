@@ -43,7 +43,7 @@ func init() {
 var serverStatsCmd = &cobra.Command{
 	Use:   "serverstats",
 	Short: "Print NTP server stats in JSON format",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
 		result, err := checker.RunServerStats(server)

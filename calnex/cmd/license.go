@@ -47,7 +47,7 @@ func licenseFunc() error {
 var licenseCmd = &cobra.Command{
 	Use:   "license",
 	Short: "install device license",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		if err := licenseFunc(); err != nil {
 			log.Fatal(err)
 		}

@@ -39,7 +39,7 @@ func init() {
 var firmwareCmd = &cobra.Command{
 	Use:   "firmware",
 	Short: "update the device firmware",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		fw := &firmware.OSSFW{
 			Filepath: source,
 		}

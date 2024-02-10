@@ -254,7 +254,7 @@ var diagCmd = &cobra.Command{
 	Use:   "diag",
 	Short: desc,
 	Long:  desc + "\nIf you need more information, please refer to http://doc.ntp.org/current-stable/debug.html",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
 		result, err := checker.RunCheck(server)

@@ -96,7 +96,7 @@ func oscillatordRun(address string, jsonOut bool) error {
 var oscillatordCmd = &cobra.Command{
 	Use:   "oscillatord",
 	Short: "Print Time Card stats reported by oscillatord",
-	Run: func(c *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		address := net.JoinHostPort(oscillatordAddressFlag, fmt.Sprint(oscillatordPortFlag))
 		if err := oscillatordRun(address, oscillatorJSONFlag); err != nil {

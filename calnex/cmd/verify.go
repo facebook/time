@@ -36,7 +36,7 @@ func init() {
 var verifyCmd = &cobra.Command{
 	Use:   "verify",
 	Short: "verify if the appliance needs to be sent to repair",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		v := &verify.VF{Checks: []checks.Check{
 			&checks.Ping{Remediation: checks.PingRemediation{}},
 			&checks.HTTP{Remediation: checks.HTTPRemediation{}},

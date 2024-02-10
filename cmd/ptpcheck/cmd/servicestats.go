@@ -78,7 +78,7 @@ func serviceStatsRun(address string) error {
 var serviceStatsCmd = &cobra.Command{
 	Use:   "servicestats",
 	Short: "Print PTP port service stats in JSON format",
-	Run: func(c *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 		if err := serviceStatsRun(rootClientFlag); err != nil {
 			log.Fatal(err)

@@ -66,7 +66,7 @@ func doAdjFreq(device string, freq float64) error {
 var adjFreqCmd = &cobra.Command{
 	Use:   "adjfreq",
 	Short: "Print PHC frequency information. Use `-set <freq>` to change the frequency",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
 		if err := doAdjFreq(dev, freq); err != nil {
