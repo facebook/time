@@ -34,7 +34,7 @@ type FW interface {
 }
 
 // Firmware checks target Calnex firmware version and upgrades if apply is specified
-func Firmware(target string, insecureTLS bool, fw FW, apply bool) error {
+func Firmware(target string, insecureTLS bool, fw FW, apply bool, force bool) error {
 	api := calnexAPI.NewAPI(target, insecureTLS, 4*time.Minute)
 	cv, err := api.FetchVersion()
 	if err != nil {
@@ -49,7 +49,7 @@ func Firmware(target string, insecureTLS bool, fw FW, apply bool) error {
 	if err != nil {
 		return err
 	}
-	if calnexVersion.GreaterThanOrEqual(v) {
+	if calnexVersion.GreaterThanOrEqual(v) && !force {
 		instrumentStatus, statusErr := api.FetchInstrumentStatus()
 		if statusErr != nil {
 			return statusErr
