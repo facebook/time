@@ -33,10 +33,11 @@ var (
 	apply       bool
 	channels    api.Channels
 	dir         string
+	force       bool
 	insecureTLS bool
+	saveConfig  string
 	source      string
 	target      string
-	saveConfig  string
 )
 
 // Execute is the main entry point for CLI interface
