@@ -19,6 +19,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/facebook/time/calnex/api"
@@ -148,7 +149,11 @@ func (c *config) baseConfig(measure *ini.Section, gnss *ini.Section, target stri
 	c.set(measure, "device_name", target)
 
 	// gnss antenna compensation
-	c.set(gnss, "antenna_delay", fmt.Sprintf("%d ns", antennaDelayNS))
+	if antennaDelayNS < 1000 {
+		c.set(gnss, "antenna_delay", fmt.Sprintf("%d ns", antennaDelayNS))
+	} else {
+		c.set(gnss, "antenna_delay", fmt.Sprintf("%s us", strconv.FormatFloat(float64(antennaDelayNS)/1000, 'f', -1, 64)))
+	}
 
 	// continuous measurement
 	c.set(measure, "continuous", api.ON)

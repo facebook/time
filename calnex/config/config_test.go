@@ -422,7 +422,7 @@ ch30\ptp_synce\ptp\domain=0
 
 func TestConfig(t *testing.T) {
 	expectedConfig := `[gnss]
-antenna_delay=42 ns
+antenna_delay=4.2 us
 [measure]
 device_name=%s
 continuous=On
@@ -599,7 +599,7 @@ ch30\ptp_synce\ptp\domain=0
 	expectedConfig = fmt.Sprintf(expectedConfig, parsed.Host)
 
 	cc := &CalnexConfig{
-		AntennaDelayNS: 42,
+		AntennaDelayNS: 4200,
 		Measure: map[api.Channel]MeasureConfig{
 			api.ChannelA: {
 				Target: "fd00:3226:301b::1f",
