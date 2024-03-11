@@ -42,7 +42,7 @@ func isHardFailure(err error) bool {
 // Export data from the device about specified channels to the specified output
 func Export(source string, insecureTLS bool, allData bool, channels []api.Channel, l Logger) (err error) {
 	var success bool
-	calnexAPI := api.NewAPI(source, insecureTLS, time.Minute)
+	calnexAPI := api.NewAPI(source, insecureTLS, 2*time.Minute)
 
 	if len(channels) == 0 {
 		channels, err = calnexAPI.FetchUsedChannels()
