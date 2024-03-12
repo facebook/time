@@ -19,7 +19,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -30,7 +29,6 @@ import (
 func printStats(r *checker.PTPCheckResult) error {
 	type stats struct {
 		Offset            float64 `json:"ptp.offset_ns"`
-		OffsetAbs         float64 `json:"ptp.offset_abs_ns"`
 		MeanPathDelay     float64 `json:"ptp.mean_path_delay_ns"`
 		StepsRemoved      int     `json:"ptp.steps_removed"`
 		GMPresent         int     `json:"ptp.gm_present"` // bool for ODS
@@ -40,7 +38,6 @@ func printStats(r *checker.PTPCheckResult) error {
 
 	output := stats{
 		Offset:            r.OffsetFromMasterNS,
-		OffsetAbs:         math.Abs(r.OffsetFromMasterNS),
 		MeanPathDelay:     r.MeanPathDelayNS,
 		StepsRemoved:      r.StepsRemoved,
 		GMPresent:         0,
