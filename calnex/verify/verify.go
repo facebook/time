@@ -30,11 +30,11 @@ type VF struct {
 func Verify(target string, insecureTLS bool, verify *VF, apply bool) error {
 	for _, c := range verify.Checks {
 		if err := c.Run(target, insecureTLS); err != nil {
-			log.Warningf("%s check fail: %v", c.Name(), err)
+			log.Warningf("%s: %s check fail: %v", target, c.Name(), err)
 			if apply {
 				result, err := c.Remediate()
 				if result != "" {
-					log.Warningf(result)
+					log.Warning(target, result)
 				}
 				if err != nil {
 					return err
@@ -42,7 +42,7 @@ func Verify(target string, insecureTLS bool, verify *VF, apply bool) error {
 				break
 			}
 		} else {
-			log.Infof("%s check pass", c.Name())
+			log.Infof("%s: %s check pass", target, c.Name())
 		}
 	}
 	return nil

@@ -33,40 +33,65 @@ type FW interface {
 	Path() (string, error)
 }
 
-// Firmware checks target Calnex firmware version and upgrades if apply is specified
-func Firmware(target string, insecureTLS bool, fw FW, apply bool, force bool) error {
-	api := calnexAPI.NewAPI(target, insecureTLS, 4*time.Minute)
+// ShouldUpgrade checks if Calnex firmware needs an upgrade
+func ShouldUpgrade(target string, api *calnexAPI.API, fw FW, force bool) (bool, error) {
 	cv, err := api.FetchVersion()
 	if err != nil {
-		return err
+		return false, err
 	}
 	calnexVersion, err := version.NewVersion(strings.ToLower(cv.Firmware))
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	v, err := fw.Version()
 	if err != nil {
+		return false, err
+	}
+
+	if calnexVersion.LessThan(v) || force {
+		log.Infof("%s: is running %s, latest is %s. Needs an update", target, calnexVersion, v)
+		return true, nil
+	}
+
+	log.Infof("%s: no firmware update is required", target)
+	return false, nil
+}
+
+// InProgress checks if Calnex firmware upgrade is in progress
+func InProgress(target string, api *calnexAPI.API) (bool, error) {
+	// Checking maybe upgrade is in progress
+	instrumentStatus, statusErr := api.FetchInstrumentStatus()
+	if statusErr != nil {
+		return false, statusErr
+	}
+	if instrumentStatus.Channels[calnexAPI.ChannelONE].Progress != -1 {
+		log.Infof("%s: update %d%% complete", target, instrumentStatus.Channels[calnexAPI.ChannelONE].Progress)
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// Firmware checks target Calnex firmware version and upgrades if apply is specified
+func Firmware(target string, insecureTLS bool, fw FW, apply bool, force bool) error {
+	api := calnexAPI.NewAPI(target, insecureTLS, 4*time.Minute)
+
+	shouldUpgrade, err := ShouldUpgrade(target, api, fw, force)
+	if err != nil {
 		return err
 	}
-	if calnexVersion.GreaterThanOrEqual(v) && !force {
-		instrumentStatus, statusErr := api.FetchInstrumentStatus()
-		if statusErr != nil {
-			return statusErr
-		}
-		if instrumentStatus.Channels[calnexAPI.ChannelONE].Progress != -1 {
-			log.Infof("update %d%% complete", instrumentStatus.Channels[calnexAPI.ChannelONE].Progress)
-			return nil
+
+	if !shouldUpgrade {
+		if _, err = InProgress(target, api); err != nil {
+			return err
 		}
 
-		log.Infof("no update is required")
 		return nil
 	}
 
-	log.Infof("%s is running %s, latest is %s. Needs an update", target, calnexVersion, v)
-
 	if !apply {
-		log.Info("dry run. Exiting")
+		log.Infof("%s: dry run. Exiting", target)
 		return nil
 	}
 
@@ -75,13 +100,13 @@ func Firmware(target string, insecureTLS bool, fw FW, apply bool, force bool) er
 		return err
 	}
 	if status.MeasurementActive {
-		log.Infof("stopping measurement")
+		log.Infof("%s: stopping measurement", target)
 		// stop measurement
 		if err = api.StopMeasure(); err != nil {
 			return err
 		}
 	}
-	log.Infof("updating firmware")
+	log.Infof("%s: updating firmware", target)
 	p, err := fw.Path()
 	if err != nil {
 		return err

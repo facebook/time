@@ -57,7 +57,7 @@ ch5\used=No
 	require.NoError(t, err)
 
 	s := f.Section("measure")
-	c.chSet(s, api.ChannelA, api.ChannelF, "%s\\used", api.NO)
+	c.chSet("leoleovich.com", s, api.ChannelA, api.ChannelF, "%s\\used", api.NO)
 	require.True(t, c.changed)
 
 	buf, err := api.ToBuffer(f)
@@ -110,7 +110,7 @@ ch6\virtual_channels_enabled=On
 	s := f.Section("measure")
 	g := f.Section("gnss")
 
-	c.baseConfig(s, g, "leoleovich.com", 42)
+	c.baseConfig("leoleovich.com", s, g, 42)
 	require.True(t, c.changed)
 
 	buf, err := api.ToBuffer(f)
@@ -412,7 +412,7 @@ ch30\ptp_synce\ptp\domain=0
 		},
 	}
 
-	c.measureConfig(s, cc.Measure)
+	c.measureConfig("leoleovich.com", s, cc.Measure)
 	require.True(t, c.changed)
 
 	buf, err := api.ToBuffer(f)
