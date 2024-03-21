@@ -44,6 +44,8 @@ typedef atomic_uint_fast64_t atomic_uint64;
 extern "C" {
 #endif
 
+struct phc_time_res;
+
 typedef struct fbclock_clockdata {
   int64_t ingress_time_ns; // PHC time when ptp client last time received sync
                            // message
@@ -64,19 +66,20 @@ typedef struct fbclock_shmdata {
 #define FBCLOCK_POW2_16 ((double)(1ULL << 16))
 #define FBCLOCK_PTPPATH "/dev/fbclock/ptp"
 
+// what customers get
+typedef struct fbclock_truetime {
+  uint64_t earliest_ns;
+  uint64_t latest_ns;
+} fbclock_truetime;
+
 // library
 typedef struct fbclock_lib {
   char* ptp_path; // path to PHC clock device
   int shm_fd; // file descriptor of opened shared mem
   int dev_fd; // file descriptor of opened /dev/ptpN
   fbclock_shmdata* shmp; // mmap-ed data
+  int (*gettime)(int, struct phc_time_res*); // pointer to gettime function
 } fbclock_lib;
-
-// what customers get
-typedef struct fbclock_truetime {
-  uint64_t earliest_ns;
-  uint64_t latest_ns;
-} fbclock_truetime;
 
 int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data);
 int fbclock_clockdata_load_data(fbclock_shmdata* shm, fbclock_clockdata* data);

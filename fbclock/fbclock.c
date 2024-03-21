@@ -122,6 +122,31 @@ static inline int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
   return (int64_t)(ptc->sec * 1000000000) + (int64_t)ptc->nsec;
 }
 
+static int fbclock_read_ptp_offset(int fd, struct phc_time_res* res) {
+  struct ptp_sys_offset pso = {.n_samples = 5};
+  int64_t min_delay = INT64_MAX, last_ts;
+
+  int r = ioctl(fd, PTP_SYS_OFFSET, &pso);
+  if (r) {
+    perror("PTP_SYS_OFFSET");
+    return -1;
+  }
+
+  for (unsigned i = 0; i < pso.n_samples; ++i) {
+    int64_t delay =
+        fbclock_pct2ns(&pso.ts[2 * i + 2]) - fbclock_pct2ns(&pso.ts[2 * i]);
+    min_delay = (delay < min_delay) ? delay : min_delay;
+    last_ts = fbclock_pct2ns(&pso.ts[2 * i + 1]);
+  }
+  res->ts = last_ts;
+  res->delay = min_delay;
+  if (min_delay < 0) {
+    perror("Negative request delay");
+    return -2;
+  }
+  return 0;
+}
+
 static int fbclock_read_ptp_offset_extended(int fd, struct phc_time_res* res) {
   struct ptp_sys_offset_extended psoe = {.n_samples = 5};
   int64_t min_delay = INT64_MAX;
@@ -161,6 +186,15 @@ int fbclock_init(fbclock_lib* lib, const char* shm_path) {
     return FBCLOCK_E_PTP_OPEN;
   }
   lib->dev_fd = ffd;
+
+  struct ptp_sys_offset_extended psoe = {.n_samples = 1};
+
+  int r = ioctl(ffd, PTP_SYS_OFFSET_EXTENDED, &psoe);
+  if (!r) {
+    lib->gettime = fbclock_read_ptp_offset_extended;
+  } else {
+    lib->gettime = fbclock_read_ptp_offset;
+  }
 
   fbclock_shmdata* shmp =
       mmap(NULL, FBCLOCK_SHMDATA_SIZE, PROT_READ, MAP_SHARED, lib->shm_fd, 0);
@@ -233,7 +267,7 @@ int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
     return FBCLOCK_E_WOU_TOO_BIG;
   }
 
-  if (fbclock_read_ptp_offset_extended(lib->dev_fd, &res)) {
+  if (lib->gettime(lib->dev_fd, &res)) {
     return FBCLOCK_E_PTP_READ_OFFSET;
   }
 
