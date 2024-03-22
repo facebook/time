@@ -34,7 +34,7 @@ func Verify(target string, insecureTLS bool, verify *VF, apply bool) error {
 			if apply {
 				result, err := c.Remediate()
 				if result != "" {
-					log.Warning(target, result)
+					log.Warningf("%s: %s", target, result)
 				}
 				if err != nil {
 					return err
