@@ -157,9 +157,6 @@ func New(cfg *Config, stats StatsServer, l Logger) (*Daemon, error) {
 
 func (s *Daemon) calcW() (float64, error) {
 	lastN := s.state.takeDataPoint(s.cfg.RingSize)
-	if len(lastN) != s.cfg.RingSize {
-		return 0, fmt.Errorf("%w getting M: want %d, got %d", errNotEnoughData, s.cfg.RingSize, len(lastN))
-	}
 	params := prepareMathParameters(lastN)
 	logSample := &LogSample{
 		MasterOffsetNS:          params["offset"][0],

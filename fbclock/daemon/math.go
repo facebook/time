@@ -166,7 +166,7 @@ var functions = map[string]govaluate.ExpressionFunction{
 		vals := args[0].([]float64)
 		nSamples := int(args[1].(float64))
 		if len(vals) < nSamples {
-			return nil, fmt.Errorf("mean: not enough samples: want %d, have %d", nSamples, len(vals))
+			return mean(vals), nil
 		}
 		return mean(vals[:nSamples]), nil
 	},
@@ -177,7 +177,7 @@ var functions = map[string]govaluate.ExpressionFunction{
 		vals := args[0].([]float64)
 		nSamples := int(args[1].(float64))
 		if len(vals) < nSamples {
-			return nil, fmt.Errorf("variance: not enough samples: want %d, have %d", nSamples, len(vals))
+			return variance(vals), nil
 		}
 		return variance(vals[:nSamples]), nil
 	},
@@ -188,7 +188,7 @@ var functions = map[string]govaluate.ExpressionFunction{
 		vals := args[0].([]float64)
 		nSamples := int(args[1].(float64))
 		if len(vals) < nSamples {
-			return nil, fmt.Errorf("stddev: not enough samples: want %d, have %d", nSamples, len(vals))
+			return stddev(vals), nil
 		}
 		return stddev(vals[:nSamples]), nil
 	},

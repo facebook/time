@@ -121,8 +121,9 @@ func TestPrepareExpressionNotEnoughValues(t *testing.T) {
 		"offset": []float64{1, 2, 3, 4, 5},
 	}
 
-	_, err = expr.Evaluate(parameters)
-	require.Error(t, err)
+	r, err := expr.Evaluate(parameters)
+	require.NoError(t, err)
+	require.Equal(t, float64(3), r)
 }
 
 func FuzzPrepareExpression(f *testing.F) {

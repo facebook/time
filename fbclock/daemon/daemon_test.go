@@ -394,8 +394,14 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 			ClockAccuracyNS:   100.0,
 		}
 		shmData, err := s.calculateSHMData(d)
-		require.Nil(t, shmData)
-		require.Error(t, err, "not enough data should give us error when calculating shm state")
+		if i < 29 {
+			require.Nil(t, shmData)
+			require.Error(t, err, "not enough data should give us error when calculating shm state")
+		} else {
+			require.NotNil(t, shmData)
+			require.NoError(t, err)
+		}
+
 	}
 	d = &DataPoint{
 		IngressTimeNS:     int64(startTime + 61*time.Second),
@@ -529,17 +535,23 @@ func TestDaemonDoWork(t *testing.T) {
 		require.Equal(t, int64(d.FreqAdjustmentPPB), stats.counters["freq_adj_ppb"])
 		require.Equal(t, int64(0), stats.counters["data_sanity_check_error"])
 		// we can calculate M after 30 seconds
+		require.Equal(t, int64(48), stats.counters["m_ns"])
+		require.Equal(t, int64(48), stats.counters["m_ns"])
+
 		if i < 29 {
-			require.Equal(t, int64(0), stats.counters["m_ns"])
+			require.Equal(t, int64(0), stats.counters["w_ns"])
+			require.Equal(t, int64(0), stats.counters["master_offset_ns.60.abs_max"])
+			require.Equal(t, int64(0), stats.counters["path_delay_ns.60.abs_max"])
+			require.Equal(t, int64(0), stats.counters["freq_adj_ppb.60.abs_max"])
 		} else {
-			require.Equal(t, int64(48), stats.counters["m_ns"])
+			require.Equal(t, int64(48), stats.counters["w_ns"])
+			require.Equal(t, int64(23), stats.counters["master_offset_ns.60.abs_max"])
+			require.Equal(t, int64(213), stats.counters["path_delay_ns.60.abs_max"])
+			require.LessOrEqual(t, int64(212145), stats.counters["freq_adj_ppb.60.abs_max"])
 		}
-		require.Equal(t, int64(0), stats.counters["w_ns"])
+
 		// not enough data for those
 		require.Equal(t, int64(0), stats.counters["dift_ppb"])
-		require.Equal(t, int64(0), stats.counters["master_offset_ns.60.abs_max"])
-		require.Equal(t, int64(0), stats.counters["path_delay_ns.60.abs_max"])
-		require.Equal(t, int64(0), stats.counters["freq_adj_ppb.60.abs_max"])
 	}
 
 	// another data point, now that we have enough in the ring buffer to write to shm
