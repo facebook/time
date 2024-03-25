@@ -401,7 +401,6 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 			require.NotNil(t, shmData)
 			require.NoError(t, err)
 		}
-
 	}
 	d = &DataPoint{
 		IngressTimeNS:     int64(startTime + 61*time.Second),

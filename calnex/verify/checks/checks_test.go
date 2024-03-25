@@ -68,26 +68,6 @@ func TestGNSSNoSatellites(t *testing.T) {
 	require.ErrorContains(t, err, "gnss: not enough satellites")
 }
 
-func TestGNSSNoAntenna(t *testing.T) {
-	r := GNSSRemediation{}
-	c := GNSS{Remediation: r}
-	require.Equal(t, "GNSS", c.Name())
-
-	sampleResp := "{\"antennaStatus\":\"BAD\",\"locked\":true,\"lockedSatellites\":9,\"surveyComplete\":true,\"surveyPercentComplete\":100}"
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
-		r *http.Request) {
-		fmt.Fprintln(w, sampleResp)
-	}))
-	defer ts.Close()
-
-	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
-	calnexAPI.Client = ts.Client()
-
-	err := c.Run(parsed.Host, true)
-	require.ErrorContains(t, err, "gnss: antenna status is: BAD")
-}
-
 func TestGNSSError(t *testing.T) {
 	r := GNSSRemediation{}
 	c := GNSS{Remediation: r}

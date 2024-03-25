@@ -23,8 +23,6 @@ import (
 	"github.com/facebook/time/calnex/api"
 )
 
-const ok = "OK"
-
 // GNSS check
 type GNSS struct {
 	Remediation Remediation
@@ -46,8 +44,6 @@ func (p *GNSS) Run(target string, insecureTLS bool) error {
 
 	if g.LockedSatellites < 4 {
 		return fmt.Errorf("gnss: not enough satellites")
-	} else if g.AntennaStatus != ok {
-		return fmt.Errorf("gnss: antenna status is: %s", g.AntennaStatus)
 	}
 
 	return nil

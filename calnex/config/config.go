@@ -206,7 +206,7 @@ func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error
 	}
 
 	if !apply {
-		log.Infof("%s: dry run. Exiting", target)
+		log.Infof("%s: dry run. Not pushing config", target)
 		return nil
 	}
 

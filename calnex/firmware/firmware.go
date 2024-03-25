@@ -86,12 +86,11 @@ func Firmware(target string, insecureTLS bool, fw FW, apply bool, force bool) er
 		if _, err = InProgress(target, api); err != nil {
 			return err
 		}
-
 		return nil
 	}
 
 	if !apply {
-		log.Infof("%s: dry run. Exiting", target)
+		log.Infof("%s: dry run. Not upgrading firmware", target)
 		return nil
 	}
 
