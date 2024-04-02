@@ -50,11 +50,11 @@ func ShouldUpgrade(target string, api *calnexAPI.API, fw FW, force bool) (bool, 
 	}
 
 	if calnexVersion.LessThan(v) || force {
-		log.Infof("%s: is running %s, latest is %s. Needs an update", target, calnexVersion, v)
+		log.Warningf("%s: is running %s, latest is %s. Needs an update", target, calnexVersion, v)
 		return true, nil
 	}
 
-	log.Infof("%s: no firmware update is required", target)
+	log.Debugf("%s: no firmware update is required", target)
 	return false, nil
 }
 
@@ -99,7 +99,7 @@ func Firmware(target string, insecureTLS bool, fw FW, apply bool, force bool) er
 		return err
 	}
 	if status.MeasurementActive {
-		log.Infof("%s: stopping measurement", target)
+		log.Debugf("%s: stopping measurement", target)
 		// stop measurement
 		if err = api.StopMeasure(); err != nil {
 			return err

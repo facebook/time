@@ -61,7 +61,7 @@ func (c *config) set(target string, s *ini.Section, name, value string) {
 	k := s.Key(name)
 	if k.Value() != value {
 		k.SetValue(value)
-		log.Infof("%s: setting %s to %s", target, name, value)
+		log.Debugf("%s: setting %s to %s", target, name, value)
 		c.changed = true
 	}
 }
@@ -218,7 +218,7 @@ func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error
 
 	if c.changed {
 		if status.MeasurementActive {
-			log.Infof("%s: stopping measurement", target)
+			log.Debugf("%s: stopping measurement", target)
 			// stop measurement
 			if err = api.StopMeasure(); err != nil {
 				return err
@@ -231,11 +231,11 @@ func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error
 			return err
 		}
 	} else {
-		log.Infof("%s: no change needs to be applied", target)
+		log.Debugf("%s: no change needs to be applied", target)
 	}
 
 	if c.changed || !status.MeasurementActive {
-		log.Infof("%s: starting measurement", target)
+		log.Debugf("%s: starting measurement", target)
 		// start measurement
 		if err = api.StartMeasure(); err != nil {
 			return err

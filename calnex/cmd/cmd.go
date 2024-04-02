@@ -42,6 +42,7 @@ var (
 
 // Execute is the main entry point for CLI interface
 func Execute() {
+	log.SetLevel(log.DebugLevel)
 	if err := RootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
