@@ -42,7 +42,7 @@ func Verify(target string, insecureTLS bool, verify *VF, apply bool) error {
 				break
 			}
 		} else {
-			log.Infof("%s: %s check pass", target, c.Name())
+			log.Debugf("%s: %s check pass", target, c.Name())
 		}
 	}
 	return nil

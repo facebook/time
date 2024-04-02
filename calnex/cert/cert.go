@@ -105,12 +105,13 @@ func Parse(data []byte) (*Bundle, error) {
 			var key *rsa.PrivateKey
 			var err error
 
-			if block.Type == "RSA PRIVATE KEY" {
+			switch block.Type {
+			case "RSA PRIVATE KEY":
 				key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
 				if err != nil {
 					return nil, err
 				}
-			} else if block.Type == "PRIVATE KEY" {
+			case "PRIVATE KEY":
 				tmpKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 				if err != nil {
 					return nil, err
@@ -121,7 +122,7 @@ func Parse(data []byte) (*Bundle, error) {
 				if !ok {
 					return nil, ErrOnlyRSA
 				}
-			} else {
+			default:
 				return nil, ErrUnsupportedPEMBlock
 			}
 
