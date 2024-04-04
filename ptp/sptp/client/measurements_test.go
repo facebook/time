@@ -177,6 +177,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		PathDelayFilter:               FilterNone,
 		PathDelayDiscardFilterEnabled: true,
 		PathDelayDiscardBelow:         100 * time.Millisecond,
+		PathDelayDiscardAbove:         time.Second,
 	}
 	m := newMeasurements(mcfg)
 	var seq uint16 = 1
@@ -309,6 +310,38 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 	timeDelaySent = timeDelaySent.Add(time.Second)
 	// simulate broken TX timestamp
 	netDelayBack = -100 * time.Millisecond
+	timeDelayReceived = timeDelaySent.Add(netDelayBack)
+	timeSyncSent = timeDelayReceived.Add(10 * time.Millisecond)
+	timeSyncReceived = timeSyncSent.Add(netDelay)
+
+	m.addT3(seq, timeDelaySent)
+	m.addT2andCF1(seq, timeSyncReceived, netCorrection)
+	m.addT4(seq, timeDelayReceived)
+	m.addT1(seq, timeSyncSent)
+	m.addCF2(seq, netCorrectionBack)
+
+	got, err = m.latest()
+	require.Nil(t, err)
+	want = &MeasurementResult{
+		Delay:             224995 * time.Microsecond,
+		S2CDelay:          netDelay - netCorrection,
+		C2SDelay:          netDelayBack - netCorrectionBack,
+		Offset:            -25001 * time.Microsecond,
+		CorrectionFieldRX: 6 * time.Microsecond,
+		CorrectionFieldTX: 4 * time.Microsecond,
+		Timestamp:         timeSyncReceived,
+		T1:                timeSyncSent,
+		T2:                timeSyncReceived,
+		T3:                timeDelaySent,
+		T4:                timeDelayReceived,
+	}
+	assert.Equal(t, want, got, "measurements with mean path delay filter and skipped path delay sample")
+
+	m.cfg.PathDelayDiscardAbove = 300 * time.Millisecond
+	// now add really bad sample so it gets dropped
+	timeDelaySent = timeDelaySent.Add(time.Second)
+	// simulate broken RX timestamp
+	netDelayBack = 400 * time.Millisecond
 	timeDelayReceived = timeDelaySent.Add(netDelayBack)
 	timeSyncSent = timeDelayReceived.Add(10 * time.Millisecond)
 	timeSyncReceived = timeSyncSent.Add(netDelay)

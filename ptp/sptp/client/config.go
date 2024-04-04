@@ -56,6 +56,7 @@ type MeasurementConfig struct {
 	PathDelayFilter               string        `yaml:"path_delay_filter"`                 // which filter to use, see supported path delay filters const
 	PathDelayDiscardFilterEnabled bool          `yaml:"path_delay_discard_filter_enabled"` // controls filter that allows us to discard anomalously small path delays
 	PathDelayDiscardBelow         time.Duration `yaml:"path_delay_discard_below"`          // discard path delays that are below this threshold
+	PathDelayDiscardAbove         time.Duration `yaml:"path_delay_discard_above"`          // discard path delays that are above this threshold
 }
 
 // Validate MeasurementConfig is sane
@@ -65,6 +66,9 @@ func (c *MeasurementConfig) Validate() error {
 	}
 	if c.PathDelayFilter != FilterNone && c.PathDelayFilter != FilterMean && c.PathDelayFilter != FilterMedian {
 		return fmt.Errorf("path_delay_filter must be either %q, %q or %q", FilterNone, FilterMean, FilterMedian)
+	}
+	if c.PathDelayDiscardFilterEnabled && (c.PathDelayDiscardAbove < c.PathDelayDiscardBelow) {
+		return fmt.Errorf("path_delay_discard_below must be less than path_delay_discard_above")
 	}
 	return nil
 }
@@ -102,6 +106,9 @@ func DefaultConfig() *Config {
 		AttemptsTXTS:             10,
 		TimeoutTXTS:              time.Duration(50) * time.Millisecond,
 		Timestamping:             HWTIMESTAMP,
+		Measurement: MeasurementConfig{
+			PathDelayDiscardAbove: time.Second,
+		},
 	}
 }
 
