@@ -97,6 +97,7 @@ measurement:
   path_delay_filter: "median"
   path_delay_discard_filter_enabled: true
   path_delay_discard_below: 2us
+  path_delay_discard_above: 1ms
 backoff:
   mode: "linear"
   step: 10
