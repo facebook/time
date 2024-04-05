@@ -223,6 +223,7 @@ type GNSS struct {
 	LeapSeconds           int              `json:"leap_seconds"`
 	SatellitesCount       int              `json:"satellites_count"`
 	SurveyInPositionError int              `json:"survey_in_position_error"`
+	TimeAccuracy          int              `json:"time_accuracy"`
 }
 
 // Clock describes structure that oscillatord returns for clock
@@ -257,6 +258,7 @@ func (s *Status) MonitoringJSON(prefix string) ([]byte, error) {
 		fmt.Sprintf("%sgnss.leap_seconds", prefix):             int64(s.GNSS.LeapSeconds),
 		fmt.Sprintf("%sgnss.satellites_count", prefix):         int64(s.GNSS.SatellitesCount),
 		fmt.Sprintf("%sgnss.survey_in_position_error", prefix): int64(s.GNSS.SurveyInPositionError),
+		fmt.Sprintf("%sgnss.time_accuracy_ns", prefix):         int64(s.GNSS.TimeAccuracy),
 		fmt.Sprintf("%sclock.class", prefix):                   int64(s.Clock.Class),
 		fmt.Sprintf("%sclock.offset_ns", prefix):               int64(s.Clock.Offset),
 	}
