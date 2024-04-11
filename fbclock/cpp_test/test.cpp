@@ -194,7 +194,6 @@ TEST(fbclock_test, test_fbclock_calculate_time) {
 }
 
 TEST(fbclock_test, test_fbclock_apply_utc_offset) {
-  int err;
   fbclock_truetime truetime;
   truetime.earliest_ns = 1647269091803102338;
   truetime.latest_ns = 1647269091803103576;
