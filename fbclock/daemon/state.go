@@ -141,18 +141,3 @@ func (s *daemonState) pushLinearizabilityTestResult(data linearizability.TestRes
 	s.linearizabilityTestResults.Value = data
 	s.linearizabilityTestResults = s.linearizabilityTestResults.Next()
 }
-
-func (s *daemonState) takeLinearizabilityTestResult(n int) []linearizability.TestResult {
-	s.Lock()
-	defer s.Unlock()
-	result := []linearizability.TestResult{}
-	r := s.linearizabilityTestResults.Prev()
-	for j := 0; j < n; j++ {
-		if r.Value == nil {
-			continue
-		}
-		result = append(result, r.Value.(linearizability.TestResult))
-		r = r.Prev()
-	}
-	return result
-}

@@ -104,33 +104,6 @@ func stddev(input []float64) float64 {
 	return s.Stddev()
 }
 
-// convolve mixes two signals together
-func convolve(input, coeffs []float64) ([]float64, error) {
-	if len(input) < len(coeffs) {
-		return nil, fmt.Errorf("not enough values")
-	}
-
-	output := make([]float64, len(input))
-	for i := 0; i < len(coeffs); i++ {
-		var sum float64
-
-		for j := 0; j <= i; j++ {
-			sum += (input[j] * coeffs[len(coeffs)-(1+i-j)])
-		}
-		output[i] = sum
-	}
-
-	for i := len(coeffs); i < len(input); i++ {
-		var sum float64
-		for j := 0; j < len(coeffs); j++ {
-			sum += (input[i-j] * coeffs[j])
-		}
-		output[i] = sum
-	}
-
-	return output, nil
-}
-
 var supportedVariables = []string{
 	"offset",
 	"delay",
