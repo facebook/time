@@ -17,7 +17,6 @@ limitations under the License.
 package cmd
 
 import (
-	"errors"
 	"net"
 	"os"
 	"time"
@@ -66,7 +65,8 @@ func certFunc() error {
 	}
 
 	if bundle.Equals(remoteBundle) {
-		return errors.New("new certificate matches existing certificate")
+		log.Debugf("%s: certificate is up to date", target)
+		return nil
 	}
 
 	if !apply {
