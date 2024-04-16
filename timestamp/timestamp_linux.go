@@ -126,7 +126,7 @@ func ioctlTimestamp(fd int, ifname string, filter int32) error {
 
 	i := &ifreq{data: uintptr(unsafe.Pointer(hw))}
 	copy(i.name[:unix.IFNAMSIZ-1], ifname)
-	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SIOCGHWTSTAMP, uintptr(unsafe.Pointer(i))); errno != 0 {
+	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SIOCGHWTSTAMP, uintptr(unsafe.Pointer(i))); errno != 0 && errno != unix.ENOTSUP {
 		return fmt.Errorf("failed to run ioctl SIOCGHWTSTAMP to see what is enabled: %s (%w)", unix.ErrnoName(errno), errno)
 	}
 
