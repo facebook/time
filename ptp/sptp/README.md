@@ -65,7 +65,7 @@ Additionally, `originTimestamp` field contains **T1** (time when server sent *SY
 
 ## Quick Installation
 ```console
-go get github.com/facebook/time/cmd/sptp@latest
+go install github.com/facebook/time/cmd/sptp@latest
 ```
 
 ## Requirements
