@@ -24,5 +24,5 @@ NTPSHM library
 
 ### Quick Installation
 ```console
-go get github.com/facebook/time/cmd/ntpresponder
+go install github.com/facebook/time/cmd/ntpresponder@latest
 ```

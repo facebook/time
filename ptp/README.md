@@ -15,7 +15,7 @@ Scalable unicast PTP server supporting PTP and SPTP.
 
 ### Quick Installation
 ```console
-go get github.com/facebook/time/cmd/ptp4u@latest
+go install github.com/facebook/time/cmd/ptp4u@latest
 ```
 
 ## SPTP
@@ -23,7 +23,7 @@ Scalable unicast SPTP client.
 
 ### Quick Installation
 ```console
-go get github.com/facebook/time/cmd/sptp@latest
+go install github.com/facebook/time/cmd/sptp@latest
 ```
 
 ## Simpleclient
