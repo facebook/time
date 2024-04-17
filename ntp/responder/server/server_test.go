@@ -45,14 +45,14 @@ var ntpRequest = &ntp.Packet{
 
 func TestFillStaticHeadersStratum(t *testing.T) {
 	stratum := 1
-	s := &Server{Stratum: stratum}
+	s := &Server{Config: Config{Stratum: stratum}}
 	response := &ntp.Packet{}
 	s.fillStaticHeaders(response)
 	require.Equal(t, uint8(stratum), response.Stratum)
 }
 
 func TestFillStaticHeadersReferenceID(t *testing.T) {
-	s := &Server{RefID: "CHANDLER"}
+	s := &Server{Config: Config{RefID: "CHANDLER"}}
 	response := &ntp.Packet{}
 
 	s.fillStaticHeaders(response)

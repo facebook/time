@@ -44,31 +44,26 @@ type task struct {
 
 // Server is a type for UDP server which handles connections.
 type Server struct {
-	ListenConfig   ListenConfig
-	Workers        int
-	Announce       Announce
-	Stats          Stats
-	Checker        Checker
-	tasks          chan task
-	ExtraOffset    time.Duration
-	RefID          string
-	Stratum        int
-	ManageLoopback bool
+	Config   Config
+	Announce Announce
+	Stats    Stats
+	Checker  Checker
+	tasks    chan task
 }
 
 // Start UDP server.
 func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
-	log.Infof("Creating %d goroutine workers", s.Workers)
-	s.tasks = make(chan task, s.Workers)
+	log.Infof("Creating %d goroutine workers", s.Config.Workers)
+	s.tasks = make(chan task, s.Config.Workers)
 	// Pre-create workers
-	for i := 0; i < s.Workers; i++ {
+	for i := 0; i < s.Config.Workers; i++ {
 		go s.startWorker()
 	}
 
-	log.Infof("Starting %d listener(s)", len(s.ListenConfig.IPs))
+	log.Infof("Starting %d listener(s)", len(s.Config.IPs))
 
-	for _, ip := range s.ListenConfig.IPs {
-		log.Infof("Starting listener on %s:%d", ip.String(), s.ListenConfig.Port)
+	for _, ip := range s.Config.IPs {
+		log.Infof("Starting listener on %s:%d", ip.String(), s.Config.Port)
 
 		go func(ip net.IP) {
 			s.Stats.IncListeners()
@@ -77,7 +72,7 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 				log.Errorf("[server]: %v", err)
 			}
 
-			conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: s.ListenConfig.Port})
+			conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: s.Config.Port})
 			if err != nil {
 				log.Fatalf("listening error: %v", err)
 			}
@@ -109,10 +104,10 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 		case <-ctx.Done():
 			return
 		case <-time.After(30 * time.Second):
-			if s.ListenConfig.ShouldAnnounce {
+			if s.Config.ShouldAnnounce {
 				// First run will be 30 seconds delayed
 				log.Debug("Requesting VIPs announce")
-				err := s.Announce.Advertise(s.ListenConfig.IPs)
+				err := s.Announce.Advertise(s.Config.IPs)
 				if err != nil {
 					log.Errorf("Error during announcement: %v", err)
 					s.Stats.ResetAnnounce()
@@ -188,7 +183,7 @@ func (s *Server) startWorker() {
 	s.Stats.IncWorkers()
 	for {
 		t := <-s.tasks
-		t.serve(response, s.ExtraOffset)
+		t.serve(response, s.Config.ExtraOffset)
 	}
 }
 
@@ -220,14 +215,14 @@ func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 // fillStaticHeaders pre-sets all the headers per worker which will never change
 // numbers are taken from tcpdump.
 func (s *Server) fillStaticHeaders(response *ntp.Packet) {
-	response.Stratum = uint8(s.Stratum)
+	response.Stratum = uint8(s.Config.Stratum)
 	response.Precision = -32
 	// Root delay. We pretend to be stratum 1
 	response.RootDelay = 0
 	// Root dispersion, big-endian 0.000152
 	response.RootDispersion = 10
 	// Reference ID ATOM. Only for stratum 1
-	response.ReferenceID = binary.BigEndian.Uint32([]byte(fmt.Sprintf("%-4s", s.RefID)))
+	response.ReferenceID = binary.BigEndian.Uint32([]byte(fmt.Sprintf("%-4s", s.Config.RefID)))
 }
 
 // generateResponse generates response NTP packet

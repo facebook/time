@@ -40,26 +40,25 @@ func main() {
 	s := server.Server{}
 
 	var (
-		debugger       bool
-		logLevel       string
-		monitoringport int
+		debugger bool
+		logLevel string
 	)
 
 	flag.StringVar(&logLevel, "loglevel", "info", "Set a log level. Can be: debug, info, warning, error")
-	flag.StringVar(&s.ListenConfig.Iface, "interface", "lo", "Interface to add IPs to")
-	flag.StringVar(&s.RefID, "refid", "OLEG", "Reference ID of the server")
-	flag.IntVar(&s.ListenConfig.Port, "port", 123, "Port to run service on")
-	flag.IntVar(&monitoringport, "monitoringport", 0, "Port to run monitoring server on")
-	flag.IntVar(&s.Stratum, "stratum", 1, "Stratum of the server")
-	flag.IntVar(&s.Workers, "workers", runtime.NumCPU()*100, "How many workers (routines) to run")
-	flag.Var(&s.ListenConfig.IPs, "ip", fmt.Sprintf("IP to listen to. Repeat for multiple. Default: %s", server.DefaultServerIPs))
+	flag.StringVar(&s.Config.Iface, "interface", "lo", "Interface to add IPs to")
+	flag.StringVar(&s.Config.RefID, "refid", "OLEG", "Reference ID of the server")
+	flag.IntVar(&s.Config.Port, "port", 123, "Port to run service on")
+	flag.IntVar(&s.Config.MonitoringPort, "monitoringport", 0, "Port to run monitoring server on")
+	flag.IntVar(&s.Config.Stratum, "stratum", 1, "Stratum of the server")
+	flag.IntVar(&s.Config.Workers, "workers", runtime.NumCPU()*100, "How many workers (routines) to run")
+	flag.Var(&s.Config.IPs, "ip", fmt.Sprintf("IP to listen to. Repeat for multiple. Default: %s", server.DefaultServerIPs))
 	flag.BoolVar(&debugger, "pprof", false, "Enable pprof")
-	flag.BoolVar(&s.ListenConfig.ShouldAnnounce, "announce", false, "Advertize IPs")
-	flag.DurationVar(&s.ExtraOffset, "extraoffset", 0, "Extra offset to return to clients")
-	flag.BoolVar(&s.ManageLoopback, "manage-loopback", true, "Add/remove IPs. If false, these must be managed elsewhere")
+	flag.BoolVar(&s.Config.ShouldAnnounce, "announce", false, "Advertize IPs")
+	flag.DurationVar(&s.Config.ExtraOffset, "extraoffset", 0, "Extra offset to return to clients")
+	flag.BoolVar(&s.Config.ManageLoopback, "manage-loopback", true, "Add/remove IPs. If false, these must be managed elsewhere")
 
 	flag.Parse()
-	s.ListenConfig.IPs.SetDefault()
+	s.Config.IPs.SetDefault()
 
 	switch logLevel {
 	case "debug":
@@ -74,8 +73,8 @@ func main() {
 		log.Fatalf("Unrecognized log level: %v", logLevel)
 	}
 
-	if s.Workers < 1 {
-		log.Fatalf("Will not start without workers")
+	if err := s.Config.Validate(); err != nil {
+		log.Fatalf("Config is invalid: %v", err)
 	}
 
 	if debugger {
@@ -85,21 +84,21 @@ func main() {
 		}()
 	}
 
-	if s.ListenConfig.ShouldAnnounce {
+	if s.Config.ShouldAnnounce {
 		log.Warningf("Will announce VIPs")
 	}
 
 	// Monitoring
 	// Replace with your implementation of Stats
 	st := &stats.JSONStats{}
-	go st.Start(monitoringport)
+	go st.Start(s.Config.MonitoringPort)
 
 	// Replace with your implementation of Announce
 	s.Announce = &announce.NoopAnnounce{}
 
 	ch := &checker.SimpleChecker{
-		ExpectedListeners: int64(len(s.ListenConfig.IPs)),
-		ExpectedWorkers:   int64(s.Workers),
+		ExpectedListeners: int64(len(s.Config.IPs)),
+		ExpectedWorkers:   int64(s.Config.Workers),
 	}
 
 	// context is used in server in case work needs to be interrupted internally
