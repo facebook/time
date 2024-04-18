@@ -61,3 +61,10 @@ func TestConfigSetDefault(t *testing.T) {
 
 	require.Equal(t, DefaultServerIPs, m)
 }
+
+func TestConfigValidate(t *testing.T) {
+	c := Config{Workers: 42}
+	require.NoError(t, c.Validate())
+	c.Workers = 0
+	require.Error(t, c.Validate())
+}

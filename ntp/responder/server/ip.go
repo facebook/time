@@ -31,14 +31,14 @@ const ipv6Mask = 64
 
 // AddIPOnInterface adds ip to interface
 func (s *Server) addIPToInterface(vip net.IP) error {
-	if !s.ManageLoopback {
+	if !s.Config.ManageLoopback {
 		return nil
 	}
-	log.Infof("Adding %s to %s", vip, s.ListenConfig.Iface)
+	log.Infof("Adding %s to %s", vip, s.Config.Iface)
 	// Add IPs to the interface
-	iface, err := net.InterfaceByName(s.ListenConfig.Iface)
+	iface, err := net.InterfaceByName(s.Config.Iface)
 	if err != nil {
-		return fmt.Errorf("failed to add IP to the %s interface: %w", s.ListenConfig.Iface, err)
+		return fmt.Errorf("failed to add IP to the %s interface: %w", s.Config.Iface, err)
 	}
 
 	return addIfaceIP(iface, &vip)
@@ -46,12 +46,12 @@ func (s *Server) addIPToInterface(vip net.IP) error {
 
 // deleteIPFromInterface deletes ip from interface
 func (s *Server) deleteIPFromInterface(vip net.IP) error {
-	if !s.ManageLoopback {
+	if !s.Config.ManageLoopback {
 		return nil
 	}
-	log.Infof("Deleting %s to %s", vip, s.ListenConfig.Iface)
+	log.Infof("Deleting %s to %s", vip, s.Config.Iface)
 	// Delete IPs to the interface
-	iface, err := net.InterfaceByName(s.ListenConfig.Iface)
+	iface, err := net.InterfaceByName(s.Config.Iface)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (s *Server) deleteIPFromInterface(vip net.IP) error {
 
 // DeleteAllIPs deletes all IPs from interface specified in config
 func (s *Server) DeleteAllIPs() {
-	for _, vip := range s.ListenConfig.IPs {
+	for _, vip := range s.Config.IPs {
 		if err := s.deleteIPFromInterface(vip); err != nil {
 			// Don't return error. Continue deleting
 			log.Errorf("[server]: %v", err)

@@ -20,17 +20,24 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 )
 
 // DefaultServerIPs is a default list of IPs server will bind to if nothing else is specified
 var DefaultServerIPs = MultiIPs{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}
 
-// ListenConfig is a wrapper around multiple IPs and Port to bind to
-type ListenConfig struct {
-	IPs            MultiIPs
-	Port           int
-	ShouldAnnounce bool
+// Config is a server config structure
+type Config struct {
+	ExtraOffset    time.Duration
 	Iface          string
+	IPs            MultiIPs
+	ManageLoopback bool
+	MonitoringPort int
+	Port           int
+	RefID          string
+	ShouldAnnounce bool
+	Stratum        int
+	Workers        int
 }
 
 // MultiIPs is a wrapper allowing to set multiple IPs with flag parser
@@ -62,4 +69,12 @@ func (m *MultiIPs) SetDefault() {
 	}
 
 	*m = DefaultServerIPs
+}
+
+// Validate checks if config is valid
+func (c *Config) Validate() error {
+	if c.Workers < 1 {
+		return fmt.Errorf("will not start without workers")
+	}
+	return nil
 }
