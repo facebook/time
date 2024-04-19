@@ -17,20 +17,13 @@ limitations under the License.
 package server
 
 import (
+	"fmt"
 	"net"
+	"os/exec"
+	"time"
 
-	"github.com/jsimonetti/rtnetlink/rtnl"
 	errors "github.com/pkg/errors"
 )
-
-// bitsInBytes is a number of bits in byte
-const bitsInBytes = 8
-
-// ipv4Len is the IPv4 len in bits
-const ipv4Len = net.IPv4len * bitsInBytes
-
-// ipv6Len is the IPv6 len in bits
-const ipv6Len = net.IPv6len * bitsInBytes
 
 func addIfaceIP(iface *net.Interface, addr *net.IP) error {
 	// Check if IP is assigned:
@@ -42,21 +35,19 @@ func addIfaceIP(iface *net.Interface, addr *net.IP) error {
 		return nil
 	}
 
-	conn, err := rtnl.Dial(nil)
-	if err != nil {
-		return errors.Wrap(err, "can't establish netlink connection")
-	}
-	defer conn.Close()
-
-	var mask net.IPMask
+	var mask int
+	var proto string
 	if v4 := addr.To4(); v4 == nil {
-		mask = net.CIDRMask(ipv6Mask, ipv6Len)
+		proto = "inet6"
+		mask = ipv6Mask
 	} else {
-		mask = net.CIDRMask(ipv4Mask, ipv4Len)
+		proto = "inet"
+		mask = ipv4Mask
 	}
 
-	err = conn.AddrAdd(iface, &net.IPNet{IP: *addr, Mask: mask})
-	if err != nil {
+	cmd := exec.Command("ifconfig", iface.Name, proto, "alias", fmt.Sprintf("%s/%d", addr.String(), mask))
+	fmt.Println(cmd.Args)
+	if err := cmd.Run(); err != nil {
 		return errors.Wrap(err, "can't add address")
 	}
 	return nil
@@ -72,23 +63,23 @@ func deleteIfaceIP(iface *net.Interface, addr *net.IP) error {
 		return nil
 	}
 
-	conn, err := rtnl.Dial(nil)
-	if err != nil {
-		return errors.Wrap(err, "can't establish netlink connection")
-	}
-	defer conn.Close()
-
-	var mask net.IPMask
+	var proto string
 	if v4 := addr.To4(); v4 == nil {
-		mask = net.CIDRMask(ipv6Mask, ipv6Len)
+		proto = "inet6"
 	} else {
-		mask = net.CIDRMask(ipv4Mask, ipv4Len)
+		proto = "inet"
 	}
 
-	err = conn.AddrDel(iface, &net.IPNet{IP: *addr, Mask: mask})
-	if err != nil {
+	cmd := exec.Command("ifconfig", iface.Name, proto, "-alias", addr.String())
+	if err := cmd.Run(); err != nil {
 		return errors.Wrap(err, "can't remove address")
 	}
 
 	return nil
+}
+
+// PHCOffset periodically checks for PHC-SYS offset and updates it in the config
+// PHC reading is not supported on FreeBSD
+func phcOffset(iface string) (time.Duration, error) {
+	return 0, nil
 }

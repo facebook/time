@@ -17,6 +17,7 @@ limitations under the License.
 package timestamp
 
 import (
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -53,6 +54,32 @@ func TestEnableSWTimestampsRx(t *testing.T) {
 
 	// To be enabled must be > 0
 	require.Greater(t, kernelTimestampsEnabled, 0, "Kernel timestamps are not enabled")
+}
+
+func TestEnableTimestamps(t *testing.T) {
+	// listen to incoming udp packets
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	require.NoError(t, err)
+	defer conn.Close()
+
+	connFd, err := ConnFd(conn)
+	require.NoError(t, err)
+
+	// SOFTWARE
+	// Allow reading of kernel timestamps via socket
+	err = EnableTimestamps(SWTIMESTAMP, connFd, "lo")
+	require.NoError(t, err)
+
+	// Check that socket option is set
+	kernelTimestampsEnabled, err := unix.GetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_TIMESTAMP)
+	require.NoError(t, err)
+
+	// To be enabled must be > 0
+	require.Greater(t, kernelTimestampsEnabled, 0, "Kernel timestamps are not enabled")
+
+	// HARDWARE
+	err = EnableTimestamps(HWTIMESTAMP, connFd, "lo")
+	require.Equal(t, fmt.Errorf("Unrecognized timestamp type: %s", HWTIMESTAMP), err)
 }
 
 func TestReadPacketWithRXTimestamp(t *testing.T) {

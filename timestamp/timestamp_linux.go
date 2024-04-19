@@ -287,3 +287,20 @@ func socketControlMessageTimestamp(b []byte) (time.Time, error) {
 	}
 	return time.Time{}, errNoTimestamp
 }
+
+// EnableTimestamps enables timestamps on the socket based on requested type
+func EnableTimestamps(ts string, connFd int, iface string) error {
+	switch ts {
+	case HWTIMESTAMP:
+		if err := EnableHWTimestamps(connFd, iface); err != nil {
+			return fmt.Errorf("cannot enable hardware timestamps: %w", err)
+		}
+	case SWTIMESTAMP:
+		if err := EnableSWTimestamps(connFd); err != nil {
+			return fmt.Errorf("cannot enable software timestamps: %w", err)
+		}
+	default:
+		return fmt.Errorf("Unrecognized timestamp type: %s", ts)
+	}
+	return nil
+}

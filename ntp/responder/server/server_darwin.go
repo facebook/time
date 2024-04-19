@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"time"
 
 	errors "github.com/pkg/errors"
 )
@@ -74,4 +75,10 @@ func deleteIfaceIP(iface *net.Interface, addr *net.IP) error {
 	}
 
 	return nil
+}
+
+// PHCOffset periodically checks for PHC-SYS offset and updates it in the config
+// PHC reading is not supported on Darwin
+func phcOffset(iface string) (time.Duration, error) {
+	return 0, nil
 }
