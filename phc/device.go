@@ -139,3 +139,24 @@ func IfacesInfo() ([]IfaceData, error) {
 	}
 	return res, nil
 }
+
+// DeviceFromIface returns a path to a PHC device from a network interface
+func DeviceFromIface(iface string) (string, error) {
+	ifaces, err := IfacesInfo()
+	if err != nil {
+		return "", err
+	}
+	if len(ifaces) == 0 {
+		return "", fmt.Errorf("no network devices found")
+	}
+
+	for _, d := range ifaces {
+		if d.Iface.Name == iface {
+			if d.TSInfo.PHCIndex < 0 {
+				return "", fmt.Errorf("no PHC support for %s", iface)
+			}
+			return fmt.Sprintf("/dev/ptp%d", d.TSInfo.PHCIndex), nil
+		}
+	}
+	return "", fmt.Errorf("%s interface is not found", iface)
+}

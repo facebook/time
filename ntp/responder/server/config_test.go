@@ -21,6 +21,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/facebook/time/timestamp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,8 +64,18 @@ func TestConfigSetDefault(t *testing.T) {
 }
 
 func TestConfigValidate(t *testing.T) {
-	c := Config{Workers: 42}
+	c := Config{Workers: 42, TimestampType: timestamp.SWTIMESTAMP}
 	require.NoError(t, c.Validate())
+
+	// Workers
 	c.Workers = 0
 	require.Error(t, c.Validate())
+	c.Workers = 42
+
+	// Timestamp type
+	c.TimestampType = "bad"
+	require.Error(t, c.Validate())
+	c.TimestampType = timestamp.HWTIMESTAMP
+
+	require.NoError(t, c.Validate())
 }

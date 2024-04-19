@@ -21,6 +21,8 @@ import (
 	"net"
 	"strings"
 	"time"
+
+	"github.com/facebook/time/timestamp"
 )
 
 // DefaultServerIPs is a default list of IPs server will bind to if nothing else is specified
@@ -37,7 +39,9 @@ type Config struct {
 	RefID          string
 	ShouldAnnounce bool
 	Stratum        int
+	TimestampType  string
 	Workers        int
+	phcOffset      time.Duration
 }
 
 // MultiIPs is a wrapper allowing to set multiple IPs with flag parser
@@ -75,6 +79,9 @@ func (m *MultiIPs) SetDefault() {
 func (c *Config) Validate() error {
 	if c.Workers < 1 {
 		return fmt.Errorf("will not start without workers")
+	}
+	if c.TimestampType != timestamp.HWTIMESTAMP && c.TimestampType != timestamp.SWTIMESTAMP {
+		return fmt.Errorf("invalid timestamp type %s", c.TimestampType)
 	}
 	return nil
 }

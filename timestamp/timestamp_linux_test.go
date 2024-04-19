@@ -196,6 +196,32 @@ func TestEnableSWTimestamps(t *testing.T) {
 	require.Greater(t, timestampsEnabled+newTimestampsEnabled, 0, "None of the socket options is set")
 }
 
+func TestEnableTimestamps(t *testing.T) {
+	// listen to incoming udp packets
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	require.NoError(t, err)
+	defer conn.Close()
+
+	connFd, err := ConnFd(conn)
+	require.NoError(t, err)
+
+	// SOFTWARE
+	// Allow reading of kernel timestamps via socket
+	err = EnableTimestamps(SWTIMESTAMP, connFd, "lo")
+	require.NoError(t, err)
+
+	// Check that socket option is set
+	timestampsEnabled, _ := unix.GetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_TIMESTAMPING)
+	newTimestampsEnabled, _ := unix.GetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_TIMESTAMPING_NEW)
+
+	// At least one of them should be set, which it > 0
+	require.Greater(t, timestampsEnabled+newTimestampsEnabled, 0, "None of the socket options is set")
+
+	// Unsupported
+	err = EnableTimestamps("Unsupported", connFd, "lo")
+	require.Equal(t, fmt.Errorf("Unrecognized timestamp type: Unsupported"), err)
+}
+
 func TestSocketControlMessageTimestamp(t *testing.T) {
 	if timestamping != unix.SO_TIMESTAMPING_NEW {
 		t.Skip("This test supports SO_TIMESTAMPING_NEW only. No sample of SO_TIMESTAMPING")

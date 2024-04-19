@@ -66,3 +66,16 @@ func EnableSWTimestampsRx(connFd int) error {
 	// Allow reading of SW timestamps via socket
 	return unix.SetsockoptInt(connFd, unix.SOL_SOCKET, timestamping, 1)
 }
+
+// EnableTimestamps enables timestamps on the socket based on requested type
+func EnableTimestamps(ts string, connFd int, _ string) error {
+	switch ts {
+	case SWTIMESTAMP:
+		if err := EnableSWTimestampsRx(connFd); err != nil {
+			return fmt.Errorf("Cannot enable software timestamps: %w", err)
+		}
+	default:
+		return fmt.Errorf("Unrecognized timestamp type: %s", ts)
+	}
+	return nil
+}

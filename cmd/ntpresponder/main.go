@@ -31,6 +31,7 @@ import (
 	"github.com/facebook/time/ntp/responder/checker"
 	"github.com/facebook/time/ntp/responder/server"
 	"github.com/facebook/time/ntp/responder/stats"
+	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -56,6 +57,7 @@ func main() {
 	flag.BoolVar(&s.Config.ShouldAnnounce, "announce", false, "Advertize IPs")
 	flag.DurationVar(&s.Config.ExtraOffset, "extraoffset", 0, "Extra offset to return to clients")
 	flag.BoolVar(&s.Config.ManageLoopback, "manage-loopback", true, "Add/remove IPs. If false, these must be managed elsewhere")
+	flag.StringVar(&s.Config.TimestampType, "timestamptype", timestamp.SWTIMESTAMP, fmt.Sprintf("Timestamp type. Can be: %s, %s", timestamp.HWTIMESTAMP, timestamp.SWTIMESTAMP))
 
 	flag.Parse()
 	s.Config.IPs.SetDefault()

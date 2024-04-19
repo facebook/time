@@ -99,6 +99,23 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 		}
 	}()
 
+	// Run PHC-SYS offset periodically
+	if s.Config.TimestampType == timestamp.HWTIMESTAMP {
+		log.Infof("Starting periodic measurement between phc and sysclock")
+		go func() {
+			for ; ; time.Sleep(time.Second) {
+				offset, err := phcOffset(s.Config.Iface)
+				if err != nil {
+					log.Errorf("[phcoffset] failed to get PHC-SYS offset: %v", err)
+					cancelFunc()
+					return
+				}
+				s.Config.phcOffset = offset
+				log.Debugf("[phcoffset] offset between PHC and SYS: %v", offset)
+			}
+		}()
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -139,9 +156,9 @@ func (s *Server) startListener(conn *net.UDPConn) {
 		log.Fatalf("Getting event connection FD: %s", err)
 	}
 
-	// Allow reading of kernel timestamps via socket
-	if err = timestamp.EnableSWTimestampsRx(connFd); err != nil {
-		log.Fatalf("enabling timestamp error: %s", err)
+	// Enable RX timestamps
+	if err := timestamp.EnableTimestamps(s.Config.TimestampType, connFd, s.Config.Iface); err != nil {
+		log.Fatal(err)
 	}
 
 	err = unix.SetNonblock(connFd, false)
@@ -160,6 +177,10 @@ func (s *Server) startListener(conn *net.UDPConn) {
 			log.Errorf("Failed to read packet on %s: %v", conn.LocalAddr(), err)
 			s.Stats.IncReadError()
 			continue
+		}
+
+		if s.Config.TimestampType == timestamp.HWTIMESTAMP {
+			rxTS = rxTS.Add(s.Config.phcOffset)
 		}
 
 		if err := request.UnmarshalBinary(buf[:bbuf]); err != nil {
