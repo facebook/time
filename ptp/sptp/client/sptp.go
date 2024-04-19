@@ -139,27 +139,10 @@ func (p *SPTP) init() error {
 	}
 
 	// we need to enable HW or SW timestamps on event port
-	switch p.cfg.Timestamping {
-	case "": // auto-detection
-		if err = timestamp.EnableHWTimestamps(connFd, p.cfg.Iface); err != nil {
-			if err = timestamp.EnableSWTimestamps(connFd); err != nil {
-				return fmt.Errorf("failed to enable timestamps on port %d: %w", ptp.PortEvent, err)
-			}
-			log.Warningf("Failed to enable hardware timestamps on port %d, falling back to software timestamps", ptp.PortEvent)
-		} else {
-			log.Infof("Using hardware timestamps")
-		}
-	case HWTIMESTAMP:
-		if err = timestamp.EnableHWTimestamps(connFd, p.cfg.Iface); err != nil {
-			return fmt.Errorf("failed to enable hardware timestamps on port %d: %w", ptp.PortEvent, err)
-		}
-	case SWTIMESTAMP:
-		if err = timestamp.EnableSWTimestamps(connFd); err != nil {
-			return fmt.Errorf("failed to enable software timestamps on port %d: %w", ptp.PortEvent, err)
-		}
-	default:
-		return fmt.Errorf("unknown type of typestamping: %q", p.cfg.Timestamping)
+	if err := timestamp.EnableTimestamps(p.cfg.Timestamping, connFd, p.cfg.Iface); err != nil {
+		return err
 	}
+
 	// set it to blocking mode, otherwise recvmsg will just return with nothing most of the time
 	if err = unix.SetNonblock(connFd, false); err != nil {
 		return fmt.Errorf("failed to set event socket to blocking: %w", err)
