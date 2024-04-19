@@ -17,7 +17,7 @@ Chrony control protocol implementation
 ntpd control protocol implementation
 
 ## Responder
-Simple NTP server implementation with kernel timestamps support
+Simple NTP server implementation with hardware timestamps support
 
 ## shm
 NTPSHM library
