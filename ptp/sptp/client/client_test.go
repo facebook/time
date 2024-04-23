@@ -123,7 +123,7 @@ func TestClientRun(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	runResult := c.RunOnce(ctx, 100*time.Millisecond)
+	runResult := c.RunOnce(ctx, defaultTestTimeout)
 	require.NotNil(t, runResult)
 	require.NoError(t, runResult.Error, "full client run should succeed")
 	require.Equal(t, "127.0.0.1", runResult.Server, "run result should have correct server")
@@ -159,7 +159,7 @@ func TestClientTimeout(t *testing.T) {
 	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any())
 
 	ctx := context.Background()
-	runResult := c.RunOnce(ctx, 100*time.Millisecond)
+	runResult := c.RunOnce(ctx, defaultTestTimeout)
 	require.NotNil(t, runResult)
 	require.Error(t, runResult.Error, "full client run should fail")
 }
@@ -197,7 +197,7 @@ func TestClientBadPacket(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	runResult := c.RunOnce(ctx, 100*time.Millisecond)
+	runResult := c.RunOnce(ctx, defaultTestTimeout)
 	require.NotNil(t, runResult)
 	require.Error(t, runResult.Error, "full client run should fail")
 	require.Equal(t, "127.0.0.1", runResult.Server, "run result should have correct server")

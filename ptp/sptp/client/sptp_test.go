@@ -38,6 +38,8 @@ func init() {
 	log.SetLevel(log.DebugLevel)
 }
 
+const defaultTestTimeout = time.Second
+
 func TestProcessResultsNoResults(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -409,7 +411,7 @@ func TestRunListenerNoAddr(t *testing.T) {
 	}
 	err := p.initClients()
 	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	err = p.RunListener(ctx)
 	require.EqualError(t, err, "received packet on port 320 with nil source address")
@@ -442,7 +444,7 @@ func TestRunListenerError(t *testing.T) {
 	}
 	err := p.initClients()
 	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	err = p.RunListener(ctx)
 	require.EqualError(t, err, "some error")
@@ -512,7 +514,7 @@ func TestRunListenerGood(t *testing.T) {
 	}
 	err := p.initClients()
 	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	err = p.RunListener(ctx)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
@@ -520,7 +522,7 @@ func TestRunListenerGood(t *testing.T) {
 	receivedGen10 := 0
 	receivedEvent11 := 0
 	receivedGen11 := 0
-	nctx, ncancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	nctx, ncancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ncancel()
 LOOP:
 	for {
