@@ -39,7 +39,7 @@ type Config struct {
 	RefID          string
 	ShouldAnnounce bool
 	Stratum        int
-	TimestampType  string
+	TimestampType  timestamp.Timestamp
 	Workers        int
 	phcOffset      time.Duration
 }
@@ -80,8 +80,8 @@ func (c *Config) Validate() error {
 	if c.Workers < 1 {
 		return fmt.Errorf("will not start without workers")
 	}
-	if c.TimestampType != timestamp.HWTIMESTAMP && c.TimestampType != timestamp.SWTIMESTAMP {
-		return fmt.Errorf("invalid timestamp type %s", c.TimestampType)
+	if c.TimestampType != timestamp.HWRX && c.TimestampType != timestamp.SWRX {
+		return fmt.Errorf("unsupported timestamp type %s", c.TimestampType)
 	}
 	return nil
 }

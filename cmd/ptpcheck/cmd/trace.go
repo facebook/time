@@ -28,19 +28,20 @@ import (
 	"github.com/spf13/cobra"
 
 	client "github.com/facebook/time/ptp/simpleclient"
+	"github.com/facebook/time/timestamp"
 )
 
 var traceRemoteServerFlag string
 var traceDurationFlag time.Duration
 var traceTimeoutFlag time.Duration
 var traceIfaceFlag string
-var traceTimestampingFlag string
+var traceTimestampingFlag timestamp.Timestamp
 
 func init() {
 	RootCmd.AddCommand(traceCmd)
 	traceCmd.Flags().StringVarP(&traceRemoteServerFlag, "server", "S", "", "remote PTP server to connect to")
 	traceCmd.Flags().StringVarP(&traceIfaceFlag, "iface", "i", "eth0", "network interface to use")
-	traceCmd.Flags().StringVarP(&traceTimestampingFlag, "timestamping", "T", "", fmt.Sprintf("timestamping to use, either %q or %q. empty means auto-detection", client.HWTIMESTAMP, client.SWTIMESTAMP))
+	traceCmd.Flags().VarP(&traceTimestampingFlag, "timestamping", "T", fmt.Sprintf("timestamping to use, either %q or %q", timestamp.HW, timestamp.SW))
 	traceCmd.Flags().DurationVarP(&traceTimeoutFlag, "timeout", "t", 15*time.Second, "global timeout")
 	traceCmd.Flags().DurationVarP(&traceDurationFlag, "duration", "d", 10*time.Second, "duration of the exchange")
 }

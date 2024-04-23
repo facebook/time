@@ -174,7 +174,7 @@ func (s *sendWorker) Start() {
 					log.Warningf("Failed to read TX timestamp: %v", err)
 					continue
 				}
-				if s.config.TimestampType != timestamp.HWTIMESTAMP {
+				if s.config.TimestampType != timestamp.HW {
 					txTS = txTS.Add(s.config.UTCOffset)
 				}
 
@@ -248,7 +248,7 @@ func (s *sendWorker) Start() {
 					log.Warningf("Failed to read TX timestamp: %v", err)
 					continue
 				}
-				if s.config.TimestampType != timestamp.HWTIMESTAMP {
+				if s.config.TimestampType != timestamp.HW {
 					txTS = txTS.Add(s.config.UTCOffset)
 				}
 

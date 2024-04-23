@@ -100,7 +100,7 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 	}()
 
 	// Run PHC-SYS offset periodically
-	if s.Config.TimestampType == timestamp.HWTIMESTAMP {
+	if s.Config.TimestampType == timestamp.HWRX {
 		log.Infof("Starting periodic measurement between phc and sysclock")
 		go func() {
 			for ; ; time.Sleep(time.Second) {
@@ -179,7 +179,7 @@ func (s *Server) startListener(conn *net.UDPConn) {
 			continue
 		}
 
-		if s.Config.TimestampType == timestamp.HWTIMESTAMP {
+		if s.Config.TimestampType == timestamp.HWRX {
 			rxTS = rxTS.Add(s.Config.phcOffset)
 		}
 

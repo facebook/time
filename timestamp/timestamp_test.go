@@ -17,6 +17,7 @@ limitations under the License.
 package timestamp
 
 import (
+	"errors"
 	"net"
 	"testing"
 
@@ -87,4 +88,57 @@ func TestSockaddrToPort(t *testing.T) {
 
 	require.Equal(t, port, SockaddrToPort(sa4))
 	require.Equal(t, port, SockaddrToPort(sa6))
+}
+
+func TestTimestampUnmarshalText(t *testing.T) {
+	var ts Timestamp
+	require.Equal(t, "timestamp", ts.Type())
+
+	err := ts.UnmarshalText([]byte("hardware"))
+	require.NoError(t, err)
+	require.Equal(t, HW, ts)
+	require.Equal(t, HW.String(), ts.String())
+
+	err = ts.UnmarshalText([]byte("hardware_rx"))
+	require.NoError(t, err)
+	require.Equal(t, HWRX, ts)
+	require.Equal(t, HWRX.String(), ts.String())
+
+	err = ts.UnmarshalText([]byte("software"))
+	require.NoError(t, err)
+	require.Equal(t, SW, ts)
+	require.Equal(t, SW.String(), ts.String())
+
+	err = ts.UnmarshalText([]byte("software_rx"))
+	require.NoError(t, err)
+	require.Equal(t, SWRX, ts)
+	require.Equal(t, SWRX.String(), ts.String())
+
+	err = ts.UnmarshalText([]byte("nope"))
+	require.Equal(t, errors.New("unknown timestamp type \"nope\""), err)
+	// Check we didn't change the value
+	require.Equal(t, SWRX, ts)
+}
+
+func TestTimestampMarshalText(t *testing.T) {
+	text, err := HW.MarshalText()
+	require.NoError(t, err)
+	require.Equal(t, "hardware", string(text))
+
+	text, err = HWRX.MarshalText()
+	require.NoError(t, err)
+	require.Equal(t, "hardware_rx", string(text))
+
+	text, err = SW.MarshalText()
+	require.NoError(t, err)
+	require.Equal(t, "software", string(text))
+
+	text, err = SWRX.MarshalText()
+	require.NoError(t, err)
+	require.Equal(t, "software_rx", string(text))
+
+	require.Equal(t, Unsupported, Timestamp(42).String())
+	text, err = Timestamp(42).MarshalText()
+	require.Equal(t, errors.New("unknown timestamp type \"Unsupported\""), err)
+	require.Equal(t, "Unsupported", string(text))
 }

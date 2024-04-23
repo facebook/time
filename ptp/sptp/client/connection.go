@@ -27,14 +27,6 @@ import (
 	"github.com/facebook/time/timestamp"
 )
 
-// re-export timestamping
-const (
-	// HWTIMESTAMP is a hardware timestamp
-	HWTIMESTAMP = timestamp.HWTIMESTAMP
-	// SWTIMESTAMP is a software timestamp
-	SWTIMESTAMP = timestamp.SWTIMESTAMP
-)
-
 // UDPConn describes what functionality we expect from UDP connection
 type UDPConn interface {
 	ReadFromUDP(b []byte) (int, *net.UDPAddr, error)

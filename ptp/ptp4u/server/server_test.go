@@ -36,7 +36,7 @@ func TestFindWorker(t *testing.T) {
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
 		StaticConfig: StaticConfig{
-			TimestampType: timestamp.SWTIMESTAMP,
+			TimestampType: timestamp.SW,
 			SendWorkers:   10,
 		},
 	}
@@ -79,7 +79,7 @@ func TestStartEventListener(t *testing.T) {
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
 		StaticConfig: StaticConfig{
-			TimestampType: timestamp.SWTIMESTAMP,
+			TimestampType: timestamp.SW,
 			SendWorkers:   10,
 			RecvWorkers:   10,
 			IP:            net.ParseIP("127.0.0.1"),
@@ -99,7 +99,7 @@ func TestStartGeneralListener(t *testing.T) {
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
 		StaticConfig: StaticConfig{
-			TimestampType: timestamp.SWTIMESTAMP,
+			TimestampType: timestamp.SW,
 			SendWorkers:   10,
 			RecvWorkers:   10,
 			IP:            net.ParseIP("127.0.0.1"),

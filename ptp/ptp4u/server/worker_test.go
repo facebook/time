@@ -32,7 +32,7 @@ func TestWorkerQueue(t *testing.T) {
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
 		StaticConfig: StaticConfig{
-			TimestampType: timestamp.SWTIMESTAMP,
+			TimestampType: timestamp.SW,
 		},
 	}
 
@@ -87,7 +87,7 @@ func TestFindSubscription(t *testing.T) {
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
 		StaticConfig: StaticConfig{
-			TimestampType: timestamp.SWTIMESTAMP,
+			TimestampType: timestamp.SW,
 		},
 	}
 
@@ -115,7 +115,7 @@ func TestFindClients(t *testing.T) {
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
 		StaticConfig: StaticConfig{
-			TimestampType: timestamp.SWTIMESTAMP,
+			TimestampType: timestamp.SW,
 		},
 	}
 

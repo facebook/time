@@ -68,9 +68,9 @@ func EnableSWTimestampsRx(connFd int) error {
 }
 
 // EnableTimestamps enables timestamps on the socket based on requested type
-func EnableTimestamps(ts string, connFd int, _ string) error {
+func EnableTimestamps(ts Timestamp, connFd int, _ string) error {
 	switch ts {
-	case SWTIMESTAMP:
+	case SW:
 		if err := EnableSWTimestampsRx(connFd); err != nil {
 			return fmt.Errorf("Cannot enable software timestamps: %w", err)
 		}

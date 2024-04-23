@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebook/time/timestamp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,7 +42,7 @@ func TestReadConfigDefaults(t *testing.T) {
 		MetricsAggregationWindow: time.Duration(60) * time.Second,
 		AttemptsTXTS:             10,
 		TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-		Timestamping:             HWTIMESTAMP,
+		Timestamping:             timestamp.HW,
 		MaxClockClass:            7,
 		MaxClockAccuracy:         37,
 		Measurement: MeasurementConfig{
@@ -83,7 +84,7 @@ measurement:
 	require.NoError(t, err)
 	want := &Config{
 		Iface:                    "eth0",
-		Timestamping:             "hardware",
+		Timestamping:             timestamp.HW,
 		MonitoringPort:           4269,
 		Interval:                 time.Second,
 		ExchangeTimeout:          200 * time.Millisecond,
@@ -243,7 +244,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -261,7 +262,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -279,7 +280,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -299,7 +300,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -319,7 +320,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -339,7 +340,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -357,7 +358,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             -10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -375,7 +376,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(-50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -393,7 +394,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(-60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -411,7 +412,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -430,7 +431,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -449,7 +450,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             "blah",
+				Timestamping:             42,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -467,7 +468,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -485,7 +486,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -503,7 +504,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -524,7 +525,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -548,7 +549,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -569,7 +570,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            2,
 				MaxClockAccuracy:         37,
 				Servers: map[string]int{
@@ -590,7 +591,7 @@ func TestConfigValidate(t *testing.T) {
 				MetricsAggregationWindow: time.Duration(60) * time.Second,
 				AttemptsTXTS:             10,
 				TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-				Timestamping:             HWTIMESTAMP,
+				Timestamping:             timestamp.HW,
 				MaxClockClass:            7,
 				MaxClockAccuracy:         10,
 				Servers: map[string]int{
@@ -648,7 +649,7 @@ measurement:
 	require.NoError(t, err)
 	want := &Config{
 		Iface:                    "eth1",
-		Timestamping:             "hardware",
+		Timestamping:             timestamp.HW,
 		MonitoringPort:           3456,
 		Interval:                 2 * time.Second,
 		ExchangeTimeout:          200 * time.Millisecond,
@@ -680,7 +681,7 @@ func TestPrepareConfigDefaults(t *testing.T) {
 	require.NoError(t, err)
 	want := &Config{
 		Iface:                    "eth1",
-		Timestamping:             "hardware",
+		Timestamping:             timestamp.HW,
 		MonitoringPort:           3456,
 		Interval:                 2 * time.Second,
 		ExchangeTimeout:          100 * time.Millisecond,

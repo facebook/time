@@ -50,12 +50,78 @@ const (
 	// Socket Control Message Header Offset on Linux
 )
 
+// Timestamp is a type of timestamp
+type Timestamp int
+
 const (
-	// HWTIMESTAMP is a hardware timestamp
-	HWTIMESTAMP = "hardware"
-	// SWTIMESTAMP is a software timestamp
-	SWTIMESTAMP = "software"
+	// SW is a software timestamp
+	SW Timestamp = iota
+	// SWRX is a software RX timestamp
+	SWRX
+	// HW is a hardware timestamp
+	HW
+	// HWRX is a hardware RX timestamp
+	HWRX
 )
+
+// Unsupported is a string for unsupported timestamp
+const Unsupported = "Unsupported"
+
+// timestampToString is a map from Timestamp to string
+var timestampToString = map[Timestamp]string{
+	SW:   "software",
+	SWRX: "software_rx",
+	HW:   "hardware",
+	HWRX: "hardware_rx",
+}
+
+// MarshalText timestamp to byte slice
+func (t Timestamp) MarshalText() ([]byte, error) {
+	_, ok := timestampToString[t]
+	if ok {
+		return []byte(t.String()), nil
+	}
+	return []byte(Unsupported), fmt.Errorf("unknown timestamp type %q", Unsupported)
+}
+
+// String timestamp to string
+func (t Timestamp) String() string {
+	v, ok := timestampToString[t]
+	if ok {
+		return v
+	}
+	return Unsupported
+}
+
+// timestampFromString returns channel from string
+func timestampFromString(value string) (*Timestamp, error) {
+	for k, v := range timestampToString {
+		if v == value {
+			return &k, nil
+		}
+	}
+	return nil, fmt.Errorf("unknown timestamp type %q", value)
+}
+
+// UnmarshalText timestamp from byte slice
+func (t *Timestamp) UnmarshalText(value []byte) error {
+	return t.Set(string(value))
+}
+
+// Set timestamp from string
+func (t *Timestamp) Set(value string) error {
+	ts, err := timestampFromString(value)
+	if err != nil {
+		return err
+	}
+	*t = *ts
+	return nil
+}
+
+// Type is required by the cobra.Value interface
+func (t *Timestamp) Type() string {
+	return "timestamp"
+}
 
 // EthtoolGetTSInfo is get time stamping and PHC info command
 const EthtoolGetTSInfo uint32 = 0x00000041
