@@ -23,6 +23,7 @@ import (
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -76,7 +77,7 @@ func (c *MeasurementConfig) Validate() error {
 // Config specifies SPTP run options
 type Config struct {
 	Iface                    string
-	Timestamping             string
+	Timestamping             timestamp.Timestamp
 	MonitoringPort           int
 	Interval                 time.Duration
 	ExchangeTimeout          time.Duration
@@ -105,7 +106,7 @@ func DefaultConfig() *Config {
 		MetricsAggregationWindow: time.Duration(60) * time.Second,
 		AttemptsTXTS:             10,
 		TimeoutTXTS:              time.Duration(50) * time.Millisecond,
-		Timestamping:             HWTIMESTAMP,
+		Timestamping:             timestamp.HW,
 		Measurement: MeasurementConfig{
 			PathDelayDiscardAbove: time.Second,
 		},
@@ -144,8 +145,8 @@ func (c *Config) Validate() error {
 	if len(c.Servers) == 0 {
 		return fmt.Errorf("at least one server must be specified")
 	}
-	if c.Timestamping != HWTIMESTAMP && c.Timestamping != SWTIMESTAMP {
-		return fmt.Errorf("only %q and %q timestamping is supported", HWTIMESTAMP, SWTIMESTAMP)
+	if c.Timestamping != timestamp.HW && c.Timestamping != timestamp.SW {
+		return fmt.Errorf("only %q and %q timestamping is supported", timestamp.HW, timestamp.SW)
 	}
 	if c.Iface == "" {
 		return fmt.Errorf("iface must be specified")

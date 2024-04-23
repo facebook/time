@@ -58,7 +58,7 @@ func main() {
 	flag.StringVar(&c.Interface, "iface", "eth0", "Set the interface")
 	flag.StringVar(&c.LogLevel, "loglevel", "warning", "Set a log level. Can be: debug, info, warning, error")
 	flag.StringVar(&c.PidFile, "pidfile", "/var/run/ptp4u.pid", "Pid file location")
-	flag.StringVar(&c.TimestampType, "timestamptype", timestamp.HWTIMESTAMP, fmt.Sprintf("Timestamp type. Can be: %s, %s", timestamp.HWTIMESTAMP, timestamp.SWTIMESTAMP))
+	flag.TextVar(&c.TimestampType, "timestamptype", timestamp.HW, fmt.Sprintf("Timestamp type. Can be: %s, %s", timestamp.HW, timestamp.SW))
 	flag.StringVar(&ipaddr, "ip", "::", "IP to bind on")
 	flag.StringVar(&c.DrainFileName, "drainfile", "/var/tmp/kill_ptp4u", "ptp4u drain file location")
 	flag.StringVar(&c.UndrainFileName, "undrainfile", "/var/tmp/unkill_ptp4u", "ptp4u force undrain file location")
@@ -94,10 +94,10 @@ func main() {
 	}
 
 	switch c.TimestampType {
-	case timestamp.SWTIMESTAMP:
+	case timestamp.SW:
 		log.Warning("Software timestamps greatly reduce the precision")
 		fallthrough
-	case timestamp.HWTIMESTAMP:
+	case timestamp.HW:
 		log.Debugf("Using %s timestamps", c.TimestampType)
 	default:
 		log.Fatalf("Unrecognized timestamp type: %s", c.TimestampType)

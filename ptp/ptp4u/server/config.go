@@ -30,6 +30,7 @@ import (
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/timestamp"
 	"golang.org/x/sys/unix"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -54,7 +55,7 @@ type StaticConfig struct {
 	QueueSize       int
 	RecvWorkers     int
 	SendWorkers     int
-	TimestampType   string
+	TimestampType   timestamp.Timestamp
 	UndrainFileName string
 }
 

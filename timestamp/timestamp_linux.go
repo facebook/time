@@ -167,8 +167,6 @@ func EnableSWTimestamps(connFd int) error {
 
 // EnableHWTimestamps enables HW timestamps (TX and RX) on the socket
 func EnableHWTimestamps(connFd int, iface string) error {
-	var rxFilter int32
-
 	rxFilter, _, err := ioctlHWTimestampCaps(connFd, iface)
 	if err != nil {
 		return err
@@ -183,6 +181,26 @@ func EnableHWTimestamps(connFd int, iface string) error {
 		unix.SOF_TIMESTAMPING_RAW_HARDWARE |
 		unix.SOF_TIMESTAMPING_OPT_TSONLY // Makes the kernel return the timestamp as a cmsg alongside an empty packet, as opposed to alongside the original packet.
 	// Allow reading of HW timestamps via socket
+	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, timestamping, flags); err != nil {
+		return err
+	}
+
+	return unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1)
+}
+
+// EnableHWTimestampsRx enables HW RX timestamps on the socket
+func EnableHWTimestampsRx(connFd int, iface string) error {
+	rxFilter, _, err := ioctlHWTimestampCaps(connFd, iface)
+	if err != nil {
+		return err
+	}
+	if err := ioctlTimestamp(connFd, iface, rxFilter); err != nil {
+		return err
+	}
+
+	// Enable hardware timestamp capabilities on socket
+	flags := unix.SOF_TIMESTAMPING_RX_HARDWARE |
+		unix.SOF_TIMESTAMPING_RAW_HARDWARE // Allow reading of HW timestamps via socket
 	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, timestamping, flags); err != nil {
 		return err
 	}
@@ -289,15 +307,23 @@ func socketControlMessageTimestamp(b []byte) (time.Time, error) {
 }
 
 // EnableTimestamps enables timestamps on the socket based on requested type
-func EnableTimestamps(ts string, connFd int, iface string) error {
+func EnableTimestamps(ts Timestamp, connFd int, iface string) error {
 	switch ts {
-	case HWTIMESTAMP:
+	case HW:
 		if err := EnableHWTimestamps(connFd, iface); err != nil {
 			return fmt.Errorf("cannot enable hardware timestamps: %w", err)
 		}
-	case SWTIMESTAMP:
+	case HWRX:
+		if err := EnableHWTimestampsRx(connFd, iface); err != nil {
+			return fmt.Errorf("cannot enable hardware rx timestamps: %w", err)
+		}
+	case SW:
 		if err := EnableSWTimestamps(connFd); err != nil {
 			return fmt.Errorf("cannot enable software timestamps: %w", err)
+		}
+	case SWRX:
+		if err := EnableSWTimestampsRx(connFd); err != nil {
+			return fmt.Errorf("cannot enable software rx timestamps: %w", err)
 		}
 	default:
 		return fmt.Errorf("Unrecognized timestamp type: %s", ts)

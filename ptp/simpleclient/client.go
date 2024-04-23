@@ -31,14 +31,6 @@ import (
 	"github.com/facebook/time/timestamp"
 )
 
-// re-export timestamping
-const (
-	// HWTIMESTAMP is a hardware timestamp
-	HWTIMESTAMP = timestamp.HWTIMESTAMP
-	// SWTIMESTAMP is a software timestamp
-	SWTIMESTAMP = timestamp.SWTIMESTAMP
-)
-
 type state int
 
 const (
@@ -117,7 +109,7 @@ type Config struct {
 	// for how long we'll request unicast transmission from server
 	Duration time.Duration
 	// what type of typestamping to use
-	Timestamping string
+	Timestamping timestamp.Timestamp
 }
 
 // Client is a very simplified PTPv2 unicast client.

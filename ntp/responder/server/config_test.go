@@ -64,7 +64,7 @@ func TestConfigSetDefault(t *testing.T) {
 }
 
 func TestConfigValidate(t *testing.T) {
-	c := Config{Workers: 42, TimestampType: timestamp.SWTIMESTAMP}
+	c := Config{Workers: 42, TimestampType: timestamp.SWRX}
 	require.NoError(t, c.Validate())
 
 	// Workers
@@ -73,9 +73,9 @@ func TestConfigValidate(t *testing.T) {
 	c.Workers = 42
 
 	// Timestamp type
-	c.TimestampType = "bad"
+	c.TimestampType = 42
 	require.Error(t, c.Validate())
-	c.TimestampType = timestamp.HWTIMESTAMP
+	c.TimestampType = timestamp.HWRX
 
 	require.NoError(t, c.Validate())
 }

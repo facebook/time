@@ -157,7 +157,7 @@ func (p *SPTP) init() error {
 		log.Warningf("operating in FreeRunning mode, will NOT adjust clock")
 		p.clock = &FreeRunningClock{}
 	} else {
-		if p.cfg.Timestamping == HWTIMESTAMP {
+		if p.cfg.Timestamping == timestamp.HW {
 			phcDev, err := NewPHC(p.cfg.Iface)
 			if err != nil {
 				return err

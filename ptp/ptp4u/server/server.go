@@ -261,7 +261,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
 			continue
 		}
-		if s.Config.TimestampType != timestamp.HWTIMESTAMP {
+		if s.Config.TimestampType != timestamp.HW {
 			rxTS = rxTS.Add(s.Config.UTCOffset)
 		}
 

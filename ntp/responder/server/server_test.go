@@ -114,7 +114,7 @@ func TestListener(t *testing.T) {
 			ExpectedListeners: 1,
 			ExpectedWorkers:   0,
 		},
-		Config: Config{Workers: 42, TimestampType: timestamp.SWTIMESTAMP},
+		Config: Config{Workers: 42, TimestampType: timestamp.SW},
 	}
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
 	require.Nil(t, err)
@@ -163,7 +163,7 @@ func TestServer(t *testing.T) {
 		},
 		Stats:  &stats.JSONStats{},
 		tasks:  make(chan task, workers),
-		Config: Config{Workers: workers, TimestampType: timestamp.SWTIMESTAMP},
+		Config: Config{Workers: workers, TimestampType: timestamp.SW},
 	}
 	// create workers
 	for i := 0; i < workers; i++ {
