@@ -28,8 +28,8 @@ func init() {
 	RootCmd.AddCommand(rebootCmd)
 	rebootCmd.Flags().BoolVar(&apply, "apply", false, "apply the config changes")
 	rebootCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
-	rebootCmd.Flags().StringVar(&target, "target", "", "device to configure")
-	if err := rebootCmd.MarkFlagRequired("target"); err != nil {
+	rebootCmd.Flags().StringVar(&target, "device", "", "device to configure")
+	if err := rebootCmd.MarkFlagRequired("device"); err != nil {
 		log.Fatal(err)
 	}
 }

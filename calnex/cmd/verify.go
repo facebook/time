@@ -27,8 +27,8 @@ func init() {
 	RootCmd.AddCommand(verifyCmd)
 	verifyCmd.Flags().BoolVar(&apply, "apply", false, "execute remediation if available")
 	verifyCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
-	verifyCmd.Flags().StringVar(&target, "target", "", "device to verify")
-	if err := verifyCmd.MarkFlagRequired("target"); err != nil {
+	verifyCmd.Flags().StringVar(&target, "device", "", "device to verify")
+	if err := verifyCmd.MarkFlagRequired("device"); err != nil {
 		log.Fatal(err)
 	}
 }

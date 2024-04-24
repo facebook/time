@@ -31,10 +31,10 @@ func init() {
 	RootCmd.AddCommand(certCmd)
 	certCmd.Flags().BoolVar(&apply, "apply", false, "apply the config changes")
 	certCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
-	certCmd.Flags().StringVar(&target, "target", "", "device to configure")
+	certCmd.Flags().StringVar(&target, "device", "", "device to configure")
 	certCmd.Flags().StringVar(&source, "file", "", "certificate file path")
 
-	if err := certCmd.MarkFlagRequired("target"); err != nil {
+	if err := certCmd.MarkFlagRequired("device"); err != nil {
 		log.Fatal(err)
 	}
 	if err := certCmd.MarkFlagRequired("file"); err != nil {

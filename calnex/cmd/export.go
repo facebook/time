@@ -30,8 +30,8 @@ func init() {
 	exportCmd.Flags().BoolVar(&allData, "allData", true, "Export entire data from device every run. Set false for unread only")
 	exportCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
 	exportCmd.Flags().Var(&channels, "channel", "Channel name. Ex: 1, 2, C ,D, VP1. Repeat for multiple. Skip for auto-detection")
-	exportCmd.Flags().StringVar(&source, "source", "localhost", "Source of the data. Ex: calnex01.example.com")
-	if err := exportCmd.MarkFlagRequired("source"); err != nil {
+	exportCmd.Flags().StringVar(&source, "device", "localhost", "Source of the data. Ex: calnex01.example.com")
+	if err := exportCmd.MarkFlagRequired("device"); err != nil {
 		log.Fatal(err)
 	}
 }
