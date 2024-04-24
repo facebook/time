@@ -27,9 +27,9 @@ import (
 func init() {
 	RootCmd.AddCommand(reportCmd)
 	reportCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
-	reportCmd.Flags().StringVar(&source, "source", "", "device to export problem report from")
+	reportCmd.Flags().StringVar(&source, "device", "", "device to export problem report from")
 	reportCmd.Flags().StringVar(&dir, "dir", "/tmp", "dir to save report")
-	if err := reportCmd.MarkFlagRequired("source"); err != nil {
+	if err := reportCmd.MarkFlagRequired("device"); err != nil {
 		log.Fatal(err)
 	}
 }

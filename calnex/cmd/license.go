@@ -27,10 +27,10 @@ import (
 func init() {
 	RootCmd.AddCommand(licenseCmd)
 	licenseCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
-	licenseCmd.Flags().StringVar(&target, "target", "", "device to configure")
+	licenseCmd.Flags().StringVar(&target, "device", "", "device to configure")
 	licenseCmd.Flags().StringVar(&source, "file", "", "license file path")
 
-	if err := licenseCmd.MarkFlagRequired("target"); err != nil {
+	if err := licenseCmd.MarkFlagRequired("device"); err != nil {
 		log.Fatal(err)
 	}
 	if err := licenseCmd.MarkFlagRequired("file"); err != nil {

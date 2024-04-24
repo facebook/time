@@ -28,8 +28,8 @@ func init() {
 	RootCmd.AddCommand(clearCmd)
 	clearCmd.Flags().BoolVar(&apply, "apply", false, "apply the config changes")
 	clearCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
-	clearCmd.Flags().StringVar(&target, "target", "", "device to configure")
-	if err := clearCmd.MarkFlagRequired("target"); err != nil {
+	clearCmd.Flags().StringVar(&target, "device", "", "device to configure")
+	if err := clearCmd.MarkFlagRequired("device"); err != nil {
 		log.Fatal(err)
 	}
 }
