@@ -30,10 +30,10 @@ func init() {
 	RootCmd.AddCommand(configCmd)
 	configCmd.Flags().BoolVar(&apply, "apply", false, "apply the config changes")
 	configCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
-	configCmd.Flags().StringVar(&target, "target", "", "device to configure")
+	configCmd.Flags().StringVar(&target, "device", "", "device to configure")
 	configCmd.Flags().StringVar(&source, "file", "", "configuration file")
 	configCmd.Flags().StringVar(&saveConfig, "save", "", "save configuration to the specified path")
-	if err := configCmd.MarkFlagRequired("target"); err != nil {
+	if err := configCmd.MarkFlagRequired("device"); err != nil {
 		log.Fatal(err)
 	}
 	if err := configCmd.MarkFlagRequired("file"); err != nil {

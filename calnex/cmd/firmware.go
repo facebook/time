@@ -27,9 +27,9 @@ func init() {
 	firmwareCmd.Flags().BoolVar(&apply, "apply", false, "apply the firmware upgrade")
 	firmwareCmd.Flags().BoolVar(&force, "force", false, "force apply same or lower firmware version")
 	firmwareCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
-	firmwareCmd.Flags().StringVar(&target, "target", "", "device to configure")
+	firmwareCmd.Flags().StringVar(&target, "device", "", "device to configure")
 	firmwareCmd.Flags().StringVar(&source, "file", "", "firmware file path")
-	if err := firmwareCmd.MarkFlagRequired("target"); err != nil {
+	if err := firmwareCmd.MarkFlagRequired("device"); err != nil {
 		log.Fatal(err)
 	}
 	if err := firmwareCmd.MarkFlagRequired("file"); err != nil {
