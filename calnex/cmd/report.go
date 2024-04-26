@@ -27,7 +27,7 @@ import (
 func init() {
 	RootCmd.AddCommand(reportCmd)
 	reportCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
-	reportCmd.Flags().StringVar(&source, "device", "", "device to export problem report from")
+	reportCmd.Flags().StringVar(&target, "device", "", "device to export problem report from")
 	reportCmd.Flags().StringVar(&dir, "dir", "/tmp", "dir to save report")
 	if err := reportCmd.MarkFlagRequired("device"); err != nil {
 		log.Fatal(err)
@@ -35,7 +35,7 @@ func init() {
 }
 
 func report() error {
-	api := api.NewAPI(source, insecureTLS, time.Minute)
+	api := api.NewAPI(target, insecureTLS, time.Minute)
 
 	reportFileName, err := api.FetchProblemReport(dir)
 	if err != nil {
