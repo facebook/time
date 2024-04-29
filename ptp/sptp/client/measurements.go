@@ -38,13 +38,12 @@ const (
 
 // mData is a single measured raw data of GM to OC communication
 type mData struct {
-	seq uint16
-	t1  time.Time     // departure time of Sync packet from GM
-	t2  time.Time     // arrival time of Sync packet on OC
-	t3  time.Time     // departure time of DelayReq from OC
-	t4  time.Time     // arrival time of DelayReq packet on GM
-	c2  time.Duration // // correctionFiled of DelayReq
-	c1  time.Duration // correctionField of Sync
+	t1 time.Time     // departure time of Sync packet from GM
+	t2 time.Time     // arrival time of Sync packet on OC
+	t3 time.Time     // departure time of DelayReq from OC
+	t4 time.Time     // arrival time of DelayReq packet on GM
+	c2 time.Duration // correctionFiled of DelayReq
+	c1 time.Duration // correctionField of Sync
 }
 
 func (d *mData) Complete() bool {
@@ -92,7 +91,7 @@ func (m *measurements) addT2andCF1(seq uint16, ts time.Time, correction time.Dur
 		v.t2 = ts
 		v.c1 = correction
 	} else {
-		m.data[seq] = &mData{seq: seq, t2: ts, c1: correction}
+		m.data[seq] = &mData{t2: ts, c1: correction}
 	}
 }
 
@@ -103,7 +102,7 @@ func (m *measurements) addT1(seq uint16, ts time.Time) {
 	if found {
 		v.t1 = ts
 	} else {
-		m.data[seq] = &mData{seq: seq, t1: ts}
+		m.data[seq] = &mData{t1: ts}
 	}
 }
 func (m *measurements) addCF2(seq uint16, correction time.Duration) {
@@ -113,7 +112,7 @@ func (m *measurements) addCF2(seq uint16, correction time.Duration) {
 	if found {
 		v.c2 = correction
 	} else {
-		m.data[seq] = &mData{seq: seq, c2: correction}
+		m.data[seq] = &mData{c2: correction}
 	}
 }
 
@@ -124,7 +123,7 @@ func (m *measurements) addT3(seq uint16, ts time.Time) {
 	if found {
 		v.t3 = ts
 	} else {
-		m.data[seq] = &mData{seq: seq, t3: ts}
+		m.data[seq] = &mData{t3: ts}
 	}
 }
 
@@ -136,7 +135,7 @@ func (m *measurements) addT4(seq uint16, ts time.Time) {
 	if found {
 		v.t4 = ts
 	} else {
-		m.data[seq] = &mData{seq: seq, t4: ts}
+		m.data[seq] = &mData{t4: ts}
 	}
 }
 
