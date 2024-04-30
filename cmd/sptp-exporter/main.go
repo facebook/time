@@ -39,8 +39,7 @@ func main() {
 	flag.BoolVar(&verboseFlag, "verbose", false, "verbose output")
 	flag.IntVar(&sptpMonitoringPortFlag, "monitoringport", 4269, "port sptp metrics http server is listening on")
 	flag.IntVar(&exporterPortFlag, "exporterport", 6942, "port prometheus metrics exporter is listening on")
-
-	flag.DurationVar(&intervalFlag, "interval", time.Second, "how often to fetch metrics from  sptp")
+	flag.DurationVar(&intervalFlag, "interval", time.Second, "how often to fetch metrics from sptp")
 	flag.StringVar(&pprofFlag, "pprof", "", "Address to have the profiler listen on, disabled if empty.")
 
 	flag.Parse()

@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -30,31 +29,9 @@ import (
 	_ "net/http/pprof"
 )
 
-func updateSysStats(sysstats *client.SysStats, statsserver client.StatsServer, interval time.Duration) {
-	stats, err := sysstats.CollectRuntimeStats(interval)
-	if err != nil {
-		log.Warningf("failed to get system metrics %v", err)
-	}
-
-	for k, v := range stats {
-		statsserver.SetCounter(fmt.Sprintf("sptp.%s", k), int64(v))
-	}
-}
-
-func updateSysStatsForever(sysstats *client.SysStats, statsserver client.StatsServer, interval time.Duration) {
-	// update stats on goroutine start
-	updateSysStats(sysstats, statsserver, interval)
-	for range time.Tick(interval) {
-		// update stats on every tick
-		updateSysStats(sysstats, statsserver, interval)
-	}
-}
-
 func doWork(cfg *client.Config) error {
 	stats := client.NewJSONStats()
-	sysstats := &client.SysStats{}
-	go updateSysStatsForever(sysstats, stats, cfg.MetricsAggregationWindow)
-	go stats.Start(cfg.MonitoringPort)
+	go stats.Start(cfg.MonitoringPort, cfg.MetricsAggregationWindow)
 	p, err := client.NewSPTP(cfg, stats)
 	if err != nil {
 		return err

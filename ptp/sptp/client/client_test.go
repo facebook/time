@@ -89,12 +89,11 @@ func TestClientRun(t *testing.T) {
 	}
 
 	// handle whatever client is sending over eventConn
-	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.sync", int64(1))
-	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.announce", int64(1))
-	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.tx.delay_req", int64(1))
+	statsServer.EXPECT().IncRXSync()
+	statsServer.EXPECT().IncRXAnnounce()
+	statsServer.EXPECT().IncTXDelayReq()
 	// unexpected packet we just ignore
-	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.delay_req", int64(1))
-	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.rx.unsupported", int64(1))
+	statsServer.EXPECT().IncUnsupported()
 	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ net.Addr) (int, time.Time, error) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
@@ -155,7 +154,7 @@ func TestClientTimeout(t *testing.T) {
 	statsServer := NewMockStatsServer(ctrl)
 	c, err := NewClient("127.0.0.1", ptp.PortEvent, cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
-	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.tx.delay_req", int64(1))
+	statsServer.EXPECT().IncTXDelayReq()
 	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any())
 
 	ctx := context.Background()
@@ -183,7 +182,7 @@ func TestClientBadPacket(t *testing.T) {
 	require.NoError(t, err)
 
 	// handle whatever client is sending over eventConn
-	statsServer.EXPECT().UpdateCounterBy("ptp.sptp.portstats.tx.delay_req", int64(1))
+	statsServer.EXPECT().IncTXDelayReq()
 	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ net.Addr) (int, time.Time, error) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)

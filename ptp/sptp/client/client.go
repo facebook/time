@@ -23,7 +23,6 @@ import (
 	"fmt"
 	rnd "math/rand"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -31,7 +30,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	ptp "github.com/facebook/time/ptp/protocol"
-	"github.com/facebook/time/ptp/sptp/stats"
 )
 
 // corrToDuration converts PTP CorrectionField to time.Duration, ignoring
@@ -197,19 +195,18 @@ func (c *Client) handleMsg(msg *InPacket) error {
 		if err := ptp.FromBytes(msg.data, announce); err != nil {
 			return fmt.Errorf("reading announce msg: %w", err)
 		}
-		c.stats.UpdateCounterBy(fmt.Sprintf("%s%s", stats.PortStatsRxPrefix, strings.ToLower(msgType.String())), 1)
+		c.stats.IncRXAnnounce()
 		return c.handleAnnounce(announce)
 	case ptp.MessageSync:
 		b := &ptp.SyncDelayReq{}
 		if err := ptp.FromBytes(msg.data, b); err != nil {
 			return fmt.Errorf("reading sync msg: %w", err)
 		}
-		c.stats.UpdateCounterBy(fmt.Sprintf("%s%s", stats.PortStatsRxPrefix, strings.ToLower(msgType.String())), 1)
+		c.stats.IncRXSync()
 		return c.handleSync(b, msg.ts)
 	default:
 		c.logReceive(msgType, "unsupported, ignoring")
-		c.stats.UpdateCounterBy(fmt.Sprintf("%s%s", stats.PortStatsRxPrefix, strings.ToLower(msgType.String())), 1)
-		c.stats.UpdateCounterBy("ptp.sptp.portstats.rx.unsupported", 1)
+		c.stats.IncUnsupported()
 		return nil
 	}
 }
@@ -277,7 +274,7 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 		}
 		c.m.addT3(seq, hwts)
 		c.logSent(ptp.MessageDelayReq, "seq=%d, our T3=%v", seq, hwts)
-		c.stats.UpdateCounterBy(fmt.Sprintf("%s%s", stats.PortStatsTxPrefix, strings.ToLower(ptp.MessageDelayReq.String())), 1)
+		c.stats.IncTXDelayReq()
 
 		for {
 			select {

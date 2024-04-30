@@ -17,96 +17,185 @@ limitations under the License.
 package client
 
 import (
+	"os"
+	"runtime"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	gmstats "github.com/facebook/time/ptp/sptp/stats"
+	"github.com/shirou/gopsutil/process"
 )
 
 // StatsServer is a stats server interface
 type StatsServer interface {
-	// Reset atomically sets all the counters to 0
-	Reset()
-	SetCounter(key string, val int64)
-	UpdateCounterBy(key string, count int64)
+	SetGmsTotal(gmsTotal int)
+	SetGmsAvailable(gmsAvailable int)
+	SetTickDuration(tickDuration time.Duration)
+	IncRXSync()
+	IncRXAnnounce()
+	IncRXDelayReq()
+	IncTXDelayReq()
+	IncUnsupported()
 	SetGMStats(stat *gmstats.Stat)
+	CollectSysStats() error
 }
 
 // Stats is an implementation of
 type Stats struct {
-	mux      sync.Mutex
-	counters map[string]int64
-	gmStats  gmstats.Stats
+	sync.Mutex
+
+	clientStats
+	sysStats
+	gmStats       gmstats.Stats
+	procStartTime time.Time
+	memstats      runtime.MemStats
+}
+
+// clientStats is just a grouping, don't use directly
+type clientStats struct {
+	gmsTotal     int64
+	gmsAvailable int64
+	tickDuration int64
+	rxSync       int64
+	rxAnnounce   int64
+	rxDelayReq   int64
+	txDelayReq   int64
+	unsupported  int64
+}
+
+// sysStats is just a grouping, don't use directly
+type sysStats struct {
+	uptimeSec      int64
+	cpuPCT         int64
+	rss            int64
+	goRoutines     int64
+	gcPauseNs      int64
+	gcPauseTotalNs int64
 }
 
 // NewStats created new instance of Stats
 func NewStats() *Stats {
 	return &Stats{
-		counters: map[string]int64{},
-		gmStats:  gmstats.Stats{},
+		gmStats:       gmstats.Stats{},
+		procStartTime: time.Now(),
 	}
 }
 
-// UpdateCounterBy will increment counter
-func (s *Stats) UpdateCounterBy(key string, count int64) {
-	s.mux.Lock()
-	s.counters[key] += count
-	s.mux.Unlock()
+// SetGmsTotal atomically sets the gmsTotal
+func (s *Stats) SetGmsTotal(gmsTotal int) {
+	atomic.StoreInt64(&s.gmsTotal, int64(gmsTotal))
 }
 
-// SetCounter will set a counter to the provided value.
-func (s *Stats) SetCounter(key string, val int64) {
-	s.mux.Lock()
-	s.counters[key] = val
-	s.mux.Unlock()
+// SetGmsAvailable atomically sets the gmsTotal
+func (s *Stats) SetGmsAvailable(gmsAvailable int) {
+	atomic.StoreInt64(&s.gmsAvailable, int64(gmsAvailable))
+}
+
+// SetTickDuration atomically sets the gmsTotal
+func (s *Stats) SetTickDuration(tickDuration time.Duration) {
+	atomic.StoreInt64(&s.tickDuration, tickDuration.Nanoseconds())
+}
+
+// IncRXSync atomically adds 1 to the rxsync
+func (s *Stats) IncRXSync() {
+	atomic.AddInt64(&s.rxSync, 1)
+}
+
+// IncRXAnnounce atomically adds 1 to the rxAnnounce
+func (s *Stats) IncRXAnnounce() {
+	atomic.AddInt64(&s.rxAnnounce, 1)
+}
+
+// IncRXDelayReq atomically adds 1 to the rxDelayReq
+func (s *Stats) IncRXDelayReq() {
+	atomic.AddInt64(&s.rxDelayReq, 1)
+}
+
+// IncTXDelayReq atomically adds 1 to the txDelayReq
+func (s *Stats) IncTXDelayReq() {
+	atomic.AddInt64(&s.txDelayReq, 1)
+}
+
+// IncUnsupported atomically adds 1 to the unsupported
+func (s *Stats) IncUnsupported() {
+	atomic.AddInt64(&s.unsupported, 1)
 }
 
 // GetCounters returns an map of counters
 func (s *Stats) GetCounters() map[string]int64 {
-	ret := make(map[string]int64)
-	s.mux.Lock()
-	for key, val := range s.counters {
-		ret[key] = val
+	s.Lock()
+	defer s.Unlock()
+
+	return map[string]int64{
+		// clientStats
+		"ptp.sptp.gms.total":                s.gmsTotal,
+		"ptp.sptp.gms.available_pct":        s.gmsAvailable,
+		"ptp.sptp.tick_duration_ns":         s.tickDuration,
+		"ptp.sptp.portstats.rx.sync":        s.rxSync,
+		"ptp.sptp.portstats.rx.announce":    s.rxAnnounce,
+		"ptp.sptp.portstats.rx.delay_req":   s.rxDelayReq,
+		"ptp.sptp.portstats.tx.delay_req":   s.txDelayReq,
+		"ptp.sptp.portstats.rx.unsupported": s.unsupported,
+		// sysStats
+		"ptp.sptp.runtime.gc.pause_ns.sum.60":    s.gcPauseNs,
+		"ptp.sptp.runtime.mem.gc.pause_total_ns": s.gcPauseTotalNs,
+		"ptp.sptp.runtime.cpu.goroutines":        s.goRoutines,
+		"ptp.sptp.process.rss":                   s.rss,
+		"ptp.sptp.process.cpu_pct.avg.60":        s.cpuPCT,
+		"ptp.sptp.process.uptime":                s.uptimeSec,
 	}
-	s.mux.Unlock()
-	return ret
 }
 
-// GetStats returns an all gm stats
-func (s *Stats) GetStats() gmstats.Stats {
+// GetGMStats returns an all gm stats
+func (s *Stats) GetGMStats() gmstats.Stats {
 	ret := make(gmstats.Stats, len(s.gmStats))
-	s.mux.Lock()
+	s.Lock()
 	copy(ret, s.gmStats)
-	s.mux.Unlock()
+	s.Unlock()
 	return ret
-}
-
-// Copy all key-values between maps
-func (s *Stats) Copy(dst *Stats) {
-	s.mux.Lock()
-	for k, v := range s.counters {
-		dst.SetCounter(k, v)
-	}
-	s.mux.Unlock()
-}
-
-// Reset all the values of counters
-func (s *Stats) Reset() {
-	s.mux.Lock()
-	for k := range s.counters {
-		s.counters[k] = 0
-	}
-	s.mux.Unlock()
 }
 
 // SetGMStats sets GM stats for particular gm
 func (s *Stats) SetGMStats(stat *gmstats.Stat) {
-	s.mux.Lock()
+	s.Lock()
 	if i := s.gmStats.Index(stat); i != -1 {
 		s.gmStats[i] = stat
 	} else {
 		s.gmStats = append(s.gmStats, stat)
 	}
-	s.mux.Unlock()
+	s.Unlock()
+}
+
+// CollectSysStats gathers cpu, mem, gc statistics
+func (s *Stats) CollectSysStats() error {
+	s.Lock()
+	defer s.Unlock()
+
+	runtime.ReadMemStats(&s.memstats)
+
+	// Process metrics
+	proc, err := process.NewProcess(int32(os.Getpid()))
+	if err != nil {
+		return err
+	}
+	s.uptimeSec = time.Now().Unix() - s.procStartTime.Unix()
+
+	if val, err := proc.Percent(0); err == nil {
+		s.cpuPCT = int64(val * 100)
+	}
+
+	if val, err := proc.MemoryInfo(); err == nil {
+		s.rss = int64(val.RSS)
+	}
+
+	// Go Runtime metrics
+	s.goRoutines = int64(runtime.NumGoroutine())
+	// Diff between current and previous where s.gcPauseTotal acts as a previous
+	s.gcPauseNs = int64(s.memstats.PauseTotalNs) - s.gcPauseTotalNs
+	s.gcPauseTotalNs = int64(s.memstats.PauseTotalNs)
+
+	return nil
 }
 
 func runResultToStats(address string, r *RunResult, p3 int, selected bool) *gmstats.Stat {
