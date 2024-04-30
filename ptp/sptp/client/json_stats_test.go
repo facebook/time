@@ -46,11 +46,10 @@ func TestJSONStats(t *testing.T) {
 	port, err := getFreePort()
 	require.Nil(t, err, "Failed to allocate port")
 	url := fmt.Sprintf("http://localhost:%d", port)
-	go stats.Start(port)
+	go stats.Start(port, time.Second)
 	time.Sleep(time.Second)
 
-	stats.SetCounter("some.counter", 1)
-	stats.SetCounter("whatever", 42)
+	stats.SetTickDuration(time.Millisecond)
 
 	gm0 := &gmstats.Stat{
 		GMAddress: "192.168.0.10",
@@ -78,11 +77,7 @@ func TestJSONStats(t *testing.T) {
 
 	counters, err := gmstats.FetchCounters(url)
 	require.NoError(t, err)
-	expectedCounters := gmstats.Counters(map[string]int64{
-		"some.counter": 1,
-		"whatever":     42,
-	})
-	require.Equal(t, expectedCounters, counters)
+	require.Equal(t, int64(1000000), counters["ptp.sptp.tick_duration_ns"])
 
 	gms, err := gmstats.FetchStats(url)
 	require.NoError(t, err)

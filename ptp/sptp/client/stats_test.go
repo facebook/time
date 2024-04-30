@@ -28,23 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestStatsReset(t *testing.T) {
-	stats := NewStats()
-
-	stats.SetCounter("some.counter", 123)
-	got := stats.GetCounters()
-	want := map[string]int64{
-		"some.counter": 123,
-	}
-	require.Equal(t, want, got)
-	stats.Reset()
-	got = stats.GetCounters()
-	want = map[string]int64{
-		"some.counter": 0,
-	}
-	require.Equal(t, want, got)
-}
-
 func TestRunResultToStatsError(t *testing.T) {
 	r := &RunResult{
 		Server: "192.168.0.10",
@@ -138,5 +121,54 @@ func TestSetGMStats(t *testing.T) {
 	want := gmstats.Stats{
 		gm,
 	}
-	require.Equal(t, want, s.GetStats())
+	require.Equal(t, want, s.GetGMStats())
+}
+
+func TestInc(t *testing.T) {
+	s := NewStats()
+	s.rxAnnounce = 42
+	s.rxSync = 43
+	s.rxDelayReq = 44
+	s.txDelayReq = 45
+	s.unsupported = 46
+	s.IncRXAnnounce()
+	s.IncRXSync()
+	s.IncRXDelayReq()
+	s.IncTXDelayReq()
+	s.IncUnsupported()
+	require.Equal(t, int64(43), s.rxAnnounce)
+	require.Equal(t, int64(44), s.rxSync)
+	require.Equal(t, int64(45), s.rxDelayReq)
+	require.Equal(t, int64(46), s.txDelayReq)
+	require.Equal(t, int64(47), s.unsupported)
+}
+
+func TestSysStats(t *testing.T) {
+	stats := NewStats()
+	time.Sleep(time.Second)
+	err := stats.CollectSysStats()
+	require.NoError(t, err)
+	// Sys counters are set and above 0
+	require.Less(t, int64(0), stats.goRoutines)
+	require.Less(t, int64(0), stats.rss)
+	require.Equal(t, int64(1), stats.uptimeSec)
+}
+
+func TestGetCounters(t *testing.T) {
+	stats := NewStats()
+	m := stats.GetCounters()
+	require.Contains(t, m, "ptp.sptp.gms.total")
+	require.Contains(t, m, "ptp.sptp.gms.available_pct")
+	require.Contains(t, m, "ptp.sptp.tick_duration_ns")
+	require.Contains(t, m, "ptp.sptp.portstats.rx.sync")
+	require.Contains(t, m, "ptp.sptp.portstats.rx.announce")
+	require.Contains(t, m, "ptp.sptp.portstats.rx.delay_req")
+	require.Contains(t, m, "ptp.sptp.portstats.tx.delay_req")
+	require.Contains(t, m, "ptp.sptp.portstats.rx.unsupported")
+	require.Contains(t, m, "ptp.sptp.runtime.gc.pause_ns.sum.60")
+	require.Contains(t, m, "ptp.sptp.runtime.mem.gc.pause_total_ns")
+	require.Contains(t, m, "ptp.sptp.runtime.cpu.goroutines")
+	require.Contains(t, m, "ptp.sptp.process.rss")
+	require.Contains(t, m, "ptp.sptp.process.cpu_pct.avg.60")
+	require.Contains(t, m, "ptp.sptp.process.uptime")
 }

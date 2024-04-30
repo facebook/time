@@ -336,7 +336,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 		tickDuration := now.Sub(p.lastTick)
 		log.Debugf("tick took %vms sys time", tickDuration.Milliseconds())
 		// +-10% of interval
-		p.stats.SetCounter("ptp.sptp.tick_duration_ns", int64(tickDuration))
+		p.stats.SetTickDuration(tickDuration)
 		if 100*tickDuration > 110*p.cfg.Interval || 100*tickDuration < 90*p.cfg.Interval {
 			log.Warningf("tick took %vms, which is outside of expected +-10%% from the interval %vms", tickDuration.Milliseconds(), p.cfg.Interval.Milliseconds())
 			isBadTick = true
@@ -365,11 +365,11 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 		idsToClients[res.Measurement.Announce.GrandmasterIdentity] = addr
 		localPrioMap[res.Measurement.Announce.GrandmasterIdentity] = p.priorities[addr]
 	}
-	p.stats.SetCounter("ptp.sptp.gms.total", int64(gmsTotal))
+	p.stats.SetGmsTotal(gmsTotal)
 	if gmsTotal != 0 {
-		p.stats.SetCounter("ptp.sptp.gms.available_pct", int64((float64(gmsAvailable)/float64(gmsTotal))*100))
+		p.stats.SetGmsAvailable(int((float64(gmsAvailable) / float64(gmsTotal)) * 100))
 	} else {
-		p.stats.SetCounter("ptp.sptp.gms.available_pct", int64(0))
+		p.stats.SetGmsAvailable(0)
 	}
 	best := bmca(announces, localPrioMap, p.cfg)
 	if best == nil {

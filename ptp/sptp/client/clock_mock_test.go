@@ -21,35 +21,36 @@ limitations under the License.
 package client
 
 import (
-	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 	time "time"
+
+	gomock "github.com/golang/mock/gomock"
 )
 
-// MockClock is a mock of PHCIface interface
+// MockClock is a mock of Clock interface.
 type MockClock struct {
 	ctrl     *gomock.Controller
 	recorder *MockClockMockRecorder
 }
 
-// MockClockMockRecorder is the mock recorder for MockClock
+// MockClockMockRecorder is the mock recorder for MockClock.
 type MockClockMockRecorder struct {
 	mock *MockClock
 }
 
-// NewMockClock creates a new mock instance
+// NewMockClock creates a new mock instance.
 func NewMockClock(ctrl *gomock.Controller) *MockClock {
 	mock := &MockClock{ctrl: ctrl}
 	mock.recorder = &MockClockMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockClock) EXPECT() *MockClockMockRecorder {
 	return m.recorder
 }
 
-// AdjFreqPPB mocks base method
+// AdjFreqPPB mocks base method.
 func (m *MockClock) AdjFreqPPB(freq float64) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AdjFreqPPB", freq)
@@ -57,27 +58,13 @@ func (m *MockClock) AdjFreqPPB(freq float64) error {
 	return ret0
 }
 
-// AdjFreqPPB indicates an expected call of AdjFreqPPB
+// AdjFreqPPB indicates an expected call of AdjFreqPPB.
 func (mr *MockClockMockRecorder) AdjFreqPPB(freq interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdjFreqPPB", reflect.TypeOf((*MockClock)(nil).AdjFreqPPB), freq)
 }
 
-// Step mocks base method
-func (m *MockClock) Step(step time.Duration) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Step", step)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Step indicates an expected call of Step
-func (mr *MockClockMockRecorder) Step(step interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Step", reflect.TypeOf((*MockClock)(nil).Step), step)
-}
-
-// FrequencyPPB mocks base method
+// FrequencyPPB mocks base method.
 func (m *MockClock) FrequencyPPB() (float64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FrequencyPPB")
@@ -86,13 +73,13 @@ func (m *MockClock) FrequencyPPB() (float64, error) {
 	return ret0, ret1
 }
 
-// FrequencyPPB indicates an expected call of FrequencyPPB
+// FrequencyPPB indicates an expected call of FrequencyPPB.
 func (mr *MockClockMockRecorder) FrequencyPPB() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FrequencyPPB", reflect.TypeOf((*MockClock)(nil).FrequencyPPB))
 }
 
-// MaxFreqPPB mocks base method
+// MaxFreqPPB mocks base method.
 func (m *MockClock) MaxFreqPPB() (float64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MaxFreqPPB")
@@ -101,13 +88,13 @@ func (m *MockClock) MaxFreqPPB() (float64, error) {
 	return ret0, ret1
 }
 
-// MaxFreqPPB indicates an expected call of MaxFreqPPB
+// MaxFreqPPB indicates an expected call of MaxFreqPPB.
 func (mr *MockClockMockRecorder) MaxFreqPPB() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxFreqPPB", reflect.TypeOf((*MockClock)(nil).MaxFreqPPB))
 }
 
-// SetSync mocks base method
+// SetSync mocks base method.
 func (m *MockClock) SetSync() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetSync")
@@ -115,8 +102,22 @@ func (m *MockClock) SetSync() error {
 	return ret0
 }
 
-// SetSync indicates an expected call of AdSetSyncjFreqPPB
+// SetSync indicates an expected call of SetSync.
 func (mr *MockClockMockRecorder) SetSync() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSync", reflect.TypeOf((*MockClock)(nil).AdjFreqPPB))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSync", reflect.TypeOf((*MockClock)(nil).SetSync))
+}
+
+// Step mocks base method.
+func (m *MockClock) Step(step time.Duration) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Step", step)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Step indicates an expected call of Step.
+func (mr *MockClockMockRecorder) Step(step interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Step", reflect.TypeOf((*MockClock)(nil).Step), step)
 }

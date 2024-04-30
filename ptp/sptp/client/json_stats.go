@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -35,21 +36,30 @@ func NewJSONStats() *JSONStats {
 }
 
 // Start runs http server and initializes maps
-func (s *JSONStats) Start(monitoringport int) {
+func (s *JSONStats) Start(monitoringport int, interval time.Duration) {
+	// collect stats forever
+	go func() {
+		for range time.Tick(interval) {
+			// update stats on every tick
+			if err := s.CollectSysStats(); err != nil {
+				log.Warningf("failed to get system metrics %s", err)
+			}
+		}
+	}()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleRootRequest)
 	mux.HandleFunc("/counters", s.handleCountersRequest)
 	addr := fmt.Sprintf(":%d", monitoringport)
 	log.Infof("Starting http json server on %s", addr)
-	err := http.ListenAndServe(addr, mux)
-	if err != nil {
+	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("Failed to start listener: %v", err)
 	}
 }
 
 // handleRootRequest is a handler used for all http monitoring requests
 func (s *JSONStats) handleRootRequest(w http.ResponseWriter, _ *http.Request) {
-	js, err := json.Marshal(s.GetStats())
+	js, err := json.Marshal(s.GetGMStats())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

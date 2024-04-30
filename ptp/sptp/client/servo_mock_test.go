@@ -21,47 +21,78 @@ limitations under the License.
 package client
 
 import (
+	reflect "reflect"
+
 	servo "github.com/facebook/time/servo"
 	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
 )
 
-// MockServo is a mock of Servo interface
+// MockServo is a mock of Servo interface.
 type MockServo struct {
 	ctrl     *gomock.Controller
 	recorder *MockServoMockRecorder
 }
 
-// MockServoMockRecorder is the mock recorder for MockServo
+// MockServoMockRecorder is the mock recorder for MockServo.
 type MockServoMockRecorder struct {
 	mock *MockServo
 }
 
-// NewMockServo creates a new mock instance
+// NewMockServo creates a new mock instance.
 func NewMockServo(ctrl *gomock.Controller) *MockServo {
 	mock := &MockServo{ctrl: ctrl}
 	mock.recorder = &MockServoMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockServo) EXPECT() *MockServoMockRecorder {
 	return m.recorder
 }
 
-// SyncInterval mocks base method
-func (m *MockServo) SyncInterval(arg0 float64) {
+// GetState mocks base method.
+func (m *MockServo) GetState() servo.State {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SyncInterval", arg0)
+	ret := m.ctrl.Call(m, "GetState")
+	ret0, _ := ret[0].(servo.State)
+	return ret0
 }
 
-// SyncInterval indicates an expected call of SyncInterval
-func (mr *MockServoMockRecorder) SyncInterval(arg0 interface{}) *gomock.Call {
+// GetState indicates an expected call of GetState.
+func (mr *MockServoMockRecorder) GetState() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncInterval", reflect.TypeOf((*MockServo)(nil).SyncInterval), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetState", reflect.TypeOf((*MockServo)(nil).GetState))
 }
 
-// Sample mocks base method
+// IsSpike mocks base method.
+func (m *MockServo) IsSpike(offset int64) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsSpike", offset)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsSpike indicates an expected call of IsSpike.
+func (mr *MockServoMockRecorder) IsSpike(offset interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSpike", reflect.TypeOf((*MockServo)(nil).IsSpike), offset)
+}
+
+// MeanFreq mocks base method.
+func (m *MockServo) MeanFreq() float64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MeanFreq")
+	ret0, _ := ret[0].(float64)
+	return ret0
+}
+
+// MeanFreq indicates an expected call of MeanFreq.
+func (mr *MockServoMockRecorder) MeanFreq() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MeanFreq", reflect.TypeOf((*MockServo)(nil).MeanFreq))
+}
+
+// Sample mocks base method.
 func (m *MockServo) Sample(offset int64, localTs uint64) (float64, servo.State) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sample", offset, localTs)
@@ -70,74 +101,44 @@ func (m *MockServo) Sample(offset int64, localTs uint64) (float64, servo.State) 
 	return ret0, ret1
 }
 
-// Sample indicates an expected call of Sample
+// Sample indicates an expected call of Sample.
 func (mr *MockServoMockRecorder) Sample(offset, localTs interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sample", reflect.TypeOf((*MockServo)(nil).Sample), offset, localTs)
 }
 
-// SetMaxFreq mocks base method
-func (m *MockServo) SetMaxFreq(arg0 float64) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetMaxFreq", arg0)
-}
-
-// SetMaxFreq indicates an expected call of SetMaxFreq
-func (mr *MockServoMockRecorder) SetMaxFreq(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMaxFreq", reflect.TypeOf((*MockServo)(nil).SetMaxFreq), arg0)
-}
-
-// MeanFreq mocks base method
-func (m *MockServo) MeanFreq() float64 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MeanFreq")
-	ret0, _ := ret[0].(float64)
-	return ret0
-}
-
-// MeanFreq indicates an expected call of MeanFreq
-func (mr *MockServoMockRecorder) MeanFreq() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MeanFreq", reflect.TypeOf((*MockServo)(nil).MeanFreq))
-}
-
-// IsSpike mocks base method
-func (m *MockServo) IsSpike(arg0 int64) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsSpike", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsSpike indicates an expected call of IsSpike
-func (mr *MockServoMockRecorder) IsSpike(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSpike", reflect.TypeOf((*MockServo)(nil).IsSpike), arg0)
-}
-
-// SetLastFreq mocks base method
+// SetLastFreq mocks base method.
 func (m *MockServo) SetLastFreq(arg0 float64) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetLastFreq", arg0)
 }
 
-// SetLastFreq indicates an expected call of SetLastFreq
+// SetLastFreq indicates an expected call of SetLastFreq.
 func (mr *MockServoMockRecorder) SetLastFreq(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLastFreq", reflect.TypeOf((*MockServo)(nil).IsSpike), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLastFreq", reflect.TypeOf((*MockServo)(nil).SetLastFreq), arg0)
 }
 
-// GetState mocks base method
-func (m *MockServo) GetState() servo.State {
+// SetMaxFreq mocks base method.
+func (m *MockServo) SetMaxFreq(arg0 float64) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetState")
-	ret0, _ := ret[0].(servo.State)
-	return ret0
+	m.ctrl.Call(m, "SetMaxFreq", arg0)
 }
 
-// GetState indicates an expected call of GetState
-func (mr *MockServoMockRecorder) GetState() *gomock.Call {
+// SetMaxFreq indicates an expected call of SetMaxFreq.
+func (mr *MockServoMockRecorder) SetMaxFreq(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetState", reflect.TypeOf((*MockServo)(nil).GetState))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMaxFreq", reflect.TypeOf((*MockServo)(nil).SetMaxFreq), arg0)
+}
+
+// SyncInterval mocks base method.
+func (m *MockServo) SyncInterval(arg0 float64) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SyncInterval", arg0)
+}
+
+// SyncInterval indicates an expected call of SyncInterval.
+func (mr *MockServoMockRecorder) SyncInterval(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncInterval", reflect.TypeOf((*MockServo)(nil).SyncInterval), arg0)
 }
