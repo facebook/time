@@ -367,7 +367,6 @@ func TestRunFiltered(t *testing.T) {
 		"192.168.0.10": {
 			Server: "192.168.0.10",
 			Measurement: &MeasurementResult{
-
 				Delay:     299995 * time.Microsecond,
 				S2CDelay:  100,
 				C2SDelay:  110,

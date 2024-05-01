@@ -32,6 +32,7 @@ type StatsServer interface {
 	SetGmsTotal(gmsTotal int)
 	SetGmsAvailable(gmsAvailable int)
 	SetTickDuration(tickDuration time.Duration)
+	IncFiltered()
 	IncRXSync()
 	IncRXAnnounce()
 	IncRXDelayReq()
@@ -57,6 +58,7 @@ type clientStats struct {
 	gmsTotal     int64
 	gmsAvailable int64
 	tickDuration int64
+	filtered     int64
 	rxSync       int64
 	rxAnnounce   int64
 	rxDelayReq   int64
@@ -97,6 +99,11 @@ func (s *Stats) SetTickDuration(tickDuration time.Duration) {
 	atomic.StoreInt64(&s.tickDuration, tickDuration.Nanoseconds())
 }
 
+// IncFiltered atomically adds 1 to the rxsync
+func (s *Stats) IncFiltered() {
+	atomic.AddInt64(&s.filtered, 1)
+}
+
 // IncRXSync atomically adds 1 to the rxsync
 func (s *Stats) IncRXSync() {
 	atomic.AddInt64(&s.rxSync, 1)
@@ -132,6 +139,7 @@ func (s *Stats) GetCounters() map[string]int64 {
 		"ptp.sptp.gms.total":                s.gmsTotal,
 		"ptp.sptp.gms.available_pct":        s.gmsAvailable,
 		"ptp.sptp.tick_duration_ns":         s.tickDuration,
+		"ptp.sptp.filtered":                 s.filtered,
 		"ptp.sptp.portstats.rx.sync":        s.rxSync,
 		"ptp.sptp.portstats.rx.announce":    s.rxAnnounce,
 		"ptp.sptp.portstats.rx.delay_req":   s.rxDelayReq,

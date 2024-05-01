@@ -131,16 +131,19 @@ func TestInc(t *testing.T) {
 	s.rxDelayReq = 44
 	s.txDelayReq = 45
 	s.unsupported = 46
+	s.filtered = 47
 	s.IncRXAnnounce()
 	s.IncRXSync()
 	s.IncRXDelayReq()
 	s.IncTXDelayReq()
 	s.IncUnsupported()
+	s.IncFiltered()
 	require.Equal(t, int64(43), s.rxAnnounce)
 	require.Equal(t, int64(44), s.rxSync)
 	require.Equal(t, int64(45), s.rxDelayReq)
 	require.Equal(t, int64(46), s.txDelayReq)
 	require.Equal(t, int64(47), s.unsupported)
+	require.Equal(t, int64(48), s.filtered)
 }
 
 func TestSysStats(t *testing.T) {
@@ -160,6 +163,7 @@ func TestGetCounters(t *testing.T) {
 	require.Contains(t, m, "ptp.sptp.gms.total")
 	require.Contains(t, m, "ptp.sptp.gms.available_pct")
 	require.Contains(t, m, "ptp.sptp.tick_duration_ns")
+	require.Contains(t, m, "ptp.sptp.filtered")
 	require.Contains(t, m, "ptp.sptp.portstats.rx.sync")
 	require.Contains(t, m, "ptp.sptp.portstats.rx.announce")
 	require.Contains(t, m, "ptp.sptp.portstats.rx.delay_req")

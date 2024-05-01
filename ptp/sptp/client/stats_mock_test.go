@@ -65,6 +65,18 @@ func (mr *MockStatsServerMockRecorder) CollectSysStats() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CollectSysStats", reflect.TypeOf((*MockStatsServer)(nil).CollectSysStats))
 }
 
+// IncFiltered mocks base method.
+func (m *MockStatsServer) IncFiltered() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "IncFiltered")
+}
+
+// IncFiltered indicates an expected call of IncFiltered.
+func (mr *MockStatsServerMockRecorder) IncFiltered() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncFiltered", reflect.TypeOf((*MockStatsServer)(nil).IncFiltered))
+}
+
 // IncRXAnnounce mocks base method.
 func (m *MockStatsServer) IncRXAnnounce() {
 	m.ctrl.T.Helper()

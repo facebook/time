@@ -393,6 +393,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	var state servo.State
 	var freqAdj float64
 	if isSpike {
+		p.stats.IncFiltered()
 		freqAdj = p.setMeanFreq()
 		if p.pi.GetState() == servo.StateLocked {
 			state = servo.StateFilter
