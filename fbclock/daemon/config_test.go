@@ -51,3 +51,17 @@ func TestEvalAndValidate(t *testing.T) {
 	c.LinearizabilityTestMaxGMOffset = 1 * time.Microsecond
 	require.Nil(t, c.EvalAndValidate())
 }
+
+func TestPostponeStart(t *testing.T) {
+	uptime, err := uptime()
+	require.NoError(t, err)
+	require.True(t, uptime > 0)
+
+	delay := 500 * time.Millisecond
+	c := Config{BootDelay: uptime + delay}
+
+	start := time.Now()
+	err = c.PostponeStart()
+	require.True(t, time.Since(start) >= delay)
+	require.NoError(t, err)
+}

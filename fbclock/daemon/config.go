@@ -21,6 +21,8 @@ import (
 	"os"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -34,6 +36,7 @@ type Config struct {
 	LinearizabilityTestInterval    time.Duration // perform the linearizability test every so often
 	SPTP                           bool          // wherever we run in sptp or ptp4l mode
 	LinearizabilityTestMaxGMOffset time.Duration // max offset between GMs before linearizability test considered failed
+	BootDelay                      time.Duration // postpone startup by this time after boot
 }
 
 // EvalAndValidate makes sure config is valid and evaluates expressions for further use.
@@ -56,6 +59,33 @@ func (c *Config) EvalAndValidate() error {
 		return fmt.Errorf("bad config: 'offset' must be positive")
 	}
 	return c.Math.Prepare()
+}
+
+// PostponeStart postpones startup by BootDelay
+func (c *Config) PostponeStart() error {
+	uptime, err := uptime()
+	if err != nil {
+		return err
+	}
+	log.Debugf("system uptime: %s", uptime)
+
+	if uptime < c.BootDelay {
+		log.Infof("postponing startup by %s", c.BootDelay-uptime)
+		time.Sleep(c.BootDelay - uptime)
+	}
+
+	return nil
+}
+
+// uptime returns system boot time
+func uptime() (time.Duration, error) {
+	var ts unix.Timespec
+
+	if err := unix.ClockGettime(unix.CLOCK_BOOTTIME, &ts); err != nil {
+		return 0, err
+	}
+
+	return time.Duration(ts.Nano()), nil
 }
 
 // ReadConfig reads config and unmarshals it from yaml into Config
