@@ -24,6 +24,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/facebook/time/dscp"
 	"github.com/facebook/time/timestamp"
 )
 
@@ -56,13 +57,51 @@ func NewUDPConnTS(conn *net.UDPConn, connFd int) *UDPConnTS {
 	}
 }
 
+// NewUDPConnTSConfig initialises a new struct UDPConnTS
+func NewUDPConnTSConfig(conn *net.UDPConn, cfg *Config) (*UDPConnTS, error) {
+	// get FD of the connection. Can be optimized by doing this when connection is created
+	connFd, err := timestamp.ConnFd(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	localAddr := conn.LocalAddr()
+	localIP := localAddr.(*net.UDPAddr).IP
+	localPort := localAddr.(*net.UDPAddr).Port
+	if err = dscp.Enable(connFd, localIP, cfg.DSCP); err != nil {
+		return nil, fmt.Errorf("setting DSCP on event socket: %w", err)
+	}
+
+	// we need to enable HW or SW timestamps on event port
+	if err := timestamp.EnableTimestamps(cfg.Timestamping, connFd, cfg.Iface); err != nil {
+		return nil, fmt.Errorf("failed to enable timestamps on port %d: %w", localPort, err)
+	}
+
+	// set it to blocking mode, otherwise recvmsg will just return with nothing most of the time
+	if err = unix.SetNonblock(connFd, false); err != nil {
+		return nil, fmt.Errorf("failed to set event socket to blocking: %w", err)
+	}
+
+	return &UDPConnTS{
+		UDPConn: conn,
+		connFd:  connFd,
+	}, nil
+}
+
 // WriteToWithTS writes bytes to addr via underlying UDPConn
 func (c *UDPConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, error) {
 	c.l.Lock()
 	defer c.l.Unlock()
-	n, err := c.WriteTo(b, addr)
+	var n int
+	var err error
+	if c.RemoteAddr() == nil {
+		n, err = c.WriteTo(b, addr)
+	} else {
+		addr = c.RemoteAddr()
+		n, err = c.Write(b)
+	}
 	if err != nil {
-		return 0, time.Time{}, err
+		return 0, time.Time{}, fmt.Errorf("failed to send to %v: %w", addr, err)
 	}
 	hwts, _, err := timestamp.ReadTXtimestamp(c.connFd)
 	if err != nil {

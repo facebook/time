@@ -26,9 +26,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sys/unix"
 
-	"github.com/facebook/time/dscp"
 	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/servo"
@@ -88,10 +86,25 @@ func (p *SPTP) initClients() error {
 	p.clients = map[string]*Client{}
 	p.priorities = map[string]int{}
 	p.backoff = map[string]*backoff{}
+	if p.cfg.ParallelTX {
+		log.Info("Initialise clients with parallel TX feature")
+	}
 	for server, prio := range p.cfg.Servers {
 		// normalize the address
-		ns := net.ParseIP(server).String()
-		c, err := NewClient(ns, ptp.PortEvent, p.clockID, p.eventConn, p.cfg, p.stats)
+		ip := net.ParseIP(server)
+		ns := ip.String()
+		econn := p.eventConn
+		if p.cfg.ParallelTX {
+			conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: ip, Port: ptp.PortEvent})
+			if err != nil {
+				return err
+			}
+			econn, err = NewUDPConnTSConfig(conn, p.cfg)
+			if err != nil {
+				return err
+			}
+		}
+		c, err := NewClient(ns, ptp.PortEvent, p.clockID, econn, p.cfg, p.stats)
 		if err != nil {
 			return fmt.Errorf("initializing client %q: %w", ns, err)
 		}
@@ -126,28 +139,10 @@ func (p *SPTP) init() error {
 		return err
 	}
 
-	// get FD of the connection. Can be optimized by doing this when connection is created
-	connFd, err := timestamp.ConnFd(eventConn)
+	p.eventConn, err = NewUDPConnTSConfig(eventConn, p.cfg)
 	if err != nil {
 		return err
 	}
-
-	localEventAddr := eventConn.LocalAddr()
-	localEventIP := localEventAddr.(*net.UDPAddr).IP
-	if err = dscp.Enable(connFd, localEventIP, p.cfg.DSCP); err != nil {
-		return fmt.Errorf("setting DSCP on event socket: %w", err)
-	}
-
-	// we need to enable HW or SW timestamps on event port
-	if err := timestamp.EnableTimestamps(p.cfg.Timestamping, connFd, p.cfg.Iface); err != nil {
-		return err
-	}
-
-	// set it to blocking mode, otherwise recvmsg will just return with nothing most of the time
-	if err = unix.SetNonblock(connFd, false); err != nil {
-		return fmt.Errorf("failed to set event socket to blocking: %w", err)
-	}
-	p.eventConn = NewUDPConnTS(eventConn, connFd)
 
 	// Configure TX timestamp attempts and timemouts
 	timestamp.AttemptsTXTS = p.cfg.AttemptsTXTS
