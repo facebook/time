@@ -863,15 +863,10 @@ func (a *API) ClearDevice() error {
 func (a *API) Reboot() error {
 	// check measurement status
 	status, err := a.FetchStatus()
-	if err != nil {
-		return err
-	}
 
-	if status.MeasurementActive {
-		// stop measurement
-		if err = a.StopMeasure(); err != nil {
-			return err
-		}
+	if err == nil && status.MeasurementActive {
+		// stop measurement if possible
+		_ = a.StopMeasure()
 	}
 	return a.get(rebootURL)
 }
