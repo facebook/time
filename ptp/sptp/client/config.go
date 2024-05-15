@@ -94,6 +94,7 @@ type Config struct {
 	Backoff                  BackoffConfig
 	SequenceIDMaskBits       uint
 	SequenceIDMaskValue      uint
+	ParallelTX               bool
 }
 
 // DefaultConfig returns Config initialized with default values
@@ -162,6 +163,9 @@ func (c *Config) Validate() error {
 	}
 	if c.SequenceIDMaskValue & ^((1<<c.SequenceIDMaskBits)-1) > 0 {
 		return fmt.Errorf("invalid value for SequenceIDMaskValue: %d is more than mask %d can handle", c.SequenceIDMaskValue, c.SequenceIDMaskBits)
+	}
+	if c.ParallelTX {
+		log.Warning("ParallelTX is enabled, this is not recommended for production use")
 	}
 	return nil
 }
