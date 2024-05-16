@@ -47,12 +47,22 @@ extern "C" {
 struct phc_time_res;
 
 typedef struct fbclock_clockdata {
-  int64_t ingress_time_ns; // PHC time when ptp client last time received sync
-                           // message
-  uint32_t error_bound_ns; // error bound as calculated based on PTP client GM
-                           // offset, path delay and frequency adjustment
-  uint32_t holdover_multiplier_ns; // multiplier we use to adjust error bound
-                                   // when clock is running in holdover mode
+  // PHC time when ptp client last time received sync message
+  int64_t ingress_time_ns;
+  // error bound calculated based on PTP client GM offset, path delay and
+  // frequency adjustment
+  uint32_t error_bound_ns;
+  // multiplier we use to adjust error bound when clock in holdover mode
+  uint32_t holdover_multiplier_ns;
+  // start time (TAI) to begin smearing clock
+  uint64_t clock_smearing_start_s;
+  // end time (TAI) to stop smearing clock
+  uint64_t clock_smearing_end_s;
+  // UTC offset before latest published leap second (tzdata)
+  int32_t utc_offset_pre_s;
+  // UTC offset after latest published leap second (tzdata)
+  int32_t utc_offset_post_s;
+
 } fbclock_clockdata;
 
 // Define a structure that will be imposed on the shared memory object.

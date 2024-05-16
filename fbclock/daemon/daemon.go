@@ -29,10 +29,15 @@ import (
 
 	"github.com/facebook/time/fbclock"
 
-	"github.com/facebook/time/ptp/linearizability"
-
+	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/phc"
+	"github.com/facebook/time/ptp/linearizability"
 	ptp "github.com/facebook/time/ptp/protocol"
+)
+
+const (
+	utcOffsetOriginalS int32  = 10    // UTC-TAI offset was 10s before leap seconds started (1972)
+	leapDurationS      uint64 = 65000 // 18.06 hours
 )
 
 var errNotEnoughData = fmt.Errorf("not enough data points")
@@ -108,6 +113,53 @@ func minRingSize(configuredRingSize int, interval time.Duration) int {
 		size = int(math.Ceil(float64(time.Minute) / float64(interval)))
 	}
 	return size
+}
+
+type clockSmearing struct {
+	smearingStartS uint64 // time (TAI) when smearing starts
+	smearingEndS   uint64 // time (TAI) when smearing ends
+	utcOffsetPreS  int32  // DTAI offset prior to Leap Second Event Time
+	utcOffsetPostS int32  // DTAI offset post Leap Second Event Time
+}
+
+func leapSeconds() ([]leapsectz.LeapSecond, error) {
+	leaps, err := leapsectz.Parse("")
+	if err != nil {
+		return []leapsectz.LeapSecond{}, err
+	}
+	if len(leaps) < 2 {
+		return []leapsectz.LeapSecond{}, fmt.Errorf("not enough leap seconds in the file")
+	}
+
+	previousLeap := leaps[len(leaps)-2]
+	latestLeap := leaps[len(leaps)-1]
+
+	return []leapsectz.LeapSecond{previousLeap, latestLeap}, nil
+}
+
+func leapSecondSmearing(leaps []leapsectz.LeapSecond) *clockSmearing {
+	// need a minimum of 2 published leap second events in tzdata
+	if len(leaps) < 2 {
+		return &clockSmearing{}
+	}
+	latestLeap := leaps[len(leaps)-1]
+	previousLeap := leaps[len(leaps)-2]
+	utcOffsetPreS := previousLeap.Nleap + utcOffsetOriginalS
+	utcOffsetPostS := latestLeap.Nleap + utcOffsetOriginalS
+
+	// this is the leap second adjustment time which is either 23:59:60 UTC or 00:00:00 UTC of following day
+	// if we don't render a timestamp of 23:59:60 UTC
+	leapSecondEventTimeS := latestLeap.Tleap - uint64(latestLeap.Nleap) + 1
+	// smearing starts at leap second event time and ends 18.06 hours after
+	smearingStartS := leapSecondEventTimeS + uint64(utcOffsetPreS)
+	smearingEndS := leapSecondEventTimeS + leapDurationS + uint64(utcOffsetPreS)
+
+	return &clockSmearing{
+		smearingStartS: smearingStartS,
+		smearingEndS:   smearingEndS,
+		utcOffsetPreS:  utcOffsetPreS,
+		utcOffsetPostS: utcOffsetPostS,
+	}
 }
 
 // New creates new fbclock-daemon
@@ -219,7 +271,7 @@ func (s *Daemon) calcDriftPPB() (float64, error) {
 	return drift, nil
 }
 
-func (s *Daemon) calculateSHMData(data *DataPoint) (*fbclock.Data, error) {
+func (s *Daemon) calculateSHMData(data *DataPoint, leaps []leapsectz.LeapSecond) (*fbclock.Data, error) {
 	if err := data.SanityCheck(); err != nil {
 		s.stats.UpdateCounterBy("data_sanity_check_error", 1)
 		return nil, fmt.Errorf("sanity checking data point: %w", err)
@@ -247,10 +299,16 @@ func (s *Daemon) calculateSHMData(data *DataPoint) (*fbclock.Data, error) {
 		return nil, fmt.Errorf("calculating drift: %w", err)
 	}
 	s.stats.SetCounter("drift_ppb", int64(hValue))
+
+	clockSmearing := leapSecondSmearing(leaps)
 	return &fbclock.Data{
 		IngressTimeNS:        data.IngressTimeNS,
 		ErrorBoundNS:         wUint,
 		HoldoverMultiplierNS: hValue,
+		SmearingStartS:       clockSmearing.smearingStartS,
+		SmearingEndS:         clockSmearing.smearingEndS,
+		UTCOffsetPreS:        clockSmearing.utcOffsetPreS,
+		UTCOffsetPostS:       clockSmearing.utcOffsetPostS,
 	}, nil
 }
 
@@ -277,8 +335,13 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 			log.Warningf("No data for time since ingress")
 		}
 	}
+	// read tzdata for leap seconds
+	leaps, err := leapSeconds()
+	if err != nil {
+		log.Warningf("Failed to get leap seconds: %v", err)
+	}
 	// store everything in shared memory
-	d, err := s.calculateSHMData(data)
+	d, err := s.calculateSHMData(data, leaps)
 	if err != nil {
 		if errors.Is(err, errNotEnoughData) {
 			log.Warning(err)

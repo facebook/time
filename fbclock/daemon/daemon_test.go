@@ -21,11 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/facebook/time/fbclock"
+	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/ptp/linearizability"
+	"github.com/stretchr/testify/require"
 
 	ptp "github.com/facebook/time/ptp/protocol"
 )
@@ -178,8 +177,8 @@ func TestTargetsChange(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			gotAdded, gotRemoved := targetsDiff(tc.oldTargets, tc.targets)
-			assert.ElementsMatch(t, tc.wantAdded, gotAdded, "added")
-			assert.ElementsMatch(t, tc.wantRemoved, gotRemoved, "removed")
+			require.ElementsMatch(t, tc.wantAdded, gotAdded, "added")
+			require.ElementsMatch(t, tc.wantRemoved, gotRemoved, "removed")
 		})
 	}
 }
@@ -259,9 +258,9 @@ func TestMathPrepare(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.in.Prepare()
 			if tc.wantErr {
-				assert.Error(t, got)
+				require.Error(t, got)
 			} else {
-				assert.NoError(t, got)
+				require.NoError(t, got)
 			}
 		})
 	}
@@ -356,9 +355,9 @@ func TestDataPointSanityCheck(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.in.SanityCheck()
 			if tc.wantErr {
-				assert.Error(t, got)
+				require.Error(t, got)
 			} else {
-				assert.NoError(t, got)
+				require.NoError(t, got)
 			}
 		})
 	}
@@ -373,6 +372,11 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 			Drift: "1.5 * mean(freqchangeabs, 29)",
 		},
 	}
+	leaps := []leapsectz.LeapSecond{
+		{Tleap: 1435708825, Nleap: 26},
+		{Tleap: 1483228826, Nleap: 27},
+	}
+
 	err := cfg.Math.Prepare()
 	require.NoError(t, err)
 	stats := NewStats()
@@ -393,7 +397,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 			FreqAdjustmentPPB: adj,
 			ClockAccuracyNS:   100.0,
 		}
-		shmData, err := s.calculateSHMData(d)
+		shmData, err := s.calculateSHMData(d, leaps)
 		if i < 29 {
 			require.Nil(t, shmData)
 			require.Error(t, err, "not enough data should give us error when calculating shm state")
@@ -414,8 +418,12 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		IngressTimeNS:        d.IngressTimeNS,
 		ErrorBoundNS:         123.0,
 		HoldoverMultiplierNS: 64.5,
+		SmearingStartS:       1483228836,
+		SmearingEndS:         1483293836,
+		UTCOffsetPreS:        36,
+		UTCOffsetPostS:       37,
 	}
-	shmData, err := s.calculateSHMData(d)
+	shmData, err := s.calculateSHMData(d, leaps)
 	require.NoError(t, err)
 	require.Equal(t, want, shmData)
 
@@ -426,7 +434,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		PathDelayNS:       0,
 		FreqAdjustmentPPB: 0,
 	}
-	shmData, err = s.calculateSHMData(d)
+	shmData, err = s.calculateSHMData(d, leaps)
 	require.Error(t, err, "we expect calculateSHMData to produce no new shm state when new input is invalid")
 	require.Nil(t, shmData)
 	// ptp4l started syncing, but haven't started updating the clock
@@ -436,7 +444,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		PathDelayNS:       213,
 		FreqAdjustmentPPB: 0,
 	}
-	shmData, err = s.calculateSHMData(d)
+	shmData, err = s.calculateSHMData(d, leaps)
 	require.Nil(t, shmData)
 	require.Error(t, err, "we expect calculateSHMData to produce no new shm state when new input is incomplete")
 
@@ -448,14 +456,40 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		FreqAdjustmentPPB: 32333,
 		ClockAccuracyNS:   100,
 	}
-	shmData, err = s.calculateSHMData(d)
+	shmData, err = s.calculateSHMData(d, leaps)
 	want = &fbclock.Data{
 		IngressTimeNS:        d.IngressTimeNS,
 		ErrorBoundNS:         157,
 		HoldoverMultiplierNS: 9362.84482758621,
+		SmearingStartS:       1483228836,
+		SmearingEndS:         1483293836,
+		UTCOffsetPreS:        36,
+		UTCOffsetPostS:       37,
 	}
 	require.NoError(t, err)
-	assert.Equal(t, want, shmData)
+	require.Equal(t, want, shmData)
+
+	// no leap second data
+	leaps = []leapsectz.LeapSecond{}
+	d = &DataPoint{
+		IngressTimeNS:     int64(startTime + 66*time.Second),
+		MasterOffsetNS:    234,
+		PathDelayNS:       213,
+		FreqAdjustmentPPB: 32333,
+		ClockAccuracyNS:   100,
+	}
+	shmData, err = s.calculateSHMData(d, leaps)
+	want = &fbclock.Data{
+		IngressTimeNS:        d.IngressTimeNS,
+		ErrorBoundNS:         185,
+		HoldoverMultiplierNS: 9361.241379310344,
+		SmearingStartS:       0,
+		SmearingEndS:         0,
+		UTCOffsetPreS:        0,
+		UTCOffsetPostS:       0,
+	}
+	require.NoError(t, err)
+	require.Equal(t, want, shmData)
 }
 
 func TestDaemonDoWork(t *testing.T) {
@@ -622,4 +656,28 @@ func TestDaemonDoWork(t *testing.T) {
 	require.Equal(t, want.IngressTimeNS, got.IngressTimeNS)
 	require.Equal(t, want.ErrorBoundNS, got.ErrorBoundNS)
 	require.InDelta(t, want.HoldoverMultiplierNS, got.HoldoverMultiplierNS, 0.001)
+}
+
+func TestLeapSecondSmearing(t *testing.T) {
+	// assume that these were the 2 most recent leap seconds in tzinfo data
+	leaps := []leapsectz.LeapSecond{
+		{Tleap: 1435708837, Nleap: 25}, // Wednesday, 1 July 2015 00:00:25 | 25 leap seconds
+		{Tleap: 1483228826, Nleap: 26}, // Sunday, 01 Jan 2017 00:00:26 UTC | 26 leap seconds
+	}
+	got := leapSecondSmearing(leaps)
+	want := &clockSmearing{
+		smearingStartS: 1483228836, // Sun, 01 Jan 2017 00:00:36 TAI (or Sat, 31 Dec 2016 12:00:00 UTC)
+		smearingEndS:   1483293836, // Sun, 01 Jan 2017 18:03:56 TAI (or Sun, 01 Jan 2017 18:03:19 UTC)
+		utcOffsetPreS:  35,
+		utcOffsetPostS: 36,
+	}
+	require.Equal(t, want, got)
+
+	// less than 2 leap second events in tzdata
+	leaps = []leapsectz.LeapSecond{
+		{Tleap: 1483228826, Nleap: 26}, // Sunday, 01 Jan 2017 00:00:26 UTC | 26 leap seconds
+	}
+	got = leapSecondSmearing(leaps)
+	want = &clockSmearing{}
+	require.Equal(t, want, got)
 }

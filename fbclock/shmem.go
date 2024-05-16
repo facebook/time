@@ -78,7 +78,11 @@ func (s *Shm) Close() error {
 type Data struct {
 	IngressTimeNS        int64
 	ErrorBoundNS         uint64
-	HoldoverMultiplierNS float64 // float stored as multiplier of  2**16
+	HoldoverMultiplierNS float64 // float stored as multiplier of 2**16
+	SmearingStartS       uint64  // Smearing starts before the Leap Second Event Time (midnight on June-30 or Dec-31)
+	SmearingEndS         uint64  // Smearing ends after the Leap Second Event Time (midnight on June-30 or Dec-31)
+	UTCOffsetPreS        int32   // UTC Offset before Leap Second Event
+	UTCOffsetPostS       int32   // UTC Offset after Leap Second Event
 }
 
 // OpenFBClockShmCustom returns opened POSIX shared mem used by fbclock,
@@ -135,6 +139,10 @@ func StoreFBClockData(fd uintptr, d Data) error {
 		ingress_time_ns:        C.int64_t(d.IngressTimeNS),
 		error_bound_ns:         C.uint32_t(Uint64ToUint32(d.ErrorBoundNS)),
 		holdover_multiplier_ns: C.uint32_t(FloatAsUint32(d.HoldoverMultiplierNS)),
+		clock_smearing_start:   C.uint64_t(d.SmearingStartS),
+		clock_smearing_end:     C.uint64_t(d.SmearingEndS),
+		utc_offset_pre:         C.int32_t(d.UTCOffsetPreS),
+		utc_offset_post:        C.int32_t(d.UTCOffsetPostS),
 	}
 	// fbclock_clockdata_store_data comes from fbclock.c
 	res := C.fbclock_clockdata_store_data(C.uint(fd), cData)
