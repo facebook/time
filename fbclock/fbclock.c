@@ -83,10 +83,7 @@ int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data) {
   if (shmp == MAP_FAILED) {
     return FBCLOCK_E_SHMEM_MAP_FAILED;
   }
-  uint64_t crc = fbclock_clockdata_crc_DEPRECATED(data);
-  // TODO: Switch to storing using new crc function after all readers are
-  // updated.
-  // uint64_t crc = fbclock_clockdata_crc(data);
+  uint64_t crc = fbclock_clockdata_crc(data);
   memcpy(&shmp->data, data, FBCLOCK_CLOCKDATA_SIZE);
   atomic_store(&shmp->crc, crc);
   munmap(shmp, FBCLOCK_SHMDATA_SIZE);
