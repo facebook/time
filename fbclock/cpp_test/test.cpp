@@ -17,12 +17,13 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <cmath>
 #include <future>
 #include <thread>
 
 #include "../fbclock.h"
 
-TEST(fbclock_test, test_write_read) {
+TEST(fbclockTest, test_write_read) {
   int err;
   char* test_shm = std::tmpnam(nullptr);
 
@@ -108,7 +109,7 @@ int reader_thread(fbclock_shmdata* shmp, int tries) {
   return 0;
 }
 
-TEST(fbclock_test, test_concurrent) {
+TEST(fbclockTest, test_concurrent) {
   int err;
   char* test_shm = std::tmpnam(nullptr);
 
@@ -144,7 +145,7 @@ TEST(fbclock_test, test_concurrent) {
   remove(test_shm);
 }
 
-TEST(fbclock_test, test_window_of_uncertainty) {
+TEST(fbclockTest, test_window_of_uncertainty) {
   int64_t seconds = 0; // how long ago was the last SYNC
   double error_bound_ns = 172.0;
   double holdover_multiplier_ns = 50.5;
@@ -160,48 +161,198 @@ TEST(fbclock_test, test_window_of_uncertainty) {
   EXPECT_DOUBLE_EQ(wou, 677.0);
 }
 
-TEST(fbclock_test, test_fbclock_calculate_time) {
+TEST(fbclockTest, test_fbclock_calculate_time) {
   int err;
   fbclock_truetime truetime;
-  double error_bound_ns = 172.0;
-  double h_value_ns = 50.5;
+  fbclock_clockdata state = {
+      .ingress_time_ns = 1647269091803102957,
+  };
+  double error_bound = 172.0;
+  double h_value = 50.5;
   // phc time is before ingress time, error
-  int64_t ingress_time_ns = 1647269091803102957;
   int64_t phctime_ns = 1647269082943150996;
 
   err = fbclock_calculate_time(
-      error_bound_ns, h_value_ns, ingress_time_ns, phctime_ns, &truetime);
+      error_bound, h_value, &state, phctime_ns, &truetime, FBCLOCK_TAI);
   ASSERT_EQ(err, FBCLOCK_E_PHC_IN_THE_PAST);
 
   // phc time is after ingress time, all good
-  ingress_time_ns = 1647269082943150996;
+  state = {.ingress_time_ns = 1647269082943150996};
   phctime_ns = 1647269091803102957;
   err = fbclock_calculate_time(
-      error_bound_ns, h_value_ns, ingress_time_ns, phctime_ns, &truetime);
+      error_bound, h_value, &state, phctime_ns, &truetime, FBCLOCK_TAI);
   ASSERT_EQ(err, 0);
 
   EXPECT_EQ(truetime.earliest_ns, 1647269091803102338);
   EXPECT_EQ(truetime.latest_ns, 1647269091803103576);
 
   // WOU is very big
-  error_bound_ns = 1000.0;
+  error_bound = 1000.0;
   phctime_ns += 6 * 3600 * 1000000000.0; // + 6 hours
   err = fbclock_calculate_time(
-      error_bound_ns, h_value_ns, ingress_time_ns, phctime_ns, &truetime);
+      error_bound, h_value, &state, phctime_ns, &truetime, FBCLOCK_TAI);
   ASSERT_EQ(err, 0);
   EXPECT_EQ(truetime.earliest_ns, 1647290691802010729);
   EXPECT_EQ(truetime.latest_ns, 1647290691804195223);
 }
 
-TEST(fbclock_test, test_fbclock_apply_utc_offset) {
-  fbclock_truetime truetime;
-  truetime.earliest_ns = 1647269091803102338;
-  truetime.latest_ns = 1647269091803103576;
+TEST(fbclockTest, test_fbclock_apply_smear_after_2017_leap_second) {
+  uint64_t offset_pre_ns = 36e9;
+  uint64_t offset_post_ns = 37e9;
+  uint64_t smear_start_ns = 1483228836e9; // Sun, 01 Jan 2017 00:00:36 TAI
+  uint64_t smear_end_ns = 1483293836e9; // Sun, 01 Jan 2017 18:03:56 TAI
+  int multiplier = 1;
 
-  fbclock_apply_utc_offset(&truetime);
+  uint64_t time =
+      1714142307961569530; // Friday, 26 April 2024 14:38:27.961:569:530 TAI
+  time = fbclock_apply_smear(
+      time,
+      offset_pre_ns,
+      offset_post_ns,
+      smear_start_ns,
+      smear_end_ns,
+      multiplier);
+  // Expect UTC time to be 37 seconds behind TAI
+  EXPECT_EQ(
+      time,
+      1714142270961569530); // Friday, 26 April 2024 14:37:50.961:569:530 UTC
 
-  EXPECT_EQ(truetime.earliest_ns, 1647269054803102338);
-  EXPECT_EQ(truetime.latest_ns, 1647269054803103576);
+  time = 1714142307961570584; // Friday, 26 April 2024 14:38:27.961:570:584 TAI
+  time = fbclock_apply_smear(
+      time,
+      offset_pre_ns,
+      offset_post_ns,
+      smear_start_ns,
+      smear_end_ns,
+      multiplier);
+  // Expect UTC time to be 37 seconds behind TAI
+  EXPECT_EQ(
+      time,
+      1714142270961570584); // Friday, 26 April 2024 14:37:50.961:570:584 UTC
+}
+
+TEST(fbclockTest, test_fbclock_apply_smear_before_2017_leap_second) {
+  uint64_t offset_pre_ns = 36e9;
+  uint64_t offset_post_ns = 37e9;
+  uint64_t smear_start_ns = 1483228836e9; // Sun, 01 Jan 2017 00:00:36 TAI
+  uint64_t smear_end_ns = 1483293836e9; // Sun, 01 Jan 2017 18:03:56 TAI
+  int multiplier = 1;
+
+  uint64_t time =
+      1443142307961555444; // Friday, 25 Sep 2015 00:51:47.961:555:444 TAI
+  time = fbclock_apply_smear(
+      time,
+      offset_pre_ns,
+      offset_post_ns,
+      smear_start_ns,
+      smear_end_ns,
+      multiplier);
+  // Expect UTC time to be 36 seconds behind TAI
+  EXPECT_EQ(
+      time,
+      1443142271961555444); // Friday, 25 Sep 2015 00:51:11.961:555:444 UTC
+
+  time = 1443142308666555444; // Friday, 25 Sep 2015 00:51:48.666:555:444 TAI
+  time = fbclock_apply_smear(
+      time,
+      offset_pre_ns,
+      offset_post_ns,
+      smear_start_ns,
+      smear_end_ns,
+      multiplier);
+  // Expect UTC time to be 36 seconds behind TAI
+  EXPECT_EQ(
+      time,
+      1443142272666555444); // Friday, 25 Sep 2015 00:51:12.666:555:444 UTC
+}
+
+TEST(fbclockTest, test_fbclock_apply_smear_during_2017_leap_second_params) {
+  uint64_t offset_pre_ns = 36e9;
+  uint64_t offset_post_ns = 37e9;
+  uint64_t smear_start_ns = 1483228836e9; // Sun, 01 Jan 2017 00:00:36 TAI
+  uint64_t smear_end_ns = 1483293836e9; // Sun, 01 Jan 2017 18:03:56 TAI
+  int multiplier = 1;
+
+  uint64_t input_times[] = {
+      1483228835000000000, // Sun, 01 Jan 2017 00:00:35:000:000:000 TAI
+      1483228836000000000, // Sun, 01 Jan 2017 00:00:36:000:000:000 TAI (start)
+      1483228836000065000, // Sun, 01 Jan 2017 00:00:36:000:065:000 TAI
+      1483228836000130000, // Sun, 01 Jan 2017 00:00:36:000:130:000 TAI
+      1483228837000000000, // Sun, 01 Jan 2017 00:00:37:000:000:000 TAI
+      1483261335000000000, // Sun, 01 Jan 2017 09:02:15:000:000:000 TAI
+      1483261336000000000, // Sun, 01 Jan 2017 09:02:16:000:000:000 TAI
+                           // (midpoint)
+      1483261337000000000, // Sun, 01 Jan 2017 09:02:17:000:000:000 TAI
+      1483261345000000000, // Sun, 01 Jan 2017 09:02:25:000:000:000 TAI
+      1483261346000000000, // Sun, 01 Jan 2017 09:02:26:000:000:000 TAI
+      1483261347000000000, // Sun, 01 Jan 2017 09:02:27:000:000:000 TAI
+      1483293836000000000, // Sun, 01 Jan 2017 18:03:56:000:000:000 TAI (end)
+      1483293837000000000, // Sun, 01 Jan 2017 18:03:57:000:000:000 TAI
+  };
+
+  uint64_t output_times[] = {
+      1483228799000000000, // Sat, 31 Dec 2016 23:59:59:000:000:000 UTC
+      1483228800000000000, // Sun, 01 Jan 2017 00:00:00:000:000:000 UTC (start)
+      1483228800000064999, // Sun, 01 Jan 2017 00:00:00:000:064:999 UTC
+      1483228800000129998, // Sun, 01 Jan 2017 00:00:00:000:129:998 UTC
+      1483228800999984616, // Sun, 01 Jan 2017 00:00:00:999:984:616 UTC
+      1483261298500015385, // Sun, 01 Jan 2017 09:01:38:500:015:385 UTC
+      1483261299500000000, // Sun, 01 Jan 2017 09:01:39:500:000:000 UTC
+                           // (midpoint)
+      1483261300499984616, // Sun, 01 Jan 2017 09:01:40:499:984:616 UTC
+      1483261308499861539, // Sun, 01 Jan 2017 09:01:49:499:861:539 UTC
+      1483261309499846154, // Sun, 01 Jan 2017 09:01:49:499:846:154 UTC
+      1483261310499830770, // Sun, 01 Jan 2017 09:01:50:499:830:770 UTC
+      1483293799000000000, // Sun, 01 Jan 2017 18:03:19:000:000:000 UTC (end)
+      1483293800000000000, // Sun, 01 Jan 2017 18:03:20:000:000:000 UTC
+  };
+
+  for (int i = 0; i < 11; ++i) {
+    EXPECT_EQ(
+        fbclock_apply_smear(
+            input_times[i],
+            offset_pre_ns,
+            offset_post_ns,
+            smear_start_ns,
+            smear_end_ns,
+            multiplier),
+        output_times[i]);
+  }
+}
+
+TEST(fbclockTest, test_fbclock_apply_smear_during_future_leap_second_negative) {
+  uint64_t offset_pre_ns = 37e9;
+  uint64_t offset_post_ns = 36e9;
+  uint64_t smear_start_ns = 1893456037e9; // Sun, 01 Jan 2030 00:00:37 TAI
+  uint64_t smear_end_ns = 1893521037e9; // Sun, 01 Jan 2017 18:03:57 TAI
+  int multiplier = -1;
+
+  uint64_t input_times[] = {
+      1893456037000000000, // Wed, 01 Jan 2030 00:00:37:000:000:000 TAI (start)
+      1893488537000000000, // Wed, 01 Jan 2030 09:02:17:000:000:000 TAI
+                           // (midpoint)
+      1893521037000000000, // Wed, 01 Jan 2030 18:03:57:000:000:000 TAI (end)
+
+  };
+
+  uint64_t output_times[] = {
+      1893456000000000000, // Wed, 01 Jan 2030 00:00:00:000:000:000 UTC (start)
+      1893488500500000000, // Wed, 01 Jan 2030 09:01:40.500:000:000 UTC
+                           // (midpoint)
+      1893521001000000000, // Wed, 01 Jan 2030 18:03:21:000:000:000 UTC (end)
+  };
+
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_EQ(
+        fbclock_apply_smear(
+            input_times[i],
+            offset_pre_ns,
+            offset_post_ns,
+            smear_start_ns,
+            smear_end_ns,
+            multiplier),
+        output_times[i]);
+  }
 }
 
 int main(int argc, char** argv) {

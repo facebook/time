@@ -139,10 +139,10 @@ func StoreFBClockData(fd uintptr, d Data) error {
 		ingress_time_ns:        C.int64_t(d.IngressTimeNS),
 		error_bound_ns:         C.uint32_t(Uint64ToUint32(d.ErrorBoundNS)),
 		holdover_multiplier_ns: C.uint32_t(FloatAsUint32(d.HoldoverMultiplierNS)),
-		clock_smearing_start:   C.uint64_t(d.SmearingStartS),
-		clock_smearing_end:     C.uint64_t(d.SmearingEndS),
-		utc_offset_pre:         C.int32_t(d.UTCOffsetPreS),
-		utc_offset_post:        C.int32_t(d.UTCOffsetPostS),
+		clock_smearing_start_s: C.uint64_t(d.SmearingStartS),
+		clock_smearing_end_s:   C.uint64_t(d.SmearingEndS),
+		utc_offset_pre_s:       C.int32_t(d.UTCOffsetPreS),
+		utc_offset_post_s:      C.int32_t(d.UTCOffsetPostS),
 	}
 	// fbclock_clockdata_store_data comes from fbclock.c
 	res := C.fbclock_clockdata_store_data(C.uint(fd), cData)
