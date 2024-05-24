@@ -75,6 +75,7 @@ type measurements struct {
 	data             map[uint16]*mData
 	announce         ptp.Announce
 	delaysWindow     *slidingWindow
+	pathDelay        time.Duration
 }
 
 func (m *measurements) addAnnounce(announce ptp.Announce) {
@@ -141,21 +142,24 @@ func (m *measurements) addT4(seq uint16, ts time.Time) {
 
 func (m *measurements) delay(newDelay time.Duration) time.Duration {
 	lastDelay := m.delaysWindow.lastSample()
+	maxPathDelay := time.Duration(m.cfg.PathDelayDiscardMultiplier) * m.pathDelay
 	// we want to have at least one sample recorded, even if it doesn't meet the filter, otherwise we'll never sync
-	if !math.IsNaN(lastDelay) && (m.cfg.PathDelayDiscardFilterEnabled && m.delaysWindow.Full() && (newDelay < m.cfg.PathDelayDiscardBelow || newDelay > m.cfg.PathDelayDiscardAbove)) {
-		log.Warningf("(%s) bad path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, m.cfg.PathDelayDiscardAbove)
+	if !math.IsNaN(lastDelay) && (m.cfg.PathDelayDiscardFilterEnabled && m.delaysWindow.Full() && m.cfg.PathDelayDiscardBelow < maxPathDelay && (newDelay < m.cfg.PathDelayDiscardBelow || newDelay > maxPathDelay)) {
+		log.Warningf("(%s) bad path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
 	} else {
 		m.delaysWindow.add(float64(newDelay))
 	}
 
 	switch m.cfg.PathDelayFilter {
 	case FilterMedian:
-		return time.Duration(m.delaysWindow.median())
+		m.pathDelay = time.Duration(m.delaysWindow.median())
 	case FilterMean:
-		return time.Duration(m.delaysWindow.mean())
+		m.pathDelay = time.Duration(m.delaysWindow.mean())
 	default:
-		return newDelay
+		m.pathDelay = newDelay
 	}
+
+	return m.pathDelay
 }
 
 // we take last complete sample of sync/followup data and last complete sample of delay req/resp data

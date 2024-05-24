@@ -46,7 +46,7 @@ func TestReadConfigDefaults(t *testing.T) {
 		MaxClockClass:            7,
 		MaxClockAccuracy:         37,
 		Measurement: MeasurementConfig{
-			PathDelayDiscardAbove: time.Second,
+			PathDelayDiscardMultiplier: 1000,
 		},
 	}
 	require.Equal(t, want, cfg)
@@ -77,7 +77,7 @@ measurement:
   path_delay_filter: "median"
   path_delay_discard_filter_enabled: true
   path_delay_discard_below: 2us
-  path_delay_discard_above: 1ms
+  path_delay_discard_multiplier: 3
 `))
 	require.NoError(t, err)
 	cfg, err := ReadConfig(f.Name())
@@ -91,7 +91,7 @@ measurement:
 		DSCP:                     35,
 		FirstStepThreshold:       time.Second,
 		Servers:                  map[string]int{"192.168.0.10": 2, "192.168.0.13": 3, "192.168.0.15": 1},
-		Measurement:              MeasurementConfig{PathDelayFilterLength: 59, PathDelayFilter: "median", PathDelayDiscardFilterEnabled: true, PathDelayDiscardBelow: 2 * time.Microsecond, PathDelayDiscardAbove: time.Millisecond},
+		Measurement:              MeasurementConfig{PathDelayFilterLength: 59, PathDelayFilter: "median", PathDelayDiscardFilterEnabled: true, PathDelayDiscardBelow: 2 * time.Microsecond, PathDelayDiscardMultiplier: 3},
 		MetricsAggregationWindow: 10 * time.Second,
 		AttemptsTXTS:             12,
 		TimeoutTXTS:              time.Duration(40) * time.Millisecond,
@@ -535,7 +535,7 @@ func TestConfigValidate(t *testing.T) {
 					PathDelayFilterLength:         30,
 					PathDelayDiscardFilterEnabled: true,
 					PathDelayDiscardBelow:         2 * time.Millisecond,
-					PathDelayDiscardAbove:         2 * time.Microsecond,
+					PathDelayDiscardMultiplier:    1,
 				},
 			},
 			wantErr: true,
@@ -642,7 +642,7 @@ measurement:
   path_delay_filter: "median"
   path_delay_discard_filter_enabled: true
   path_delay_discard_below: 2us
-  path_delay_discard_above: 1ms
+  path_delay_discard_multiplier: 3
 `))
 	require.NoError(t, err)
 	cfg, err := PrepareConfig(f.Name(), nil, "eth1", 3456, 2*time.Second, 42)
@@ -670,7 +670,7 @@ measurement:
 			PathDelayFilter:               "median",
 			PathDelayDiscardFilterEnabled: true,
 			PathDelayDiscardBelow:         2 * time.Microsecond,
-			PathDelayDiscardAbove:         time.Millisecond,
+			PathDelayDiscardMultiplier:    3,
 		},
 	}
 	require.Equal(t, want, cfg)
@@ -700,7 +700,7 @@ func TestPrepareConfigDefaults(t *testing.T) {
 			PathDelayFilter:               "",
 			PathDelayDiscardFilterEnabled: false,
 			PathDelayDiscardBelow:         0,
-			PathDelayDiscardAbove:         time.Second,
+			PathDelayDiscardMultiplier:    1000,
 		},
 	}
 	require.Equal(t, want, cfg)
