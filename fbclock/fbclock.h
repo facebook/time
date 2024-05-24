@@ -37,8 +37,10 @@ typedef atomic_uint_fast64_t atomic_uint64;
 #define FBCLOCK_E_PHC_IN_THE_PAST -7
 #define FBCLOCK_E_CRC_MISMATCH -8
 
-// until new leap second is introduced, UTC is exactly 37 seconds behind TAI
-#define UTC_TAI_OFFSET (int64_t)(-37e9)
+// Fixed UTC-TAI offset - used when data not present in shared memory
+#define UTC_TAI_OFFSET_NS (int64_t)(-37e9)
+// Smear step size - smear clock by 1ns every 65us
+#define SMEAR_STEP_NS (int64_t)(65e3)
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,7 +67,7 @@ typedef struct fbclock_clockdata {
 
 } fbclock_clockdata;
 
-// Define a structure that will be imposed on the shared memory object.
+// fbclock shared memory object
 typedef struct fbclock_shmdata {
   atomic_uint64 crc;
   fbclock_clockdata data;
@@ -76,16 +78,20 @@ typedef struct fbclock_shmdata {
 #define FBCLOCK_POW2_16 ((double)(1ULL << 16))
 #define FBCLOCK_PTPPATH "/dev/fbclock/ptp"
 
-// what customers get
+// supported time standards
+#define FBCLOCK_TAI 0
+#define FBCLOCK_UTC 1
+
+// response to fbclock_gettime request
 typedef struct fbclock_truetime {
   uint64_t earliest_ns;
   uint64_t latest_ns;
 } fbclock_truetime;
 
-// library
+// fbclock library
 typedef struct fbclock_lib {
   char* ptp_path; // path to PHC clock device
-  int shm_fd; // file descriptor of opened shared mem
+  int shm_fd; // file descriptor of opened shared memory object
   int dev_fd; // file descriptor of opened /dev/ptpN
   fbclock_shmdata* shmp; // mmap-ed data
   int (*gettime)(int, struct phc_time_res*); // pointer to gettime function
@@ -100,16 +106,29 @@ double fbclock_window_of_uncertainty(
 int fbclock_calculate_time(
     double error_bound_ns,
     double h_value_ns,
-    int64_t ingress_time_ns,
+    fbclock_clockdata* state,
     int64_t phctime_ns,
-    fbclock_truetime* truetime);
-void fbclock_apply_utc_offset(fbclock_truetime* truetime);
+    fbclock_truetime* truetime,
+    int timezone);
+uint64_t fbclock_apply_utc_offset(fbclock_clockdata* state, int64_t phctime_ns);
+uint64_t fbclock_apply_smear(
+    uint64_t time,
+    uint64_t offset_pre_ns,
+    uint64_t offset_post_ns,
+    uint64_t smear_start_ns,
+    uint64_t smear_end_ns,
+    int multiplier);
+int fbclock_gettime_tz(
+    fbclock_lib* lib,
+    fbclock_truetime* truetime,
+    int timezone);
 
 // methods we provide to end users
 int fbclock_init(fbclock_lib* lib, const char* shm_path);
 int fbclock_destroy(fbclock_lib* lib);
 int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime);
 int fbclock_gettime_utc(fbclock_lib* lib, fbclock_truetime* truetime);
+
 // turn error code into err msg
 const char* fbclock_strerror(int err_code);
 

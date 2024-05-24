@@ -39,6 +39,7 @@ limitations under the License.
 
 #define FBCLOCK_CLOCKDATA_SIZE sizeof(fbclock_clockdata)
 #define FBCLOCK_MAX_READ_TRIES 1000
+#define NANOSECONDS_IN_SECONDS 1e9
 
 #ifdef __x86_64__
 #define fbclock_crc64 __builtin_ia32_crc32di
@@ -76,7 +77,6 @@ static inline uint64_t fbclock_clockdata_crc(fbclock_clockdata* value) {
   return counter ^ 0xFFFFFFFF;
 }
 
-// fbclock_clockdata_store_data is used in shmem.go to store timing data
 int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data) {
   fbclock_shmdata* shmp = mmap(
       NULL, FBCLOCK_SHMDATA_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -116,7 +116,7 @@ int fbclock_clockdata_load_data(
 }
 
 static inline int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
-  return (int64_t)(ptc->sec * 1000000000) + (int64_t)ptc->nsec;
+  return (int64_t)(ptc->sec * NANOSECONDS_IN_SECONDS) + (int64_t)ptc->nsec;
 }
 
 static int fbclock_read_ptp_offset(int fd, struct phc_time_res* res) {
@@ -227,16 +227,24 @@ double fbclock_window_of_uncertainty(
 int fbclock_calculate_time(
     double error_bound_ns,
     double h_value_ns,
-    int64_t ingress_time_ns,
+    fbclock_clockdata* state,
     int64_t phctime_ns,
-    fbclock_truetime* truetime) {
-  // first, we check how long it was since last SYNC message from GM, in seconds
-  // with parts
-  double seconds = (double)(phctime_ns - ingress_time_ns) / 1000000000.0;
+    fbclock_truetime* truetime,
+    int time_standard) {
+  // check how far back since last SYNC message from GM (in seconds)
+  double seconds =
+      (double)(phctime_ns - state->ingress_time_ns) / NANOSECONDS_IN_SECONDS;
+
   if (seconds < 0) {
     return FBCLOCK_E_PHC_IN_THE_PAST;
   }
-  // then we calculate WOU
+
+  // UTC offset applied if time standard used is UTC (and not TAI)
+  if (time_standard == FBCLOCK_UTC) {
+    phctime_ns = fbclock_apply_utc_offset(state, phctime_ns);
+  }
+
+  // calculate the Window of Uncertainty (WOU) (in nanoseconds)
   double wou_ns =
       fbclock_window_of_uncertainty(seconds, error_bound_ns, h_value_ns);
   truetime->earliest_ns = phctime_ns - (uint64_t)wou_ns;
@@ -244,16 +252,18 @@ int fbclock_calculate_time(
   return FBCLOCK_E_NO_ERROR;
 }
 
-int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
+int fbclock_gettime_tz(
+    fbclock_lib* lib,
+    fbclock_truetime* truetime,
+    int timezone) {
   struct phc_time_res res;
-  fbclock_clockdata state;
+  fbclock_clockdata state = {};
   int rcode = fbclock_clockdata_load_data(lib->shmp, &state);
   if (rcode != FBCLOCK_E_NO_ERROR) {
     return rcode;
   }
 
-  // if by this point we still haven't managed to get consistent data - go ahead
-  // with potential inconsistency
+  // cannot determine Truetime without these values
   if (state.error_bound_ns == 0 || state.ingress_time_ns == 0) {
     return FBCLOCK_E_NO_DATA;
   }
@@ -270,26 +280,71 @@ int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
 
   double error_bound = (double)state.error_bound_ns + (double)res.delay;
   double h_value = (double)state.holdover_multiplier_ns / FBCLOCK_POW2_16;
+
   return fbclock_calculate_time(
-      error_bound, h_value, state.ingress_time_ns, res.ts, truetime);
+      error_bound, h_value, &state, res.ts, truetime, timezone);
 }
 
-void fbclock_apply_utc_offset(fbclock_truetime* truetime) {
-  truetime->earliest_ns += UTC_TAI_OFFSET;
-  truetime->latest_ns += UTC_TAI_OFFSET;
+int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
+  return fbclock_gettime_tz(lib, truetime, FBCLOCK_TAI);
 }
 
-// When/if new leap second is announced, we would need to update this function
-// to do smearing, and fetch offset from fbclock daemon.
-// For now, we apply the offset, as leap seconds will be abandoned by 2035
-// and it is possible we won't have any at all.
 int fbclock_gettime_utc(fbclock_lib* lib, fbclock_truetime* truetime) {
-  int rcode = fbclock_gettime(lib, truetime);
-  if (rcode != FBCLOCK_E_NO_ERROR) {
-    return rcode;
+  return fbclock_gettime_tz(lib, truetime, FBCLOCK_UTC);
+}
+
+uint64_t fbclock_apply_smear(
+    uint64_t time,
+    uint64_t offset_pre_ns,
+    uint64_t offset_post_ns,
+    uint64_t smear_start_ns,
+    uint64_t smear_end_ns,
+    int multiplier) {
+  if (time > smear_end_ns) {
+    time -= offset_post_ns;
+  } else if (time < smear_start_ns) {
+    time -= offset_pre_ns;
+  } else if (smear_start_ns <= time && time <= smear_end_ns) {
+    uint64_t smear = multiplier * ((time - smear_start_ns) / SMEAR_STEP_NS);
+    time -= (offset_pre_ns + smear);
   }
-  fbclock_apply_utc_offset(truetime);
-  return FBCLOCK_E_NO_ERROR;
+  return time;
+}
+
+uint64_t fbclock_apply_utc_offset(
+    fbclock_clockdata* state,
+    int64_t phctime_ns) {
+  // Fixed offset is applied if tzdata information not in shared memory
+  if (state->utc_offset_pre_s == 0 && state->utc_offset_post_s == 0) {
+    phctime_ns += UTC_TAI_OFFSET_NS;
+    return (uint64_t)phctime_ns;
+  }
+
+  fbclock_debug_print(
+      "UTC-TAI Offset Before Leap Second Event: %d\n", state->utc_offset_pre_s);
+  fbclock_debug_print(
+      "UTC-TAI Offset After Leap Second Event: %d\n", state->utc_offset_post_s);
+  fbclock_debug_print(
+      "Clock Smearing Start Time (TAI): %lu\n", state->clock_smearing_start_s);
+  fbclock_debug_print(
+      "Clock Smearing End Time (TAI): %lu\n", state->clock_smearing_end_s);
+
+  // Multipler may be negative (if a negative leap second is applied)
+  int multiplier = state->utc_offset_post_s - state->utc_offset_pre_s;
+
+  // Switch to nanoseconds
+  uint64_t smear_end_ns = state->clock_smearing_end_s * 1e9;
+  uint64_t smear_start_ns = state->clock_smearing_start_s * 1e9;
+  uint64_t offset_post_ns = state->utc_offset_post_s * 1e9;
+  uint64_t offset_pre_ns = state->utc_offset_pre_s * 1e9;
+
+  return fbclock_apply_smear(
+      phctime_ns,
+      offset_pre_ns,
+      offset_post_ns,
+      smear_start_ns,
+      smear_end_ns,
+      multiplier);
 }
 
 const char* fbclock_strerror(int err_code) {
