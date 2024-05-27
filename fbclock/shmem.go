@@ -19,7 +19,8 @@ package fbclock
 /*
 #cgo LDFLAGS: -lrt
 
-#include "fbclock.h"
+#include "fbclock.h" // @oss-only
+// @fb-only: #include "time/fbclock/fbclock.h"
 
 #include <stdlib.h>   // for free()
 #include <sys/stat.h> // For mode constants

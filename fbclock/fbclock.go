@@ -20,7 +20,8 @@ package fbclock
 #cgo LDFLAGS: -lrt
 #cgo amd64 CFLAGS: -msse4.2
 
-#include "fbclock.h"
+#include "fbclock.h" // @oss-only
+// @fb-only: #include "time/fbclock/fbclock.h"
 
 #include <stdlib.h>   // for free()
 */
