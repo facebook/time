@@ -19,6 +19,8 @@ package linearizability
 import (
 	"context"
 	"fmt"
+
+	"github.com/facebook/time/fbclock/stats"
 )
 
 // TestResult is what we get after the test run
@@ -38,25 +40,16 @@ type Tester interface {
 }
 
 // ProcessMonitoringResults returns map of metrics based on TestResults
-func ProcessMonitoringResults(prefix string, results map[string]TestResult) map[string]int {
+func ProcessMonitoringResults(prefix string, results map[string]TestResult, s stats.Server) {
 	failed := 0
-	broken := 0
-
 	for _, tr := range results {
 		good, err := tr.Good()
-		if err != nil {
-			broken++
-		} else {
-			if !good {
-				failed++
-			}
+		if err != nil || !good {
+			failed++
 		}
 	}
-	// general stats to JSON output
-	output := map[string]int{}
-	output[fmt.Sprintf("%sfailed_tests", prefix)] = failed
-	output[fmt.Sprintf("%sbroken_tests", prefix)] = broken
-	output[fmt.Sprintf("%stotal_tests", prefix)] = len(results)
-	output[fmt.Sprintf("%spassed_tests", prefix)] = len(results) - failed - broken
-	return output
+
+	s.SetCounter(fmt.Sprintf("%stotal_tests", prefix), int64(len(results)))
+	s.SetCounter(fmt.Sprintf("%sfailed_tests", prefix), int64(failed))
+	s.SetCounter(fmt.Sprintf("%spassed_tests", prefix), int64(len(results)-failed))
 }
