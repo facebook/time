@@ -181,9 +181,8 @@ func (p *SPTP) init() error {
 	if err != nil {
 		log.Warningf("max PHC frequency error: %v", err)
 		maxFreq = phc.DefaultMaxClockFreqPPB
-	} else {
-		pi.SetMaxFreq(maxFreq)
 	}
+	pi.SetMaxFreq(maxFreq)
 	log.Debugf("max PHC frequency: %v", maxFreq)
 	piFilterCfg := servo.DefaultPiServoFilterCfg()
 	servo.NewPiServoFilter(pi, piFilterCfg)
