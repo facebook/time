@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebook/time/fbclock/stats"
 	ptp "github.com/facebook/time/ptp/protocol"
 
 	"github.com/golang/mock/gomock"
@@ -525,6 +526,7 @@ func TestTestResultExplain(t *testing.T) {
 }
 
 func TestProcessMonitoringResults(t *testing.T) {
+	s := stats.NewStats()
 	results := map[string]TestResult{
 		"server01.nha1": PTP4lTestResult{ // tests pass - TX before RX
 			Server:      "192.168.0.10",
@@ -557,12 +559,11 @@ func TestProcessMonitoringResults(t *testing.T) {
 			RXTimestamp: time.Time{},
 		},
 	}
-	want := map[string]int{
-		"ptp.linearizability.broken_tests": 2,
-		"ptp.linearizability.failed_tests": 1,
-		"ptp.linearizability.passed_tests": 2,
-		"ptp.linearizability.total_tests":  5,
-	}
-	output := ProcessMonitoringResults("ptp.linearizability.", results)
-	require.Equal(t, want, output)
+
+	ProcessMonitoringResults("ptp.linearizability.", results, s)
+
+	c := s.Get()
+	require.Equal(t, int64(3), c["ptp.linearizability.failed_tests"])
+	require.Equal(t, int64(2), c["ptp.linearizability.passed_tests"])
+	require.Equal(t, int64(5), c["ptp.linearizability.total_tests"])
 }

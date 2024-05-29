@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/facebook/time/fbclock/daemon"
+	"github.com/facebook/time/fbclock/stats"
 	ptp "github.com/facebook/time/ptp/protocol"
 
 	log "github.com/sirupsen/logrus"
@@ -116,14 +117,14 @@ func main() {
 		}
 		l = daemon.NewCSVLogger(csvW, logSampleRate)
 	}
-	stats := daemon.NewJSONStats()
-	go stats.Start(monitoringPort)
-	s, err := daemon.New(cfg, stats, l)
+	s := stats.NewJSONStats()
+	go s.Start(monitoringPort)
+	d, err := daemon.New(cfg, s, l)
 	if err != nil {
 		log.Fatal(err)
 	}
 	ctx := context.Background()
-	if err := s.Run(ctx); err != nil {
+	if err := d.Run(ctx); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -17,11 +17,13 @@ limitations under the License.
 package daemon
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/facebook/time/fbclock"
+	"github.com/facebook/time/fbclock/stats"
 	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/ptp/linearizability"
 	"github.com/stretchr/testify/require"
@@ -38,7 +40,7 @@ func (l *testLogger) Log(s *LogSample) error {
 	return nil
 }
 
-func newTestDaemon(cfg *Config, stats StatsServer) *Daemon {
+func newTestDaemon(cfg *Config, stats stats.Server) *Daemon {
 	s := &Daemon{
 		stats:       stats,
 		cfg:         cfg,
@@ -379,7 +381,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 
 	err := cfg.Math.Prepare()
 	require.NoError(t, err)
-	stats := NewStats()
+	stats := stats.NewStats()
 	s := newTestDaemon(cfg, stats)
 	startTime := time.Duration(1647359186979431900)
 	var d *DataPoint
@@ -504,7 +506,7 @@ func TestDaemonDoWork(t *testing.T) {
 	}
 	err := cfg.Math.Prepare()
 	require.NoError(t, err)
-	stats := NewStats()
+	stats := stats.NewStats()
 	s := newTestDaemon(cfg, stats)
 	startTime := time.Duration(1647359186979431900)
 	phcTime := startTime // we modify this during the test
@@ -531,16 +533,17 @@ func TestDaemonDoWork(t *testing.T) {
 		}
 		err = s.doWork(shm, d)
 		require.Error(t, err, "not enough data should give us error when calculating shm state")
+		c := stats.Get()
 		// not enough data for those
-		require.Equal(t, int64(0), stats.counters["ingress_time_ns"])
-		require.Equal(t, int64(0), stats.counters["master_offset_ns"])
-		require.Equal(t, int64(0), stats.counters["path_delay_ns"])
-		require.Equal(t, int64(0), stats.counters["freq_adj_ppb"])
-		require.Equal(t, int64(0), stats.counters["dift_ppb"])
-		require.Equal(t, int64(0), stats.counters["master_offset_ns.60.abs_max"])
-		require.Equal(t, int64(0), stats.counters["path_delay_ns.60.abs_max"])
-		require.Equal(t, int64(0), stats.counters["freq_adj_ppb.60.abs_max"])
-		require.Equal(t, int64(i+1), stats.counters["data_sanity_check_error"])
+		require.Equal(t, int64(0), c["ingress_time_ns"])
+		require.Equal(t, int64(0), c["master_offset_ns"])
+		require.Equal(t, int64(0), c["path_delay_ns"])
+		require.Equal(t, int64(0), c["freq_adj_ppb"])
+		require.Equal(t, int64(0), c["dift_ppb"])
+		require.Equal(t, int64(0), c["master_offset_ns.60.abs_max"])
+		require.Equal(t, int64(0), c["path_delay_ns.60.abs_max"])
+		require.Equal(t, int64(0), c["freq_adj_ppb.60.abs_max"])
+		require.Equal(t, int64(i+1), c["data_sanity_check_error"])
 	}
 	// good data
 	adj := 212131.0
@@ -562,29 +565,30 @@ func TestDaemonDoWork(t *testing.T) {
 		err = s.doWork(shm, d)
 		require.NoError(t, err, "not enough data should give us error when calculating shm state, which we log and continue")
 		// check exported stats
-		require.Equal(t, int64(tme), stats.counters["ingress_time_ns"])
-		require.Equal(t, int64(d.MasterOffsetNS), stats.counters["master_offset_ns"])
-		require.Equal(t, int64(d.PathDelayNS), stats.counters["path_delay_ns"])
-		require.Equal(t, int64(d.FreqAdjustmentPPB), stats.counters["freq_adj_ppb"])
-		require.Equal(t, int64(0), stats.counters["data_sanity_check_error"])
+		c := stats.Get()
+		require.Equal(t, int64(tme), c["ingress_time_ns"])
+		require.Equal(t, int64(d.MasterOffsetNS), c["master_offset_ns"])
+		require.Equal(t, int64(d.PathDelayNS), c["path_delay_ns"])
+		require.Equal(t, int64(d.FreqAdjustmentPPB), c["freq_adj_ppb"])
+		require.Equal(t, int64(0), c["data_sanity_check_error"])
 		// we can calculate M after 30 seconds
-		require.Equal(t, int64(48), stats.counters["m_ns"])
-		require.Equal(t, int64(48), stats.counters["m_ns"])
+		require.Equal(t, int64(48), c["m_ns"])
+		require.Equal(t, int64(48), c["m_ns"])
 
 		if i < 29 {
-			require.Equal(t, int64(0), stats.counters["w_ns"])
-			require.Equal(t, int64(0), stats.counters["master_offset_ns.60.abs_max"])
-			require.Equal(t, int64(0), stats.counters["path_delay_ns.60.abs_max"])
-			require.Equal(t, int64(0), stats.counters["freq_adj_ppb.60.abs_max"])
+			require.Equal(t, int64(0), c["w_ns"])
+			require.Equal(t, int64(0), c["master_offset_ns.60.abs_max"])
+			require.Equal(t, int64(0), c["path_delay_ns.60.abs_max"])
+			require.Equal(t, int64(0), c["freq_adj_ppb.60.abs_max"])
 		} else {
-			require.Equal(t, int64(48), stats.counters["w_ns"])
-			require.Equal(t, int64(23), stats.counters["master_offset_ns.60.abs_max"])
-			require.Equal(t, int64(213), stats.counters["path_delay_ns.60.abs_max"])
-			require.LessOrEqual(t, int64(212145), stats.counters["freq_adj_ppb.60.abs_max"])
+			require.Equal(t, int64(48), c["w_ns"])
+			require.Equal(t, int64(23), c["master_offset_ns.60.abs_max"])
+			require.Equal(t, int64(213), c["path_delay_ns.60.abs_max"])
+			require.LessOrEqual(t, int64(212145), c["freq_adj_ppb.60.abs_max"])
 		}
 
 		// not enough data for those
-		require.Equal(t, int64(0), stats.counters["dift_ppb"])
+		require.Equal(t, int64(0), c["dift_ppb"])
 	}
 
 	// another data point, now that we have enough in the ring buffer to write to shm
@@ -600,17 +604,18 @@ func TestDaemonDoWork(t *testing.T) {
 	err = s.doWork(shm, d)
 	require.NoError(t, err)
 	// check that we have proper stats reported
-	require.Equal(t, int64(startTime+61*time.Second), stats.counters["ingress_time_ns"], "ingress_time_ns after good data")
-	require.Equal(t, int64(d.MasterOffsetNS), stats.counters["master_offset_ns"], "master_offset_ns after good data")
-	require.Equal(t, int64(d.PathDelayNS), stats.counters["path_delay_ns"], "path_delay_ns after good data")
-	require.Equal(t, int64(d.FreqAdjustmentPPB), stats.counters["freq_adj_ppb"], "freq_adj_ppb after good data")
-	require.Equal(t, int64(48), stats.counters["m_ns"], "m_ns after good data")
-	require.Equal(t, int64(48), stats.counters["w_ns"], "w_ns after good data")
-	require.Equal(t, int64(64), stats.counters["drift_ppb"], "drift_ppb after good data")
-	require.Equal(t, int64(23), stats.counters["master_offset_ns.60.abs_max"], "master_offset_ns.60.abs_max after good data")
-	require.Equal(t, int64(213), stats.counters["path_delay_ns.60.abs_max"], "path_delay_ns.60.abs_max after good data")
-	require.Equal(t, int64(212159), stats.counters["freq_adj_ppb.60.abs_max"], "freq_adj_ppb.60.abs_max after good data")
-	require.Equal(t, int64(0), stats.counters["data_sanity_check_error"])
+	c := stats.Get()
+	require.Equal(t, int64(startTime+61*time.Second), c["ingress_time_ns"], "ingress_time_ns after good data")
+	require.Equal(t, int64(d.MasterOffsetNS), c["master_offset_ns"], "master_offset_ns after good data")
+	require.Equal(t, int64(d.PathDelayNS), c["path_delay_ns"], "path_delay_ns after good data")
+	require.Equal(t, int64(d.FreqAdjustmentPPB), c["freq_adj_ppb"], "freq_adj_ppb after good data")
+	require.Equal(t, int64(48), c["m_ns"], "m_ns after good data")
+	require.Equal(t, int64(48), c["w_ns"], "w_ns after good data")
+	require.Equal(t, int64(64), c["drift_ppb"], "drift_ppb after good data")
+	require.Equal(t, int64(23), c["master_offset_ns.60.abs_max"], "master_offset_ns.60.abs_max after good data")
+	require.Equal(t, int64(213), c["path_delay_ns.60.abs_max"], "path_delay_ns.60.abs_max after good data")
+	require.Equal(t, int64(212159), c["freq_adj_ppb.60.abs_max"], "freq_adj_ppb.60.abs_max after good data")
+	require.Equal(t, int64(0), c["data_sanity_check_error"])
 
 	// check that we wrote data correctly
 	want := &fbclock.Data{
@@ -638,17 +643,18 @@ func TestDaemonDoWork(t *testing.T) {
 	err = s.doWork(shm, d)
 	require.Error(t, err, "data point fails sanity check")
 	// check that we have proper stats reported
-	require.Equal(t, int64(0), stats.counters["ingress_time_ns"], "ingress_time_ns after bad data")
-	require.Equal(t, int64(d.MasterOffsetNS), stats.counters["master_offset_ns"], "master_offset_ns after bad data")
-	require.Equal(t, int64(d.PathDelayNS), stats.counters["path_delay_ns"], "path_delay_ns after bad data")
-	require.Equal(t, int64(d.FreqAdjustmentPPB), stats.counters["freq_adj_ppb"], "freq_adj_ppb after bad data")
-	require.Equal(t, int64(48), stats.counters["m_ns"], "m_ns after bad data")
-	require.Equal(t, int64(48), stats.counters["w_ns"], "w_ns after bad data")
-	require.Equal(t, int64(64), stats.counters["drift_ppb"], "drift_ppb after bad data")
-	require.Equal(t, int64(23), stats.counters["master_offset_ns.60.abs_max"], "master_offset_ns.60.abs_max after bad data")
-	require.Equal(t, int64(213), stats.counters["path_delay_ns.60.abs_max"], "path_delay_ns.60.abs_max after bad data")
-	require.Equal(t, int64(212159), stats.counters["freq_adj_ppb.60.abs_max"], "freq_adj_ppb.60.abs_max after bad data")
-	require.Equal(t, int64(1), stats.counters["data_sanity_check_error"])
+	c = stats.Get()
+	require.Equal(t, int64(0), c["ingress_time_ns"], "ingress_time_ns after bad data")
+	require.Equal(t, int64(d.MasterOffsetNS), c["master_offset_ns"], "master_offset_ns after bad data")
+	require.Equal(t, int64(d.PathDelayNS), c["path_delay_ns"], "path_delay_ns after bad data")
+	require.Equal(t, int64(d.FreqAdjustmentPPB), c["freq_adj_ppb"], "freq_adj_ppb after bad data")
+	require.Equal(t, int64(48), c["m_ns"], "m_ns after bad data")
+	require.Equal(t, int64(48), c["w_ns"], "w_ns after bad data")
+	require.Equal(t, int64(64), c["drift_ppb"], "drift_ppb after bad data")
+	require.Equal(t, int64(23), c["master_offset_ns.60.abs_max"], "master_offset_ns.60.abs_max after bad data")
+	require.Equal(t, int64(213), c["path_delay_ns.60.abs_max"], "path_delay_ns.60.abs_max after bad data")
+	require.Equal(t, int64(212159), c["freq_adj_ppb.60.abs_max"], "freq_adj_ppb.60.abs_max after bad data")
+	require.Equal(t, int64(1), c["data_sanity_check_error"])
 
 	// check that we wrote data correctly (should be the same as before, as new data point was discarded)
 	got, err = fbclock.ReadFBClockData(shmpData)
@@ -679,5 +685,33 @@ func TestLeapSecondSmearing(t *testing.T) {
 	}
 	got = leapSecondSmearing(leaps)
 	want = &clockSmearing{}
+	require.Equal(t, want, got)
+}
+
+func TestRunLinearizabilityTestsNoGMs(t *testing.T) {
+	cfg := &Config{
+		LinearizabilityTestInterval: time.Second,
+	}
+	stats := stats.NewStats()
+	s := newTestDaemon(cfg, stats)
+	go s.runLinearizabilityTests(context.Background())
+	time.Sleep(100 * time.Millisecond)
+	c := stats.Get()
+	t.Log(c)
+	require.Equal(t, int64(len(defaultTargets)), c["linearizability.total_tests"], "linearizability.total_tests must be set")
+	require.Equal(t, int64(len(defaultTargets)), c["linearizability.failed_tests"], "linearizability.failed_tests must be set")
+	require.Equal(t, int64(0), c["linearizability.passed_tests"])
+}
+
+func TestNoTestResults(t *testing.T) {
+	targets := []string{"o", "l", "e", "g"}
+	want := map[string]linearizability.TestResult{
+		"o": linearizability.SPTPTestResult{Error: errNoTestResults},
+		"l": linearizability.SPTPTestResult{Error: errNoTestResults},
+		"e": linearizability.SPTPTestResult{Error: errNoTestResults},
+		"g": linearizability.SPTPTestResult{Error: errNoTestResults},
+	}
+
+	got := noTestResults(targets)
 	require.Equal(t, want, got)
 }

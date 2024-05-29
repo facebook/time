@@ -14,14 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package daemon
+package stats
 
 import (
 	"sync"
 )
 
-// StatsServer is a stats server interface
-type StatsServer interface {
+var mux sync.Mutex
+
+// Server is a stats server interface
+type Server interface {
 	// Reset atomically sets all the counters to 0
 	Reset()
 	SetCounter(key string, val int64)
@@ -30,7 +32,6 @@ type StatsServer interface {
 
 // Stats is an implementation of
 type Stats struct {
-	mux      sync.Mutex
 	counters map[string]int64
 }
 
@@ -42,44 +43,44 @@ func NewStats() *Stats {
 }
 
 // UpdateCounterBy will increment counter
-func (s *Stats) UpdateCounterBy(key string, count int64) {
-	s.mux.Lock()
+func (s Stats) UpdateCounterBy(key string, count int64) {
+	mux.Lock()
 	s.counters[key] += count
-	s.mux.Unlock()
+	mux.Unlock()
 }
 
 // SetCounter will set a counter to the provided value.
-func (s *Stats) SetCounter(key string, val int64) {
-	s.mux.Lock()
+func (s Stats) SetCounter(key string, val int64) {
+	mux.Lock()
 	s.counters[key] = val
-	s.mux.Unlock()
+	mux.Unlock()
 }
 
 // Get returns an map of counters
-func (s *Stats) Get() map[string]int64 {
+func (s Stats) Get() map[string]int64 {
 	ret := make(map[string]int64)
-	s.mux.Lock()
+	mux.Lock()
 	for key, val := range s.counters {
 		ret[key] = val
 	}
-	s.mux.Unlock()
+	mux.Unlock()
 	return ret
 }
 
 // Copy all key-values between maps
-func (s *Stats) Copy(dst *Stats) {
-	s.mux.Lock()
+func (s Stats) Copy(dst *Stats) {
+	mux.Lock()
 	for k, v := range s.counters {
 		dst.SetCounter(k, v)
 	}
-	s.mux.Unlock()
+	mux.Unlock()
 }
 
 // Reset all the values of counters
-func (s *Stats) Reset() {
-	s.mux.Lock()
+func (s Stats) Reset() {
+	mux.Lock()
 	for k := range s.counters {
 		s.counters[k] = 0
 	}
-	s.mux.Unlock()
+	mux.Unlock()
 }

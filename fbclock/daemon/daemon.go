@@ -28,6 +28,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/facebook/time/fbclock"
+	"github.com/facebook/time/fbclock/stats"
 
 	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/phc"
@@ -38,9 +39,14 @@ import (
 const (
 	utcOffsetOriginalS int32  = 10    // UTC-TAI offset was 10s before leap seconds started (1972)
 	leapDurationS      uint64 = 65000 // 18.06 hours
+	monPrefix          string = "linearizability."
 )
 
-var errNotEnoughData = fmt.Errorf("not enough data points")
+var errNotEnoughData = errors.New("not enough data points")
+var errNoTestResults = errors.New("no test results")
+
+// defaultTargets is a list of targets if no available
+var defaultTargets = []string{"::1", "::2", "::3"}
 
 // DataPoint is what we store in DataPoint ring buffer
 type DataPoint struct {
@@ -96,7 +102,7 @@ type Daemon struct {
 	DataFetcher
 	cfg   *Config
 	state *daemonState
-	stats StatsServer
+	stats stats.Server
 	l     Logger
 
 	// function to get PHC time from configured PHC device
@@ -162,8 +168,17 @@ func leapSecondSmearing(leaps []leapsectz.LeapSecond) *clockSmearing {
 	}
 }
 
+// noTestResults generates a map of error test results
+func noTestResults(targets []string) map[string]linearizability.TestResult {
+	r := map[string]linearizability.TestResult{}
+	for _, target := range targets {
+		r[target] = linearizability.SPTPTestResult{Error: errNoTestResults}
+	}
+	return r
+}
+
 // New creates new fbclock-daemon
-func New(cfg *Config, stats StatsServer, l Logger) (*Daemon, error) {
+func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
 	// we need at least 1m of samples for aggregate values
 	effectiveRingSize := minRingSize(cfg.RingSize, cfg.Interval)
 	s := &Daemon{
@@ -394,6 +409,11 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 		targets, err := s.DataFetcher.FetchGMs(s.cfg)
 		if err != nil {
 			log.Errorf("getting linearizability test targets: %v", err)
+			if len(oldTargets) > 0 {
+				linearizability.ProcessMonitoringResults(monPrefix, noTestResults(oldTargets), s.stats)
+			} else {
+				linearizability.ProcessMonitoringResults(monPrefix, noTestResults(defaultTargets), s.stats)
+			}
 			continue
 		}
 		log.Debugf("targets: %v, err: %v", targets, err)
@@ -448,10 +468,7 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 			s.state.pushLinearizabilityTestResult(res)
 		}
 		// add stats from linearizability checks
-		stats := linearizability.ProcessMonitoringResults("linearizability.", currentResults)
-		for k, v := range stats {
-			s.stats.SetCounter(k, int64(v))
-		}
+		linearizability.ProcessMonitoringResults(monPrefix, currentResults, s.stats)
 	}
 }
 
