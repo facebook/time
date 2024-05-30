@@ -279,21 +279,20 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 		for {
 			select {
 			case <-ctx.Done():
-				log.Debugf("cancelled main loop")
+				log.Debugf("[%s] cancelled main loop", c.server)
 				return ctx.Err()
 			case msg := <-c.inChan:
 				if err := c.handleMsg(msg); err != nil {
 					return err
 				}
 				latest, err := c.m.latest()
-
 				if err != nil {
-					log.Debugf("getting latest measurement: %v", err)
+					log.Debugf("[%s] getting latest measurement: %v", c.server, err)
 					if !errors.Is(err, errNotEnoughData) {
 						return err
 					}
 				} else {
-					log.Debugf("latest measurement: %+v", latest)
+					log.Debugf("[%s] latest measurement: %+v", c.server, latest)
 					result.Measurement = latest
 					return nil
 				}

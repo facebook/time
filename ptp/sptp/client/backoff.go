@@ -19,6 +19,7 @@ package client
 import (
 	"errors"
 	"math"
+	"time"
 )
 
 var errBackoff = errors.New("backoff for faulty GM")
@@ -34,7 +35,7 @@ type backoff struct {
 	cfg BackoffConfig
 	// state
 	counter int
-	value   int
+	value   time.Duration
 }
 
 func (b *backoff) active() bool {
@@ -46,30 +47,30 @@ func (b *backoff) reset() {
 	b.counter = 0
 }
 
-func (b *backoff) tick() int {
-	b.value--
+func (b *backoff) dec(d time.Duration) time.Duration {
+	b.value = b.value - d
 	if b.value < 0 {
 		b.value = 0
 	}
 	return b.value
 }
 
-func (b *backoff) bump() int {
+func (b *backoff) inc() time.Duration {
 	b.counter++
 	switch b.cfg.Mode {
 	case backoffFixed:
-		b.value = b.cfg.Step
+		b.value = time.Duration(b.cfg.Step) * time.Second
 	case backoffLinear:
-		b.value = b.cfg.Step * b.counter
+		b.value = time.Duration(b.counter) * time.Duration(b.cfg.Step) * time.Second
 	case backoffExponential:
-		b.value = int(math.Pow(float64(b.cfg.Step), float64(b.counter)))
+		b.value = time.Duration(math.Pow(float64(b.cfg.Step), float64(b.counter))) * time.Second
 	default:
 		// do nothing, never active
 		b.counter = 0
 		b.value = 0
 	}
-	if b.value > b.cfg.MaxValue {
-		b.value = b.cfg.MaxValue
+	if b.value > time.Duration(b.cfg.MaxValue)*time.Second {
+		b.value = time.Duration(b.cfg.MaxValue) * time.Second
 	}
 	return b.value
 }

@@ -281,15 +281,15 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func (p *SPTP) handleExchangeError(addr string, err error) {
+func (p *SPTP) handleExchangeError(addr string, err error, tickDuration time.Duration) {
 	if errors.Is(err, errBackoff) {
-		b := p.backoff[addr].tick()
-		log.Debugf("backoff %s: %d seconds", addr, b)
+		b := p.backoff[addr].dec(tickDuration)
+		log.Debugf("backoff %s: %s", addr, b)
 	} else {
 		log.Errorf("result %s: %+v", addr, err)
-		b := p.backoff[addr].bump()
+		b := p.backoff[addr].inc()
 		if b != 0 {
-			log.Warningf("backoff %s: extended by %d", addr, b)
+			log.Warningf("backoff %s: extended by %s", addr, b)
 		}
 	}
 }
@@ -326,8 +326,9 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 
 	isBadTick := false
 	now := time.Now()
+	var tickDuration time.Duration
 	if !p.lastTick.IsZero() {
-		tickDuration := now.Sub(p.lastTick)
+		tickDuration = now.Sub(p.lastTick)
 		log.Debugf("tick took %vms sys time", tickDuration.Milliseconds())
 		// +-10% of interval
 		p.stats.SetTickDuration(tickDuration)
@@ -347,7 +348,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 			p.backoff[addr].reset()
 			log.Debugf("result %s: %+v", addr, res.Measurement)
 		} else {
-			p.handleExchangeError(addr, res.Error)
+			p.handleExchangeError(addr, res.Error, tickDuration)
 			continue
 		}
 		if res.Measurement == nil {
