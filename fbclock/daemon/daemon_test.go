@@ -715,3 +715,13 @@ func TestNoTestResults(t *testing.T) {
 	got := noTestResults(targets)
 	require.Equal(t, want, got)
 }
+
+func TestNoPHC(t *testing.T) {
+	cfg := &Config{}
+	stats := stats.NewStats()
+	s := newTestDaemon(cfg, stats)
+	s.getPHCTime = func() (time.Time, error) { return time.Time{}, errNoPHC }
+
+	err := s.doWork(&fbclock.Shm{}, &DataPoint{})
+	require.ErrorIs(t, err, errNoPHC)
+}

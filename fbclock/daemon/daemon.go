@@ -44,6 +44,7 @@ const (
 
 var errNotEnoughData = errors.New("not enough data points")
 var errNoTestResults = errors.New("no test results")
+var errNoPHC = errors.New("phc error")
 
 // defaultTargets is a list of targets if no available
 var defaultTargets = []string{"::1", "::2", "::3"}
@@ -206,7 +207,6 @@ func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
 	s.stats.SetCounter("drift_ppb", 0)
 	// error counters
 	s.stats.SetCounter("data_error", 0)
-	s.stats.SetCounter("phc_error", 0)
 	s.stats.SetCounter("processing_error", 0)
 	s.stats.SetCounter("data_sanity_check_error", 0)
 	// values collected from ptp4l
@@ -336,19 +336,20 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 	s.stats.SetCounter("clock_accuracy_ns", int64(data.ClockAccuracyNS))
 	// try and calculate how long ago was the ingress time
 	// use clock_gettime as the fastest and widely available method
-	if phcTime, err := s.getPHCTime(); err != nil {
-		log.Warningf("Failed to get PHC time from %s: %v", s.cfg.Iface, err)
+	phcTime, err := s.getPHCTime()
+	if err != nil {
+		return fmt.Errorf("Failed to get PHC time from %s: %w", s.cfg.Iface, errors.Join(errNoPHC, err))
+	}
+
+	if data.IngressTimeNS > 0 {
+		s.state.updateIngressTimeNS(data.IngressTimeNS)
+	}
+	it := s.state.ingressTimeNS()
+	if it > 0 {
+		timeSinceIngress := phcTime.UnixNano() - it
+		log.Debugf("Time since ingress: %dns", timeSinceIngress)
 	} else {
-		if data.IngressTimeNS > 0 {
-			s.state.updateIngressTimeNS(data.IngressTimeNS)
-		}
-		it := s.state.ingressTimeNS()
-		if it > 0 {
-			timeSinceIngress := phcTime.UnixNano() - it
-			log.Debugf("Time since ingress: %dns", timeSinceIngress)
-		} else {
-			log.Warningf("No data for time since ingress")
-		}
+		log.Warningf("No data for time since ingress")
 	}
 	// read tzdata for leap seconds
 	leaps, err := leapSeconds()
@@ -496,13 +497,13 @@ func (s *Daemon) Run(ctx context.Context) error {
 		// get PHC freq adjustment
 		freqPPB, err := s.getPHCFreqPPB()
 		if err != nil {
-			log.Error(err)
-			s.stats.UpdateCounterBy("phc_error", 1)
-			continue
+			return err
 		}
-		s.stats.SetCounter("phc_error", 0)
 		data.FreqAdjustmentPPB = freqPPB
 		if err := s.doWork(shm, data); err != nil {
+			if errors.Is(err, errNoPHC) {
+				return err
+			}
 			log.Error(err)
 			s.stats.UpdateCounterBy("processing_error", 1)
 			continue
