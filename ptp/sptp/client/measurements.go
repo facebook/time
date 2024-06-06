@@ -207,7 +207,7 @@ func (m *measurements) latest() (*MeasurementResult, error) {
 func (m *measurements) cleanup() {
 	m.Lock()
 	defer m.Unlock()
-	m.data = map[uint16]*mData{}
+	clear(m.data)
 }
 
 func newMeasurements(cfg *MeasurementConfig) *measurements {
