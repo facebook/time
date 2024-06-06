@@ -28,6 +28,7 @@ type slidingWindow struct {
 	currentSize int
 	sum         float64
 	samples     *ring.Ring
+	sorted      []float64
 }
 
 func newSlidingWindow(size int) *slidingWindow {
@@ -37,9 +38,11 @@ func newSlidingWindow(size int) *slidingWindow {
 	w := &slidingWindow{
 		size:    size,
 		samples: ring.New(size),
+		sorted:  make([]float64, size),
 	}
 	for i := 0; i < w.size; i++ {
 		w.samples.Value = math.NaN()
+		w.sorted[i] = math.NaN()
 		w.samples = w.samples.Next()
 	}
 	return w
@@ -63,16 +66,15 @@ func (w *slidingWindow) lastSample() float64 {
 }
 
 func (w *slidingWindow) allSamples() []float64 {
-	s := []float64{}
 	r := w.samples
 	for j := 0; j < w.size; j++ {
 		v := r.Value.(float64)
 		if !math.IsNaN(v) {
-			s = append(s, v)
+			w.sorted[j] = v
 		}
 		r = r.Prev()
 	}
-	return s
+	return w.sorted[0:w.currentSize]
 }
 
 func mean(data []float64) float64 {
