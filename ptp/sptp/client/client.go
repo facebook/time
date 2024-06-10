@@ -25,7 +25,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/fatih/color"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
@@ -162,18 +161,10 @@ func NewClient(target string, targetPort int, clockID ptp.ClockIdentity, eventCo
 	return c, nil
 }
 
-// couple of helpers to log nice lines about happening communication
-func (c *Client) logSent(t ptp.MessageType, msg string, v ...interface{}) {
-	log.Debugf(color.GreenString("[%s] client -> %s (%s)", c.server, t, fmt.Sprintf(msg, v...)))
-}
-func (c *Client) logReceive(t ptp.MessageType, msg string, v ...interface{}) {
-	log.Debugf(color.BlueString("[%s] server -> %s (%s)", c.server, t, fmt.Sprintf(msg, v...)))
-}
-
 // handleAnnounce handles ANNOUNCE packet and records UTC offset from it's data
 func (c *Client) handleAnnounce(b *ptp.Announce) {
-	c.logReceive(ptp.MessageAnnounce, "seq=%d, T1=%v, CF2=%v, gmIdentity=%s, gmTimeSource=%s, stepsRemoved=%d",
-		b.SequenceID, b.OriginTimestamp.Time(), corrToDuration(b.CorrectionField), b.GrandmasterIdentity, b.TimeSource, b.StepsRemoved)
+	log.Debugf("[%s] server -> %s (seq=%d, T1=%v, CF2=%v, gmIdentity=%s, gmTimeSource=%s, stepsRemoved=%d)",
+		c.server, ptp.MessageAnnounce, b.SequenceID, b.OriginTimestamp.Time(), corrToDuration(b.CorrectionField), b.GrandmasterIdentity, b.TimeSource, b.StepsRemoved)
 	c.m.currentUTCoffset = time.Duration(b.CurrentUTCOffset) * time.Second
 	// announce carries T1 and CF2
 	c.m.addT1(b.SequenceID, b.OriginTimestamp.Time())
@@ -183,7 +174,8 @@ func (c *Client) handleAnnounce(b *ptp.Announce) {
 
 // handleSync handles SYNC packet and adds send timestamp to measurements
 func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) {
-	c.logReceive(ptp.MessageSync, "seq=%d, T2=%v, T4=%v, CF1=%v", b.SequenceID, ts, b.OriginTimestamp.Time(), corrToDuration(b.CorrectionField))
+	log.Debugf("[%s] server -> %s (seq=%d, T2=%v, T4=%v, CF1=%v)",
+		c.server, ptp.MessageSync, b.SequenceID, ts, b.OriginTimestamp.Time(), corrToDuration(b.CorrectionField))
 	// T2 and CF1
 	c.m.addT2andCF1(b.SequenceID, ts, corrToDuration(b.CorrectionField))
 	// sync carries T4 as well
@@ -222,7 +214,7 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 			return err
 		}
 		c.m.addT3(seq, hwts)
-		c.logSent(ptp.MessageDelayReq, "seq=%d, our T3=%v", seq, hwts)
+		log.Debugf("[%s] client -> %s (seq=%d, our T3=%v)", c.server, ptp.MessageDelayReq, seq, hwts)
 		c.stats.IncTXDelayReq()
 
 		for {
