@@ -387,7 +387,7 @@ func TestRunListenerNoAddr(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
-	mockEventConn.EXPECT().ReadPacketWithRXTimestamp().AnyTimes()
+	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockGenConn := NewMockUDPConn(ctrl)
 	mockGenConn.EXPECT().ReadFromUDP(gomock.Any()).AnyTimes()
 	mockClock := NewMockClock(ctrl)
@@ -420,7 +420,7 @@ func TestRunListenerError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
-	mockEventConn.EXPECT().ReadPacketWithRXTimestamp().Return([]byte{}, &unix.SockaddrInet6{}, time.Time{}, fmt.Errorf("some error")).AnyTimes()
+	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).Return(0, &unix.SockaddrInet6{}, time.Time{}, fmt.Errorf("some error")).AnyTimes()
 	mockGenConn := NewMockUDPConn(ctrl)
 	mockGenConn.EXPECT().ReadFromUDP(gomock.Any()).Return(2, nil, fmt.Errorf("some error")).AnyTimes()
 	mockClock := NewMockClock(ctrl)
@@ -455,10 +455,14 @@ func TestRunListenerGood(t *testing.T) {
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 	sentEvent := 0
 	sentGen := 0
-	mockEventConn.EXPECT().ReadPacketWithRXTimestamp().DoAndReturn(func() ([]byte, unix.Sockaddr, time.Time, error) {
+	syncBytes, _ := ptp.Bytes(&ptp.SyncDelayReq{})
+	announceBytes, _ := ptp.Bytes(&ptp.Announce{})
+
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).AnyTimes()
+	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).DoAndReturn(func(b, oob []byte) (int, unix.Sockaddr, time.Time, error) {
 		// limit how many we send, so we don't overwhelm the client. packets from uknown IPs will be discarded
 		if sentEvent > 10 {
-			return nil, &unix.SockaddrInet4{}, time.Time{}, nil
+			return 0, &unix.SockaddrInet4{}, time.Time{}, nil
 		}
 		addr := "192.168.0.11"
 		if sentEvent%2 == 0 {
@@ -467,7 +471,13 @@ func TestRunListenerGood(t *testing.T) {
 		var addrBytes [4]byte
 		copy(addrBytes[:], net.ParseIP(addr).To4())
 		sentEvent++
-		return []byte{1, 2, 3, 4}, &unix.SockaddrInet4{Addr: addrBytes, Port: 319}, time.Now(), nil
+		clear(b)
+		b = syncBytes
+		b[0] = 1
+		b[1] = 2
+		b[2] = 3
+		b[3] = 4
+		return len(syncBytes), &unix.SockaddrInet4{Addr: addrBytes, Port: 319}, time.Now(), nil
 	}).AnyTimes()
 
 	mockGenConn := NewMockUDPConn(ctrl)
@@ -485,17 +495,20 @@ func TestRunListenerGood(t *testing.T) {
 			IP:   net.ParseIP(addr),
 			Port: 320,
 		}
+		clear(b)
+		b = announceBytes
 		b[0] = 9
 		b[1] = 3
 		b[2] = 7
 		b[3] = 4
-
-		return 4, udpAddr, nil
+		return len(announceBytes), udpAddr, nil
 	}).AnyTimes()
 
 	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
+	mockStatsServer.EXPECT().IncRXAnnounce().Times(11)
+	mockStatsServer.EXPECT().IncRXSync().Times(11)
 
 	p := &SPTP{
 		clock: mockClock,
@@ -517,10 +530,8 @@ func TestRunListenerGood(t *testing.T) {
 	defer cancel()
 	err = p.RunListener(ctx)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
-	receivedEvent10 := 0
-	receivedGen10 := 0
-	receivedEvent11 := 0
-	receivedGen11 := 0
+	received10 := 0
+	received11 := 0
 	nctx, ncancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ncancel()
 LOOP:
@@ -528,26 +539,16 @@ LOOP:
 		select {
 		case <-nctx.Done():
 			break LOOP
-		case p := <-p.clients["192.168.0.10"].inChan:
-			switch p.data[0] {
-			case 1:
-				receivedEvent10++
-			case 9:
-				receivedGen10++
-			}
-		case p := <-p.clients["192.168.0.11"].inChan:
-			switch p.data[0] {
-			case 1:
-				receivedEvent11++
-			case 9:
-				receivedGen11++
-			}
+		case <-p.clients["192.168.0.10"].inChan:
+			received10++
+		case <-p.clients["192.168.0.11"].inChan:
+			received11++
 		}
 	}
-	require.Equal(t, sentGen/2, receivedGen10, "expect to receive N general packets to client 192.168.0.10")
-	require.Equal(t, sentEvent/2+1, receivedEvent10, "expect to receive N event packets to client 192.168.0.10")
-	require.Equal(t, sentGen/2+1, receivedGen11, "expect to receive N general packets to client 192.168.0.11")
-	require.Equal(t, sentEvent/2, receivedEvent11, "expect to receive N event packets to client 192.168.0.11")
+	require.Equal(t, 11, sentGen)
+	require.Equal(t, 11, sentEvent)
+	require.Equal(t, sentGen/2+sentEvent/2+1, received10, "expect to receive N packets to client 192.168.0.10")
+	require.Equal(t, sentGen/2+1+sentEvent/2, received11, "expect to receive N packets to client 192.168.0.11")
 }
 
 func TestPTPing(t *testing.T) {

@@ -48,6 +48,20 @@ func init() {
 	ptpingCmd.Flags().DurationVarP(&timeoutf, "timeout", "t", time.Second, "request timeout/interval")
 }
 
+type timestamps struct {
+	t1 time.Time
+	t2 time.Time
+	t3 time.Time
+	t4 time.Time
+}
+
+func (t *timestamps) reset() {
+	t.t1 = time.Time{}
+	t.t2 = time.Time{}
+	t.t3 = time.Time{}
+	t.t4 = time.Time{}
+}
+
 type ptping struct {
 	iface  string
 	dscp   int
@@ -56,8 +70,7 @@ type ptping struct {
 	clockID   ptp.ClockIdentity
 	eventConn client.UDPConnWithTS
 	client    *client.Client
-
-	inChan chan *client.InPacket
+	ts        timestamps
 }
 
 func (p *ptping) init() error {
@@ -104,91 +117,86 @@ func (p *ptping) init() error {
 	timestamp.AttemptsTXTS = 5
 	timestamp.TimeoutTXTS = 100 * time.Millisecond
 	p.client, err = client.NewClient(p.target, ptp.PortEvent, p.clockID, p.eventConn, &client.Config{}, &client.JSONStats{})
-	go p.runReader()
+	go func() {
+		if err := p.runReader(); err != nil {
+			log.Error(err)
+		}
+	}()
 
 	return err
 }
 
-// timestamps returns t1, t2, t4
-func (p *ptping) timestamps(timeout time.Duration) (time.Time, time.Time, time.Time, error) {
-	var t1 time.Time
-	var t2 time.Time
-	var t4 time.Time
+// timestamps fills timestamps
+func (p *ptping) timestamps(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	for {
-		select {
-		case <-ctx.Done():
-			if t4.IsZero() {
-				return t1, t2, t4, fmt.Errorf("timeout waiting")
-			}
-			return t1, t2, t4, nil
-		case p := <-p.inChan:
-			msgType, err := ptp.ProbeMsgType(p.Data())
-			if err != nil {
-				return t1, t2, t4, err
-			}
-			switch msgType {
-			case ptp.MessageSync, ptp.MessageDelayReq:
-				t2 = p.TS()
-				b := &ptp.SyncDelayReq{}
-				if err = ptp.FromBytes(p.Data(), b); err != nil {
-					return t1, t2, t4, fmt.Errorf("reading sync msg: %w", err)
-				}
-				t4 = b.OriginTimestamp.Time()
-				continue
+	<-ctx.Done()
+	if p.ts.t4.IsZero() {
+		return fmt.Errorf("timeout waiting")
+	}
+	return nil
+}
 
-			case ptp.MessageAnnounce:
-				b := &ptp.Announce{}
-				if err = ptp.FromBytes(p.Data(), b); err != nil {
-					return t1, t2, t4, fmt.Errorf("reading announce msg: %w", err)
-				}
-				t1 = b.OriginTimestamp.Time()
-				continue
-			default:
-				log.Infof("got unsupported packet %v:", msgType)
+func (p *ptping) runReader() error {
+	sync := &ptp.SyncDelayReq{}
+	buf := make([]byte, timestamp.PayloadSizeBytes)
+	oob := make([]byte, timestamp.ControlSizeBytes)
+	for {
+		bbuf, _, rxts, _ := p.eventConn.ReadPacketWithRXTimestampBuf(buf, oob)
+		msgType, err := ptp.ProbeMsgType(buf[:bbuf])
+		if err != nil {
+			return fmt.Errorf("can't read a message type")
+		}
+
+		switch msgType {
+		case ptp.MessageSync, ptp.MessageDelayReq:
+			p.ts.t2 = rxts
+			if err = ptp.FromBytes(buf[:bbuf], sync); err != nil {
+				return fmt.Errorf("reading sync msg: %w", err)
 			}
+			p.ts.t4 = sync.OriginTimestamp.Time()
+		case ptp.MessageAnnounce:
+			announce := &ptp.Announce{}
+			if err = ptp.FromBytes(buf[:bbuf], announce); err != nil {
+				return fmt.Errorf("reading announce msg: %w", err)
+			}
+			p.ts.t1 = announce.OriginTimestamp.Time()
+		default:
+			log.Infof("got unsupported packet %v:", msgType)
 		}
 	}
 }
 
-func (p *ptping) runReader() {
-	for {
-		response, _, rxts, _ := p.eventConn.ReadPacketWithRXTimestamp()
-		p.inChan <- client.NewInPacket(response, rxts)
-	}
-}
-
 func ptpingRun(iface string, dscp int, server string, count int, timeout time.Duration) error {
+	var err error
 	p := &ptping{
 		iface:  iface,
 		dscp:   dscp,
 		target: server,
-		inChan: make(chan *client.InPacket),
 	}
 
-	if err := p.init(); err != nil {
+	if err = p.init(); err != nil {
 		return err
 	}
 	// We want to avoid first 10 which may be used by other tools
 	portID := uint16(rand.Intn(10+65535) - 10)
 
 	for c := 1; c <= count; c++ {
-		_, t3, err := p.client.SendEventMsg(client.ReqDelay(p.clockID, portID))
+		p.ts.reset()
+		_, p.ts.t3, err = p.client.SendEventMsg(client.ReqDelay(p.clockID, portID))
 		if err != nil {
 			log.Errorf("failed to send request: %s", err)
 			continue
 		}
 
-		t1, t2, t4, err := p.timestamps(timeout)
-		if err != nil {
+		if err = p.timestamps(timeout); err != nil {
 			log.Errorf("failed to read sync response: %v", err)
 			continue
 		}
-		fw := t4.Sub(t3)
-		bk := t2.Sub(t1)
-		if t1.IsZero() {
+		fw := p.ts.t4.Sub(p.ts.t3)
+		bk := p.ts.t2.Sub(p.ts.t1)
+		if p.ts.t1.IsZero() {
 			bk = 0
 		}
 

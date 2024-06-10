@@ -39,7 +39,7 @@ type UDPConn interface {
 type UDPConnWithTS interface {
 	UDPConn
 	WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, error)
-	ReadPacketWithRXTimestamp() ([]byte, unix.Sockaddr, time.Time, error)
+	ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, unix.Sockaddr, time.Time, error)
 }
 
 // UDPConnTS is a wrapper around udp connection and a corresponding fd
@@ -110,7 +110,7 @@ func (c *UDPConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, erro
 	return n, hwts, nil
 }
 
-// ReadPacketWithRXTimestamp reads bytes and a timestamp from underlying fd
-func (c *UDPConnTS) ReadPacketWithRXTimestamp() ([]byte, unix.Sockaddr, time.Time, error) {
-	return timestamp.ReadPacketWithRXTimestamp(c.connFd)
+// ReadPacketWithRXTimestampBuf reads bytes and a timestamp from underlying fd
+func (c *UDPConnTS) ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, unix.Sockaddr, time.Time, error) {
+	return timestamp.ReadPacketWithRXTimestampBuf(c.connFd, buf, oob)
 }

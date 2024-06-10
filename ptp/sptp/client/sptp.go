@@ -211,14 +211,15 @@ func (p *SPTP) ptping(sourceIP net.IP, sourcePort int, response []byte, rxtx tim
 // RunListener starts a listener, must be run before any client-server interactions happen
 func (p *SPTP) RunListener(ctx context.Context) error {
 	eg, ctx := errgroup.WithContext(ctx)
-	// get packets from general port
+	// get announce packets from general port
 	eg.Go(func() error {
 		// it's done in non-blocking way, so if context is cancelled we exit correctly
 		doneChan := make(chan error, 1)
 		go func() {
+			announce := &ptp.Announce{}
+			buf := make([]byte, timestamp.PayloadSizeBytes)
 			for {
-				response := make([]uint8, 1024)
-				n, addr, err := p.genConn.ReadFromUDP(response)
+				bbuf, addr, err := p.genConn.ReadFromUDP(buf)
 				if err != nil {
 					doneChan <- err
 					return
@@ -227,13 +228,20 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					doneChan <- fmt.Errorf("received packet on port 320 with nil source address")
 					return
 				}
-				log.Debugf("got packet on port 320, n = %v, addr = %v", n, addr)
+				log.Debugf("got packet on port 320, n = %v, addr = %v", bbuf, addr)
 				cc, found := p.clients[addr.IP.String()]
 				if !found {
 					log.Warningf("ignoring packets from server %v", addr)
 					continue
 				}
-				cc.inChan <- &InPacket{data: response[:n]}
+
+				if err = ptp.FromBytes(buf[:bbuf], announce); err != nil {
+					log.Warningf("reading announce msg: %v", err)
+					continue
+				}
+				cc.stats.IncRXAnnounce()
+				cc.handleAnnounce(announce)
+				cc.inChan <- true
 			}
 		}()
 		select {
@@ -249,8 +257,11 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 		// it's done in non-blocking way, so if context is cancelled we exit correctly
 		doneChan := make(chan error, 1)
 		go func() {
+			sync := &ptp.SyncDelayReq{}
+			buf := make([]byte, timestamp.PayloadSizeBytes)
+			oob := make([]byte, timestamp.ControlSizeBytes)
 			for {
-				response, addr, rxtx, err := p.eventConn.ReadPacketWithRXTimestamp()
+				bbuf, addr, rxtx, err := p.eventConn.ReadPacketWithRXTimestampBuf(buf, oob)
 				if err != nil {
 					doneChan <- err
 					return
@@ -261,12 +272,18 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 				if !found {
 					log.Warningf("ignoring packets from server %v. Trying ptping", ip)
 					// Try ptping
-					if err = p.ptping(ip, timestamp.SockaddrToPort(addr), response, rxtx); err != nil {
+					if err = p.ptping(ip, timestamp.SockaddrToPort(addr), buf, rxtx); err != nil {
 						log.Warning(err)
 					}
 					continue
 				}
-				cc.inChan <- &InPacket{data: response, ts: rxtx}
+				if err = ptp.FromBytes(buf[:bbuf], sync); err != nil {
+					log.Warningf("reading sync msg: %v", err)
+					continue
+				}
+				cc.stats.IncRXSync()
+				cc.handleSync(sync, rxtx)
+				cc.inChan <- true
 			}
 		}()
 		select {

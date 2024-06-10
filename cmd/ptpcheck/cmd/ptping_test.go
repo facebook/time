@@ -22,42 +22,27 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	ptp "github.com/facebook/time/ptp/protocol"
-	"github.com/facebook/time/ptp/sptp/client"
 )
 
-func TestTimestamps(t *testing.T) {
-	now := time.Now()
+func TestResetTimestamps(t *testing.T) {
+	ts := timestamps{}
+	ts.t1 = time.Now()
+	ts.t2 = time.Now()
+	ts.t3 = time.Now()
+	ts.t4 = time.Now()
+
+	ts.reset()
+	require.True(t, ts.t1.IsZero())
+	require.True(t, ts.t2.IsZero())
+	require.True(t, ts.t3.IsZero())
+	require.True(t, ts.t4.IsZero())
+}
+
+func TestCollectionTimeout(t *testing.T) {
 	timeout := time.Millisecond
-	s := client.ReqDelay(ptp.ClockIdentity(0xc42a1fffe6d7ca6), 1)
-	s.OriginTimestamp = ptp.NewTimestamp(now)
-	sb, err := s.MarshalBinary()
-	require.NoError(t, err)
-
-	a := client.ReqAnnounce(ptp.ClockIdentity(0xc42a1fffe6d7ca6), 1, now)
-	ab, err := a.MarshalBinary()
-	require.NoError(t, err)
-
-	p := &ptping{
-		inChan: make(chan *client.InPacket, 2),
-	}
-
-	_, _, _, err = p.timestamps(timeout)
+	p := &ptping{}
+	start := time.Now()
+	err := p.timestamps(timeout)
+	require.Greater(t, time.Since(start), timeout)
 	require.Equal(t, fmt.Errorf("timeout waiting"), err)
-
-	p.inChan <- client.NewInPacket(sb, now)
-	_, t2, t4, err := p.timestamps(timeout)
-	require.NoError(t, err)
-	require.Equal(t, now.Nanosecond(), t2.Nanosecond())
-	require.Equal(t, now.Nanosecond(), t4.Nanosecond())
-
-	p.inChan <- client.NewInPacket(ab, now)
-	p.inChan <- client.NewInPacket(sb, now)
-
-	t1, t2, t4, err := p.timestamps(timeout)
-	require.NoError(t, err)
-	require.Equal(t, now.Nanosecond(), t1.Nanosecond())
-	require.Equal(t, now.Nanosecond(), t2.Nanosecond())
-	require.Equal(t, now.Nanosecond(), t4.Nanosecond())
 }

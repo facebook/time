@@ -150,21 +150,21 @@ func (mr *MockUDPConnWithTSMockRecorder) ReadFromUDP(b interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFromUDP", reflect.TypeOf((*MockUDPConnWithTS)(nil).ReadFromUDP), b)
 }
 
-// ReadPacketWithRXTimestamp mocks base method.
-func (m *MockUDPConnWithTS) ReadPacketWithRXTimestamp() ([]byte, unix.Sockaddr, time.Time, error) {
+// ReadPacketWithRXTimestampBuf mocks base method.
+func (m *MockUDPConnWithTS) ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, unix.Sockaddr, time.Time, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadPacketWithRXTimestamp")
-	ret0, _ := ret[0].([]byte)
+	ret := m.ctrl.Call(m, "ReadPacketWithRXTimestampBuf", buf, oob)
+	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(unix.Sockaddr)
 	ret2, _ := ret[2].(time.Time)
 	ret3, _ := ret[3].(error)
 	return ret0, ret1, ret2, ret3
 }
 
-// ReadPacketWithRXTimestamp indicates an expected call of ReadPacketWithRXTimestamp.
-func (mr *MockUDPConnWithTSMockRecorder) ReadPacketWithRXTimestamp() *gomock.Call {
+// ReadPacketWithRXTimestampBuf indicates an expected call of ReadPacketWithRXTimestampBuf.
+func (mr *MockUDPConnWithTSMockRecorder) ReadPacketWithRXTimestampBuf(buf, oob interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadPacketWithRXTimestamp", reflect.TypeOf((*MockUDPConnWithTS)(nil).ReadPacketWithRXTimestamp))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadPacketWithRXTimestampBuf", reflect.TypeOf((*MockUDPConnWithTS)(nil).ReadPacketWithRXTimestampBuf), buf, oob)
 }
 
 // WriteTo mocks base method.
