@@ -89,11 +89,8 @@ func TestClientRun(t *testing.T) {
 	}
 
 	// handle whatever client is sending over eventConn
-	statsServer.EXPECT().IncRXSync()
-	statsServer.EXPECT().IncRXAnnounce()
 	statsServer.EXPECT().IncTXDelayReq()
 	// unexpected packet we just ignore
-	statsServer.EXPECT().IncUnsupported()
 	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ net.Addr) (int, time.Time, error) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
@@ -102,21 +99,15 @@ func TestClientRun(t *testing.T) {
 		sync := syncPkt(int(delayReq.SequenceID))
 		syncBytes, err := ptp.Bytes(sync)
 		require.Nil(t, err)
-		c.inChan <- &InPacket{
-			data: syncBytes,
-			ts:   time.Now(),
-		}
+		c.handleSync(sync, time.Now())
+		c.inChan <- true
 		// send in irrelevant packet client should ignore
-		c.inChan <- &InPacket{
-			data: []byte{1, 2, 3, 4, 5},
-		}
+		c.inChan <- true
 
 		announce = announcePkt(int(delayReq.SequenceID))
-		announceBytes, err := ptp.Bytes(announce)
 		require.Nil(t, err)
-		c.inChan <- &InPacket{
-			data: announceBytes,
-		}
+		c.handleAnnounce(announce)
+		c.inChan <- true
 
 		return len(syncBytes), time.Now(), nil
 	})
@@ -187,10 +178,7 @@ func TestClientBadPacket(t *testing.T) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
 		require.Nil(t, err, "reading delayReq msg")
-		c.inChan <- &InPacket{
-			data: []byte{},
-			ts:   time.Now(),
-		}
+		c.inChan <- true
 
 		return 10, time.Now(), nil
 	})
@@ -236,12 +224,4 @@ func TestReqAnnounce(t *testing.T) {
 	now := time.Now()
 	a := ReqAnnounce(ptp.ClockIdentity(0xc42a1fffe6d7ca6), 1, now)
 	require.Equal(t, now.Nanosecond(), a.OriginTimestamp.Time().Nanosecond())
-}
-
-func TestInPacket(t *testing.T) {
-	data := []byte("test")
-	ts := time.Now()
-	p := NewInPacket(data, ts)
-	require.Equal(t, data, p.Data())
-	require.Equal(t, ts, p.TS())
 }

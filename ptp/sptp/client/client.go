@@ -87,27 +87,6 @@ type RunResult struct {
 	Error       error
 }
 
-// InPacket is input packet data + receive timestamp
-type InPacket struct {
-	data []byte
-	ts   time.Time
-}
-
-// NewInPacket returns a new instance of InPacket
-func NewInPacket(data []byte, ts time.Time) *InPacket {
-	return &InPacket{data: data, ts: ts}
-}
-
-// Data returns data
-func (i *InPacket) Data() []byte {
-	return i.data
-}
-
-// TS returns timestamp
-func (i *InPacket) TS() time.Time {
-	return i.ts
-}
-
 // Client is a part of PTPNG that talks to only one server
 type Client struct {
 	server string
@@ -117,8 +96,8 @@ type Client struct {
 	sequenceIDMask uint16
 	// const value for sequence ID
 	sequenceIDValue uint16
-	// chan for received packets regardless of port
-	inChan chan *InPacket
+	// chan for received packets event regardless of port
+	inChan chan bool
 	// listening connection on port 319
 	eventConn UDPConnWithTS
 	// our clockID derived from MAC address
@@ -175,40 +154,12 @@ func NewClient(target string, targetPort int, clockID ptp.ClockIdentity, eventCo
 		sequenceIDValue: sequenceIDMaskedValue,
 		eventConn:       eventConn,
 		eventAddr:       eventAddr,
-		inChan:          make(chan *InPacket, 100),
+		inChan:          make(chan bool, 100),
 		server:          target,
 		m:               newMeasurements(&cfg.Measurement),
 		stats:           stats,
 	}
 	return c, nil
-}
-
-// dispatch handler based on msg type
-func (c *Client) handleMsg(msg *InPacket) error {
-	msgType, err := ptp.ProbeMsgType(msg.data)
-	if err != nil {
-		return err
-	}
-	switch msgType {
-	case ptp.MessageAnnounce:
-		announce := &ptp.Announce{}
-		if err := ptp.FromBytes(msg.data, announce); err != nil {
-			return fmt.Errorf("reading announce msg: %w", err)
-		}
-		c.stats.IncRXAnnounce()
-		return c.handleAnnounce(announce)
-	case ptp.MessageSync:
-		b := &ptp.SyncDelayReq{}
-		if err := ptp.FromBytes(msg.data, b); err != nil {
-			return fmt.Errorf("reading sync msg: %w", err)
-		}
-		c.stats.IncRXSync()
-		return c.handleSync(b, msg.ts)
-	default:
-		c.logReceive(msgType, "unsupported, ignoring")
-		c.stats.IncUnsupported()
-		return nil
-	}
 }
 
 // couple of helpers to log nice lines about happening communication
@@ -220,7 +171,7 @@ func (c *Client) logReceive(t ptp.MessageType, msg string, v ...interface{}) {
 }
 
 // handleAnnounce handles ANNOUNCE packet and records UTC offset from it's data
-func (c *Client) handleAnnounce(b *ptp.Announce) error {
+func (c *Client) handleAnnounce(b *ptp.Announce) {
 	c.logReceive(ptp.MessageAnnounce, "seq=%d, T1=%v, CF2=%v, gmIdentity=%s, gmTimeSource=%s, stepsRemoved=%d",
 		b.SequenceID, b.OriginTimestamp.Time(), corrToDuration(b.CorrectionField), b.GrandmasterIdentity, b.TimeSource, b.StepsRemoved)
 	c.m.currentUTCoffset = time.Duration(b.CurrentUTCOffset) * time.Second
@@ -228,17 +179,15 @@ func (c *Client) handleAnnounce(b *ptp.Announce) error {
 	c.m.addT1(b.SequenceID, b.OriginTimestamp.Time())
 	c.m.addCF2(b.SequenceID, corrToDuration(b.CorrectionField))
 	c.m.addAnnounce(*b)
-	return nil
 }
 
 // handleSync handles SYNC packet and adds send timestamp to measurements
-func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) error {
+func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) {
 	c.logReceive(ptp.MessageSync, "seq=%d, T2=%v, T4=%v, CF1=%v", b.SequenceID, ts, b.OriginTimestamp.Time(), corrToDuration(b.CorrectionField))
 	// T2 and CF1
 	c.m.addT2andCF1(b.SequenceID, ts, corrToDuration(b.CorrectionField))
 	// sync carries T4 as well
 	c.m.addT4(b.SequenceID, b.OriginTimestamp.Time())
-	return nil
 }
 
 // handleDelayReq handles Delay Reqest packet and responds with SYNC
@@ -281,10 +230,7 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 			case <-ctx.Done():
 				log.Debugf("[%s] cancelled main loop", c.server)
 				return ctx.Err()
-			case msg := <-c.inChan:
-				if err := c.handleMsg(msg); err != nil {
-					return err
-				}
+			case <-c.inChan:
 				latest, err := c.m.latest()
 				if err != nil {
 					log.Debugf("[%s] getting latest measurement: %v", c.server, err)
