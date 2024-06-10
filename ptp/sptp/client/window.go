@@ -19,15 +19,13 @@ package client
 import (
 	"math"
 	"sort"
-
-	"container/ring"
 )
 
 type slidingWindow struct {
 	size        int
 	currentSize int
 	sum         float64
-	samples     *ring.Ring
+	samples     []float64
 	sorted      []float64
 }
 
@@ -37,42 +35,39 @@ func newSlidingWindow(size int) *slidingWindow {
 	}
 	w := &slidingWindow{
 		size:    size,
-		samples: ring.New(size),
+		samples: make([]float64, size),
 		sorted:  make([]float64, size),
 	}
 	for i := 0; i < w.size; i++ {
-		w.samples.Value = math.NaN()
+		w.samples[i] = math.NaN()
 		w.sorted[i] = math.NaN()
-		w.samples = w.samples.Next()
 	}
 	return w
 }
 
 func (w *slidingWindow) add(sample float64) {
-	w.samples = w.samples.Next()
-	v := w.samples.Value.(float64)
-	if !math.IsNaN(v) {
-		w.sum -= v
-	}
 	if !w.Full() {
 		w.currentSize++
+	} else {
+		w.sum -= w.samples[w.size-1]
 	}
-	w.samples.Value = sample
+	for i := w.currentSize - 1; i > 0; i-- {
+		w.samples[i] = w.samples[i-1]
+	}
+
+	w.samples[0] = sample
 	w.sum += sample
 }
 
 func (w *slidingWindow) lastSample() float64 {
-	return w.samples.Value.(float64)
+	return w.samples[0]
 }
 
 func (w *slidingWindow) allSamples() []float64 {
-	r := w.samples
-	for j := 0; j < w.size; j++ {
-		v := r.Value.(float64)
+	for j, v := range w.samples {
 		if !math.IsNaN(v) {
 			w.sorted[j] = v
 		}
-		r = r.Prev()
 	}
 	return w.sorted[0:w.currentSize]
 }
