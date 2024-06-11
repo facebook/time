@@ -202,7 +202,7 @@ func (p *SPTP) ptping(sourceIP net.IP, sourcePort int, response []byte, rxtx tim
 	if err != nil {
 		return fmt.Errorf("failed to respond to a delay request %w", err)
 	}
-	if err := c.handleDelayReq(rxtx); err != nil {
+	if err := c.handleDelayReq(p.clockID, rxtx); err != nil {
 		return fmt.Errorf("failed to respond to a delay request %w", err)
 	}
 	return nil

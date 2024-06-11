@@ -99,8 +99,8 @@ type Client struct {
 	inChan chan bool
 	// listening connection on port 319
 	eventConn UDPConnWithTS
-	// our clockID derived from MAC address
-	clockID ptp.ClockIdentity
+	// outgoing delay request packet
+	delayRequest *ptp.SyncDelayReq
 
 	eventAddr *net.UDPAddr
 
@@ -147,10 +147,10 @@ func NewClient(target string, targetPort int, clockID ptp.ClockIdentity, eventCo
 	}
 	sequenceIDMask, sequenceIDMaskedValue := cfg.GenerateMaskAndValue()
 	c := &Client{
-		clockID:         clockID,
 		eventSequence:   uint16(rnd.Int31n(65536)) & sequenceIDMask,
 		sequenceIDMask:  sequenceIDMask,
 		sequenceIDValue: sequenceIDMaskedValue,
+		delayRequest:    ReqDelay(clockID, 1),
 		eventConn:       eventConn,
 		eventAddr:       eventAddr,
 		inChan:          make(chan bool, 100),
@@ -164,7 +164,14 @@ func NewClient(target string, targetPort int, clockID ptp.ClockIdentity, eventCo
 // handleAnnounce handles ANNOUNCE packet and records UTC offset from it's data
 func (c *Client) handleAnnounce(b *ptp.Announce) {
 	log.Debugf("[%s] server -> %s (seq=%d, T1=%v, CF2=%v, gmIdentity=%s, gmTimeSource=%s, stepsRemoved=%d)",
-		c.server, ptp.MessageAnnounce, b.SequenceID, b.OriginTimestamp.Time(), corrToDuration(b.CorrectionField), b.GrandmasterIdentity, b.TimeSource, b.StepsRemoved)
+		c.server,
+		ptp.MessageAnnounce,
+		b.SequenceID,
+		b.OriginTimestamp.Time(),
+		corrToDuration(b.CorrectionField),
+		b.GrandmasterIdentity,
+		b.TimeSource,
+		b.StepsRemoved)
 	c.m.currentUTCoffset = time.Duration(b.CurrentUTCOffset) * time.Second
 	// announce carries T1 and CF2
 	c.m.addT1(b.SequenceID, b.OriginTimestamp.Time())
@@ -175,7 +182,12 @@ func (c *Client) handleAnnounce(b *ptp.Announce) {
 // handleSync handles SYNC packet and adds send timestamp to measurements
 func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) {
 	log.Debugf("[%s] server -> %s (seq=%d, T2=%v, T4=%v, CF1=%v)",
-		c.server, ptp.MessageSync, b.SequenceID, ts, b.OriginTimestamp.Time(), corrToDuration(b.CorrectionField))
+		c.server,
+		ptp.MessageSync,
+		b.SequenceID,
+		ts,
+		b.OriginTimestamp.Time(),
+		corrToDuration(b.CorrectionField))
 	// T2 and CF1
 	c.m.addT2andCF1(b.SequenceID, ts, corrToDuration(b.CorrectionField))
 	// sync carries T4 as well
@@ -184,14 +196,14 @@ func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) {
 
 // handleDelayReq handles Delay Reqest packet and responds with SYNC
 // It's used for external pingers such as ptping and not required for sptp itself
-func (c *Client) handleDelayReq(ts time.Time) error {
-	sync := ReqDelay(c.clockID, 1)
+func (c *Client) handleDelayReq(clockID ptp.ClockIdentity, ts time.Time) error {
+	sync := ReqDelay(clockID, 1)
 	sync.OriginTimestamp = ptp.NewTimestamp(ts)
 	_, txts, err := c.SendEventMsg(sync)
 	if err != nil {
 		return err
 	}
-	announce := ReqAnnounce(c.clockID, 1, txts)
+	announce := ReqAnnounce(clockID, 1, txts)
 	_, _, err = c.SendEventMsg(announce)
 	return err
 }
@@ -209,7 +221,7 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 
 	eg.Go(func() error {
 		// ask for delay
-		seq, hwts, err := c.SendEventMsg(ReqDelay(c.clockID, 1))
+		seq, hwts, err := c.SendEventMsg(c.delayRequest)
 		if err != nil {
 			return err
 		}
