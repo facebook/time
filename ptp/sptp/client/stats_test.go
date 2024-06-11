@@ -116,7 +116,8 @@ func TestSetGMStats(t *testing.T) {
 		GMAddress: "192.168.0.10",
 		Error:     "mymy",
 	}
-	s := NewStats()
+	s, err := NewStats()
+	require.NoError(t, err)
 	s.SetGMStats(gm)
 	want := gmstats.Stats{
 		gm,
@@ -125,7 +126,8 @@ func TestSetGMStats(t *testing.T) {
 }
 
 func TestInc(t *testing.T) {
-	s := NewStats()
+	s, err := NewStats()
+	require.NoError(t, err)
 	s.rxAnnounce = 42
 	s.rxSync = 43
 	s.rxDelayReq = 44
@@ -147,10 +149,10 @@ func TestInc(t *testing.T) {
 }
 
 func TestSysStats(t *testing.T) {
-	stats := NewStats()
-	time.Sleep(time.Second)
-	err := stats.CollectSysStats()
+	stats, err := NewStats()
 	require.NoError(t, err)
+	time.Sleep(time.Second)
+	stats.CollectSysStats()
 	// Sys counters are set and above 0
 	require.Less(t, int64(0), stats.goRoutines)
 	require.Less(t, int64(0), stats.rss)
@@ -158,7 +160,8 @@ func TestSysStats(t *testing.T) {
 }
 
 func TestGetCounters(t *testing.T) {
-	stats := NewStats()
+	stats, err := NewStats()
+	require.NoError(t, err)
 	m := stats.GetCounters()
 	require.Contains(t, m, "ptp.sptp.gms.total")
 	require.Contains(t, m, "ptp.sptp.gms.available_pct")

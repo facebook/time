@@ -42,7 +42,8 @@ func getFreePort() (int, error) {
 }
 
 func TestJSONStats(t *testing.T) {
-	stats := NewJSONStats()
+	stats, err := NewJSONStats()
+	require.NoError(t, err)
 	port, err := getFreePort()
 	require.Nil(t, err, "Failed to allocate port")
 	url := fmt.Sprintf("http://localhost:%d", port)

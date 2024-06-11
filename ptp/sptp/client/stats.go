@@ -39,7 +39,7 @@ type StatsServer interface {
 	IncTXDelayReq()
 	IncUnsupported()
 	SetGMStats(stat *gmstats.Stat)
-	CollectSysStats() error
+	CollectSysStats()
 }
 
 // Stats is an implementation of
@@ -52,6 +52,7 @@ type Stats struct {
 	snapshot      gmstats.Stats
 	procStartTime time.Time
 	memstats      runtime.MemStats
+	proc          *process.Process
 }
 
 // clientStats is just a grouping, don't use directly
@@ -78,12 +79,14 @@ type sysStats struct {
 }
 
 // NewStats created new instance of Stats
-func NewStats() *Stats {
+func NewStats() (*Stats, error) {
+	proc, err := process.NewProcess(int32(os.Getpid()))
 	return &Stats{
 		gmStats:       gmstats.Stats{},
 		snapshot:      gmstats.Stats{},
 		procStartTime: time.Now(),
-	}
+		proc:          proc,
+	}, err
 }
 
 // SetGmsTotal atomically sets the gmsTotal
@@ -178,24 +181,18 @@ func (s *Stats) SetGMStats(stat *gmstats.Stat) {
 }
 
 // CollectSysStats gathers cpu, mem, gc statistics
-func (s *Stats) CollectSysStats() error {
+func (s *Stats) CollectSysStats() {
 	s.Lock()
 	defer s.Unlock()
 
 	runtime.ReadMemStats(&s.memstats)
-
-	// Process metrics
-	proc, err := process.NewProcess(int32(os.Getpid()))
-	if err != nil {
-		return err
-	}
 	s.uptimeSec = time.Now().Unix() - s.procStartTime.Unix()
 
-	if val, err := proc.Percent(0); err == nil {
+	if val, err := s.proc.Percent(0); err == nil {
 		s.cpuPCT = int64(val * 100)
 	}
 
-	if val, err := proc.MemoryInfo(); err == nil {
+	if val, err := s.proc.MemoryInfo(); err == nil {
 		s.rss = int64(val.RSS)
 	}
 
@@ -204,8 +201,6 @@ func (s *Stats) CollectSysStats() error {
 	// Diff between current and previous where s.gcPauseTotal acts as a previous
 	s.gcPauseNs = int64(s.memstats.PauseTotalNs) - s.gcPauseTotalNs
 	s.gcPauseTotalNs = int64(s.memstats.PauseTotalNs)
-
-	return nil
 }
 
 func runResultToGMStats(address string, r *RunResult, p3 int, selected bool) *gmstats.Stat {

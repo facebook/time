@@ -52,11 +52,9 @@ func (m *MockStatsServer) EXPECT() *MockStatsServerMockRecorder {
 }
 
 // CollectSysStats mocks base method.
-func (m *MockStatsServer) CollectSysStats() error {
+func (m *MockStatsServer) CollectSysStats() {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CollectSysStats")
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "CollectSysStats")
 }
 
 // CollectSysStats indicates an expected call of CollectSysStats.

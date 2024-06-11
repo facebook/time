@@ -30,9 +30,12 @@ import (
 )
 
 func doWork(cfg *client.Config) error {
-	stats := client.NewJSONStats()
+	stats, err := client.NewJSONStats()
+	if err != nil {
+		return err
+	}
 	go stats.Start(cfg.MonitoringPort, cfg.MetricsAggregationWindow)
-	p, err := client.NewSPTP(cfg, stats)
+	p, err := client.NewSPTP(cfg, *stats)
 	if err != nil {
 		return err
 	}

@@ -27,23 +27,22 @@ import (
 
 // JSONStats is what we want to report as stats via http
 type JSONStats struct {
-	Stats
+	*Stats
 }
 
 // NewJSONStats returns a new JSONStats
-func NewJSONStats() *JSONStats {
-	return &JSONStats{Stats: *NewStats()}
+func NewJSONStats() (*JSONStats, error) {
+	stats, err := NewStats()
+	return &JSONStats{Stats: stats}, err
 }
 
 // Start runs http server and initializes maps
-func (s *JSONStats) Start(monitoringport int, interval time.Duration) {
+func (s JSONStats) Start(monitoringport int, interval time.Duration) {
 	// collect stats forever
 	go func() {
 		for range time.Tick(interval) {
 			// update stats on every tick
-			if err := s.CollectSysStats(); err != nil {
-				log.Warningf("failed to get system metrics %s", err)
-			}
+			s.CollectSysStats()
 		}
 	}()
 
@@ -58,7 +57,7 @@ func (s *JSONStats) Start(monitoringport int, interval time.Duration) {
 }
 
 // handleRootRequest is a handler used for all http monitoring requests
-func (s *JSONStats) handleRootRequest(w http.ResponseWriter, _ *http.Request) {
+func (s JSONStats) handleRootRequest(w http.ResponseWriter, _ *http.Request) {
 	js, err := json.Marshal(s.GetGMStats())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -71,7 +70,7 @@ func (s *JSONStats) handleRootRequest(w http.ResponseWriter, _ *http.Request) {
 }
 
 // handleCountersRequest is a handler used for all http monitoring requests
-func (s *JSONStats) handleCountersRequest(w http.ResponseWriter, _ *http.Request) {
+func (s JSONStats) handleCountersRequest(w http.ResponseWriter, _ *http.Request) {
 	js, err := json.Marshal(s.GetCounters())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
