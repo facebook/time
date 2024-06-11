@@ -5,8 +5,11 @@ CPPFLAGS=-fpermissive -lrt -lpthread -msse4.2 -lgtest -g
 
 .PHONY: clean test
 
+BUILDDIR ?= .
+
 fbclock:
-	$(CC) $(CFLAGS) -shared -o fbclock.so -fPIC fbclock.c 
+	mkdir -p $(BUILDDIR)
+	$(CC) $(CFLAGS) -shared -o $(BUILDDIR)/fbclock.so -fPIC fbclock.c
 
 test:
 	$(CPP) $(CPPFLAGS) -o fbclock-test test/test.cpp fbclock.c
