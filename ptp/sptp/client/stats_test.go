@@ -33,7 +33,7 @@ func TestRunResultToStatsError(t *testing.T) {
 		Server: "192.168.0.10",
 		Error:  fmt.Errorf("ooops"),
 	}
-	got := runResultToStats("192.168.0.10", r, 1, false)
+	got := runResultToGMStats("192.168.0.10", r, 1, false)
 	want := &gmstats.Stat{
 		GMAddress: "192.168.0.10",
 		Priority3: 1,
@@ -101,12 +101,12 @@ func TestRunResultToStats(t *testing.T) {
 	}
 
 	t.Run("not selected", func(t *testing.T) {
-		got := runResultToStats("192.168.0.10", r, 3, false)
+		got := runResultToGMStats("192.168.0.10", r, 3, false)
 		require.Equal(t, want, got)
 	})
 	want.Selected = true
 	t.Run("selected", func(t *testing.T) {
-		got := runResultToStats("192.168.0.10", r, 3, true)
+		got := runResultToGMStats("192.168.0.10", r, 3, true)
 		require.Equal(t, want, got)
 	})
 }

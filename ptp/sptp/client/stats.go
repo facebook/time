@@ -49,6 +49,7 @@ type Stats struct {
 	clientStats
 	sysStats
 	gmStats       gmstats.Stats
+	snapshot      gmstats.Stats
 	procStartTime time.Time
 	memstats      runtime.MemStats
 }
@@ -80,6 +81,7 @@ type sysStats struct {
 func NewStats() *Stats {
 	return &Stats{
 		gmStats:       gmstats.Stats{},
+		snapshot:      gmstats.Stats{},
 		procStartTime: time.Now(),
 	}
 }
@@ -157,11 +159,11 @@ func (s *Stats) GetCounters() map[string]int64 {
 
 // GetGMStats returns an all gm stats
 func (s *Stats) GetGMStats() gmstats.Stats {
-	ret := make(gmstats.Stats, len(s.gmStats))
 	s.Lock()
-	copy(ret, s.gmStats)
-	s.Unlock()
-	return ret
+	defer s.Unlock()
+	s.snapshot = make(gmstats.Stats, len(s.gmStats))
+	copy(s.snapshot, s.gmStats)
+	return s.snapshot
 }
 
 // SetGMStats sets GM stats for particular gm
@@ -206,7 +208,7 @@ func (s *Stats) CollectSysStats() error {
 	return nil
 }
 
-func runResultToStats(address string, r *RunResult, p3 int, selected bool) *gmstats.Stat {
+func runResultToGMStats(address string, r *RunResult, p3 int, selected bool) *gmstats.Stat {
 	s := &gmstats.Stat{
 		GMAddress: address,
 		Priority3: uint8(p3),

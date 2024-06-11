@@ -336,7 +336,7 @@ func (p *SPTP) reprioritize(bestAddr string) {
 func (p *SPTP) processResults(results map[string]*RunResult) {
 	defer func() {
 		for addr, res := range results {
-			s := runResultToStats(addr, res, p.priorities[addr], addr == p.bestGM)
+			s := runResultToGMStats(addr, res, p.priorities[addr], addr == p.bestGM)
 			p.stats.SetGMStats(s)
 		}
 	}()
