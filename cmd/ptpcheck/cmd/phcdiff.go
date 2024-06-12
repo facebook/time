@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/facebook/time/phc"
@@ -46,11 +47,22 @@ func init() {
 }
 
 func phcdiffRun(deviceA, deviceB string, isJSON bool) error {
-	extendedA, err := phc.ReadPTPSysOffsetExtended(deviceA, phc.ExtendedNumProbes)
+	a, err := os.Open(deviceA)
+	if err != nil {
+		return fmt.Errorf("opening device %q to set frequency: %w", deviceA, err)
+	}
+	defer a.Close()
+	b, err := os.Open(deviceB)
+	if err != nil {
+		return fmt.Errorf("opening device %q to set frequency: %w", deviceB, err)
+	}
+	defer b.Close()
+
+	extendedA, err := phc.ReadPTPSysOffsetExtended(a, phc.ExtendedNumProbes)
 	if err != nil {
 		return err
 	}
-	extendedB, err := phc.ReadPTPSysOffsetExtended(deviceB, phc.ExtendedNumProbes)
+	extendedB, err := phc.ReadPTPSysOffsetExtended(b, phc.ExtendedNumProbes)
 	if err != nil {
 		return err
 	}

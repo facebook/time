@@ -17,6 +17,8 @@ limitations under the License.
 package cmd
 
 import (
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/facebook/time/clock"
@@ -43,7 +45,19 @@ func init() {
 }
 
 func phc2phcRun(srcDevice string, dstDevice string, interval time.Duration, stepth time.Duration) error {
-	freq, err := phc.FrequencyPPBFromDevice(dstDevice)
+	src, err := os.Open(srcDevice)
+	if err != nil {
+		return fmt.Errorf("opening device %q to read frequency: %w", srcDevice, err)
+	}
+	defer src.Close()
+	// we need RW permissions to issue CLOCK_ADJTIME on the device, even with empty struct
+	dst, err := os.OpenFile(dstDevice, os.O_RDWR, 0)
+	if err != nil {
+		return fmt.Errorf("opening device %q to set frequency: %w", dstDevice, err)
+	}
+	defer dst.Close()
+
+	freq, err := phc.FrequencyPPBFromDevice(dst)
 	if err != nil {
 		return err
 	}
@@ -58,7 +72,7 @@ func phc2phcRun(srcDevice string, dstDevice string, interval time.Duration, step
 	pi := servo.NewPiServo(servoCfg, servo.DefaultPiServoCfg(), -freq)
 	pi.SyncInterval(interval.Seconds())
 
-	maxFreq, err := phc.MaxFreqAdjPPBFromDevice(dstDevice)
+	maxFreq, err := phc.MaxFreqAdjPPBFromDevice(dst)
 	if err != nil {
 		log.Warningf("max PHC frequency error: %v", err)
 		maxFreq = phc.DefaultMaxClockFreqPPB
@@ -68,12 +82,12 @@ func phc2phcRun(srcDevice string, dstDevice string, interval time.Duration, step
 	log.Debugf("max PHC frequency: %v", maxFreq)
 
 	for ; ; time.Sleep(interval) {
-		extendedSrc, err := phc.ReadPTPSysOffsetExtended(srcDevice, phc.ExtendedNumProbes)
+		extendedSrc, err := phc.ReadPTPSysOffsetExtended(src, phc.ExtendedNumProbes)
 		if err != nil {
 			log.Errorf("failed to read data from %v: %v", srcDevice, err)
 			continue
 		}
-		extendedDst, err := phc.ReadPTPSysOffsetExtended(dstDevice, phc.ExtendedNumProbes)
+		extendedDst, err := phc.ReadPTPSysOffsetExtended(dst, phc.ExtendedNumProbes)
 		if err != nil {
 			log.Errorf("failed to read data from %v: %v", dstDevice, err)
 			continue
@@ -85,12 +99,12 @@ func phc2phcRun(srcDevice string, dstDevice string, interval time.Duration, step
 		freqAdj, state := pi.Sample(int64(phcOffset), uint64(timeAndOffsetDst.SysTime.UnixNano()))
 		log.Infof("offset %12d freq %+9.0f path delay %5d", phcOffset, freqAdj, timeAndOffsetSrc.Delay.Nanoseconds()+timeAndOffsetDst.Delay.Nanoseconds())
 		if state == servo.StateJump {
-			if err := phc.ClockStep(dstDevice, -phcOffset); err != nil {
+			if err := phc.ClockStep(dst, -phcOffset); err != nil {
 				log.Errorf("failed to step clock by %v: %v", -phcOffset, err)
 				continue
 			}
 		} else {
-			if err := phc.ClockAdjFreq(dstDevice, -freqAdj); err != nil {
+			if err := phc.ClockAdjFreq(dst, -freqAdj); err != nil {
 				log.Errorf("failed to adjust freq to %v: %v", -freqAdj, err)
 				continue
 			}

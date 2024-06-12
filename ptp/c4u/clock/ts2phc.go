@@ -17,8 +17,10 @@ limitations under the License.
 package clock
 
 import (
-	"github.com/facebook/time/phc"
+	"os"
 	"time"
+
+	"github.com/facebook/time/phc"
 )
 
 const (
@@ -27,5 +29,17 @@ const (
 )
 
 func ts2phc() (time.Duration, error) {
-	return phc.OffsetBetweenDevices(phcTimeCardPath, phcNICPath)
+	a, err := os.Open(phcTimeCardPath)
+	if err != nil {
+		return 0, err
+	}
+	defer a.Close()
+
+	b, err := os.Open(phcNICPath)
+	if err != nil {
+		return 0, err
+	}
+	defer b.Close()
+
+	return phc.OffsetBetweenDevices(a, b)
 }
