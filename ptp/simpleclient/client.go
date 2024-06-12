@@ -89,15 +89,6 @@ func (c *udpConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, erro
 	return n, hwts, nil
 }
 
-// corrToDuration converts PTP CorrectionField to time.Duration, ignoring
-// case where correction is too big, and dropping fractions of nanoseconds
-func corrToDuration(correction ptp.Correction) (corr time.Duration) {
-	if !correction.TooBig() {
-		corr = time.Duration(correction.Nanoseconds())
-	}
-	return
-}
-
 // Config specifies Client run options
 type Config struct {
 	// address of a server to talk to
@@ -361,16 +352,16 @@ func (c *Client) handleAnnounce(b *ptp.Announce) error {
 
 // handleSync handles SYNC packet and adds send timestamp to measurements
 func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) error {
-	c.logReceive(ptp.MessageSync, "seq=%d, our ReceiveTimestamp(T2)=%v, correctionField(C1)=%v", b.SequenceID, ts, corrToDuration(b.CorrectionField))
-	c.m.addSync(b.SequenceID, ts, corrToDuration(b.CorrectionField))
+	c.logReceive(ptp.MessageSync, "seq=%d, our ReceiveTimestamp(T2)=%v, correctionField(C1)=%v", b.SequenceID, ts, b.CorrectionField.Duration())
+	c.m.addSync(b.SequenceID, ts, b.CorrectionField.Duration())
 	return nil
 }
 
 // handleDelay handles DELAY packet and adds ReceiveTimestamp to measurements
 func (c *Client) handleDelay(b *ptp.DelayResp) error {
-	c.logReceive(ptp.MessageDelayResp, "seq=%d, server ReceiveTimestamp(T4)=%v, correctionField(C3)=%v", b.SequenceID, b.ReceiveTimestamp.Time(), corrToDuration(b.CorrectionField))
+	c.logReceive(ptp.MessageDelayResp, "seq=%d, server ReceiveTimestamp(T4)=%v, correctionField(C3)=%v", b.SequenceID, b.ReceiveTimestamp.Time(), b.CorrectionField.Duration())
 	// store data in measurements
-	c.m.addDelayResp(b.SequenceID, b.ReceiveTimestamp.Time(), corrToDuration(b.CorrectionField))
+	c.m.addDelayResp(b.SequenceID, b.ReceiveTimestamp.Time(), b.CorrectionField.Duration())
 
 	// do whatever needs to be done with current measurements
 	res, err := c.m.latest()
@@ -384,8 +375,8 @@ func (c *Client) handleDelay(b *ptp.DelayResp) error {
 
 // handleFollowUp handles FOLLOW_UP packet and sends DELAY_REQ packet
 func (c *Client) handleFollowUp(b *ptp.FollowUp) error {
-	c.logReceive(ptp.MessageFollowUp, "seq=%d, server PreciseOriginTimestamp(T1)=%v, correctionField(C2)=%v", b.SequenceID, b.PreciseOriginTimestamp.Time(), corrToDuration(b.CorrectionField))
-	c.m.addFollowUp(b.SequenceID, b.PreciseOriginTimestamp.Time(), corrToDuration(b.CorrectionField))
+	c.logReceive(ptp.MessageFollowUp, "seq=%d, server PreciseOriginTimestamp(T1)=%v, correctionField(C2)=%v", b.SequenceID, b.PreciseOriginTimestamp.Time(), b.CorrectionField.Duration())
+	c.m.addFollowUp(b.SequenceID, b.PreciseOriginTimestamp.Time(), b.CorrectionField.Duration())
 	// ask for delay
 	seq, hwts, err := c.sendEventMsg(reqDelay(c.clockID))
 	if err != nil {

@@ -31,15 +31,6 @@ import (
 	ptp "github.com/facebook/time/ptp/protocol"
 )
 
-// corrToDuration converts PTP CorrectionField to time.Duration, ignoring
-// case where correction is too big, and dropping fractions of nanoseconds
-func corrToDuration(correction ptp.Correction) (corr time.Duration) {
-	if !correction.TooBig() {
-		corr = time.Duration(correction.Nanoseconds())
-	}
-	return
-}
-
 // ReqDelay is a helper to build ptp.SyncDelayReq
 func ReqDelay(clockID ptp.ClockIdentity, portID uint16) *ptp.SyncDelayReq {
 	return &ptp.SyncDelayReq{
@@ -194,14 +185,14 @@ func (c *Client) handleAnnounce(b *ptp.Announce) {
 		ptp.MessageAnnounce,
 		b.SequenceID,
 		b.OriginTimestamp.Time(),
-		corrToDuration(b.CorrectionField),
+		b.CorrectionField.Duration(),
 		b.GrandmasterIdentity,
 		b.TimeSource,
 		b.StepsRemoved)
 	c.m.currentUTCoffset = time.Duration(b.CurrentUTCOffset) * time.Second
 	// announce carries T1 and CF2
 	c.m.addT1(b.SequenceID, b.OriginTimestamp.Time())
-	c.m.addCF2(b.SequenceID, corrToDuration(b.CorrectionField))
+	c.m.addCF2(b.SequenceID, b.CorrectionField.Duration())
 	c.m.addAnnounce(*b)
 }
 
@@ -213,9 +204,9 @@ func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) {
 		b.SequenceID,
 		ts,
 		b.OriginTimestamp.Time(),
-		corrToDuration(b.CorrectionField))
+		b.CorrectionField.Duration())
 	// T2 and CF1
-	c.m.addT2andCF1(b.SequenceID, ts, corrToDuration(b.CorrectionField))
+	c.m.addT2andCF1(b.SequenceID, ts, b.CorrectionField.Duration())
 	// sync carries T4 as well
 	c.m.addT4(b.SequenceID, b.OriginTimestamp.Time())
 }

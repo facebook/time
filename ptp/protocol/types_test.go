@@ -249,7 +249,7 @@ func TestTimestamp(t *testing.T) {
 	}
 }
 
-func TestCorrection(t *testing.T) {
+func TestCorrectionFromDuration(t *testing.T) {
 	tests := []struct {
 		in         time.Duration
 		want       Correction
@@ -281,6 +281,28 @@ func TestCorrection(t *testing.T) {
 			} else {
 				require.Equal(t, tt.in, time.Duration(gotNS))
 			}
+		})
+	}
+}
+
+func TestDurationFromCorrection(t *testing.T) {
+	tests := []struct {
+		in   Correction
+		want time.Duration
+	}{
+		{
+			in:   Correction(65536000000),
+			want: time.Millisecond,
+		},
+		{
+			in:   Correction(0x7fffffffffffffff),
+			want: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("Duration of %v", tt.in), func(t *testing.T) {
+			got := tt.in.Duration()
+			require.Equal(t, tt.want, got)
 		})
 	}
 }

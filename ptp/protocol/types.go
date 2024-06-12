@@ -163,6 +163,15 @@ func (t Correction) Nanoseconds() float64 {
 	return IntFloat(t).Value()
 }
 
+// Duration converts PTP CorrectionField to time.Duration, ignoring
+// case where correction is too big, and dropping fractions of nanoseconds
+func (t Correction) Duration() time.Duration {
+	if !t.TooBig() {
+		return time.Duration(t.Nanoseconds())
+	}
+	return 0
+}
+
 func (t Correction) String() string {
 	if t.TooBig() {
 		return "Correction(Too big)"
