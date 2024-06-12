@@ -101,6 +101,8 @@ type Client struct {
 	eventConn UDPConnWithTS
 	// outgoing delay request packet
 	delayRequest *ptp.SyncDelayReq
+	// outgoing packet bytes buffer
+	delayReqBytes []byte
 
 	eventAddr *net.UDPAddr
 
@@ -117,15 +119,15 @@ func (c *Client) incrementSequence() {
 }
 
 // SendEventMsg sends an event message via event socket
-func (c *Client) SendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
+func (c *Client) SendEventMsg(p *ptp.SyncDelayReq) (uint16, time.Time, error) {
 	seq := c.eventSequence
 	p.SetSequence(c.eventSequence)
-	b, err := ptp.Bytes(p)
+	_, err := ptp.BytesTo(p, c.delayReqBytes)
 	if err != nil {
 		return 0, time.Time{}, err
 	}
 	// send packet
-	_, hwts, err := c.eventConn.WriteToWithTS(b, c.eventAddr)
+	_, hwts, err := c.eventConn.WriteToWithTS(c.delayReqBytes, c.eventAddr)
 
 	c.incrementSequence()
 	if err != nil {
@@ -135,6 +137,29 @@ func (c *Client) SendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
 
 	log.Debugf("sent packet to %v", c.eventAddr)
 	return seq, hwts, nil
+}
+
+// SendAnnounce sends an announce message via event socket
+// It's used for external pingers such as ptping and not required for sptp itself
+func (c *Client) SendAnnounce(p *ptp.Announce) (uint16, error) {
+	seq := c.eventSequence
+	p.SetSequence(c.eventSequence)
+	b, err := ptp.Bytes(p)
+	if err != nil {
+		return 0, err
+	}
+	// send packet
+	// since client only has the event conn we have to read the TS
+	_, _, err = c.eventConn.WriteToWithTS(b, c.eventAddr)
+
+	c.incrementSequence()
+	if err != nil {
+		log.Warnf("Error sending packet with SeqID = %04x: %v", seq, err)
+		return 0, err
+	}
+
+	log.Debugf("sent packet to %v", c.eventAddr)
+	return seq, nil
 }
 
 // NewClient initializes sptp client
@@ -151,6 +176,7 @@ func NewClient(target string, targetPort int, clockID ptp.ClockIdentity, eventCo
 		sequenceIDMask:  sequenceIDMask,
 		sequenceIDValue: sequenceIDMaskedValue,
 		delayRequest:    ReqDelay(clockID, 1),
+		delayReqBytes:   make([]byte, binary.Size(ptp.Header{})+binary.Size(ptp.SyncDelayReq{})),
 		eventConn:       eventConn,
 		eventAddr:       eventAddr,
 		inChan:          make(chan bool, 100),
@@ -204,7 +230,7 @@ func (c *Client) handleDelayReq(clockID ptp.ClockIdentity, ts time.Time) error {
 		return err
 	}
 	announce := ReqAnnounce(clockID, 1, txts)
-	_, _, err = c.SendEventMsg(announce)
+	_, err = c.SendAnnounce(announce)
 	return err
 }
 
