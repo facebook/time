@@ -19,6 +19,7 @@ package client
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"testing"
 	"time"
 
@@ -87,4 +88,24 @@ func TestJSONStats(t *testing.T) {
 		gm1,
 	}
 	require.Equal(t, expectedStats, gms)
+}
+
+func TestHeaders(t *testing.T) {
+	stats, err := NewJSONStats()
+	require.NoError(t, err)
+	port, err := getFreePort()
+	require.Nil(t, err, "Failed to allocate port")
+	url := fmt.Sprintf("http://localhost:%d", port)
+	go stats.Start(port, time.Second)
+	time.Sleep(time.Second)
+
+	c := http.Client{
+		Timeout: time.Second * 2,
+	}
+
+	resp, err := c.Get(url)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, applicationJSON, resp.Header.Get(contentType))
 }

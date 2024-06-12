@@ -25,6 +25,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	contentType     = "Content-Type"
+	applicationJSON = "application/json"
+)
+
 // JSONStats is what we want to report as stats via http
 type JSONStats struct {
 	*Stats
@@ -63,7 +68,7 @@ func (s JSONStats) handleRootRequest(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(contentType, applicationJSON)
 	if _, err = w.Write(js); err != nil {
 		log.Errorf("Failed to reply: %v", err)
 	}
@@ -76,7 +81,7 @@ func (s JSONStats) handleCountersRequest(w http.ResponseWriter, _ *http.Request)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(contentType, applicationJSON)
 	if _, err = w.Write(js); err != nil {
 		log.Errorf("Failed to reply: %v", err)
 	}
