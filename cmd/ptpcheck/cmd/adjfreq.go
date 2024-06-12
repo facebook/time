@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"math"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -37,13 +38,20 @@ func init() {
 }
 
 func doAdjFreq(device string, freq float64) error {
-	curFreq, err := phc.FrequencyPPBFromDevice(device)
+	// we need RW permissions to issue CLOCK_ADJTIME on the device, even with empty struct
+	f, err := os.OpenFile(device, os.O_RDWR, 0)
+	if err != nil {
+		return fmt.Errorf("opening device %q to read frequency: %w", device, err)
+	}
+	defer f.Close()
+
+	curFreq, err := phc.FrequencyPPBFromDevice(f)
 	if err != nil {
 		return err
 	}
 	log.Infof("Current device frequency: %f", curFreq)
 
-	maxFreq, err := phc.MaxFreqAdjPPBFromDevice(device)
+	maxFreq, err := phc.MaxFreqAdjPPBFromDevice(f)
 	if err != nil {
 		return err
 	}
@@ -58,7 +66,7 @@ func doAdjFreq(device string, freq float64) error {
 	}
 
 	log.Infof("Setting new frequency value %f", freq)
-	err = phc.ClockAdjFreq(device, freq)
+	err = phc.ClockAdjFreq(f, freq)
 
 	return err
 }

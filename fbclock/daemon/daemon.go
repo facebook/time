@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"sync"
 	"time"
 
@@ -198,9 +199,16 @@ func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
 	if err != nil {
 		return nil, fmt.Errorf("finding PHC device for %q: %w", cfg.Iface, err)
 	}
+
+	// Keep file open for the lifetime of the fbclock
+	f, err := os.OpenFile(phcDevice, os.O_RDWR, 0)
+	if err != nil {
+		return nil, err
+	}
+
 	// function to get time from phc
-	s.getPHCTime = func() (time.Time, error) { return phc.TimeFromDevice(phcDevice) }
-	s.getPHCFreqPPB = func() (float64, error) { return phc.FrequencyPPBFromDevice(phcDevice) }
+	s.getPHCTime = func() (time.Time, error) { return phc.TimeFromDevice(f) }
+	s.getPHCFreqPPB = func() (float64, error) { return phc.FrequencyPPBFromDevice(f) }
 	// calculated values
 	s.stats.SetCounter("m_ns", 0)
 	s.stats.SetCounter("w_ns", 0)

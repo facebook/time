@@ -90,13 +90,14 @@ func TimeAndOffset(iface string, method TimeMethod) (SysoffResult, error) {
 
 // TimeAndOffsetFromDevice returns time we got from phc device + offset
 func TimeAndOffsetFromDevice(device string, method TimeMethod) (SysoffResult, error) {
+	f, err := os.Open(device)
+	if err != nil {
+		return SysoffResult{}, err
+	}
+	defer f.Close()
+
 	switch method {
 	case MethodSyscallClockGettime:
-		f, err := os.Open(device)
-		if err != nil {
-			return SysoffResult{}, err
-		}
-		defer f.Close()
 		var ts unix.Timespec
 		ts1 := time.Now()
 		err = unix.ClockGettime(FDToClockID(f.Fd()), &ts)
@@ -107,7 +108,7 @@ func TimeAndOffsetFromDevice(device string, method TimeMethod) (SysoffResult, er
 
 		return SysoffEstimateBasic(ts1, time.Unix(ts.Unix()), ts2), nil
 	case MethodIoctlSysOffsetExtended:
-		extended, err := ReadPTPSysOffsetExtended(device, ExtendedNumProbes)
+		extended, err := ReadPTPSysOffsetExtended(f, ExtendedNumProbes)
 		if err != nil {
 			return SysoffResult{}, err
 		}
@@ -154,7 +155,7 @@ func OffsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) t
 }
 
 // OffsetBetweenDevices returns estimated difference between two PHC devices
-func OffsetBetweenDevices(deviceA, deviceB string) (time.Duration, error) {
+func OffsetBetweenDevices(deviceA, deviceB *os.File) (time.Duration, error) {
 	extendedA, err := ReadPTPSysOffsetExtended(deviceA, ExtendedNumProbes)
 	if err != nil {
 		return 0, err

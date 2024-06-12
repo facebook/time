@@ -26,56 +26,29 @@ import (
 )
 
 // FrequencyPPBFromDevice reads PHC device frequency in PPB
-func FrequencyPPBFromDevice(phcDevice string) (freqPPB float64, err error) {
-	// we need RW permissions to issue CLOCK_ADJTIME on the device, even with empty struct
-	f, err := os.OpenFile(phcDevice, os.O_RDWR, 0)
-	if err != nil {
-		return freqPPB, fmt.Errorf("opening device %q to read frequency: %w", phcDevice, err)
-	}
-	defer f.Close()
+func FrequencyPPBFromDevice(phcDevice *os.File) (freqPPB float64, err error) {
 	var state int
-	freqPPB, state, err = clock.FrequencyPPB(FDToClockID(f.Fd()))
+	freqPPB, state, err = clock.FrequencyPPB(FDToClockID(phcDevice.Fd()))
 	if err == nil && state != unix.TIME_OK {
-		return freqPPB, fmt.Errorf("clock %q state %d is not TIME_OK", phcDevice, state)
+		return freqPPB, fmt.Errorf("clock %q state %d is not TIME_OK", phcDevice.Name(), state)
 	}
 	return freqPPB, err
 }
 
-// FrequencyPPB reads network card PHC device frequency in PPB
-func FrequencyPPB(iface string) (float64, error) {
-	device, err := IfaceToPHCDevice(iface)
-	if err != nil {
-		return 0.0, err
-	}
-	return FrequencyPPBFromDevice(device)
-}
-
 // ClockAdjFreq adjusts PHC clock frequency in PPB
-func ClockAdjFreq(phcDevice string, freqPPB float64) error {
-	// we need RW permissions to issue CLOCK_ADJTIME on the device, even with empty struct
-	f, err := os.OpenFile(phcDevice, os.O_RDWR, 0)
-	if err != nil {
-		return fmt.Errorf("opening device %q to set frequency: %w", phcDevice, err)
-	}
-	defer f.Close()
-	state, err := clock.AdjFreqPPB(FDToClockID(f.Fd()), freqPPB)
+func ClockAdjFreq(phcDevice *os.File, freqPPB float64) error {
+	state, err := clock.AdjFreqPPB(FDToClockID(phcDevice.Fd()), freqPPB)
 	if err == nil && state != unix.TIME_OK {
-		return fmt.Errorf("clock %q state %d is not TIME_OK", phcDevice, state)
+		return fmt.Errorf("clock %q state %d is not TIME_OK", phcDevice.Name(), state)
 	}
 	return err
 }
 
 // ClockStep steps PHC clock by given step
-func ClockStep(phcDevice string, step time.Duration) error {
-	// we need RW permissions to issue CLOCK_ADJTIME on the device, even with empty struct
-	f, err := os.OpenFile(phcDevice, os.O_RDWR, 0)
-	if err != nil {
-		return fmt.Errorf("opening device %q to set frequency: %w", phcDevice, err)
-	}
-	defer f.Close()
-	state, err := clock.Step(FDToClockID(f.Fd()), step)
+func ClockStep(phcDevice *os.File, step time.Duration) error {
+	state, err := clock.Step(FDToClockID(phcDevice.Fd()), step)
 	if err == nil && state != unix.TIME_OK {
-		return fmt.Errorf("clock %q state %d is not TIME_OK", phcDevice, state)
+		return fmt.Errorf("clock %q state %d is not TIME_OK", phcDevice.Name(), state)
 	}
 	return err
 }
