@@ -49,7 +49,7 @@ func (b *backoff) reset() {
 
 func (b *backoff) dec(d time.Duration) time.Duration {
 	b.value = b.value - d
-	if b.value < 0 {
+	if b.value < time.Second {
 		b.value = 0
 	}
 	return b.value

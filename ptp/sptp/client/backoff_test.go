@@ -108,3 +108,14 @@ func TestBackoffExponential(t *testing.T) {
 	b.reset()
 	require.False(t, b.active(), "exponential backoff is not active after reset")
 }
+
+func TestBackoffRound(t *testing.T) {
+	cfg := BackoffConfig{Mode: backoffLinear, Step: 3, MaxValue: 30}
+	require.NoError(t, cfg.Validate())
+	b := newBackoff(cfg)
+	require.False(t, b.active(), "backoff is not active when init")
+	require.Equal(t, 3*time.Second, b.inc(), "bumping backoff does something")
+
+	require.Equal(t, time.Duration(0), b.dec(2500*time.Millisecond), "decrement should be round down to 0")
+	require.False(t, b.active(), "must not be active after a decrement")
+}
