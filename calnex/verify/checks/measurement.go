@@ -24,8 +24,9 @@ import (
 )
 
 const (
-	measuring = "Measuring"
-	ready     = "Ready"
+	measuring           = "Measuring"
+	ready               = "Ready"
+	readyForMeasurement = "ReadyForMeasurement"
 )
 
 // Module check
@@ -48,7 +49,7 @@ func (m *Module) Run(target string, insecureTLS bool) error {
 	}
 
 	for channel, module := range ms.Modules {
-		if module.State != measuring && module.State != ready {
+		if module.State != measuring && module.State != ready && module.State != readyForMeasurement {
 			return fmt.Errorf("module: failed module %s: state: %s", channel, module.State)
 		}
 	}
