@@ -110,7 +110,7 @@ func TestExportFail(t *testing.T) {
 	err = Export(parsed.Host, true, true, []api.Channel{api.ChannelONE}, nil)
 	require.ErrorIs(t, errNoTarget, err)
 
-	err = Export("localhost", true, true, []api.Channel{api.ChannelONE}, nil)
+	err = Export("1.2.3.4", true, true, []api.Channel{api.ChannelONE}, nil)
 	require.Error(t, err)
 	require.True(t, isHardFailure(err), "error should be hard failure")
 }
