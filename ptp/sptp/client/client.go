@@ -26,7 +26,6 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 
 	ptp "github.com/facebook/time/ptp/protocol"
 )
@@ -229,18 +228,20 @@ func (c *Client) handleDelayReq(clockID ptp.ClockIdentity, ts time.Time) error {
 func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	eg, ctx := errgroup.WithContext(ctx)
+	errchan := make(chan error)
 
 	result := RunResult{
 		Server: c.server,
 	}
 	c.m.cleanup()
 
-	eg.Go(func() error {
+	go func() {
+		defer close(errchan)
 		// ask for delay
 		seq, hwts, err := c.SendEventMsg(c.delayRequest)
 		if err != nil {
-			return err
+			errchan <- err
+			return
 		}
 		c.m.addT3(seq, hwts)
 		log.Debugf("[%s] client -> %s (seq=%d, our T3=%v)", c.server, ptp.MessageDelayReq, seq, hwts)
@@ -249,24 +250,33 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 		for {
 			select {
 			case <-ctx.Done():
-				log.Debugf("[%s] cancelled main loop", c.server)
-				return ctx.Err()
+				log.Debugf("[%s] cancelled routine", c.server)
+				errchan <- ctx.Err()
+				return
 			case <-c.inChan:
 				latest, err := c.m.latest()
 				if err != nil {
 					log.Debugf("[%s] getting latest measurement: %v", c.server, err)
 					if !errors.Is(err, errNotEnoughData) {
-						return err
+						errchan <- err
+						return
 					}
 				} else {
 					log.Debugf("[%s] latest measurement: %+v", c.server, latest)
 					result.Measurement = latest
-					return nil
+					errchan <- nil
+					return
 				}
 			}
 		}
-	})
-	result.Error = eg.Wait()
+	}()
+
+	select {
+	case err := <-errchan:
+		result.Error = err
+	case <-ctx.Done():
+		result.Error = ctx.Err()
+	}
 
 	return &result
 }
