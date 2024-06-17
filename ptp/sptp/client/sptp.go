@@ -357,7 +357,6 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	p.lastTick = now
 	gmsTotal := len(results)
 	gmsAvailable := 0
-	announces := []*ptp.Announce{}
 	idsToClients := map[ptp.ClockIdentity]string{}
 	localPrioMap := map[ptp.ClockIdentity]int{}
 	for addr, res := range results {
@@ -373,7 +372,6 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 			continue
 		}
 		gmsAvailable++
-		announces = append(announces, &res.Measurement.Announce)
 		idsToClients[res.Measurement.Announce.GrandmasterIdentity] = addr
 		localPrioMap[res.Measurement.Announce.GrandmasterIdentity] = p.priorities[addr]
 	}
@@ -383,7 +381,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	} else {
 		p.stats.SetGmsAvailable(0)
 	}
-	best := bmca(announces, localPrioMap, p.cfg)
+	best := bmca(results, localPrioMap, p.cfg)
 	if best == nil {
 		log.Warningf("no Best Master selected")
 		p.bestGM = ""

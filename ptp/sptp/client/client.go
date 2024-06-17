@@ -230,7 +230,7 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 	defer cancel()
 	errchan := make(chan error)
 
-	result := RunResult{
+	result := &RunResult{
 		Server: c.server,
 	}
 	c.m.cleanup()
@@ -278,5 +278,5 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 		result.Error = ctx.Err()
 	}
 
-	return &result
+	return result
 }

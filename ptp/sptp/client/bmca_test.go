@@ -23,29 +23,53 @@ import (
 )
 
 func TestBmcaProperlyUsesClockQuality(t *testing.T) {
-	best := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass7}}}
-	worse := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass13}}}
-	selected := bmca([]*ptp.Announce{&best, &worse}, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
-	require.Equal(t, best, *selected)
+	results := map[string]*RunResult{
+		"best": {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass7}}}},
+		},
+		"worse": {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass13}}}},
+		},
+	}
+	selected := bmca(results, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
+	require.Equal(t, results["best"].Measurement.Announce, *selected)
 }
 
 func TestBmcaProperlyUsesLocalPriority(t *testing.T) {
-	best := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterPriority1: 1}}  // GrandMasterIdentity is ignored with TelcoDscmp
-	worse := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterPriority1: 2}} // GrandMasterIdentity is ignored with TelcoDscmp
-	selected := bmca([]*ptp.Announce{&best, &worse}, map[ptp.ClockIdentity]int{1: 1, 2: 2}, DefaultConfig())
-	require.Equal(t, best, *selected)
+	results := map[string]*RunResult{
+		"best": {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterPriority1: 1}}}, // GrandMasterIdentity is ignored with TelcoDscmp
+		},
+		"worse": {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterPriority1: 2}}}, // GrandMasterIdentity is ignored with TelcoDscmp
+		},
+	}
+	selected := bmca(results, map[ptp.ClockIdentity]int{1: 1, 2: 2}, DefaultConfig())
+	require.Equal(t, results["best"].Measurement.Announce, *selected)
 }
 
 func TestBmcaNoMasterForCalibrating(t *testing.T) {
-	best := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass13}}}
-	worse := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass52}}}
-	selected := bmca([]*ptp.Announce{&best, &worse}, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
+	results := map[string]*RunResult{
+		"best": {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass13}}}},
+		},
+		"worse": {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass52}}}},
+		},
+	}
+	selected := bmca(results, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
 	require.Empty(t, selected)
 }
 
 func TestBmcaNoMasterForLowAccuracy(t *testing.T) {
-	best := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockAccuracy: ptp.ClockAccuracyMicrosecond100}}}
-	worse := ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockAccuracy: ptp.ClockAccuracySecond10}}}
-	selected := bmca([]*ptp.Announce{&best, &worse}, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
+	results := map[string]*RunResult{
+		"best": {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockAccuracy: ptp.ClockAccuracyMicrosecond100}}}},
+		},
+		"worse": {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockAccuracy: ptp.ClockAccuracySecond10}}}},
+		},
+	}
+	selected := bmca(results, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
 	require.Empty(t, selected)
 }

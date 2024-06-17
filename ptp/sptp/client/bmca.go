@@ -22,14 +22,21 @@ import (
 	"github.com/facebook/time/ptp/sptp/bmc"
 )
 
-func bmca(msgs []*ptp.Announce, prios map[ptp.ClockIdentity]int, cfg *Config) *ptp.Announce {
-	if len(msgs) == 0 {
+func bmca(results map[string]*RunResult, prios map[ptp.ClockIdentity]int, cfg *Config) *ptp.Announce {
+	if len(results) == 0 {
 		return nil
 	}
-	best := msgs[0]
-	for _, msg := range msgs[1:] {
+	var best *ptp.Announce
+	for _, result := range results {
+		if result.Measurement == nil {
+			continue
+		}
+		if best == nil {
+			best = &result.Measurement.Announce
+			continue
+		}
 		a := best
-		b := msg
+		b := &result.Measurement.Announce
 		localPrioA := prios[a.AnnounceBody.GrandmasterIdentity]
 		localPrioB := prios[b.AnnounceBody.GrandmasterIdentity]
 		if bmc.TelcoDscmp(a, b, localPrioA, localPrioB) < 0 {
@@ -37,7 +44,7 @@ func bmca(msgs []*ptp.Announce, prios map[ptp.ClockIdentity]int, cfg *Config) *p
 		}
 	}
 	// Never select GM if worse (greater) than MaxClockClass or with clock accuracy worse than MaxClockAccuracy
-	if best.AnnounceBody.GrandmasterClockQuality.ClockClass > cfg.MaxClockClass || best.AnnounceBody.GrandmasterClockQuality.ClockAccuracy > cfg.MaxClockAccuracy {
+	if best == nil || best.AnnounceBody.GrandmasterClockQuality.ClockClass > cfg.MaxClockClass || best.AnnounceBody.GrandmasterClockQuality.ClockAccuracy > cfg.MaxClockAccuracy {
 		return nil
 	}
 	return best
