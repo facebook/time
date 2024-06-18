@@ -29,31 +29,31 @@ import (
 	unix "golang.org/x/sys/unix"
 )
 
-// MockUDPConn is a mock of UDPConn interface.
-type MockUDPConn struct {
+// MockUDPConnNoTS is a mock of UDPConnNoTS interface.
+type MockUDPConnNoTS struct {
 	ctrl     *gomock.Controller
-	recorder *MockUDPConnMockRecorder
+	recorder *MockUDPConnNoTSMockRecorder
 }
 
-// MockUDPConnMockRecorder is the mock recorder for MockUDPConn.
-type MockUDPConnMockRecorder struct {
-	mock *MockUDPConn
+// MockUDPConnNoTSMockRecorder is the mock recorder for MockUDPConnNoTS.
+type MockUDPConnNoTSMockRecorder struct {
+	mock *MockUDPConnNoTS
 }
 
-// NewMockUDPConn creates a new mock instance.
-func NewMockUDPConn(ctrl *gomock.Controller) *MockUDPConn {
-	mock := &MockUDPConn{ctrl: ctrl}
-	mock.recorder = &MockUDPConnMockRecorder{mock}
+// NewMockUDPConnNoTS creates a new mock instance.
+func NewMockUDPConnNoTS(ctrl *gomock.Controller) *MockUDPConnNoTS {
+	mock := &MockUDPConnNoTS{ctrl: ctrl}
+	mock.recorder = &MockUDPConnNoTSMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockUDPConn) EXPECT() *MockUDPConnMockRecorder {
+func (m *MockUDPConnNoTS) EXPECT() *MockUDPConnNoTSMockRecorder {
 	return m.recorder
 }
 
 // Close mocks base method.
-func (m *MockUDPConn) Close() error {
+func (m *MockUDPConnNoTS) Close() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Close")
 	ret0, _ := ret[0].(error)
@@ -61,29 +61,29 @@ func (m *MockUDPConn) Close() error {
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockUDPConnMockRecorder) Close() *gomock.Call {
+func (mr *MockUDPConnNoTSMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockUDPConn)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockUDPConnNoTS)(nil).Close))
 }
 
-// ReadFromUDP mocks base method.
-func (m *MockUDPConn) ReadFromUDP(b []byte) (int, *net.UDPAddr, error) {
+// ReadPacketBuf mocks base method.
+func (m *MockUDPConnNoTS) ReadPacketBuf(buf []byte) (int, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadFromUDP", b)
+	ret := m.ctrl.Call(m, "ReadPacketBuf", buf)
 	ret0, _ := ret[0].(int)
-	ret1, _ := ret[1].(*net.UDPAddr)
+	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
 
-// ReadFromUDP indicates an expected call of ReadFromUDP.
-func (mr *MockUDPConnMockRecorder) ReadFromUDP(b interface{}) *gomock.Call {
+// ReadPacketBuf indicates an expected call of ReadPacketBuf.
+func (mr *MockUDPConnNoTSMockRecorder) ReadPacketBuf(buf interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFromUDP", reflect.TypeOf((*MockUDPConn)(nil).ReadFromUDP), b)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadPacketBuf", reflect.TypeOf((*MockUDPConnNoTS)(nil).ReadPacketBuf), buf)
 }
 
 // WriteTo mocks base method.
-func (m *MockUDPConn) WriteTo(b []byte, addr net.Addr) (int, error) {
+func (m *MockUDPConnNoTS) WriteTo(b []byte, addr net.Addr) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WriteTo", b, addr)
 	ret0, _ := ret[0].(int)
@@ -92,9 +92,9 @@ func (m *MockUDPConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 }
 
 // WriteTo indicates an expected call of WriteTo.
-func (mr *MockUDPConnMockRecorder) WriteTo(b, addr interface{}) *gomock.Call {
+func (mr *MockUDPConnNoTSMockRecorder) WriteTo(b, addr interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteTo", reflect.TypeOf((*MockUDPConn)(nil).WriteTo), b, addr)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteTo", reflect.TypeOf((*MockUDPConnNoTS)(nil).WriteTo), b, addr)
 }
 
 // MockUDPConnWithTS is a mock of UDPConnWithTS interface.
@@ -134,22 +134,6 @@ func (mr *MockUDPConnWithTSMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockUDPConnWithTS)(nil).Close))
 }
 
-// ReadFromUDP mocks base method.
-func (m *MockUDPConnWithTS) ReadFromUDP(b []byte) (int, *net.UDPAddr, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadFromUDP", b)
-	ret0, _ := ret[0].(int)
-	ret1, _ := ret[1].(*net.UDPAddr)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// ReadFromUDP indicates an expected call of ReadFromUDP.
-func (mr *MockUDPConnWithTSMockRecorder) ReadFromUDP(b interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFromUDP", reflect.TypeOf((*MockUDPConnWithTS)(nil).ReadFromUDP), b)
-}
-
 // ReadPacketWithRXTimestampBuf mocks base method.
 func (m *MockUDPConnWithTS) ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, unix.Sockaddr, time.Time, error) {
 	m.ctrl.T.Helper()
@@ -165,21 +149,6 @@ func (m *MockUDPConnWithTS) ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, 
 func (mr *MockUDPConnWithTSMockRecorder) ReadPacketWithRXTimestampBuf(buf, oob interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadPacketWithRXTimestampBuf", reflect.TypeOf((*MockUDPConnWithTS)(nil).ReadPacketWithRXTimestampBuf), buf, oob)
-}
-
-// WriteTo mocks base method.
-func (m *MockUDPConnWithTS) WriteTo(b []byte, addr net.Addr) (int, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WriteTo", b, addr)
-	ret0, _ := ret[0].(int)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// WriteTo indicates an expected call of WriteTo.
-func (mr *MockUDPConnWithTSMockRecorder) WriteTo(b, addr interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteTo", reflect.TypeOf((*MockUDPConnWithTS)(nil).WriteTo), b, addr)
 }
 
 // WriteToWithTS mocks base method.

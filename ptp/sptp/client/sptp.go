@@ -62,7 +62,7 @@ type SPTP struct {
 	lastTick   time.Time
 
 	clockID ptp.ClockIdentity
-	genConn UDPConn
+	genConn UDPConnNoTS
 	// listening connection on port 319
 	eventConn UDPConnWithTS
 }
@@ -132,7 +132,10 @@ func (p *SPTP) init() error {
 	if err != nil {
 		return err
 	}
-	p.genConn = genConn
+	p.genConn, err = NewUDPConn(genConn)
+	if err != nil {
+		return err
+	}
 	// bind to event port
 	eventConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("::"), Port: ptp.PortEvent})
 	if err != nil {
@@ -219,17 +222,17 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 			announce := &ptp.Announce{}
 			buf := make([]byte, timestamp.PayloadSizeBytes)
 			for {
-				bbuf, addr, err := p.genConn.ReadFromUDP(buf)
+				bbuf, addr, err := p.genConn.ReadPacketBuf(buf)
 				if err != nil {
 					doneChan <- err
 					return
 				}
-				if addr == nil {
+				if addr == "" {
 					doneChan <- fmt.Errorf("received packet on port 320 with nil source address")
 					return
 				}
 				log.Debugf("got packet on port 320, n = %v, addr = %v", bbuf, addr)
-				cc, found := p.clients[addr.IP.String()]
+				cc, found := p.clients[addr]
 				if !found {
 					log.Warningf("ignoring packets from server %v", addr)
 					continue

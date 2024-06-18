@@ -28,18 +28,24 @@ import (
 	"github.com/facebook/time/timestamp"
 )
 
-// UDPConn describes what functionality we expect from UDP connection
-type UDPConn interface {
-	ReadFromUDP(b []byte) (int, *net.UDPAddr, error)
+// UDPConnNoTS describes what functionality we expect from UDP connection
+type UDPConnNoTS interface {
 	WriteTo(b []byte, addr net.Addr) (int, error)
+	ReadPacketBuf(buf []byte) (int, string, error)
 	Close() error
 }
 
 // UDPConnWithTS describes what functionality we expect from UDP connection that allows us to read TX timestamps
 type UDPConnWithTS interface {
-	UDPConn
 	WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, error)
 	ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, unix.Sockaddr, time.Time, error)
+	Close() error
+}
+
+// UDPConn is a wrapper around udp connection and a corresponding fd
+type UDPConn struct {
+	*net.UDPConn
+	connFd int
 }
 
 // UDPConnTS is a wrapper around udp connection and a corresponding fd
@@ -47,6 +53,25 @@ type UDPConnTS struct {
 	*net.UDPConn
 	connFd int
 	l      sync.Mutex
+}
+
+// NewUDPConn initialises a new struct UDPConn
+func NewUDPConn(conn *net.UDPConn) (*UDPConn, error) {
+	// get FD of the connection. Can be optimized by doing this when connection is created
+	connFd, err := timestamp.ConnFd(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	// set it to blocking mode, otherwise recvmsg will just return with nothing most of the time
+	if err = unix.SetNonblock(connFd, false); err != nil {
+		return nil, fmt.Errorf("failed to set event socket to blocking: %w", err)
+	}
+
+	return &UDPConn{
+		UDPConn: conn,
+		connFd:  connFd,
+	}, nil
 }
 
 // NewUDPConnTS initialises a new struct UDPConnTS
@@ -113,4 +138,14 @@ func (c *UDPConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, erro
 // ReadPacketWithRXTimestampBuf reads bytes and a timestamp from underlying fd
 func (c *UDPConnTS) ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, unix.Sockaddr, time.Time, error) {
 	return timestamp.ReadPacketWithRXTimestampBuf(c.connFd, buf, oob)
+}
+
+// ReadPacketBuf reads bytes from underlying fd
+func (c *UDPConn) ReadPacketBuf(buf []byte) (int, string, error) {
+	n, saddr, err := unix.Recvfrom(c.connFd, buf, 0)
+	if err != nil {
+		return 0, "", err
+	}
+
+	return n, timestamp.SockaddrToIP(saddr).String(), err
 }
