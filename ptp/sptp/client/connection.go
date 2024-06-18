@@ -19,6 +19,7 @@ package client
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -31,7 +32,7 @@ import (
 // UDPConnNoTS describes what functionality we expect from UDP connection
 type UDPConnNoTS interface {
 	WriteTo(b []byte, addr net.Addr) (int, error)
-	ReadPacketBuf(buf []byte) (int, string, error)
+	ReadPacketBuf(buf []byte) (int, netip.Addr, error)
 	Close() error
 }
 
@@ -141,11 +142,11 @@ func (c *UDPConnTS) ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, unix.Soc
 }
 
 // ReadPacketBuf reads bytes from underlying fd
-func (c *UDPConn) ReadPacketBuf(buf []byte) (int, string, error) {
+func (c *UDPConn) ReadPacketBuf(buf []byte) (int, netip.Addr, error) {
 	n, saddr, err := unix.Recvfrom(c.connFd, buf, 0)
 	if err != nil {
-		return 0, "", err
+		return 0, netip.Addr{}, err
 	}
 
-	return n, timestamp.SockaddrToIP(saddr).String(), err
+	return n, timestamp.SockaddrToAddr(saddr), err
 }

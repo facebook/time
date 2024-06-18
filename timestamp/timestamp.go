@@ -21,6 +21,7 @@ package timestamp
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -221,6 +222,18 @@ func SockaddrToIP(sa unix.Sockaddr) net.IP {
 		return sa.Addr[0:]
 	}
 	return nil
+}
+
+// SockaddrToAddr converts socket address to a netip.Addr
+// Somewhat copy from https://github.com/golang/go/blob/658b5e66ecbc41a49e6fb5aa63c5d9c804cf305f/src/net/udpsock_posix.go#L15
+func SockaddrToAddr(sa unix.Sockaddr) netip.Addr {
+	switch sa := sa.(type) {
+	case *unix.SockaddrInet4:
+		return netip.AddrFrom4(sa.Addr)
+	case *unix.SockaddrInet6:
+		return netip.AddrFrom16(sa.Addr)
+	}
+	return netip.Addr{}
 }
 
 // SockaddrToPort converts socket address to an IP

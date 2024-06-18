@@ -19,6 +19,7 @@ package client
 import (
 	"encoding/binary"
 	"fmt"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -30,10 +31,10 @@ import (
 
 func TestRunResultToStatsError(t *testing.T) {
 	r := &RunResult{
-		Server: "192.168.0.10",
+		Server: netip.MustParseAddr("192.168.0.10"),
 		Error:  fmt.Errorf("ooops"),
 	}
-	got := runResultToGMStats("192.168.0.10", r, 1, false)
+	got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, false)
 	want := &gmstats.Stat{
 		GMAddress: "192.168.0.10",
 		Priority3: 1,
@@ -67,7 +68,7 @@ func TestRunResultToStats(t *testing.T) {
 	ts, err := time.Parse(time.RFC3339, "2021-05-21T13:32:05+01:00")
 	require.Nil(t, err)
 	r := &RunResult{
-		Server: "192.168.0.10",
+		Server: netip.MustParseAddr("192.168.0.10"),
 		Measurement: &MeasurementResult{
 			Delay:             299995 * time.Microsecond,
 			S2CDelay:          10 * time.Microsecond,
@@ -101,12 +102,12 @@ func TestRunResultToStats(t *testing.T) {
 	}
 
 	t.Run("not selected", func(t *testing.T) {
-		got := runResultToGMStats("192.168.0.10", r, 3, false)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false)
 		require.Equal(t, want, got)
 	})
 	want.Selected = true
 	t.Run("selected", func(t *testing.T) {
-		got := runResultToGMStats("192.168.0.10", r, 3, true)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true)
 		require.Equal(t, want, got)
 	})
 }

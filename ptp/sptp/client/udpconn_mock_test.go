@@ -22,6 +22,7 @@ package client
 
 import (
 	net "net"
+	netip "net/netip"
 	reflect "reflect"
 	time "time"
 
@@ -67,11 +68,11 @@ func (mr *MockUDPConnNoTSMockRecorder) Close() *gomock.Call {
 }
 
 // ReadPacketBuf mocks base method.
-func (m *MockUDPConnNoTS) ReadPacketBuf(buf []byte) (int, string, error) {
+func (m *MockUDPConnNoTS) ReadPacketBuf(buf []byte) (int, netip.Addr, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadPacketBuf", buf)
 	ret0, _ := ret[0].(int)
-	ret1, _ := ret[1].(string)
+	ret1, _ := ret[1].(netip.Addr)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }

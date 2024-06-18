@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -54,11 +55,11 @@ type SPTP struct {
 
 	clock Clock
 
-	bestGM string
+	bestGM netip.Addr
 
-	clients    map[string]*Client
-	priorities map[string]int
-	backoff    map[string]*backoff
+	clients    map[netip.Addr]*Client
+	priorities map[netip.Addr]int
+	backoff    map[netip.Addr]*backoff
 	lastTick   time.Time
 
 	clockID ptp.ClockIdentity
@@ -83,19 +84,21 @@ func NewSPTP(cfg *Config, stats StatsServer) (*SPTP, error) {
 }
 
 func (p *SPTP) initClients() error {
-	p.clients = map[string]*Client{}
-	p.priorities = map[string]int{}
-	p.backoff = map[string]*backoff{}
+	p.clients = map[netip.Addr]*Client{}
+	p.priorities = map[netip.Addr]int{}
+	p.backoff = map[netip.Addr]*backoff{}
 	if p.cfg.ParallelTX {
 		log.Info("Initialise clients with parallel TX feature")
 	}
 	for server, prio := range p.cfg.Servers {
 		// normalize the address
-		ip := net.ParseIP(server)
-		ns := ip.String()
+		ip, err := netip.ParseAddr(server)
+		if err != nil {
+			return fmt.Errorf("parsing server address %q: %w", server, err)
+		}
 		econn := p.eventConn
 		if p.cfg.ParallelTX {
-			conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: ip, Port: ptp.PortEvent})
+			conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: ip.AsSlice(), Port: ptp.PortEvent})
 			if err != nil {
 				return err
 			}
@@ -104,13 +107,13 @@ func (p *SPTP) initClients() error {
 				return err
 			}
 		}
-		c, err := NewClient(ns, ptp.PortEvent, p.clockID, econn, p.cfg, p.stats)
+		c, err := NewClient(ip, ptp.PortEvent, p.clockID, econn, p.cfg, p.stats)
 		if err != nil {
-			return fmt.Errorf("initializing client %q: %w", ns, err)
+			return fmt.Errorf("initializing client %v: %w", ip, err)
 		}
-		p.clients[ns] = c
-		p.priorities[ns] = prio
-		p.backoff[ns] = newBackoff(p.cfg.Backoff)
+		p.clients[ip] = c
+		p.priorities[ip] = prio
+		p.backoff[ip] = newBackoff(p.cfg.Backoff)
 	}
 	return nil
 }
@@ -195,13 +198,13 @@ func (p *SPTP) init() error {
 
 // ptping probing if packet is ptping before discarding it
 // It's used for external pingers such as ptping and not required for sptp itself
-func (p *SPTP) ptping(sourceIP net.IP, sourcePort int, response []byte, rxtx time.Time) error {
+func (p *SPTP) ptping(sourceIP netip.Addr, sourcePort int, response []byte, rxtx time.Time) error {
 	// Has to be a delay request from ptping
 	b := &ptp.SyncDelayReq{}
 	if err := ptp.FromBytes(response, b); err != nil {
 		return fmt.Errorf("failed to read delay request %w", err)
 	}
-	c, err := NewClient(sourceIP.String(), sourcePort, p.clockID, p.eventConn, p.cfg, p.stats)
+	c, err := NewClient(sourceIP, sourcePort, p.clockID, p.eventConn, p.cfg, p.stats)
 	if err != nil {
 		return fmt.Errorf("failed to respond to a delay request %w", err)
 	}
@@ -227,7 +230,7 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					doneChan <- err
 					return
 				}
-				if addr == "" {
+				if !addr.IsValid() {
 					doneChan <- fmt.Errorf("received packet on port 320 with nil source address")
 					return
 				}
@@ -270,8 +273,8 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					return
 				}
 				log.Debugf("got packet on port 319, addr = %v", addr)
-				ip := timestamp.SockaddrToIP(addr)
-				cc, found := p.clients[ip.String()]
+				ip := timestamp.SockaddrToAddr(addr)
+				cc, found := p.clients[ip]
 				if !found {
 					log.Warningf("ignoring packets from server %v. Trying ptping", ip)
 					// Try ptping
@@ -301,7 +304,7 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func (p *SPTP) handleExchangeError(addr string, err error, tickDuration time.Duration) {
+func (p *SPTP) handleExchangeError(addr netip.Addr, err error, tickDuration time.Duration) {
 	if errors.Is(err, errBackoff) {
 		b := p.backoff[addr].dec(tickDuration)
 		log.Debugf("backoff %s: %s", addr, b)
@@ -324,7 +327,7 @@ func (p *SPTP) setMeanFreq() float64 {
 }
 
 // reprioritize is pushing former "best gm" to the back of the list
-func (p *SPTP) reprioritize(bestAddr string) {
+func (p *SPTP) reprioritize(bestAddr netip.Addr) {
 	// by how much we should shift the list
 	k := p.priorities[bestAddr] - 1
 	for addr, prio := range p.priorities {
@@ -336,7 +339,7 @@ func (p *SPTP) reprioritize(bestAddr string) {
 	}
 }
 
-func (p *SPTP) processResults(results map[string]*RunResult) {
+func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 	defer func() {
 		for addr, res := range results {
 			s := runResultToGMStats(addr, res, p.priorities[addr], addr == p.bestGM)
@@ -360,7 +363,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	p.lastTick = now
 	gmsTotal := len(results)
 	gmsAvailable := 0
-	idsToClients := map[ptp.ClockIdentity]string{}
+	idsToClients := map[ptp.ClockIdentity]netip.Addr{}
 	localPrioMap := map[ptp.ClockIdentity]int{}
 	for addr, res := range results {
 		if res.Error == nil {
@@ -387,7 +390,7 @@ func (p *SPTP) processResults(results map[string]*RunResult) {
 	best := bmca(results, localPrioMap, p.cfg)
 	if best == nil {
 		log.Warningf("no Best Master selected")
-		p.bestGM = ""
+		p.bestGM = netip.Addr{}
 		freqAdj := p.setMeanFreq()
 		log.Infof("offset Unknown s%d freq %+7.0f path delay Unknown", servo.StateHoldover, freqAdj)
 		return
@@ -442,7 +445,7 @@ func (p *SPTP) runInternal(ctx context.Context) error {
 
 	tick := func() {
 		eg, ictx := errgroup.WithContext(ctx)
-		results := map[string]*RunResult{}
+		results := map[netip.Addr]*RunResult{}
 		for addr, c := range p.clients {
 			addr := addr
 			c := c

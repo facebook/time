@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -51,7 +52,7 @@ func TestProcessResultsNoResults(t *testing.T) {
 		pi:    mockServo,
 		stats: mockStatsServer,
 	}
-	results := map[string]*RunResult{}
+	results := map[netip.Addr]*RunResult{}
 	mockServo.EXPECT().MeanFreq()
 	mockServo.EXPECT().SetLastFreq(float64(0))
 	mockClock.EXPECT().AdjFreqPPB(gomock.Any())
@@ -59,7 +60,7 @@ func TestProcessResultsNoResults(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsAvailable(0)
 	p.processResults(results)
 
-	require.Equal(t, "", p.bestGM)
+	require.Equal(t, netip.Addr{}, p.bestGM)
 }
 
 func TestProcessResultsEmptyResult(t *testing.T) {
@@ -81,8 +82,8 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	}
 	err := p.initClients()
 	require.NoError(t, err)
-	results := map[string]*RunResult{
-		"192.168.0.10": {},
+	results := map[netip.Addr]*RunResult{
+		netip.MustParseAddr("192.168.0.10"): {},
 	}
 	meanFreq := 10.2
 	mockServo.EXPECT().MeanFreq().Return(meanFreq)
@@ -92,7 +93,7 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsAvailable(0)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	p.processResults(results)
-	require.Equal(t, "", p.bestGM)
+	require.Equal(t, netip.Addr{}, p.bestGM)
 }
 
 func TestProcessResultsSingle(t *testing.T) {
@@ -124,9 +125,9 @@ func TestProcessResultsSingle(t *testing.T) {
 		stats: mockStatsServer,
 		cfg:   cfg,
 	}
-	results := map[string]*RunResult{
-		"192.168.0.10": {
-			Server: "192.168.0.10",
+	results := map[netip.Addr]*RunResult{
+		netip.MustParseAddr("192.168.0.10"): {
+			Server: netip.MustParseAddr("192.168.0.10"),
 			Measurement: &MeasurementResult{
 				Delay:     299995 * time.Microsecond,
 				S2CDelay:  100,
@@ -140,18 +141,18 @@ func TestProcessResultsSingle(t *testing.T) {
 	require.NoError(t, err)
 	// we step here
 	p.processResults(results)
-	require.Equal(t, "192.168.0.10", p.bestGM)
+	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 
 	// we have to wait a second to avoid "samples are too fast" error
 	time.Sleep(time.Second)
-	results["192.168.0.10"].Measurement.Offset = -100001 * time.Microsecond
+	results[netip.MustParseAddr("192.168.0.10")].Measurement.Offset = -100001 * time.Microsecond
 	// we adj here
 	mockStatsServer.EXPECT().SetGmsTotal(1)
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetTickDuration(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	p.processResults(results)
-	require.Equal(t, "192.168.0.10", p.bestGM)
+	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 }
 
 func TestProcessResultsFastSamples(t *testing.T) {
@@ -183,9 +184,9 @@ func TestProcessResultsFastSamples(t *testing.T) {
 		stats: mockStatsServer,
 		cfg:   cfg,
 	}
-	results := map[string]*RunResult{
-		"192.168.0.10": {
-			Server: "192.168.0.10",
+	results := map[netip.Addr]*RunResult{
+		netip.MustParseAddr("192.168.0.10"): {
+			Server: netip.MustParseAddr("192.168.0.10"),
 			Measurement: &MeasurementResult{
 				Delay:     299995 * time.Microsecond,
 				S2CDelay:  100,
@@ -199,7 +200,7 @@ func TestProcessResultsFastSamples(t *testing.T) {
 	require.NoError(t, err)
 	// we step here
 	p.processResults(results)
-	require.Equal(t, "192.168.0.10", p.bestGM)
+	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 
 	// we stick to holdover mode and mean freq
 	mockStatsServer.EXPECT().SetGmsTotal(1)
@@ -207,7 +208,7 @@ func TestProcessResultsFastSamples(t *testing.T) {
 	mockStatsServer.EXPECT().SetTickDuration(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	p.processResults(results)
-	require.Equal(t, "192.168.0.10", p.bestGM)
+	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 }
 
 func TestProcessResultsMulti(t *testing.T) {
@@ -249,9 +250,9 @@ func TestProcessResultsMulti(t *testing.T) {
 	announce1 := announcePkt(1)
 	announce1.GrandmasterIdentity = ptp.ClockIdentity(0x042)
 	announce1.GrandmasterPriority2 = 1
-	results := map[string]*RunResult{
-		"192.168.0.10": {
-			Server: "192.168.0.10",
+	results := map[netip.Addr]*RunResult{
+		netip.MustParseAddr("192.168.0.10"): {
+			Server: netip.MustParseAddr("192.168.0.10"),
 			Measurement: &MeasurementResult{
 				Delay:     299995 * time.Microsecond,
 				S2CDelay:  100,
@@ -261,21 +262,21 @@ func TestProcessResultsMulti(t *testing.T) {
 				Announce:  *announce0,
 			},
 		},
-		"192.168.0.11": {
-			Server: "192.168.0.11",
+		netip.MustParseAddr("192.168.0.11"): {
+			Server: netip.MustParseAddr("192.168.0.11"),
 			Error:  fmt.Errorf("context deadline exceeded"),
 		},
 	}
 	// we step here
 	p.processResults(results)
-	require.Equal(t, "192.168.0.10", p.bestGM)
+	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 
 	// we have to wait a second to avoid "samples are too fast" error
 	time.Sleep(time.Second)
 
-	results["192.168.0.10"].Measurement.Offset = -100001 * time.Microsecond
-	results["192.168.0.11"].Error = nil
-	results["192.168.0.11"].Measurement = &MeasurementResult{
+	results[netip.MustParseAddr("192.168.0.10")].Measurement.Offset = -100001 * time.Microsecond
+	results[netip.MustParseAddr("192.168.0.11")].Error = nil
+	results[netip.MustParseAddr("192.168.0.11")].Measurement = &MeasurementResult{
 		Delay:     299995 * time.Microsecond,
 		S2CDelay:  90,
 		C2SDelay:  120,
@@ -290,7 +291,7 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	p.processResults(results)
-	require.Equal(t, "192.168.0.11", p.bestGM)
+	require.Equal(t, netip.MustParseAddr("192.168.0.11"), p.bestGM)
 }
 
 func TestRunInternalAllDead(t *testing.T) {
@@ -363,9 +364,9 @@ func TestRunFiltered(t *testing.T) {
 		stats: mockStatsServer,
 		cfg:   cfg,
 	}
-	results := map[string]*RunResult{
-		"192.168.0.10": {
-			Server: "192.168.0.10",
+	results := map[netip.Addr]*RunResult{
+		netip.MustParseAddr("192.168.0.10"): {
+			Server: netip.MustParseAddr("192.168.0.10"),
 			Measurement: &MeasurementResult{
 				Delay:     299995 * time.Microsecond,
 				S2CDelay:  100,
@@ -379,8 +380,8 @@ func TestRunFiltered(t *testing.T) {
 	require.NoError(t, err)
 	// we step here
 	p.processResults(results)
-	require.Equal(t, "192.168.0.10", p.bestGM)
-	require.Nil(t, nil, results["192.168.0.10"])
+	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
+	require.Nil(t, nil, results[netip.MustParseAddr("192.168.0.10")])
 }
 
 func TestRunListenerNoAddr(t *testing.T) {
@@ -422,7 +423,7 @@ func TestRunListenerError(t *testing.T) {
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).Return(0, &unix.SockaddrInet6{}, time.Time{}, fmt.Errorf("some error")).AnyTimes()
 	mockGenConn := NewMockUDPConnNoTS(ctrl)
-	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).Return(2, "", fmt.Errorf("some error")).AnyTimes()
+	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).Return(2, netip.Addr{}, fmt.Errorf("some error")).AnyTimes()
 	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
@@ -481,10 +482,10 @@ func TestRunListenerGood(t *testing.T) {
 	}).AnyTimes()
 
 	mockGenConn := NewMockUDPConnNoTS(ctrl)
-	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).DoAndReturn(func(b []byte) (int, string, error) {
+	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).DoAndReturn(func(b []byte) (int, netip.Addr, error) {
 		// limit how many we send, so we don't overwhelm the client. packets from uknown IPs will be discarded
 		if sentGen > 10 {
-			return 0, "whatever", nil
+			return 0, netip.MustParseAddr("4.4.4.4"), nil
 		}
 		sentGen++
 		addr := "192.168.0.11"
@@ -497,7 +498,7 @@ func TestRunListenerGood(t *testing.T) {
 		b[1] = 3
 		b[2] = 7
 		b[3] = 4
-		return len(announceBytes), addr, nil
+		return len(announceBytes), netip.MustParseAddr(addr), nil
 	}).AnyTimes()
 
 	mockClock := NewMockClock(ctrl)
@@ -535,9 +536,9 @@ LOOP:
 		select {
 		case <-nctx.Done():
 			break LOOP
-		case <-p.clients["192.168.0.10"].inChan:
+		case <-p.clients[netip.MustParseAddr("192.168.0.10")].inChan:
 			received10++
-		case <-p.clients["192.168.0.11"].inChan:
+		case <-p.clients[netip.MustParseAddr("192.168.0.11")].inChan:
 			received11++
 		}
 	}
@@ -564,7 +565,7 @@ func TestPTPing(t *testing.T) {
 	}
 
 	response := []byte{}
-	ip := net.ParseIP("1.2.3.4")
+	ip := netip.MustParseAddr("1.2.3.4")
 
 	err := p.ptping(ip, 1234, response, time.Time{})
 	require.Equal(t, "failed to read delay request not enough data to decode SyncDelayReq", err.Error())
@@ -577,31 +578,35 @@ func TestPTPing(t *testing.T) {
 }
 
 func TestShiftPriorities(t *testing.T) {
+	o := netip.MustParseAddr("1.1.1.1")
+	l := netip.MustParseAddr("1.1.1.2")
+	e := netip.MustParseAddr("1.1.1.3")
+	g := netip.MustParseAddr("1.1.1.4")
 	p := &SPTP{
-		priorities: map[string]int{
-			"O": 1,
-			"L": 2,
-			"E": 3,
-			"G": 4,
+		priorities: map[netip.Addr]int{
+			o: 1,
+			l: 2,
+			e: 3,
+			g: 4,
 		},
 	}
 
-	p.reprioritize("L")
-	require.Equal(t, 1, p.priorities["L"])
-	require.Equal(t, 2, p.priorities["E"])
-	require.Equal(t, 3, p.priorities["G"])
-	require.Equal(t, 4, p.priorities["O"])
+	p.reprioritize(l)
+	require.Equal(t, 1, p.priorities[l])
+	require.Equal(t, 2, p.priorities[e])
+	require.Equal(t, 3, p.priorities[g])
+	require.Equal(t, 4, p.priorities[o])
 
-	p.reprioritize("O")
-	require.Equal(t, 1, p.priorities["O"])
-	require.Equal(t, 2, p.priorities["L"])
-	require.Equal(t, 3, p.priorities["E"])
-	require.Equal(t, 4, p.priorities["G"])
+	p.reprioritize(o)
+	require.Equal(t, 1, p.priorities[o])
+	require.Equal(t, 2, p.priorities[l])
+	require.Equal(t, 3, p.priorities[e])
+	require.Equal(t, 4, p.priorities[g])
 
 	// Shift by 0 (no change)
-	p.reprioritize("O")
-	require.Equal(t, 1, p.priorities["O"])
-	require.Equal(t, 2, p.priorities["L"])
-	require.Equal(t, 3, p.priorities["E"])
-	require.Equal(t, 4, p.priorities["G"])
+	p.reprioritize(o)
+	require.Equal(t, 1, p.priorities[o])
+	require.Equal(t, 2, p.priorities[l])
+	require.Equal(t, 3, p.priorities[e])
+	require.Equal(t, 4, p.priorities[g])
 }

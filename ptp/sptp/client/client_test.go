@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -80,7 +81,7 @@ func TestClientRun(t *testing.T) {
 		},
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := NewClient("127.0.0.1", ptp.PortEvent, cid, eventConn, &cfg, statsServer)
+	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 
 	// put stuff into measurements to make sure it got cleaned before the run
@@ -116,7 +117,7 @@ func TestClientRun(t *testing.T) {
 	runResult := c.RunOnce(ctx, defaultTestTimeout)
 	require.NotNil(t, runResult)
 	require.NoError(t, runResult.Error, "full client run should succeed")
-	require.Equal(t, "127.0.0.1", runResult.Server, "run result should have correct server")
+	require.Equal(t, netip.MustParseAddr("127.0.0.1"), runResult.Server, "run result should have correct server")
 	require.NotNil(t, runResult.Measurement, "run result should have measurements")
 	require.Equal(t, *announce, runResult.Measurement.Announce)
 	require.NotEqual(t, 0, runResult.Measurement.Delay)
@@ -143,7 +144,7 @@ func TestClientTimeout(t *testing.T) {
 		},
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := NewClient("127.0.0.1", ptp.PortEvent, cid, eventConn, &cfg, statsServer)
+	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 	statsServer.EXPECT().IncTXDelayReq()
 	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any())
@@ -169,7 +170,7 @@ func TestClientBadPacket(t *testing.T) {
 		},
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := NewClient("127.0.0.1", ptp.PortEvent, cid, eventConn, &cfg, statsServer)
+	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 
 	// handle whatever client is sending over eventConn
@@ -187,7 +188,7 @@ func TestClientBadPacket(t *testing.T) {
 	runResult := c.RunOnce(ctx, defaultTestTimeout)
 	require.NotNil(t, runResult)
 	require.Error(t, runResult.Error, "full client run should fail")
-	require.Equal(t, "127.0.0.1", runResult.Server, "run result should have correct server")
+	require.Equal(t, netip.MustParseAddr("127.0.0.1"), runResult.Server, "run result should have correct server")
 }
 
 func TestClientIncrementSequence(t *testing.T) {
@@ -207,7 +208,7 @@ func TestClientIncrementSequence(t *testing.T) {
 		SequenceIDMaskValue: 3,
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := NewClient("127.0.0.1", ptp.PortEvent, cid, eventConn, &cfg, statsServer)
+	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 	require.Equal(t, uint16(0x3FFF), c.sequenceIDMask)
 	require.Equal(t, uint16(0xC000), c.sequenceIDValue)
