@@ -61,15 +61,6 @@ struct phc_time_res {
   int64_t delay; // mean delay of several requests
 };
 
-static inline uint64_t fbclock_clockdata_crc_DEPRECATED(
-    fbclock_clockdata* value) {
-  // TODO: Remove deprecated function after phase is rolled out.
-  uint64_t counter = fbclock_crc64(value->ingress_time_ns, 0x04C11DB7);
-  counter = fbclock_crc64(value->error_bound_ns, counter);
-  counter = fbclock_crc64(value->holdover_multiplier_ns, counter);
-  return counter;
-}
-
 static inline uint64_t fbclock_clockdata_crc(fbclock_clockdata* value) {
   uint64_t counter = fbclock_crc64(0xFFFFFFFF, value->ingress_time_ns);
   counter = fbclock_crc64(counter, value->error_bound_ns);
@@ -99,12 +90,6 @@ int fbclock_clockdata_load_data(
     uint64_t our_crc = fbclock_clockdata_crc(data);
     if (our_crc == crc) {
       fbclock_debug_print("reading clock data took %d tries\n", i + 1);
-      return FBCLOCK_E_NO_ERROR;
-    }
-    // TODO: Remove deprecated block after phase is rolled out.
-    uint64_t our_crc_DEPRECATED = fbclock_clockdata_crc_DEPRECATED(data);
-    if (our_crc_DEPRECATED == crc) {
-      fbclock_debug_print("reading clock data took %d tries (old)\n", i + 1);
       return FBCLOCK_E_NO_ERROR;
     }
   }
