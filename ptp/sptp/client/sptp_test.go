@@ -388,8 +388,8 @@ func TestRunListenerNoAddr(t *testing.T) {
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockGenConn := NewMockUDPConn(ctrl)
-	mockGenConn.EXPECT().ReadFromUDP(gomock.Any()).AnyTimes()
+	mockGenConn := NewMockUDPConnNoTS(ctrl)
+	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).AnyTimes()
 	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
@@ -421,8 +421,8 @@ func TestRunListenerError(t *testing.T) {
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).Return(0, &unix.SockaddrInet6{}, time.Time{}, fmt.Errorf("some error")).AnyTimes()
-	mockGenConn := NewMockUDPConn(ctrl)
-	mockGenConn.EXPECT().ReadFromUDP(gomock.Any()).Return(2, nil, fmt.Errorf("some error")).AnyTimes()
+	mockGenConn := NewMockUDPConnNoTS(ctrl)
+	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).Return(2, "", fmt.Errorf("some error")).AnyTimes()
 	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
@@ -480,20 +480,16 @@ func TestRunListenerGood(t *testing.T) {
 		return len(syncBytes), &unix.SockaddrInet4{Addr: addrBytes, Port: 319}, time.Now(), nil
 	}).AnyTimes()
 
-	mockGenConn := NewMockUDPConn(ctrl)
-	mockGenConn.EXPECT().ReadFromUDP(gomock.Any()).DoAndReturn(func(b []byte) (int, *net.UDPAddr, error) {
+	mockGenConn := NewMockUDPConnNoTS(ctrl)
+	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).DoAndReturn(func(b []byte) (int, string, error) {
 		// limit how many we send, so we don't overwhelm the client. packets from uknown IPs will be discarded
 		if sentGen > 10 {
-			return 0, &net.UDPAddr{}, nil
+			return 0, "whatever", nil
 		}
 		sentGen++
 		addr := "192.168.0.11"
 		if sentGen%2 == 0 {
 			addr = "192.168.0.10"
-		}
-		udpAddr := &net.UDPAddr{
-			IP:   net.ParseIP(addr),
-			Port: 320,
 		}
 		clear(b)
 		b = announceBytes
@@ -501,7 +497,7 @@ func TestRunListenerGood(t *testing.T) {
 		b[1] = 3
 		b[2] = 7
 		b[3] = 4
-		return len(announceBytes), udpAddr, nil
+		return len(announceBytes), addr, nil
 	}).AnyTimes()
 
 	mockClock := NewMockClock(ctrl)
