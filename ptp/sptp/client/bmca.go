@@ -17,12 +17,14 @@ limitations under the License.
 package client
 
 import (
+	"net/netip"
+
 	ptp "github.com/facebook/time/ptp/protocol"
 
 	"github.com/facebook/time/ptp/sptp/bmc"
 )
 
-func bmca(results map[string]*RunResult, prios map[ptp.ClockIdentity]int, cfg *Config) *ptp.Announce {
+func bmca(results map[netip.Addr]*RunResult, prios map[ptp.ClockIdentity]int, cfg *Config) *ptp.Announce {
 	if len(results) == 0 {
 		return nil
 	}

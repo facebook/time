@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/facebook/time/dscp"
@@ -65,7 +66,7 @@ func (t *timestamps) reset() {
 type ptping struct {
 	iface  string
 	dscp   int
-	target string
+	target netip.Addr
 
 	clockID   ptp.ClockIdentity
 	eventConn client.UDPConnWithTS
@@ -171,9 +172,13 @@ func (p *ptping) runReader() error {
 func ptpingRun(iface string, dscp int, server string, count int, timeout time.Duration) error {
 	var err error
 	p := &ptping{
-		iface:  iface,
-		dscp:   dscp,
-		target: server,
+		iface: iface,
+		dscp:  dscp,
+	}
+
+	p.target, err = netip.ParseAddr(server)
+	if err != nil {
+		return err
 	}
 
 	if err = p.init(); err != nil {

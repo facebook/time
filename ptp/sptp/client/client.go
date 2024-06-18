@@ -23,6 +23,7 @@ import (
 	"fmt"
 	rnd "math/rand"
 	"net"
+	"net/netip"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -71,14 +72,14 @@ func ReqAnnounce(clockID ptp.ClockIdentity, portID uint16, ts time.Time) *ptp.An
 
 // RunResult is what we return from single client-server interaction
 type RunResult struct {
-	Server      string
+	Server      netip.Addr
 	Measurement *MeasurementResult
 	Error       error
 }
 
 // Client is a part of PTPNG that talks to only one server
 type Client struct {
-	server string
+	server netip.Addr
 	// packet sequence counter
 	eventSequence uint16
 	// mask for sequence ID value
@@ -153,10 +154,10 @@ func (c *Client) SendAnnounce(p *ptp.Announce) (uint16, error) {
 }
 
 // NewClient initializes sptp client
-func NewClient(target string, targetPort int, clockID ptp.ClockIdentity, eventConn UDPConnWithTS, cfg *Config, stats StatsServer) (*Client, error) {
+func NewClient(target netip.Addr, targetPort int, clockID ptp.ClockIdentity, eventConn UDPConnWithTS, cfg *Config, stats StatsServer) (*Client, error) {
 	// addresses
 	// where to send to
-	eventAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(target, fmt.Sprintf("%d", targetPort)))
+	eventAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(target.String(), fmt.Sprintf("%d", targetPort)))
 	if err != nil {
 		return nil, err
 	}

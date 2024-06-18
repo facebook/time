@@ -17,43 +17,48 @@ limitations under the License.
 package client
 
 import (
+	"net/netip"
+	"testing"
+
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
+var best = netip.MustParseAddr("1.1.1.1")
+var worse = netip.MustParseAddr("4.4.4.4")
+
 func TestBmcaProperlyUsesClockQuality(t *testing.T) {
-	results := map[string]*RunResult{
-		"best": {
+	results := map[netip.Addr]*RunResult{
+		best: {
 			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass7}}}},
 		},
-		"worse": {
+		worse: {
 			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass13}}}},
 		},
 	}
 	selected := bmca(results, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
-	require.Equal(t, results["best"].Measurement.Announce, *selected)
+	require.Equal(t, results[best].Measurement.Announce, *selected)
 }
 
 func TestBmcaProperlyUsesLocalPriority(t *testing.T) {
-	results := map[string]*RunResult{
-		"best": {
+	results := map[netip.Addr]*RunResult{
+		best: {
 			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterPriority1: 1}}}, // GrandMasterIdentity is ignored with TelcoDscmp
 		},
-		"worse": {
+		worse: {
 			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterPriority1: 2}}}, // GrandMasterIdentity is ignored with TelcoDscmp
 		},
 	}
 	selected := bmca(results, map[ptp.ClockIdentity]int{1: 1, 2: 2}, DefaultConfig())
-	require.Equal(t, results["best"].Measurement.Announce, *selected)
+	require.Equal(t, results[best].Measurement.Announce, *selected)
 }
 
 func TestBmcaNoMasterForCalibrating(t *testing.T) {
-	results := map[string]*RunResult{
-		"best": {
+	results := map[netip.Addr]*RunResult{
+		best: {
 			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass13}}}},
 		},
-		"worse": {
+		worse: {
 			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass52}}}},
 		},
 	}
@@ -62,11 +67,11 @@ func TestBmcaNoMasterForCalibrating(t *testing.T) {
 }
 
 func TestBmcaNoMasterForLowAccuracy(t *testing.T) {
-	results := map[string]*RunResult{
-		"best": {
+	results := map[netip.Addr]*RunResult{
+		best: {
 			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockAccuracy: ptp.ClockAccuracyMicrosecond100}}}},
 		},
-		"worse": {
+		worse: {
 			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockAccuracy: ptp.ClockAccuracySecond10}}}},
 		},
 	}
