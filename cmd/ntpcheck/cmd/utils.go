@@ -19,6 +19,7 @@ package cmd
 import (
 	"crypto/md5"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -89,9 +90,37 @@ func stripZeroes(num float64) string {
 	return strings.TrimRight(strings.TrimRight(s, "0"), ".")
 }
 
+// receiveNTPPacketWithRetries receives NTP packet from the socket and returns it.
+// In the perfect world we simply set socket to blocking mode and read from it, which blocks until we have a packet.
+// However currently there is a bug in the kernel which causes a race between receiving packet and unblocking recvmsg syscall,
+// which then can block forever.
+// To work around this, we are using socket-level timeouts and retrying to read packet.
+func receiveNTPPacketWithRetries(connFd int, buf, oob []byte, tries int) (*ntp.Packet, time.Time, error) {
+	var err error
+	var n int
+	var clientReceiveTime time.Time
+	for try := 0; try < tries; try++ {
+		n, _, clientReceiveTime, err = timestamp.ReadPacketWithRXTimestampBuf(connFd, buf, oob)
+		if errors.Is(err, unix.EINTR) || errors.Is(err, unix.EAGAIN) {
+			log.Debugf("got timeout reading response packet, retrying")
+			continue
+		}
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return nil, clientReceiveTime, err
+	}
+	response, err := ntp.BytesToPacket(buf[:n])
+	return response, clientReceiveTime, err
+}
+
 // ntpDate prints data similar to 'ntptime' command output
-func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) error {
+func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) (err error) {
 	timeout := 5 * time.Second
+	singleAttemptTimeout := 100 * time.Millisecond
+	tries := int(timeout / singleAttemptTimeout)
 	addr := net.JoinHostPort(remoteServerAddr, remoteServerPort)
 	conn, err := net.DialTimeout("udp", addr, timeout)
 	if err != nil {
@@ -116,8 +145,33 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 
 	var sumDelay int64
 	var sumOffset int64
+	var i int
+	var skipped int
+	// report how many packets were skipped, and how many processed if we encounter an error
+	defer func() {
+		if err != nil {
+			log.Warningf("Processed %d requests before error", i)
+		}
+		if skipped > 0 {
+			log.Warningf("total %d packets skipped", skipped)
+		}
+	}()
+	// set socket level timeout to work around a kernel bug when recvmsg blocks forever.
+	// see receiveNTPPacketWithRetries for details
+	timeoutVal := unix.Timeval{
+		Sec:  0,
+		Usec: singleAttemptTimeout.Microseconds(),
+	}
+	err = unix.SetsockoptTimeval(connFd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &timeoutVal)
+	if err != nil {
+		return err
+	}
 
-	for i := 0; i < requests; i++ {
+	// buffers
+	buf := make([]byte, 1024)
+	oob := make([]byte, 1024)
+
+	for i = 0; i < requests; i++ {
 		clientTransmitTime := time.Now()
 		sec, frac := ntp.Time(clientTransmitTime)
 		clientWireTransmitTime := ntp.Unix(sec, frac)
@@ -132,31 +186,10 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 		if err := binary.Write(conn, binary.BigEndian, request); err != nil {
 			return fmt.Errorf("failed to send request, %w", err)
 		}
-
-		var response *ntp.Packet
-		var clientReceiveTime time.Time
-		var buf []byte
-
-		blockingRead := make(chan bool, 1)
-		go func() {
-			// This calls unix.Recvmsg which has no timeout
-			buf, _, clientReceiveTime, err = timestamp.ReadPacketWithRXTimestamp(connFd)
-			if err != nil {
-				blockingRead <- true
-				return
-			}
-
-			response, err = ntp.BytesToPacket(buf)
-			blockingRead <- true
-		}()
-
-		select {
-		case <-blockingRead:
-			if err != nil {
-				return err
-			}
-		case <-time.After(timeout):
-			return fmt.Errorf("timeout waiting for reply from server for %v", timeout)
+		response, clientReceiveTime, err := receiveNTPPacketWithRetries(connFd, buf, oob, tries)
+		if err != nil {
+			log.Errorf("Error reading response to %d after %d tries, err = %v", i, tries, err)
+			continue
 		}
 
 		serverReceiveTime := ntp.Unix(response.RxTimeSec, response.RxTimeFrac)
@@ -169,8 +202,18 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) err
 		log.Debugf("Client RX timestamp (T4): %v", clientReceiveTime)
 
 		// sanity check: origin time must be same as client transmit time
+		// if it is not so, we probably have extra packet in the kernel queue which we need to read and discard
 		if response.OrigTimeSec != sec || response.OrigTimeFrac != frac {
-			log.Errorf("Client TX timestamp %v not equal to Origin TX timestamp %v", clientTransmitTime, originTime)
+			response, clientReceiveTime, err = receiveNTPPacketWithRetries(connFd, buf, oob, tries)
+			if err != nil {
+				log.Errorf("Client TX timestamp %v not equal to Origin TX timestamp %v", clientTransmitTime, originTime)
+				return err
+			}
+			log.Debugf("skipped one packet from the receive queue")
+			skipped++
+			serverReceiveTime = ntp.Unix(response.RxTimeSec, response.RxTimeFrac)
+			serverTransmitTime = ntp.Unix(response.TxTimeSec, response.TxTimeFrac)
+			originTime = ntp.Unix(response.OrigTimeSec, response.OrigTimeFrac)
 		}
 
 		delay := ntp.RoundTripDelay(originTime, serverReceiveTime, serverTransmitTime, clientReceiveTime)
