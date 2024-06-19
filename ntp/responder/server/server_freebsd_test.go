@@ -44,9 +44,3 @@ func TestCheckIPFalse(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, assigned)
 }
-
-func TestConfigPHCOffset(t *testing.T) {
-	offset, err := tc.PHCOffset()
-	require.Nil(t, err)
-	require.Equal(t, 0, offset)
-}

@@ -23,6 +23,7 @@ package server
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -174,6 +175,11 @@ func (s *Server) startListener(conn *net.UDPConn) {
 		// read kernel timestamp from incoming packet
 		bbuf, clisa, rxTS, err := timestamp.ReadPacketWithRXTimestampBuf(connFd, buf, oob)
 		if err != nil {
+			if errors.Is(err, unix.EBADF) {
+				// our connection was closed
+				log.Warning("listener connection closed, exiting listener server")
+				return
+			}
 			log.Errorf("Failed to read packet on %s: %v", conn.LocalAddr(), err)
 			s.Stats.IncReadError()
 			continue

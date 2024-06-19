@@ -43,6 +43,16 @@ var ntpRequest = &ntp.Packet{
 	TxTimeFrac:     2718216404,
 }
 
+// try to listen on any port, if it fails - skip the test
+func tryListenUDP(t *testing.T) *net.UDPConn {
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Skipf("failed to listen on any port: %v", err)
+		return nil
+	}
+	return conn
+}
+
 func TestFillStaticHeadersStratum(t *testing.T) {
 	stratum := 1
 	s := &Server{Config: Config{Stratum: stratum}}
@@ -116,12 +126,12 @@ func TestListener(t *testing.T) {
 		},
 		Config: Config{Workers: 42, TimestampType: timestamp.SW},
 	}
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	require.Nil(t, err)
+	conn := tryListenUDP(t)
+	defer conn.Close()
 	go s.startListener(conn)
 	time.Sleep(100 * time.Millisecond)
 
-	err = s.Checker.Check()
+	err := s.Checker.Check()
 	require.NoError(t, err)
 }
 
@@ -136,8 +146,7 @@ func TestWorker(t *testing.T) {
 	}
 
 	// listen to incoming udp ntp.
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	require.NoError(t, err)
+	conn := tryListenUDP(t)
 	defer conn.Close()
 
 	// get connection file descriptor
@@ -169,15 +178,14 @@ func TestServer(t *testing.T) {
 	for i := 0; i < workers; i++ {
 		go s.startWorker()
 	}
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	require.Nil(t, err)
+	conn := tryListenUDP(t)
 	defer conn.Close()
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	go s.startListener(conn)
 
 	time.Sleep(100 * time.Millisecond)
 
-	err = s.Checker.Check()
+	err := s.Checker.Check()
 	require.NoError(t, err)
 
 	// talk to local server
