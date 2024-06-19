@@ -158,11 +158,7 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) (er
 	}()
 	// set socket level timeout to work around a kernel bug when recvmsg blocks forever.
 	// see receiveNTPPacketWithRetries for details
-	timeoutVal := unix.Timeval{
-		Sec:  0,
-		Usec: singleAttemptTimeout.Microseconds(),
-	}
-	err = unix.SetsockoptTimeval(connFd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &timeoutVal)
+	err = setSocketTimeout(connFd, singleAttemptTimeout)
 	if err != nil {
 		return err
 	}
