@@ -142,3 +142,14 @@ func TestTimestampMarshalText(t *testing.T) {
 	require.Equal(t, errors.New("unknown timestamp type \"Unsupported\""), err)
 	require.Equal(t, "Unsupported", string(text))
 }
+
+func TestNewSockaddrWithPort(t *testing.T) {
+	oldSA := &unix.SockaddrInet4{Addr: [4]byte{1, 2, 3, 4}, Port: 4567}
+	newSA := NewSockaddrWithPort(oldSA, 8901)
+	newSA4 := newSA.(*unix.SockaddrInet4)
+	require.Equal(t, oldSA.Addr, newSA4.Addr)
+	require.Equal(t, 8901, newSA4.Port)
+	// changing the original should not change the new one
+	oldSA.Addr[0] = 42
+	require.NotEqual(t, oldSA.Addr, newSA4.Addr)
+}

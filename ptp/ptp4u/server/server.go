@@ -251,7 +251,6 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 	var msgType ptp.MessageType
 	var worker *sendWorker
 	var sc *SubscriptionClient
-	var ip net.IP
 	var gclisa unix.Sockaddr
 	var expire time.Time
 
@@ -290,8 +289,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 				expire = time.Now().Add(subscriptionDuration)
 				// SYNC DELAY_REQUEST and ANNOUNCE
 				if sc = worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayReq); sc == nil {
-					ip = timestamp.SockaddrToIP(eclisa)
-					gclisa = timestamp.IPToSockaddr(ip, ptp.PortGeneral)
+					gclisa = timestamp.NewSockaddrWithPort(eclisa, ptp.PortGeneral)
 					// Create a new subscription
 					sc = NewSubscriptionClient(worker.queue, worker.signalingQueue, eclisa, gclisa, ptp.MessageDelayReq, s.Config, subscriptionDuration, expire)
 					worker.RegisterSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayReq, sc)
