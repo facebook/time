@@ -247,3 +247,14 @@ func SockaddrToPort(sa unix.Sockaddr) int {
 	}
 	return 0
 }
+
+// NewSockaddrWithPort creates a new socket address with the same IP and new port
+func NewSockaddrWithPort(sa unix.Sockaddr, port int) unix.Sockaddr {
+	switch sa := sa.(type) {
+	case *unix.SockaddrInet4:
+		return &unix.SockaddrInet4{Addr: sa.Addr, Port: port}
+	case *unix.SockaddrInet6:
+		return &unix.SockaddrInet6{Addr: sa.Addr, Port: port}
+	}
+	return nil
+}
