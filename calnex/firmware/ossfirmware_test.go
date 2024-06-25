@@ -26,15 +26,14 @@ import (
 func TestOSSFW(t *testing.T) {
 	expectedFilePath := "/tmp/sentinel_fw_v2.13.1.0.5583D-20210924.tar"
 	expectedVersion, _ := version.NewVersion("2.13.1.0.5583d-20210924")
-	fw := OSSFW{
-		Filepath: expectedFilePath,
-	}
+	fw, err := NewOSSFW(expectedFilePath)
+	require.NoError(t, err)
 
 	p, err := fw.Path()
 	require.NoError(t, err)
 	require.Equal(t, expectedFilePath, p)
 
-	v, err := fw.Version()
+	v := fw.Version()
 	require.NoError(t, err)
 	require.Equal(t, expectedVersion, v)
 }

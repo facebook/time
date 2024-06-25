@@ -41,8 +41,9 @@ var firmwareCmd = &cobra.Command{
 	Use:   "firmware",
 	Short: "update the device firmware",
 	Run: func(_ *cobra.Command, _ []string) {
-		fw := &firmware.OSSFW{
-			Filepath: source,
+		fw, err := firmware.NewOSSFW(source)
+		if err != nil {
+			log.Fatal(err)
 		}
 		if err := firmware.Firmware(target, insecureTLS, fw, apply, force); err != nil {
 			log.Fatal(err)
