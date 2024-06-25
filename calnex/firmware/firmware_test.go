@@ -42,9 +42,8 @@ func TestFirmware(t *testing.T) {
 	require.NotNil(t, f)
 	f.Close()
 
-	fw := &OSSFW{
-		Filepath: filepath,
-	}
+	fw, err := NewOSSFW(filepath)
+	require.NoError(t, err)
 
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
@@ -85,9 +84,8 @@ func TestFirmwareForce(t *testing.T) {
 	require.NotNil(t, f)
 	f.Close()
 
-	fw := &OSSFW{
-		Filepath: filepath,
-	}
+	fw, err := NewOSSFW(filepath)
+	require.NoError(t, err)
 
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
@@ -128,9 +126,8 @@ func TestFirmwareInProgress(t *testing.T) {
 	require.NotNil(t, f)
 	f.Close()
 
-	fw := &OSSFW{
-		Filepath: filepath,
-	}
+	fw, err := NewOSSFW(filepath)
+	require.NoError(t, err)
 
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {

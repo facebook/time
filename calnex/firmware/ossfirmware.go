@@ -25,19 +25,29 @@ import (
 
 // OSSFW is an open source implementation of the FW interface
 type OSSFW struct {
-	Filepath string
+	filepath string
+	version  *version.Version
+}
+
+// NewOSSFW returns initialized version of OSSFW
+func NewOSSFW(source string) (*OSSFW, error) {
+	fw := &OSSFW{
+		filepath: source,
+	}
+	basename := filepath.Base(fw.filepath)
+	vs := strings.ReplaceAll(strings.TrimSuffix(basename, filepath.Ext(basename)), "sentinel_fw_v", "")
+	v, err := version.NewVersion(strings.ToLower(vs))
+	fw.version = v
+	return fw, err
 }
 
 // Version downloads latest firmware version
 // sentinel_fw_v2.13.1.0.5583D-20210924.tar
-func (f *OSSFW) Version() (*version.Version, error) {
-	basename := filepath.Base(f.Filepath)
-	vs := strings.ReplaceAll(strings.TrimSuffix(basename, filepath.Ext(basename)), "sentinel_fw_v", "")
-	v, err := version.NewVersion(strings.ToLower(vs))
-	return v, err
+func (f *OSSFW) Version() *version.Version {
+	return f.version
 }
 
 // Path downloads latest firmware version
 func (f *OSSFW) Path() (string, error) {
-	return f.Filepath, nil
+	return f.filepath, nil
 }

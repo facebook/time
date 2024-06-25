@@ -28,7 +28,7 @@ import (
 // FW is an interface of the Firmware Version
 type FW interface {
 	// Version returns latest fw version available
-	Version() (*version.Version, error)
+	Version() *version.Version
 	// Path returns local FW path
 	Path() (string, error)
 }
@@ -44,13 +44,8 @@ func ShouldUpgrade(target string, api *calnexAPI.API, fw FW, force bool) (bool, 
 		return false, err
 	}
 
-	v, err := fw.Version()
-	if err != nil {
-		return false, err
-	}
-
-	if calnexVersion.LessThan(v) || force {
-		log.Warningf("%s: is running %s, latest is %s. Needs an update", target, calnexVersion, v)
+	if calnexVersion.LessThan(fw.Version()) || force {
+		log.Warningf("%s: is running %s, latest is %s. Needs an update", target, calnexVersion, fw.Version())
 		return true, nil
 	}
 
