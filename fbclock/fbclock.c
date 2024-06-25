@@ -28,7 +28,7 @@ limitations under the License.
 #include <unistd.h> // close
 #include "missing.h"
 
-#ifndef NDEBUG
+#if defined(__GNUC__) && !defined(__OPTIMIZE__)
 #define fbclock_debug_print(fmt, ...)  \
   do {                                 \
     fprintf(stderr, fmt, __VA_ARGS__); \
