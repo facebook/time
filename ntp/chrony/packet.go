@@ -92,6 +92,7 @@ const (
 	rpyNTPSourceName ReplyType = 19
 	rpyServerStats2  ReplyType = 22
 	rpyServerStats3  ReplyType = 24
+	rpyServerStats4  ReplyType = 25
 )
 
 // source modes
@@ -697,6 +698,33 @@ type ReplyServerStats3 struct {
 	ServerStats3
 }
 
+// ServerStats4 contains parsed version of 'serverstats4' reply
+type ServerStats4 struct {
+	NTPHits               uint64
+	NKEHits               uint64
+	CMDHits               uint64
+	NTPDrops              uint64
+	NKEDrops              uint64
+	CMDDrops              uint64
+	LogDrops              uint64
+	NTPAuthHits           uint64
+	NTPInterleavedHits    uint64
+	NTPTimestamps         uint64
+	NTPSpanSeconds        uint64
+	NTPDaemonRxtimestamps uint64
+	NTPDaemonTxtimestamps uint64
+	NTPKernelRxtimestamps uint64
+	NTPKernelTxtimestamps uint64
+	NTPHwRxTimestamps     uint64
+	NTPHwTxTimestamps     uint64
+}
+
+// ReplyServerStats4 is a usable version of 'serverstats4' response
+type ReplyServerStats4 struct {
+	ReplyHead
+	ServerStats4
+}
+
 // here go request constructors
 
 // NewSourcesPacket creates new packet to request number of sources (peers)
@@ -911,6 +939,16 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		return &ReplyServerStats3{
 			ReplyHead:    *head,
 			ServerStats3: *data,
+		}, nil
+	case rpyServerStats4:
+		data := new(ServerStats4)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplyServerStats4{
+			ReplyHead:    *head,
+			ServerStats4: *data,
 		}, nil
 	default:
 		return nil, fmt.Errorf("not implemented reply type %d from %+v", head.Reply, head)
