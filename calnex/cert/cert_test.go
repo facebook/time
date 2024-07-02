@@ -17,70 +17,122 @@ limitations under the License.
 package cert
 
 import (
+	"crypto/x509"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
+// generated with
+// openssl genrsa -out "root.key" 3072
+//
+//	openssl req -x509 -nodes -sha256 -new -key "root.key" -out "root.crt" -days 731 \
+//	  -subj "/CN=Custom Root" \
+//	  -addext "keyUsage = critical, keyCertSign" \
+//	  -addext "basicConstraints = critical, CA:TRUE, pathlen:0" \
+//	  -addext "subjectKeyIdentifier = hash"
+const rootCA = `-----BEGIN CERTIFICATE-----
+MIIEIDCCAoigAwIBAgIUH6gyij3LwI01yP1WRsITIm4op7YwDQYJKoZIhvcNAQEL
+BQAwFjEUMBIGA1UEAwwLQ3VzdG9tIFJvb3QwHhcNMjQwNzAxMTMyOTQ2WhcNMjYw
+NzAyMTMyOTQ2WjAWMRQwEgYDVQQDDAtDdXN0b20gUm9vdDCCAaIwDQYJKoZIhvcN
+AQEBBQADggGPADCCAYoCggGBAL7TbX59+OpBLmzs3orQbBcP1uN9qzaoMRBaJuVj
+f1hn8jhdip2pNnZTyTmVgNDvur3v5AzaQQK1TxHyCbrmoe4I6/tV5YShlXmFx24S
+gXGyVfzshnnNSoIup9knT18VTbYUFfA8CAVIafTlNB20fN+YDv7Ah/SjQ+ZZn+IO
+m+1i9yeJ0aVwzSIvz2re3ei9OoN78aQXoF3Xk833XWiftCCGxZtbTP94sMGn4WUU
+4SmJMaQEIEXD3gLaP+CMOAdEw2FJdJ1OQV5IShaOAq2qhKAwCNWMt3WUaYAWeOhf
+sGGyzWgdsoQ9cze/l3lMk6mHhSOh/nktaUPntSJaGucZjLKtfu6vXn04sepdpsSV
+HgKEGXXcPMN9qStlaJf010pnuKYU556K7IhGCEHPQ/WpxaN468cDZOxpE0XgsMe7
+llvmqhFxvMVvnFpTcbjmW+DgdhaHG9kicVmi012b7AdQ7H6Z3X2psSMgzONhIRcV
+1S38tVTMowTVrHE6fIDapGTkjwIDAQABo2YwZDAfBgNVHSMEGDAWgBQ717pUZqNd
+eylniXMuPxwOL1gvUDAOBgNVHQ8BAf8EBAMCAgQwEgYDVR0TAQH/BAgwBgEB/wIB
+ADAdBgNVHQ4EFgQUO9e6VGajXXspZ4lzLj8cDi9YL1AwDQYJKoZIhvcNAQELBQAD
+ggGBAKOIW9W0slLA8Ib3lU/WdwhDaSWQe0VdDFHnMB77i59Xf5j/npSMEwna2N1T
+1IfLiFEpf6WXSounPJH2+Sy7+030MrthSqCrGriuxV3c3VE6/tFW4WsQ9hu5z8V9
+ZuaS5W96jBaIViDPDybvZ+kLurRL+c0x23EqxrxAy+8HcO+QScREf1nGB2EYNv+n
+kEaPrj/XPXeh7y2oSutrEr9QzREbXSJj2eeNKR4LrlqOd4Z71UTYAktfVY+EM0uB
+8PGqihkTU2uNdPKUD6nBOdFM0OfZSL/mOtsBFkpz+eM+aMDX21hE7zxZ+ap5870X
+s47ClO3BDs16Rvpcby0UmT7bt+mkwuRxAm6RcZScYD6Ym7wyAS+YGb/WOwXZUUL7
+eP6DjPCyn1NBPBhssB9Ll5xZ+ALfQiaOiufkkO2bGlqmCt9Tlvg5alPL42m3HMNh
+q/rA1ZVNsR6wtE/GSbW2vCtF07P24HQBsfKm1ZII0MeZKWlfEyLSKZ87w84wZvhv
+pZKEFw==
+-----END CERTIFICATE-----
+`
+
 // Test certificate generated with:
 //
-// $ openssl req -x509 -nodes -newkey rsa:2048 -keyout privkey.pem -out cert.pem -sha256 -days 365 \
-//	-subj '/CN=testhost.invalid' -reqexts SAN -extensions SAN \
-//	-config <(printf '[req]\ndistinguished_name = dn\n[dn]\nCN=testhost.invalid\n[SAN]\nsubjectAltName=DNS:testhost.invalid')
+// openssl genrsa -out "testhost.invalid.key" 2048
+// openssl req -sha256 -new -key "testhost.invalid.key" -out "testhost.invalid.csr" \
+// -subj "/CN=*.testhost.invalid" \
+// -reqexts SAN -config <(echo "[SAN]\nsubjectAltName=DNS:testhost.invalid,DNS:*.testhost.invalid\n")
 //
+// openssl x509 -req -sha256 -in "testhost.invalid.csr" -out "testhost.invalid.crt" -days 731 \
+//   -CAkey "root.key" -CA "root.crt" -CAcreateserial -extfile <(cat <<END
+//     subjectAltName = DNS:testhost.invalid,DNS:*.testhost.invalid
+//     keyUsage = critical, digitalSignature, keyEncipherment
+//     extendedKeyUsage = serverAuth
+//     basicConstraints = CA:FALSE
+//     authorityKeyIdentifier = keyid:always
+//     subjectKeyIdentifier = none
+// END
+// )
 // Validity
-//   Not Before: Feb  3 11:25:46 2022 GMT
-//   Not After : Feb  3 11:25:46 2023 GMT
+// Not Before: Jul  1 13:29:47 2024 GMT
+// Not After : Jul  2 13:29:47 2026 GMT
 
 const testCertificate = `-----BEGIN CERTIFICATE-----
-MIIC4zCCAcugAwIBAgIUdGVC+4vEBWjB87q9k/NLtwF2wGswDQYJKoZIhvcNAQEL
-BQAwGzEZMBcGA1UEAwwQdGVzdGhvc3QuaW52YWxpZDAeFw0yMjAyMDMxMTI1NDZa
-Fw0yMzAyMDMxMTI1NDZaMBsxGTAXBgNVBAMMEHRlc3Rob3N0LmludmFsaWQwggEi
-MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC6CnsEElO640Xk9H7SPHPHXXQS
-9Oo4pGf3uNMc9qXIA8PgNktskXMTh020vtV1d2RMRjbAvUmfK8RPsy7OyZvFMFv0
-ncppC8BLrx2by7e60XXRlH6mpqA3X5H6y2UDaRhy4rl5xXn+Ppn+SjJTP91gYsDH
-ryau4vgxM4QnHAb8PuDenTZdlHHLZxrPTET4NOll1SmDB/qPGva4/eZMGdosS7FW
-KqyE1Loh4dygERM7Xrwlu2hNTJHd4BviKRF9wWV52iMv4uTIaSJHAGVd2YVg5fG+
-tBQqqd9snLSydq8aay1wrr2DEo9fsFHR+kJUD9vcICdog/ge0eV4C9Gdrf6XAgMB
-AAGjHzAdMBsGA1UdEQQUMBKCEHRlc3Rob3N0LmludmFsaWQwDQYJKoZIhvcNAQEL
-BQADggEBABnfLyaYMNjJ7CqK3BwRYaHIYnVyKF8gnyzQzeH0jtGWyNe1rtmZLNiB
-cDmK7BCNXfdZrAMBfNC3ku/wuISlqN3IWpdU0IBQiRLx2aZDMjTW+Tn1vjEA8bfy
-lkye6unj1dXBjXt1sI4NhXgBsAvNISg7dh7AK9/rHefxvMXW3PLozvkwWV+lZjhe
-u3CyT1d1MZdJzqts1t0eJTju1uZgsWp0SMXivabV6XiHQQQaYLSYsSMLxZxoAgOQ
-Ml59Q4pF/AOnbPpnv0wdPYWXlGaFWSZ1d3Ch67ALbDIp6IA2NjSCcYORltaF+Ogr
-kgEAiwyM3UboyEtLXDPk9VwqzCglAj0=
+MIID3zCCAkegAwIBAgIUBATsW3bbqNNSzh4TU+FiOHl8QQUwDQYJKoZIhvcNAQEL
+BQAwFjEUMBIGA1UEAwwLQ3VzdG9tIFJvb3QwHhcNMjQwNzAxMTMyOTQ3WhcNMjYw
+NzAyMTMyOTQ3WjA1MRswGQYDVQQDDBIqLnRlc3Rob3N0LmludmFsaWQxFjAUBgNV
+BAoMDU1ldGEgSUROIFRlc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIB
+AQDN9nk7srvl66/a1VUQ7A6yyYQdnKaKOMWHfWZS2Sl+ZDJqiCAm+LYX3b1ashG6
+QM80TC/bKEqQujSFSaPAqQXj/9v3ETMibYDPbjk8iCAx7VEEy67aJ+ng93raGpUm
+yFJOF+h0sHpbbqmyIM4PVlhUMmshUkTKZyQNWjicEp7wxpH1l7xO0ShRg2EtZnrr
+hK6ukYzlTfAaAHWeUslVV6ppuZy7gobXI7dNyWIk/9CGjF/iqyNuGf/DrExPY2kE
+v9LX84sLsYqn1W53u3QftMSWCTcqTAW5KS93RM5FSHAntBPGNXNGVrQJ1XOfpQhp
+bviM4c5BgOGNJl88RONuOqo/AgMBAAGjgYUwgYIwLwYDVR0RBCgwJoIQdGVzdGhv
+c3QuaW52YWxpZIISKi50ZXN0aG9zdC5pbnZhbGlkMA4GA1UdDwEB/wQEAwIFoDAT
+BgNVHSUEDDAKBggrBgEFBQcDATAJBgNVHRMEAjAAMB8GA1UdIwQYMBaAFDvXulRm
+o117KWeJcy4/HA4vWC9QMA0GCSqGSIb3DQEBCwUAA4IBgQBY8QiImao9+CXt4Rwl
+TgnI2n8E7FiEg/nQhTOvgWqQesTeWNz5ctyqU+XZC5R1Nb0vEiKrC1RSLy7tZ7E3
+zpVdAb6lhKKkpgW7bwYBx5fu4JoqAzlD8flibEr8/jlasRUYlT4nmpflmG9CMwjV
+7PS+E2Vy2uBEJfZBUIRmUECRkRsNiLx8jNLpfAClIO1qzyIwLz66PjPtwwKBa/uA
+gWnsc4uHNeMV2YNO8Sg6ULV3infFnrG3LSJLXGCP+O6HG3Da+kwNMaskJfXhP9q7
+gdzmC+qaoLkpv5DNBh9LQX0QKi1zXNHammZJ9LhafRkpzyt9z03b3gaA8HaLSTsR
+3aBpI7SnM6gLdhhMZf4q7jPvEOa/zenHPtA7D4n086C46Aao5xe938m9x8+0lmnn
+1LjCIc7ze3M42pLhwJUjtzX0W5PBk9UphbsQObO30DN3AAMpEAugQ5W334Goz41u
+r1GkDF/44gf4QxzJOGZuWPoKBr1Bcqkbn7C4BuJ2mbC68MU=
 -----END CERTIFICATE-----
 `
 
 // @lint-ignore PRIVATEKEY insecure-private-key-storage
 const testKey = `-----BEGIN PRIVATE KEY-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC6CnsEElO640Xk
-9H7SPHPHXXQS9Oo4pGf3uNMc9qXIA8PgNktskXMTh020vtV1d2RMRjbAvUmfK8RP
-sy7OyZvFMFv0ncppC8BLrx2by7e60XXRlH6mpqA3X5H6y2UDaRhy4rl5xXn+Ppn+
-SjJTP91gYsDHryau4vgxM4QnHAb8PuDenTZdlHHLZxrPTET4NOll1SmDB/qPGva4
-/eZMGdosS7FWKqyE1Loh4dygERM7Xrwlu2hNTJHd4BviKRF9wWV52iMv4uTIaSJH
-AGVd2YVg5fG+tBQqqd9snLSydq8aay1wrr2DEo9fsFHR+kJUD9vcICdog/ge0eV4
-C9Gdrf6XAgMBAAECggEAUUrVGCFd/vLijrobVIhf2wTF/KaSVi/Y0lErxqMsK6sh
-gy6WZJll3GmqFcmxgoOqCv4/XJcZvXilbmIQmQFVlKOd+tScJqyg2TFq0bIB1ZtD
-TVICyZVTuv6CzkDkIcphiYnym/gjZ2o5ZflL5j6o4D4mmNq7H35ED1PAckp37u5X
-d/MmWeE+axoOgaU2A7bcMdT8EkYBdeOb+7WTkel/F8tbPKc8rpp4fw5zsRFOREqy
-EyaeUj2rsqhBOcPhFelaXAQ7AaF2U1BeEnLZzRRUIhdTA76NsE5varmDeoBdDIlf
-EacAPXzQuqYsHjlzDXQuMZ44sVhrvTLH0vKrFbMUAQKBgQDtMAjSVgIlyCaELJmv
-/E3HnNYXAEpkpgiNppeW/WNn141h1nIxiOU67Jyu7QXMfUssjLCFUfoe7jpt2RPi
-O+QPLI7IasTB5dN4hPnJDnfJy/+zpTWA1vqkR9ULAd7DSq7EyaQH3qRIRwEI0/cK
-/HLLBLRiSImOtJ0sqpzzfah2AQKBgQDIy/C5Vrv2EL8l8CkmPgnM07jfFF0z083j
-83/yG+Zqc+cFSstt2nuNCGKy7cbHbhGAZu42qBPhz0KGLJSb/Xb1sItOs/Mg+Vsy
-CHXw0M5z7YxUC5/MuDnLpiTRw/CdIISxSR0yhcSRkS5O7vZb1YYqfZx4NFvzIYqK
-bUaM4ThklwKBgQCDKjcWqj2RyzeRjGCJM8uHgbHbEmwRcMf2HZRjCUk5mbgzzLVl
-s0Cg70xOaAD27qrtvfe4IndhN3jUWmFmkJwzz/490t1wJLpnQZIon3ma/Ncw70HB
-OCFvS9ICvkwET36KkL/HIlZTKgDmcuGBD84jezyNxXNcmYD5vHgDJxBMAQKBgQDD
-25F55u0+TgV1BvXMVJUQkq/wAJgMtptMrrXtPWOaEGWWFueoxoTfAv/q0d2jp2ww
-17Wh4H5MMvMLly55nVlMuyCW6xXK4w8eFXydIb9O+rV3QUNk14mgZ/XgGgR370Ef
-AFcXcb1T083ctl/dIcBVb+KQqVnLJLtS3NYFEqYEDwKBgHcvU054ijoHE/uWKePW
-V4DNschu4iFvyVqgaqd/wLTBTxWIN4ig8yw3EIRnb9yB00/YakxkiDGNML/E2pGz
-6WpaadzzKqu84iQGXrD0V/Wv+Di/Mhnossfaj3K1shlHatHP1LPTQwtTxK8uzxeg
-1J0Y06oQ8xagjQtehln0flmO
+MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDN9nk7srvl66/a
+1VUQ7A6yyYQdnKaKOMWHfWZS2Sl+ZDJqiCAm+LYX3b1ashG6QM80TC/bKEqQujSF
+SaPAqQXj/9v3ETMibYDPbjk8iCAx7VEEy67aJ+ng93raGpUmyFJOF+h0sHpbbqmy
+IM4PVlhUMmshUkTKZyQNWjicEp7wxpH1l7xO0ShRg2EtZnrrhK6ukYzlTfAaAHWe
+UslVV6ppuZy7gobXI7dNyWIk/9CGjF/iqyNuGf/DrExPY2kEv9LX84sLsYqn1W53
+u3QftMSWCTcqTAW5KS93RM5FSHAntBPGNXNGVrQJ1XOfpQhpbviM4c5BgOGNJl88
+RONuOqo/AgMBAAECggEAXpBNtVUo5DXENgtA1VYsoXXYjOgBpvDN8Jlow50lafyD
+EVqSuJH0uRx79gpQDV34RKC+UDc9lRmJR7E52BlCtR4iVlu1SJdSTuriqKIvdfzp
+9/O0wkEVJs85vq350Sakc2qSthDY/OXgUAKz2WLhhzbm7ROitfOJIABOgYojI5SV
+E4aPDrxCGFMzyBnGhS2Q9m6nrT4PmbnnbIT2nZzBT9FYWmSC9FKmej5IS3AKGLwB
+9ZpuWV1iqZOIgvDhRWntVr24Gn0O5EMTF7RynTV2QlbWuE8zCD1kSjnuicxRGAqf
+OeMbeClkU9jOsVeyJmAzIlwAfs3YbFEz1yMKF4D90QKBgQDa/yLaJmMx/7sxNt+4
+qATWjGMJO8SYggrqeFqqJU+gMGInsyGN6UlLko+kaSQF4kBbceDHb6o2XXlPtK3P
+JFuEQQiV/CbztinyB0UNuJpB06dtfEW22O1cJqrgS5M/xwj1vIE4CRHZKQYzZQ9C
+iXnnfXp0AiOZ2IuaXImrZoCwcwKBgQDww4yHudV2DP5qTGhy4LBfIq2rzY+QDaBa
+g5pWzomJt5eJWgMruwxFEHNIjLSXb2lYq9TTCXKyNzwBF6kGVOM4WCwV+/JOGx7F
+vGg5KUBKPC/9uIYikm9Gs3XMhmcUZqBV7g0B4soiWalwBkI7BtoeObqaSZZ+QZUI
+jyemIjXoBQKBgQCltWTz2RQ6Ix3MEY+btFdk2PmfZQBPvibwYH2KPY1Q0wuSqrL7
+JMj3TEEw0PYXFapJB5RklJQhav1+WGMkWIh/PI54n0ICK5b1spaH2WWv5a3M5LoD
+r4V7sy6dZdJX8g1PlIHamtJMlgRBI3k2ibwadBIScgPqR7bq6JargXZjDQKBgQCU
+avemc5hzPW9Yd+Grb3dKLkaBMibd1oiTQ61Q9eEzVEnGEgcCXjwiFxH6F0L8V2HJ
+l6OKtLhPxFzpD3zSumGXykLjCn1ESNOfcZWOJy/Kk2/CKI4Hod2W5+omOnQwz1Ln
+pee+0d9pbXxV4oXRfVfYah3uHo73JdaJgDYg49X3QQKBgQCan9EfdksF8OVi+5PP
+7gktyg+giMFWnNFFE/Gi9VbyHRSQB/pU9LpdwzlPUSe6QQuKdL93kgWXYgVf3cwF
+zKvIA65gXxPrpkPwWeuzjMIA9pwW9IJudsof6kaZ7NK+T6gBbt91WLVi+zWwoxci
+p89kXDk+P1McDjmisyRqgRV49A==
 -----END PRIVATE KEY-----
 `
 
@@ -128,19 +180,29 @@ func TestBadVerify(t *testing.T) {
 	bundle, err := Parse([]byte(testCertificate + testKey))
 	require.NoError(t, err)
 
+	// nil bundle
+	var emptyBundle *Bundle = nil
+	err = emptyBundle.Verify("testhost.invalid", x509.VerifyOptions{})
+	require.Equal(t, ErrBundleNil, err)
+
+	// CA signed by unknown authority
+	testTime, _ := time.Parse(time.RFC3339, "2025-02-03T12:00:00Z")
+	err = bundle.Verify("testhost.invalid", x509.VerifyOptions{CurrentTime: testTime})
+	require.ErrorAs(t, err, &x509.UnknownAuthorityError{})
+
 	// Invalid hostname
-	testTime, _ := time.Parse(time.RFC3339, "2022-02-03T12:00:00Z")
-	err = bundle.Verify("invalid.testhost", testTime)
+	testTime, _ = time.Parse(time.RFC3339, "2025-02-03T12:00:00Z")
+	err = bundle.Verify("invalid.testhost", x509.VerifyOptions{CurrentTime: testTime})
 	require.Equal(t, ErrBundleNoCertForHost, err)
 
 	// Not yet valid
 	testTime, _ = time.Parse(time.RFC3339, "2022-02-01T12:00:00Z")
-	err = bundle.Verify("testhost.invalid", testTime)
+	err = bundle.Verify("testhost.invalid", x509.VerifyOptions{CurrentTime: testTime})
 	require.Equal(t, ErrCertNotYetValid, err)
 
 	// Expired
-	testTime, _ = time.Parse(time.RFC3339, "2023-02-03T12:00:00Z")
-	err = bundle.Verify("testhost.invalid", testTime)
+	testTime, _ = time.Parse(time.RFC3339, "2027-02-03T12:00:00Z")
+	err = bundle.Verify("testhost.invalid", x509.VerifyOptions{CurrentTime: testTime})
 	require.Equal(t, ErrCertExpired, err)
 }
 
@@ -178,8 +240,10 @@ func TestGoodVerify(t *testing.T) {
 	bundle, err := Parse([]byte(testCertificate + testKey))
 	require.NoError(t, err)
 
-	testTime, _ := time.Parse(time.RFC3339, "2022-02-03T12:00:00Z")
-	err = bundle.Verify("testhost.invalid", testTime)
+	cp := x509.NewCertPool()
+	cp.AppendCertsFromPEM([]byte(rootCA))
+
+	err = bundle.Verify("testhost.invalid", x509.VerifyOptions{Roots: cp})
 	require.NoError(t, err)
 }
 
@@ -188,13 +252,13 @@ func TestMissingDataVerify(t *testing.T) {
 	require.NoError(t, err)
 
 	testTime, _ := time.Parse(time.RFC3339, "2022-02-03T12:00:00Z")
-	err = bundle.Verify("testhost.invalid", testTime)
+	err = bundle.Verify("testhost.invalid", x509.VerifyOptions{CurrentTime: testTime})
 	require.Equal(t, ErrBundleNoPrivKey, err)
 
 	bundle, err = Parse([]byte(testKey))
 	require.NoError(t, err)
 
-	err = bundle.Verify("testhost.invalid", testTime)
+	err = bundle.Verify("testhost.invalid", x509.VerifyOptions{CurrentTime: testTime})
 	require.Equal(t, ErrBundleNoCerts, err)
 }
 

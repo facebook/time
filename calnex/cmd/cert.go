@@ -21,6 +21,7 @@ import (
 	"os"
 	"time"
 
+	"crypto/x509"
 	"github.com/facebook/time/calnex/api"
 	"github.com/facebook/time/calnex/cert"
 	log "github.com/sirupsen/logrus"
@@ -54,7 +55,7 @@ func certFunc() error {
 		return err
 	}
 
-	err = bundle.Verify(target, time.Now())
+	err = bundle.Verify(target, x509.VerifyOptions{})
 	if err != nil {
 		return err
 	}

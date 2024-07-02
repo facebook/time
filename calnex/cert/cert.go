@@ -169,9 +169,15 @@ func (b *Bundle) Equals(other *Bundle) bool {
 //   - We have a cert
 //   - One of the cert CNs matches the supplied hostname
 //   - The cert validity date before and ends after the supplied time.
+//   - Other validations provided by x509 lib, inc. unknown authority
 //
 // Returns an error if any of these are not satisfied.
-func (b *Bundle) Verify(hostname string, t time.Time) error {
+func (b *Bundle) Verify(hostname string, opts x509.VerifyOptions) error {
+	t := opts.CurrentTime
+	if t.IsZero() {
+		t = time.Now()
+	}
+
 	if b == nil {
 		return ErrBundleNil
 	}
@@ -192,6 +198,7 @@ func (b *Bundle) Verify(hostname string, t time.Time) error {
 			hostCert = cert
 		}
 	}
+
 	if hostCert == nil {
 		return ErrBundleNoCertForHost
 	}
@@ -199,9 +206,12 @@ func (b *Bundle) Verify(hostname string, t time.Time) error {
 	if hostCert.NotBefore.After(t) {
 		return ErrCertNotYetValid
 	}
+
 	if hostCert.NotAfter.Before(t) {
 		return ErrCertExpired
 	}
 
-	return nil
+	_, err := hostCert.Verify(opts)
+
+	return err
 }
