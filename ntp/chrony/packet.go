@@ -82,17 +82,17 @@ const (
 
 // reply types
 const (
-	rpyNSources      ReplyType = 2
-	rpySourceData    ReplyType = 3
-	rpyTracking      ReplyType = 5
-	rpySourceStats   ReplyType = 6
-	rpyActivity      ReplyType = 12
-	rpyServerStats   ReplyType = 14
-	rpyNTPData       ReplyType = 16
-	rpyNTPSourceName ReplyType = 19
-	rpyServerStats2  ReplyType = 22
-	rpyServerStats3  ReplyType = 24
-	rpyServerStats4  ReplyType = 25
+	RpyNSources      ReplyType = 2
+	RpySourceData    ReplyType = 3
+	RpyTracking      ReplyType = 5
+	RpySourceStats   ReplyType = 6
+	RpyActivity      ReplyType = 12
+	RpyServerStats   ReplyType = 14
+	RpyNTPData       ReplyType = 16
+	RpyNTPSourceName ReplyType = 19
+	RpyServerStats2  ReplyType = 22
+	RpyServerStats3  ReplyType = 24
+	RpyServerStats4  ReplyType = 25
 )
 
 // source modes
@@ -246,7 +246,7 @@ type RequestPacket interface {
 // ResponsePacket is an interface to abstract all different incoming packets
 type ResponsePacket interface {
 	GetCommand() CommandType
-	GetType() PacketType
+	GetType() ReplyType
 	GetStatus() ResponseStatusType
 }
 
@@ -339,8 +339,8 @@ func (r *ReplyHead) GetCommand() CommandType {
 }
 
 // GetType returns reply packet type
-func (r *ReplyHead) GetType() PacketType {
-	return r.PKTType
+func (r *ReplyHead) GetType() ReplyType {
+	return r.Reply
 }
 
 // GetStatus returns reply packet status
@@ -840,7 +840,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		return nil, fmt.Errorf("got status %s (%d)", head.Status, head.Status)
 	}
 	switch head.Reply {
-	case rpyNSources:
+	case RpyNSources:
 		data := new(replySourcesContent)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
@@ -850,7 +850,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead: *head,
 			NSources:  int(data.NSources),
 		}, nil
-	case rpySourceData:
+	case RpySourceData:
 		data := new(replySourceDataContent)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
@@ -860,7 +860,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead:  *head,
 			SourceData: *newSourceData(data),
 		}, nil
-	case rpyTracking:
+	case RpyTracking:
 		data := new(replyTrackingContent)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
@@ -870,7 +870,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead: *head,
 			Tracking:  *newTracking(data),
 		}, nil
-	case rpySourceStats:
+	case RpySourceStats:
 		data := new(replySourceStatsContent)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
@@ -880,7 +880,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead:   *head,
 			SourceStats: *newSourceStats(data),
 		}, nil
-	case rpyActivity:
+	case RpyActivity:
 		data := new(Activity)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
@@ -890,7 +890,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead: *head,
 			Activity:  *data,
 		}, nil
-	case rpyServerStats:
+	case RpyServerStats:
 		data := new(ServerStats)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
@@ -900,7 +900,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead:   *head,
 			ServerStats: *data,
 		}, nil
-	case rpyNTPData:
+	case RpyNTPData:
 		data := new(replyNTPDataContent)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
@@ -910,7 +910,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead: *head,
 			NTPData:   *newNTPData(data),
 		}, nil
-	case rpyNTPSourceName:
+	case RpyNTPSourceName:
 		data := new(replyNTPSourceNameContent)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
@@ -920,7 +920,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead:     *head,
 			NTPSourceName: *newNTPSourceName(data),
 		}, nil
-	case rpyServerStats2:
+	case RpyServerStats2:
 		data := new(ServerStats2)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
@@ -930,7 +930,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead:    *head,
 			ServerStats2: *data,
 		}, nil
-	case rpyServerStats3:
+	case RpyServerStats3:
 		data := new(ServerStats3)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
@@ -940,7 +940,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 			ReplyHead:    *head,
 			ServerStats3: *data,
 		}, nil
-	case rpyServerStats4:
+	case RpyServerStats4:
 		data := new(ServerStats4)
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
