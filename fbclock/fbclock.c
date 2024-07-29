@@ -17,7 +17,6 @@ limitations under the License.
 #include "fbclock.h"
 #include <fcntl.h> // For O_* constants
 #include <linux/ptp_clock.h>
-#include <math.h> // pow
 #include <stdint.h>
 #include <stdio.h> // for printf and perror
 #include <string.h>
@@ -105,7 +104,7 @@ static inline int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
 }
 
 static int fbclock_read_ptp_offset(int fd, struct phc_time_res* res) {
-  struct ptp_sys_offset pso = {.n_samples = 5};
+  struct ptp_sys_offset pso = {.n_samples = 1};
   int64_t min_delay = INT64_MAX, last_ts;
 
   int r = ioctl(fd, PTP_SYS_OFFSET, &pso);
@@ -130,7 +129,7 @@ static int fbclock_read_ptp_offset(int fd, struct phc_time_res* res) {
 }
 
 static int fbclock_read_ptp_offset_extended(int fd, struct phc_time_res* res) {
-  struct ptp_sys_offset_extended psoe = {.n_samples = 5};
+  struct ptp_sys_offset_extended psoe = {.n_samples = 1};
   int64_t min_delay = INT64_MAX;
 
   int r = ioctl(fd, PTP_SYS_OFFSET_EXTENDED, &psoe);
@@ -168,7 +167,7 @@ int fbclock_init(fbclock_lib* lib, const char* shm_path) {
     return FBCLOCK_E_PTP_OPEN;
   }
   lib->dev_fd = ffd;
-
+  lib->min_phc_delay = INT64_MAX;
   struct ptp_sys_offset_extended psoe = {.n_samples = 1};
 
   int r = ioctl(ffd, PTP_SYS_OFFSET_EXTENDED, &psoe);
@@ -195,34 +194,33 @@ int fbclock_destroy(fbclock_lib* lib) {
   // we don't want to unlink it, others might still use it
 }
 
-double fbclock_window_of_uncertainty(
+uint64_t fbclock_window_of_uncertainty(
     double seconds,
-    double error_bound_ns,
+    uint64_t error_bound_ns,
     double holdover_multiplier_ns) {
-  double h = holdover_multiplier_ns * seconds;
-  double w = error_bound_ns + h;
-  fbclock_debug_print("error_bound=%f\n", error_bound_ns);
+  uint64_t h = (uint64_t)(holdover_multiplier_ns * seconds);
+  uint64_t w = error_bound_ns + h;
+  fbclock_debug_print("error_bound=%lu\n", error_bound_ns);
   fbclock_debug_print("holdover_multiplier=%f\n", holdover_multiplier_ns);
-  fbclock_debug_print("%.3f seconds holdover, h=%f\n", seconds, h);
-  fbclock_debug_print("w = %f ns\n", w);
-  fbclock_debug_print("w = %f ms\n", w / 1000000.0);
+  fbclock_debug_print("%.3f seconds holdover, h=%lu\n", seconds, h);
+  fbclock_debug_print("w = %lu ns\n", w);
+  fbclock_debug_print("w = %lu ms\n", w / 1000000);
   return w;
 }
 
 int fbclock_calculate_time(
-    double error_bound_ns,
+    uint64_t error_bound_ns,
     double h_value_ns,
     fbclock_clockdata* state,
     int64_t phctime_ns,
     fbclock_truetime* truetime,
     int time_standard) {
+  if (state->ingress_time_ns > phctime_ns) {
+    return FBCLOCK_E_PHC_IN_THE_PAST;
+  }
   // check how far back since last SYNC message from GM (in seconds)
   double seconds =
       (double)(phctime_ns - state->ingress_time_ns) / NANOSECONDS_IN_SECONDS;
-
-  if (seconds < 0) {
-    return FBCLOCK_E_PHC_IN_THE_PAST;
-  }
 
   // UTC offset applied if time standard used is UTC (and not TAI)
   if (time_standard == FBCLOCK_UTC) {
@@ -230,10 +228,10 @@ int fbclock_calculate_time(
   }
 
   // calculate the Window of Uncertainty (WOU) (in nanoseconds)
-  double wou_ns =
+  uint64_t wou_ns =
       fbclock_window_of_uncertainty(seconds, error_bound_ns, h_value_ns);
-  truetime->earliest_ns = phctime_ns - (uint64_t)wou_ns;
-  truetime->latest_ns = phctime_ns + (uint64_t)wou_ns;
+  truetime->earliest_ns = phctime_ns - wou_ns;
+  truetime->latest_ns = phctime_ns + wou_ns;
   return FBCLOCK_E_NO_ERROR;
 }
 
@@ -262,8 +260,11 @@ int fbclock_gettime_tz(
   if (lib->gettime(lib->dev_fd, &res)) {
     return FBCLOCK_E_PTP_READ_OFFSET;
   }
-
-  double error_bound = (double)state.error_bound_ns + (double)res.delay;
+  // store the minimal PHC request delay
+  if (res.delay < lib->min_phc_delay) {
+    lib->min_phc_delay = res.delay;
+  }
+  uint64_t error_bound = state.error_bound_ns + lib->min_phc_delay;
   double h_value = (double)state.holdover_multiplier_ns / FBCLOCK_POW2_16;
 
   return fbclock_calculate_time(

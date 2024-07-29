@@ -93,18 +93,19 @@ typedef struct fbclock_lib {
   char* ptp_path; // path to PHC clock device
   int shm_fd; // file descriptor of opened shared memory object
   int dev_fd; // file descriptor of opened /dev/ptpN
+  int64_t min_phc_delay; // minimal PHC request delay observed
   fbclock_shmdata* shmp; // mmap-ed data
   int (*gettime)(int, struct phc_time_res*); // pointer to gettime function
 } fbclock_lib;
 
 int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data);
 int fbclock_clockdata_load_data(fbclock_shmdata* shm, fbclock_clockdata* data);
-double fbclock_window_of_uncertainty(
+uint64_t fbclock_window_of_uncertainty(
     double seconds,
-    double error_bound_ns,
+    uint64_t error_bound_ns,
     double holdover_multiplier_ns);
 int fbclock_calculate_time(
-    double error_bound_ns,
+    uint64_t error_bound_ns,
     double h_value_ns,
     fbclock_clockdata* state,
     int64_t phctime_ns,
