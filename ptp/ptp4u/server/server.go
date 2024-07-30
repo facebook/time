@@ -312,7 +312,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 			}
 			sc.Once()
 		default:
-			log.Errorf("Got unsupported message type %s(%d)", msgType, msgType)
+			log.Warningf("Got unsupported message type %s(%d)", msgType, msgType)
 		}
 	}
 }
