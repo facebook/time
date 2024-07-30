@@ -17,7 +17,9 @@ limitations under the License.
 package firmware
 
 import (
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	calnexAPI "github.com/facebook/time/calnex/api"
@@ -33,8 +35,18 @@ type FW interface {
 	Path() (string, error)
 }
 
+// CalnexUpgraderInterface represents an upgradeable firmware
+type CalnexUpgraderInterface interface {
+	Firmware(target string, insecureTLS bool, fw FW, apply bool, force bool) error
+	InProgress(target string, api *calnexAPI.API) (bool, error)
+	ShouldUpgrade(target string, api *calnexAPI.API, fw FW, force bool) (bool, error)
+}
+
+// CalnexUpgrader represents an upgradeable firmware
+type CalnexUpgrader struct{}
+
 // ShouldUpgrade checks if Calnex firmware needs an upgrade
-func ShouldUpgrade(target string, api *calnexAPI.API, fw FW, force bool) (bool, error) {
+func (up CalnexUpgrader) ShouldUpgrade(target string, api *calnexAPI.API, fw FW, force bool) (bool, error) {
 	cv, err := api.FetchVersion()
 	if err != nil {
 		return false, err
@@ -54,7 +66,7 @@ func ShouldUpgrade(target string, api *calnexAPI.API, fw FW, force bool) (bool, 
 }
 
 // InProgress checks if Calnex firmware upgrade is in progress
-func InProgress(target string, api *calnexAPI.API) (bool, error) {
+func (up CalnexUpgrader) InProgress(target string, api *calnexAPI.API) (bool, error) {
 	// Checking maybe upgrade is in progress
 	instrumentStatus, statusErr := api.FetchInstrumentStatus()
 	if statusErr != nil {
@@ -69,16 +81,18 @@ func InProgress(target string, api *calnexAPI.API) (bool, error) {
 }
 
 // Firmware checks target Calnex firmware version and upgrades if apply is specified
-func Firmware(target string, insecureTLS bool, fw FW, apply bool, force bool) error {
+// Returns err if there is a failure at any point in the process
+func (up CalnexUpgrader) Firmware(target string, insecureTLS bool, fw FW, apply bool, force bool) error {
 	api := calnexAPI.NewAPI(target, insecureTLS, 4*time.Minute)
 
-	shouldUpgrade, err := ShouldUpgrade(target, api, fw, force)
+	shouldUpgrade, err := up.ShouldUpgrade(target, api, fw, force)
 	if err != nil {
 		return err
 	}
 
 	if !shouldUpgrade {
-		if _, err = InProgress(target, api); err != nil {
+		_, err := up.InProgress(target, api)
+		if err != nil {
 			return err
 		}
 		return nil
@@ -106,5 +120,31 @@ func Firmware(target string, insecureTLS bool, fw FW, apply bool, force bool) er
 		return err
 	}
 	_, err = api.PushVersion(p)
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ParallelFirmwareUpgrade upgrades the provided list of devices in parallel
+// Returns a slice of errors, which contains an error for each device that failed to upgrade
+func ParallelFirmwareUpgrade(devices []string, insecureTLS bool, fw FW, ufw CalnexUpgraderInterface, apply bool, force bool) []error {
+	var wg = sync.WaitGroup{}
+	errors := make([]error, 0, len(devices))
+	errorMutex := sync.Mutex{}
+	for i := 0; i < len(devices); i++ {
+		wg.Add(1)
+		device := devices[i]
+		go func(device string) {
+			defer wg.Done()
+			err := ufw.Firmware(device, insecureTLS, fw, apply, force)
+			if err != nil {
+				errorMutex.Lock()
+				errors = append(errors, fmt.Errorf("%s: error during firmware upgrade: %w", device, err))
+				errorMutex.Unlock()
+			}
+		}(device)
+	}
+	wg.Wait()
+	return errors
 }

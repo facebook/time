@@ -45,7 +45,8 @@ var firmwareCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err := firmware.Firmware(target, insecureTLS, fw, apply, force); err != nil {
+		up := firmware.CalnexUpgrader{}
+		if err := up.Firmware(target, insecureTLS, fw, apply, force); err != nil {
 			log.Fatal(err)
 		}
 	},

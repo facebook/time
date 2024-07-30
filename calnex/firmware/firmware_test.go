@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/facebook/time/calnex/api"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -69,7 +70,8 @@ func TestFirmware(t *testing.T) {
 	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
-	err = Firmware(parsed.Host, true, fw, true, false)
+	up := CalnexUpgrader{}
+	err = up.Firmware(parsed.Host, true, fw, true, false)
 	require.NoError(t, err)
 }
 
@@ -111,7 +113,8 @@ func TestFirmwareForce(t *testing.T) {
 	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
-	err = Firmware(parsed.Host, true, fw, true, true)
+	up := CalnexUpgrader{}
+	err = up.Firmware(parsed.Host, true, fw, true, true)
 	require.NoError(t, err)
 }
 
@@ -153,6 +156,31 @@ func TestFirmwareInProgress(t *testing.T) {
 	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
 	calnexAPI.Client = ts.Client()
 
-	err = Firmware(parsed.Host, true, fw, true, false)
+	up := CalnexUpgrader{}
+	err = up.Firmware(parsed.Host, true, fw, true, false)
 	require.NoError(t, err)
+}
+
+func TestParallelFirmwareUpgrade(t *testing.T) {
+	// Should call Firmware once per device and return errors for devices that fail
+	mockUpgrader := new(MockCalnexUpgrader)
+	mockUpgrader.On("Firmware", "device", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).Times(4)
+	mockUpgrader.On("Firmware", "deviceError", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(fmt.Errorf("error")).Times(1)
+
+	errors := ParallelFirmwareUpgrade([]string{"device", "device", "device", "device", "deviceError"}, true, nil, mockUpgrader, true, false)
+
+	mockUpgrader.AssertNumberOfCalls(t, "Firmware", 5)
+	require.Len(t, errors, 1)
+	require.Equal(t, errors[0].Error(), "deviceError: error during firmware upgrade: error")
+}
+
+func TestParallelFirmwareUpgradeNoDevices(t *testing.T) {
+	mockUpgrader := new(MockCalnexUpgrader)
+
+	errors := ParallelFirmwareUpgrade([]string{}, true, nil, mockUpgrader, true, false)
+
+	mockUpgrader.AssertNumberOfCalls(t, "Firmware", 0)
+	require.ElementsMatch(t, errors, []error{})
 }
