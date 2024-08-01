@@ -180,35 +180,45 @@ func NewClient(target netip.Addr, targetPort int, clockID ptp.ClockIdentity, eve
 
 // handleAnnounce handles ANNOUNCE packet and records UTC offset from it's data
 func (c *Client) handleAnnounce(b *ptp.Announce) {
+	t1 := b.OriginTimestamp.Time()
+	cf := b.CorrectionField.Duration()
 	log.Debugf("[%s] server -> %s (seq=%d, T1=%v, CF2=%v, gmIdentity=%s, gmTimeSource=%s, stepsRemoved=%d)",
 		c.server,
 		ptp.MessageAnnounce,
 		b.SequenceID,
-		b.OriginTimestamp.Time(),
-		b.CorrectionField.Duration(),
+		t1,
+		cf,
 		b.GrandmasterIdentity,
 		b.TimeSource,
 		b.StepsRemoved)
+	if cf < 0 {
+		log.Warnf("[%s] announce msg CF2=%v is negative", c.server, cf)
+	}
 	c.m.currentUTCoffset = time.Duration(b.CurrentUTCOffset) * time.Second
 	// announce carries T1 and CF2
-	c.m.addT1(b.SequenceID, b.OriginTimestamp.Time())
-	c.m.addCF2(b.SequenceID, b.CorrectionField.Duration())
+	c.m.addT1(b.SequenceID, t1)
+	c.m.addCF2(b.SequenceID, cf)
 	c.m.addAnnounce(*b)
 }
 
 // handleSync handles SYNC packet and adds send timestamp to measurements
 func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) {
+	t4 := b.OriginTimestamp.Time()
+	cf := b.CorrectionField.Duration()
 	log.Debugf("[%s] server -> %s (seq=%d, T2=%v, T4=%v, CF1=%v)",
 		c.server,
 		ptp.MessageSync,
 		b.SequenceID,
 		ts,
-		b.OriginTimestamp.Time(),
-		b.CorrectionField.Duration())
+		t4,
+		cf)
+	if cf < 0 {
+		log.Warnf("[%s] sync msg CF1=%v is negative", c.server, cf)
+	}
 	// T2 and CF1
-	c.m.addT2andCF1(b.SequenceID, ts, b.CorrectionField.Duration())
+	c.m.addT2andCF1(b.SequenceID, ts, cf)
 	// sync carries T4 as well
-	c.m.addT4(b.SequenceID, b.OriginTimestamp.Time())
+	c.m.addT4(b.SequenceID, t4)
 }
 
 // handleDelayReq handles Delay Reqest packet and responds with SYNC
