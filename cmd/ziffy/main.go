@@ -65,6 +65,7 @@ func main() {
 	flag.StringVar(&c.Device, "if", "eth0", "network interface to use")
 	flag.IntVar(&c.HopMax, "maxhop", 7, "max number of hops (used by sender)")
 	flag.IntVar(&c.HopMin, "minhop", 1, "min number of hops (used by sender)")
+	flag.IntVar(&c.PacketsPerHop, "packetsperhop", 3, "number of packets we send per hop (used by sender)")
 	flag.DurationVar(&c.IcmpTimeout, "icmptime", 1*time.Second, "max timeout to wait for icmp packets (used by sender)")
 	flag.StringVar(&c.DestinationAddress, "addr", "", "IP address of receiver (used by sender)")
 	flag.IntVar(&c.DestinationPort, "dp", ptp.PortEvent, "destination port to send packets to")

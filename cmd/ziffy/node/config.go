@@ -47,6 +47,7 @@ type Config struct {
 	PortCount          int
 	HopMax             int
 	HopMin             int
+	PacketsPerHop      int
 	IPCount            int
 	DSCP               int
 	PTPRecvHandlers    int

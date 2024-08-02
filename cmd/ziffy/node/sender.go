@@ -82,15 +82,17 @@ func (s *Sender) Start() ([]PathInfo, error) {
 
 	go s.monitorIcmp(s.icmpConn)
 
-	log.Infof("sending %v flows of PTP %v packets to %v from source port range %v-%v with max hop count of %v and min hop count of %v and "+
+	log.Infof("sending %v flows of PTP %v packets to %v from source port range %v-%v to destination port %v with %v packets per hop, max hop count of %v and min hop count of %v and "+
 		"sweeping %v other addresses in target network prefix with a per hop timeout of %v. Total flows %v.\n\n",
 		s.Config.PortCount, s.Config.MessageType, s.Config.DestinationAddress,
-		s.Config.SourcePort, s.Config.SourcePort+s.Config.PortCount-1, s.Config.HopMax, s.Config.HopMin, s.Config.IPCount, s.Config.IcmpTimeout,
+		s.Config.SourcePort, s.Config.SourcePort+s.Config.PortCount-1, s.Config.DestinationPort,
+		s.Config.PacketsPerHop,
+		s.Config.HopMax, s.Config.HopMin, s.Config.IPCount, s.Config.IcmpTimeout,
 		s.Config.PortCount+s.Config.PortCount*s.Config.IPCount)
 
 	for i := 0; i < s.Config.PortCount; i++ {
 		s.routes = append(s.routes, PathInfo{switches: nil, rackSwHostname: s.rackSwHostname})
-		if err := s.traceRoute(s.Config.DestinationAddress, s.Config.SourcePort+i, false); err != nil {
+		if err := s.traceRoute(s.Config.DestinationAddress, s.Config.SourcePort+i, false, s.Config.PacketsPerHop); err != nil {
 			log.Errorf("traceRoute failed: %v", err)
 			continue
 		}
@@ -156,7 +158,7 @@ func (s *Sender) sweepRackPrefix() {
 		for j := 0; j < s.Config.PortCount; j++ {
 			s.routes = append(s.routes, PathInfo{rackSwHostname: s.rackSwHostname})
 
-			if err := s.traceRoute(newIP.String(), s.Config.SourcePort+j, true); err != nil {
+			if err := s.traceRoute(newIP.String(), s.Config.SourcePort+j, true, s.Config.PacketsPerHop); err != nil {
 				log.Errorf("sweepRackPrefix traceRoute failed: %v", err)
 				continue
 			}
@@ -169,7 +171,7 @@ func (s *Sender) sweepRackPrefix() {
 	fmt.Printf("\n\n")
 }
 
-func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) error {
+func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool, packetsPerHop int) error {
 	ptpUDPAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(destinationIP, fmt.Sprint(s.Config.DestinationPort)))
 	if err != nil {
 		return fmt.Errorf("traceRoute unable to resolve UDPAddr: %w", err)
@@ -203,36 +205,57 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool) e
 	// Stop incrementing hops when either the max hop count is reached or
 	// the destination has responded unless continue is specified
 	for hop := s.Config.HopMin; hop <= hopMax && (!destReached || s.Config.ContReached); hop++ {
-		if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_UNICAST_HOPS, hop); err != nil {
-			return err
-		}
-		// First 2 bits from Traffic Class are unused, so we shift the value 2 bits
-		if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, s.Config.DSCP<<2); err != nil {
-			return err
-		}
-		var p ptp.Packet
-		switch s.Config.MessageType {
-		case ptp.MessageSync, ptp.MessageDelayReq:
-			p = formSyncPacket(s.Config.MessageType, hop, s.currentRoute)
-		case ptp.MessageSignaling:
-			p = formSignalingPacket(hop, s.currentRoute)
-		default:
-			return fmt.Errorf("unsupported packet type %v", s.Config.MessageType)
-		}
-
-		if err := s.sendEventMsg(p, connFd, ptpAddr); err != nil {
-			return err
-		}
-
-		select {
-		case sw := <-s.inputQueue:
-			s.routes[sw.routeIdx].switches = append(s.routes[sw.routeIdx].switches, *sw)
-			if net.ParseIP(sw.ip).Equal(ptpUDPAddr.IP) {
-				destReached = true
-				s.destHop = hop
+		for i := 0; i < packetsPerHop; i++ {
+			if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_UNICAST_HOPS, hop); err != nil {
+				return err
 			}
-		case <-time.After(s.Config.IcmpTimeout):
-			continue
+			// First 2 bits from Traffic Class are unused, so we shift the value 2 bits
+			if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, s.Config.DSCP<<2); err != nil {
+				return err
+			}
+			var p ptp.Packet
+			switch s.Config.MessageType {
+			case ptp.MessageSync, ptp.MessageDelayReq:
+				p = formSyncPacket(s.Config.MessageType, hop, s.currentRoute)
+			case ptp.MessageSignaling:
+				p = formSignalingPacket(hop, s.currentRoute)
+			default:
+				return fmt.Errorf("unsupported packet type %v", s.Config.MessageType)
+			}
+
+			if err := s.sendEventMsg(p, connFd, ptpAddr); err != nil {
+				return err
+			}
+
+			select {
+			case sw := <-s.inputQueue:
+				trace := s.routes[sw.routeIdx]
+				l := len(trace.switches)
+				newSampleForHop := true
+				if l > 0 {
+					lastSample := trace.switches[l-1]
+					// check previous sample for this hop to see if CF was lower.
+					// this is intended to eliminate use cases where CF has a transient spike
+					// which when subtracted from CF on subsequent hop can lead to negative values
+					if lastSample.hop == sw.hop {
+						newSampleForHop = false
+						if sw.corrField < lastSample.corrField {
+							log.Debugf("Received better sample for hop %v", sw.hop)
+							trace.switches[l-1] = *sw
+							s.routes[sw.routeIdx] = trace
+						}
+					}
+				}
+				if newSampleForHop {
+					s.routes[sw.routeIdx].switches = append(s.routes[sw.routeIdx].switches, *sw)
+				}
+				if net.ParseIP(sw.ip).Equal(ptpUDPAddr.IP) {
+					destReached = true
+					s.destHop = hop
+				}
+			case <-time.After(s.Config.IcmpTimeout):
+				continue
+			}
 		}
 	}
 	return nil
@@ -258,7 +281,7 @@ func (s *Sender) monitorIcmp(conn net.PacketConn) {
 				log.Debugf("icmp listener error: %v", err)
 				continue
 			}
-			go s.handleIcmpPacket(buf, n, rAddr)
+			s.handleIcmpPacket(buf, n, rAddr)
 		}
 	}
 }
