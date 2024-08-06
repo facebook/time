@@ -423,6 +423,7 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 	} else {
 		freqAdj, state = p.pi.Sample(bmOffset, uint64(bm.Timestamp.UnixNano()))
 	}
+	p.stats.SetServoState(int(state))
 	log.Infof("offset %10d s%d freq %+7.0f path delay %10d (%6d:%6d)", bmOffset, state, freqAdj, bmDelay, bm.C2SDelay, bm.S2CDelay)
 	switch state {
 	case servo.StateJump:

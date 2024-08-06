@@ -114,6 +114,7 @@ func TestProcessResultsSingle(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsTotal(1)
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
 
 	cfg := DefaultConfig()
 	cfg.Servers = map[string]int{
@@ -173,6 +174,7 @@ func TestProcessResultsFastSamples(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsTotal(1)
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
 
 	cfg := DefaultConfig()
 	cfg.Servers = map[string]int{
@@ -230,6 +232,7 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsAvailable(50)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
 
 	cfg := DefaultConfig()
 	cfg.Servers = map[string]int{
@@ -353,6 +356,7 @@ func TestRunFiltered(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsTotal(1)
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
 
 	cfg := DefaultConfig()
 	cfg.Servers = map[string]int{
