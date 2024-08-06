@@ -33,6 +33,7 @@ type StatsServer interface {
 	SetGmsTotal(gmsTotal int)
 	SetGmsAvailable(gmsAvailable int)
 	SetTickDuration(tickDuration time.Duration)
+	SetServoState(state int)
 	IncFiltered()
 	IncRXSync()
 	IncRXAnnounce()
@@ -67,6 +68,7 @@ type clientStats struct {
 	rxDelayReq   int64
 	txDelayReq   int64
 	unsupported  int64
+	servoState   int64
 }
 
 // sysStats is just a grouping, don't use directly
@@ -103,6 +105,11 @@ func (s *Stats) SetGmsAvailable(gmsAvailable int) {
 // SetTickDuration atomically sets the gmsTotal
 func (s *Stats) SetTickDuration(tickDuration time.Duration) {
 	atomic.StoreInt64(&s.tickDuration, tickDuration.Nanoseconds())
+}
+
+// SetServoState atomically sets the servoState
+func (s *Stats) SetServoState(state int) {
+	atomic.StoreInt64(&s.servoState, int64(state))
 }
 
 // IncFiltered atomically adds 1 to the rxsync
@@ -151,6 +158,7 @@ func (s *Stats) GetCounters() map[string]int64 {
 		"ptp.sptp.portstats.rx.delay_req":   s.rxDelayReq,
 		"ptp.sptp.portstats.tx.delay_req":   s.txDelayReq,
 		"ptp.sptp.portstats.rx.unsupported": s.unsupported,
+		"ptp.sptp.servo.state":              s.servoState,
 		// sysStats
 		"ptp.sptp.runtime.gc.pause_ns.sum.60":    s.gcPauseNs,
 		"ptp.sptp.runtime.mem.gc.pause_total_ns": s.gcPauseTotalNs,

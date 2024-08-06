@@ -182,3 +182,15 @@ func (mr *MockStatsServerMockRecorder) SetTickDuration(tickDuration interface{})
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTickDuration", reflect.TypeOf((*MockStatsServer)(nil).SetTickDuration), tickDuration)
 }
+
+// SetServoState mocks base method.
+func (m *MockStatsServer) SetServoState(state int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetServoState", state)
+}
+
+// SetServoState indicates an expected call of SetServoState.
+func (mr *MockStatsServerMockRecorder) SetServoState(state interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetServoState", reflect.TypeOf((*MockStatsServer)(nil).SetServoState), state)
+}
