@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/facebook/time/ntp/chrony"
 	"github.com/facebook/time/ntp/control"
@@ -81,6 +82,20 @@ func sanityCheckPeerVars(p *Peer) error {
 		return errors.New("Incomplete data, poll 0 in peer variables")
 	}
 	return nil
+}
+
+// GetSyncSource returns human readable representation of sync source address for remote, 4 rune word for local
+func GetSyncSource(p *Peer, clockSource string) string {
+	if clockSource == chrony.ClockSourceLocal {
+		var localSource = ""
+		parts := strings.Split(p.SRCAdr, ".")
+		for _, p := range parts {
+			asciiCode, _ := strconv.Atoi(p)
+			localSource += string(byte(asciiCode))
+		}
+		return localSource
+	}
+	return p.SRCAdr
 }
 
 // NewPeerFromNTP constructs Peer from NTPControlMsg packet

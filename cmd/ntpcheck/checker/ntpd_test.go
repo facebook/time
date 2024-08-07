@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/facebook/time/ntp/chrony"
 	"github.com/facebook/time/ntp/control"
 )
 
@@ -109,7 +110,7 @@ func TestNTPCheckRun(t *testing.T) {
 	want := &NTPCheckResult{
 		LI:          0,
 		LIDesc:      "none",
-		ClockSource: "ntp",
+		ClockSource: chrony.ClockSourceNTP,
 		Event:       "clock_sync",
 		SysVars: &SystemVariables{
 			Stratum: 3,

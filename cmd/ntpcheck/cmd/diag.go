@@ -94,7 +94,7 @@ func checkSync(r *checker.NTPCheckResult) (status, string) {
 	if r.LI == 3 {
 		return FAIL, "Clock is not fully synchronized, leap indicator is set to 'alarm'"
 	}
-	return OK, fmt.Sprintf("Clock is syncing to %s", color.BlueString(syspeer.SRCAdr))
+	return OK, fmt.Sprintf("Clock is syncing to %s", color.BlueString(checker.GetSyncSource(syspeer, r.ClockSource)))
 }
 
 func checkLeap(r *checker.NTPCheckResult) (status, string) {
@@ -205,7 +205,7 @@ func checkPeersReach(r *checker.NTPCheckResult) (status, string) {
 				badPeers,
 				fmt.Sprintf(
 					"Peer %s has reach %s",
-					color.BlueString(peer.SRCAdr),
+					color.BlueString(checker.GetSyncSource(peer, r.ClockSource)),
 					color.YellowString("%08b", peer.Reach),
 				),
 			)
