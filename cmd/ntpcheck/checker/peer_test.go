@@ -182,3 +182,17 @@ func TestNewPeerFromChrony(t *testing.T) {
 		})
 	}
 }
+
+func TestGetSyncSource(t *testing.T) {
+	testCases := [][]string{
+		{"80.72.67.48", chrony.ClockSourceLocal, "PHC0"},
+		{"65.84.79.77", chrony.ClockSourceLocal, "ATOM"},
+		{"2a03:2880:f0ff:00c0:face:b00c:0000:03fb", chrony.ClockSourceNTP, "2a03:2880:f0ff:00c0:face:b00c:0000:03fb"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc[0], func(t *testing.T) {
+			p := &Peer{SRCAdr: tc[0]}
+			require.Equal(t, tc[2], GetSyncSource(p, tc[1]))
+		})
+	}
+}

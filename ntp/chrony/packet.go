@@ -827,6 +827,34 @@ func NewActivityPacket() *RequestActivity {
 	}
 }
 
+// possible clock sources
+const (
+	ClockSourceUnspec     = "unspec"
+	ClockSourcePPS        = "pps"
+	ClockSourceLFRadio    = "lf_radio"
+	ClockSourceHFRadio    = "hf_radio"
+	ClockSourceUHFRadio   = "uhf_radio"
+	ClockSourceLocal      = "local"
+	ClockSourceNTP        = "ntp"
+	ClockSourceOther      = "other"
+	ClockSourceWristWatch = "wristwatch"
+	ClockSourceTelephone  = "telephone"
+)
+
+// ClockSourceDesc stores human-readable descriptions of ClockSource field
+var ClockSourceDesc = [10]string{
+	ClockSourceUnspec,     // 00
+	ClockSourcePPS,        // 01
+	ClockSourceLFRadio,    // 02
+	ClockSourceHFRadio,    // 03
+	ClockSourceUHFRadio,   // 04
+	ClockSourceLocal,      // 05
+	ClockSourceNTP,        // 06
+	ClockSourceOther,      // 07
+	ClockSourceWristWatch, // 08
+	ClockSourceTelephone,  // 09
+}
+
 // decodePacket decodes bytes to valid response packet
 func decodePacket(response []byte) (ResponsePacket, error) {
 	var err error

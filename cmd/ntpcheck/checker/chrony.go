@@ -157,9 +157,9 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 		// if main sync source, update ClockSource info
 		if sourceData.State == chrony.SourceStateSync {
 			if sourceData.Mode == chrony.SourceModeRef {
-				result.ClockSource = "local"
+				result.ClockSource = chrony.ClockSourceLocal
 			} else {
-				result.ClockSource = "ntp"
+				result.ClockSource = chrony.ClockSourceNTP
 			}
 		}
 	}
