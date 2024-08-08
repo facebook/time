@@ -46,9 +46,10 @@ func TestSPTPTestResultGood(t *testing.T) {
 		{
 			name: "fail",
 			in: SPTPTestResult{
-				Config: SPTPTestConfig{Server: "time01", LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
-				Offset: float64(time.Millisecond.Nanoseconds()),
-				Error:  nil,
+				Config:     SPTPTestConfig{Server: "time01", LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
+				Offset:     float64(time.Millisecond.Nanoseconds()),
+				ClockClass: 6,
+				Error:      nil,
 			},
 			want:    false,
 			wantErr: false,
@@ -56,9 +57,10 @@ func TestSPTPTestResultGood(t *testing.T) {
 		{
 			name: "pass",
 			in: SPTPTestResult{
-				Config: SPTPTestConfig{Server: "time01", LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
-				Offset: float64(time.Nanosecond),
-				Error:  nil,
+				Config:     SPTPTestConfig{Server: "time01", LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
+				Offset:     float64(time.Nanosecond),
+				ClockClass: 6,
+				Error:      nil,
 			},
 			want:    true,
 			wantErr: false,
@@ -94,11 +96,22 @@ func TestSPTPTestResultExplain(t *testing.T) {
 		{
 			name: "fail",
 			in: SPTPTestResult{
-				Config: SPTPTestConfig{Server: "time01", LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
-				Offset: float64(time.Millisecond.Nanoseconds()),
-				Error:  nil,
+				Config:     SPTPTestConfig{Server: "time01", LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
+				Offset:     float64(time.Millisecond.Nanoseconds()),
+				ClockClass: 6,
+				Error:      nil,
 			},
 			want: "linearizability test against \"time01\" failed because the offset 1000000.00ns is > 3µs",
+		},
+		{
+			name: "pass",
+			in: SPTPTestResult{
+				Config:     SPTPTestConfig{Server: "time01", LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
+				Offset:     float64(time.Millisecond.Nanoseconds()),
+				ClockClass: 52,
+				Error:      nil,
+			},
+			want: "linearizability test against \"time01\" passed",
 		},
 		{
 			name: "pass",
@@ -135,9 +148,10 @@ func TestSPTPRunTest(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedGood := SPTPTestResult{
-		Config: SPTPTestConfig{Server: "127.0.0.1", sptpurl: ts.URL, LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
-		Offset: -42.42,
-		Error:  nil,
+		Config:     SPTPTestConfig{Server: "127.0.0.1", sptpurl: ts.URL, LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
+		Offset:     -42.42,
+		ClockClass: 6,
+		Error:      nil,
 	}
 
 	testResult := lt.RunTest(context.Background())
@@ -150,9 +164,10 @@ func TestSPTPRunTest(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedBad := SPTPTestResult{
-		Config: SPTPTestConfig{Server: "::1", sptpurl: ts.URL, LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
-		Offset: -43.43,
-		Error:  fmt.Errorf("oops"),
+		Config:     SPTPTestConfig{Server: "::1", sptpurl: ts.URL, LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
+		Offset:     -43.43,
+		ClockClass: 7,
+		Error:      fmt.Errorf("oops"),
 	}
 
 	testResult = lt.RunTest(context.Background())

@@ -22,15 +22,17 @@ import (
 	"math"
 	"time"
 
+	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/sptp/stats"
 	log "github.com/sirupsen/logrus"
 )
 
 // SPTPTestResult is what we get after the test run
 type SPTPTestResult struct {
-	Config SPTPTestConfig
-	Offset float64
-	Error  error
+	Config     SPTPTestConfig
+	Offset     float64
+	Error      error
+	ClockClass ptp.ClockClass
 }
 
 // Target returns value of server
@@ -44,6 +46,10 @@ func (tr SPTPTestResult) Good() (bool, error) {
 		return false, tr.Error
 	}
 	if math.Abs(tr.Offset) > float64(tr.Config.LinearizabilityTestMaxGMOffset.Nanoseconds()) {
+		if tr.ClockClass != ptp.ClockClass6 {
+			log.Warningf("linearizability test against %v ignored because the clock class is not Locked", tr.Config.Server)
+			return true, nil
+		}
 		return false, nil
 	}
 	return true, nil
@@ -126,6 +132,7 @@ func (lt *SPTPTester) RunTest(_ context.Context) TestResult {
 	for _, s := range stats {
 		if s.GMAddress == lt.cfg.Server {
 			result.Offset = s.Offset
+			result.ClockClass = s.ClockQuality.ClockClass
 			if s.Error != "" {
 				result.Error = fmt.Errorf(s.Error)
 			}
