@@ -191,9 +191,6 @@ func (c *Client) handleAnnounce(b *ptp.Announce) {
 		b.GrandmasterIdentity,
 		b.TimeSource,
 		b.StepsRemoved)
-	if cf < 0 {
-		log.Warnf("[%s] announce msg CF2=%v is negative", c.server, cf)
-	}
 	c.m.currentUTCoffset = time.Duration(b.CurrentUTCOffset) * time.Second
 	// announce carries T1 and CF2
 	c.m.addT1(b.SequenceID, t1)
@@ -212,9 +209,6 @@ func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) {
 		ts,
 		t4,
 		cf)
-	if cf < 0 {
-		log.Warnf("[%s] sync msg CF1=%v is negative", c.server, cf)
-	}
 	// T2 and CF1
 	c.m.addT2andCF1(b.SequenceID, ts, cf)
 	// sync carries T4 as well

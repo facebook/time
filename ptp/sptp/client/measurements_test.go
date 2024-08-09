@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -71,7 +70,7 @@ func TestMeasurementsFullRun(t *testing.T) {
 			T3:        timeDelaySent,
 			T4:        timeDelayReceived,
 		}
-		assert.Equal(t, want, got)
+		require.Equal(t, want, got)
 	})
 
 	t.Run("asymmetrical delay, some offset", func(t *testing.T) {
@@ -117,7 +116,7 @@ func TestMeasurementsFullRun(t *testing.T) {
 			T3:        timeDelaySent,
 			T4:        timeDelayReceived,
 		}
-		assert.Equal(t, want, got)
+		require.Equal(t, want, got)
 	})
 
 	t.Run("asymmetrical delay, some offset and correction", func(t *testing.T) {
@@ -167,7 +166,7 @@ func TestMeasurementsFullRun(t *testing.T) {
 			T3:                timeDelaySent,
 			T4:                timeDelayReceived,
 		}
-		assert.Equal(t, want, got)
+		require.Equal(t, want, got)
 	})
 }
 
@@ -227,7 +226,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
 	}
-	assert.Equal(t, want, got, "initial measurements check")
+	require.Equal(t, want, got, "initial measurements check")
 
 	// now let's add more data so we see filtering work
 	for i := 0; i < 5; i++ {
@@ -265,7 +264,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
 	}
-	assert.Equal(t, want, got, "measurements after 6 more exchanges")
+	require.Equal(t, want, got, "measurements after 6 more exchanges")
 
 	// now the same with sliding window filtering
 	// nothing changes with median filter, as it was all stable
@@ -285,7 +284,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
 	}
-	assert.Equal(t, want, got, "measurements with median path delay filter")
+	require.Equal(t, want, got, "measurements with median path delay filter")
 
 	// mean filter
 	m.cfg.PathDelayFilter = FilterMean
@@ -304,7 +303,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
 	}
-	assert.Equal(t, want, got, "measurements with mean path delay filter")
+	require.Equal(t, want, got, "measurements with mean path delay filter")
 
 	// now add really bad sample so it gets dropped
 	timeDelaySent = timeDelaySent.Add(time.Second)
@@ -335,7 +334,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
 	}
-	assert.Equal(t, want, got, "measurements with mean path delay filter and skipped path delay sample")
+	require.Equal(t, want, got, "measurements with mean path delay filter and skipped path delay sample")
 
 	m.cfg.PathDelayDiscardMultiplier = 3
 	// now add really bad sample so it gets dropped
@@ -367,7 +366,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
 	}
-	assert.Equal(t, want, got, "measurements with mean path delay filter and skipped path delay sample")
+	require.Equal(t, want, got, "measurements with mean path delay filter and skipped path delay sample")
 }
 
 func TestMeasurementsCleanup(t *testing.T) {
@@ -395,4 +394,58 @@ func TestMDataComplete(t *testing.T) {
 	require.False(t, d.Complete())
 	d.t4 = time.Now()
 	require.True(t, d.Complete())
+}
+
+func TestBadDelay(t *testing.T) {
+	mcfg := &MeasurementConfig{
+		PathDelayFilterLength:         2,
+		PathDelayFilter:               FilterMedian,
+		PathDelayDiscardFilterEnabled: true,
+		PathDelayDiscardBelow:         0,
+		PathDelayDiscardMultiplier:    3,
+	}
+	m := newMeasurements(mcfg)
+
+	newDelay := m.delay(time.Millisecond)
+	require.Equal(t, time.Millisecond, newDelay)
+
+	newDelay = m.delay(3 * time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, newDelay)
+
+	// We add a negative delay and it's being ignored
+	newDelay = m.delay(-time.Second)
+	require.Equal(t, 2*time.Millisecond, newDelay)
+
+	// We add a huge delay and it's being ignored
+	newDelay = m.delay(time.Second)
+	require.Equal(t, 2*time.Millisecond, newDelay)
+}
+
+func TestBadCF(t *testing.T) {
+	mcfg := &MeasurementConfig{
+		PathDelayFilterLength:         2,
+		PathDelayFilter:               FilterMedian,
+		PathDelayDiscardFilterEnabled: true,
+		PathDelayDiscardBelow:         0,
+		PathDelayDiscardMultiplier:    3,
+	}
+	m := newMeasurements(mcfg)
+
+	newDelay := m.delay(time.Millisecond)
+	require.Equal(t, time.Millisecond, newDelay)
+
+	newDelay = m.delay(3 * time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, newDelay)
+
+	m.lastData = &mData{}
+
+	// Valid delay, bad CF1
+	m.lastData.c1 = -time.Millisecond
+	newDelay = m.delay(time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, newDelay)
+
+	// Valid delay, bad CF2
+	m.lastData.c2 = -time.Millisecond
+	newDelay = m.delay(time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, newDelay)
 }

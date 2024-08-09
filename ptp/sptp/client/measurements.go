@@ -73,6 +73,7 @@ type measurements struct {
 	cfg              *MeasurementConfig
 	currentUTCoffset time.Duration
 	data             map[uint16]*mData
+	lastData         *mData
 	announce         ptp.Announce
 	delaysWindow     *slidingWindow
 	pathDelay        time.Duration
@@ -146,6 +147,8 @@ func (m *measurements) delay(newDelay time.Duration) time.Duration {
 	// we want to have at least one sample recorded, even if it doesn't meet the filter, otherwise we'll never sync
 	if !math.IsNaN(lastDelay) && (m.cfg.PathDelayDiscardFilterEnabled && m.delaysWindow.Full() && m.cfg.PathDelayDiscardBelow < maxPathDelay && (newDelay < m.cfg.PathDelayDiscardBelow || newDelay > maxPathDelay)) {
 		log.Warningf("(%s) bad path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
+	} else if !math.IsNaN(lastDelay) && m.lastData != nil && m.cfg.PathDelayDiscardFilterEnabled && (m.lastData.c1 < 0 || m.lastData.c2 < 0) {
+		log.Warningf("(%s) bad correction fields: CF1 (sync): %v, CF2 (announce): %v - filtered out", m.announce.GrandmasterIdentity, m.lastData.c1, m.lastData.c2)
 	} else {
 		m.delaysWindow.add(float64(newDelay))
 	}
@@ -167,22 +170,22 @@ func (m *measurements) delay(newDelay time.Duration) time.Duration {
 func (m *measurements) latest() (*MeasurementResult, error) {
 	m.Lock()
 	defer m.Unlock()
-	var lastData *mData
+	m.lastData = nil
 	for _, v := range m.data {
 		if !v.Complete() {
 			continue
 		}
-		if lastData == nil || v.t2.After(lastData.t2) {
-			lastData = v
+		if m.lastData == nil || v.t2.After(m.lastData.t2) {
+			m.lastData = v
 		}
 	}
-	if lastData == nil {
+	if m.lastData == nil {
 		return nil, errNotEnoughData
 	}
 	// offset = ((t2 − t1 − c1) − (t4 − t3 − c2))/2
 	// delay = ((t2 − t1 − c1) + (t4 − t3 − c2))/2
-	C2SDelay := lastData.t4.Sub(lastData.t3) - lastData.c2
-	S2CDelay := lastData.t2.Sub(lastData.t1) - lastData.c1
+	C2SDelay := m.lastData.t4.Sub(m.lastData.t3) - m.lastData.c2
+	S2CDelay := m.lastData.t2.Sub(m.lastData.t1) - m.lastData.c1
 	newDelay := (C2SDelay + S2CDelay) / 2
 	delay := m.delay(newDelay)
 	offset := S2CDelay - delay
@@ -193,13 +196,13 @@ func (m *measurements) latest() (*MeasurementResult, error) {
 		Offset:            offset,
 		S2CDelay:          S2CDelay,
 		C2SDelay:          C2SDelay,
-		CorrectionFieldRX: lastData.c1,
-		CorrectionFieldTX: lastData.c2,
-		Timestamp:         lastData.t2,
-		T1:                lastData.t1,
-		T2:                lastData.t2,
-		T3:                lastData.t3,
-		T4:                lastData.t4,
+		CorrectionFieldRX: m.lastData.c1,
+		CorrectionFieldTX: m.lastData.c2,
+		Timestamp:         m.lastData.t2,
+		T1:                m.lastData.t1,
+		T2:                m.lastData.t2,
+		T3:                m.lastData.t3,
+		T4:                m.lastData.t4,
 		Announce:          m.announce,
 	}, nil
 }
