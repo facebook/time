@@ -44,14 +44,15 @@ func doAdjFreq(device string, freq float64) error {
 		return fmt.Errorf("opening device %q to read frequency: %w", device, err)
 	}
 	defer f.Close()
+	phcdev := phc.FromFile(f)
 
-	curFreq, err := phc.FrequencyPPBFromDevice(f)
+	curFreq, err := phcdev.FreqPPB()
 	if err != nil {
 		return err
 	}
 	log.Infof("Current device frequency: %f", curFreq)
 
-	maxFreq, err := phc.MaxFreqAdjPPBFromDevice(f)
+	maxFreq, err := phcdev.MaxFreqAdjPPB()
 	if err != nil {
 		return err
 	}
@@ -66,7 +67,7 @@ func doAdjFreq(device string, freq float64) error {
 	}
 
 	log.Infof("Setting new frequency value %f", freq)
-	err = phc.ClockAdjFreq(f, freq)
+	err = phcdev.AdjFreq(freq)
 
 	return err
 }

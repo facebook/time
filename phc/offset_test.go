@@ -37,7 +37,7 @@ func TestSysoffEstimateBasic(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestSysoffEstimateExtended(t *testing.T) {
+func TestSysoffBestSample(t *testing.T) {
 	extended := &PTPSysOffsetExtended{
 		NSamples: 3,
 		TS: [ptpMaxSamples][3]PTPClockTime{
@@ -46,7 +46,7 @@ func TestSysoffEstimateExtended(t *testing.T) {
 			{{Sec: 1667818190, NSec: 552297644}, {Sec: 1667818153, NSec: 552297661}, {Sec: 1667818190, NSec: 552297722}},
 		},
 	}
-	got := SysoffEstimateExtended(extended)
+	got := extended.BestSample()
 	want := SysoffResult{
 		SysTime: time.Unix(0, 1667818190552297683),
 		PHCTime: time.Unix(0, 1667818153552297661),
@@ -95,6 +95,6 @@ func TestOffsetBetweenExtendedReadings(t *testing.T) {
 			{{Sec: 1667818191, NSec: 552301866}, {Sec: 1667818154, NSec: 552297861}, {Sec: 1667818191, NSec: 552328912}},
 		},
 	}
-	offset := OffsetBetweenExtendedReadings(extendedA, extendedB)
+	offset := extendedB.Sub(extendedA)
 	require.Equal(t, time.Duration(-815), offset)
 }

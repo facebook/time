@@ -40,12 +40,6 @@ func (t PTPClockTime) Time() time.Time {
 	return time.Unix(t.Sec, int64(t.NSec))
 }
 
-// FDToClockID converts file descriptor number to clockID.
-// see man(3) clock_gettime, FD_TO_CLOCKID macros
-func FDToClockID(fd uintptr) int32 {
-	return int32((int(^fd) << 3) | 3)
-}
-
 // TimeMethod is method we use to get time
 type TimeMethod string
 
@@ -86,37 +80,65 @@ func Time(iface string, method TimeMethod) (time.Time, error) {
 		return time.Time{}, err
 	}
 	defer f.Close()
+	dev := FromFile(f)
 
 	switch method {
 	case MethodSyscallClockGettime:
-		return TimeFromDevice(f)
+		return dev.Time()
 	case MethodIoctlSysOffsetExtended:
-		extended, err := ReadPTPSysOffsetExtended(f, 1)
+		extended, err := dev.ReadSysoffExtended1()
 		if err != nil {
 			return time.Time{}, err
 		}
 		latest := extended.TS[extended.NSamples-1]
 		return latest[1].Time(), nil
+	default:
+		return time.Time{}, fmt.Errorf("unknown method to get PHC time %q", method)
 	}
-	return time.Time{}, fmt.Errorf("unknown method to get PHC time %q", method)
 }
 
-// TimeFromDevice returns time we got from PTP device
-func TimeFromDevice(phcDevice *os.File) (time.Time, error) {
+// Device represents a PHC device
+type Device os.File
+
+// FromFile returns a *Device corresponding to an *os.File
+func FromFile(file *os.File) *Device { return (*Device)(file) }
+
+// File returns the underlying *os.File
+func (dev *Device) File() *os.File { return (*os.File)(dev) }
+
+// Fd returns the underlying file descriptor
+func (dev *Device) Fd() uintptr { return dev.File().Fd() }
+
+// ClockID derives the clock ID from the file descriptor number - see clock_gettime(3), FD_TO_CLOCKID macros
+func (dev *Device) ClockID() int32 { return int32((int(^dev.Fd()) << 3) | 3) }
+
+// Time returns time from the PTP device using the clock_gettime syscall
+func (dev *Device) Time() (time.Time, error) {
 	var ts unix.Timespec
-	if err := unix.ClockGettime(FDToClockID(phcDevice.Fd()), &ts); err != nil {
+	if err := unix.ClockGettime(dev.ClockID(), &ts); err != nil {
 		return time.Time{}, fmt.Errorf("failed clock_gettime: %w", err)
 	}
 	return time.Unix(ts.Unix()), nil
 }
 
-// ReadPTPSysOffsetExtended gets precise time from PHC along with SYS time to measure the call delay.
-func ReadPTPSysOffsetExtended(phcDevice *os.File, nsamples int) (*PTPSysOffsetExtended, error) {
+// ReadSysoffExtended reads the precise time from the PHC along with SYS time to measure the call delay.
+// The nsamples parameter is set to ExtendedNumProbes.
+func (dev *Device) ReadSysoffExtended() (*PTPSysOffsetExtended, error) {
+	return dev.readSysoffExtended(ExtendedNumProbes)
+}
+
+// ReadSysoffExtended1 reads the precise time from the PHC along with SYS time to measure the call delay.
+// The nsamples parameter is set to 1.
+func (dev *Device) ReadSysoffExtended1() (*PTPSysOffsetExtended, error) {
+	return dev.readSysoffExtended(1)
+}
+
+func (dev *Device) readSysoffExtended(nsamples int) (*PTPSysOffsetExtended, error) {
 	res := &PTPSysOffsetExtended{
 		NSamples: uint32(nsamples),
 	}
 	_, _, errno := unix.Syscall(
-		unix.SYS_IOCTL, phcDevice.Fd(),
+		unix.SYS_IOCTL, dev.Fd(),
 		ioctlPTPSysOffsetExtended,
 		uintptr(unsafe.Pointer(res)),
 	)
@@ -126,12 +148,11 @@ func ReadPTPSysOffsetExtended(phcDevice *os.File, nsamples int) (*PTPSysOffsetEx
 	return res, nil
 }
 
-// ReadPTPClockCapsFromDevice reads ptp capabilities using ioctl
-func ReadPTPClockCapsFromDevice(phcDevice *os.File) (*PTPClockCaps, error) {
+// readCaps reads PTP capabilities using ioctl
+func (dev *Device) readCaps() (*PTPClockCaps, error) {
 	caps := &PTPClockCaps{}
-
 	_, _, errno := unix.Syscall(
-		unix.SYS_IOCTL, phcDevice.Fd(),
+		unix.SYS_IOCTL, dev.Fd(),
 		ioctlPTPClockGetcaps,
 		uintptr(unsafe.Pointer(caps)),
 	)
@@ -142,20 +163,20 @@ func ReadPTPClockCapsFromDevice(phcDevice *os.File) (*PTPClockCaps, error) {
 	return caps, nil
 }
 
-// MaxFreqAdjPPBFromDevice reads max value for frequency adjustments (in PPB) from ptp device
-func MaxFreqAdjPPBFromDevice(phcDevice *os.File) (maxFreq float64, err error) {
-	caps, err := ReadPTPClockCapsFromDevice(phcDevice)
-
+// MaxFreqAdjPPB reads max value for frequency adjustments (in PPB) from ptp device
+func (dev *Device) MaxFreqAdjPPB() (maxFreq float64, err error) {
+	caps, err := dev.readCaps()
 	if err != nil {
 		return 0, err
 	}
-
-	return maxAdj(caps), nil
+	return caps.maxAdj(), nil
 }
 
-func maxAdj(caps *PTPClockCaps) float64 {
-	if caps == nil || caps.MaxAdj == 0 {
-		return DefaultMaxClockFreqPPB
-	}
-	return float64(caps.MaxAdj)
-}
+// FreqPPB reads PHC device frequency in PPB (parts per billion)
+func (dev *Device) FreqPPB() (freqPPB float64, err error) { return freqPPBFromDevice(dev) }
+
+// AdjFreq adjusts the PHC clock frequency in PPB
+func (dev *Device) AdjFreq(freqPPB float64) error { return clockAdjFreq(dev, freqPPB) }
+
+// Step steps the PHC clock by given duration
+func (dev *Device) Step(step time.Duration) error { return clockStep(dev, step) }

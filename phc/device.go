@@ -85,6 +85,13 @@ type PTPClockCaps struct {
 	Rsv         [12]int32 /* Reserved for future use. */
 }
 
+func (caps *PTPClockCaps) maxAdj() float64 {
+	if caps == nil || caps.MaxAdj == 0 {
+		return DefaultMaxClockFreqPPB
+	}
+	return float64(caps.MaxAdj)
+}
+
 // IfaceInfo uses SIOCETHTOOL ioctl to get information for the give nic, i.e. eth0.
 func IfaceInfo(iface string) (*EthtoolTSinfo, error) {
 	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, 0)

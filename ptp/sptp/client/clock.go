@@ -38,7 +38,7 @@ type Clock interface {
 
 // PHC groups methods for interactions with PHC devices
 type PHC struct {
-	device *os.File
+	dev *phc.Device
 }
 
 // NewPHC creates new PHC device abstraction from network interface name
@@ -54,29 +54,27 @@ func NewPHC(iface string) (*PHC, error) {
 		return nil, fmt.Errorf("opening device %s error: %w", devicePath, err)
 	}
 
-	return &PHC{
-		device: f,
-	}, nil
+	return &PHC{dev: phc.FromFile(f)}, nil
 }
 
 // AdjFreqPPB adjusts PHC frequency
-func (p *PHC) AdjFreqPPB(freq float64) error {
-	return phc.ClockAdjFreq(p.device, freq)
+func (p *PHC) AdjFreqPPB(freqPPB float64) error {
+	return p.dev.AdjFreq(freqPPB)
 }
 
 // Step jumps time on PHC
 func (p *PHC) Step(step time.Duration) error {
-	return phc.ClockStep(p.device, step)
+	return p.dev.Step(step)
 }
 
 // FrequencyPPB returns current PHC frequency
 func (p *PHC) FrequencyPPB() (float64, error) {
-	return phc.FrequencyPPBFromDevice(p.device)
+	return p.dev.FreqPPB()
 }
 
 // MaxFreqPPB returns maximum frequency adjustment supported by PHC
 func (p *PHC) MaxFreqPPB() (float64, error) {
-	return phc.MaxFreqAdjPPBFromDevice(p.device)
+	return p.dev.MaxFreqAdjPPB()
 }
 
 // SetSync is a no-op for PHC

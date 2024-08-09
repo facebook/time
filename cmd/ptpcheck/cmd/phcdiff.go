@@ -57,18 +57,19 @@ func phcdiffRun(deviceA, deviceB string, isJSON bool) error {
 		return fmt.Errorf("opening device %q to set frequency: %w", deviceB, err)
 	}
 	defer b.Close()
+	adev, bdev := phc.FromFile(a), phc.FromFile(b)
 
-	extendedA, err := phc.ReadPTPSysOffsetExtended(a, phc.ExtendedNumProbes)
+	extendedA, err := adev.ReadSysoffExtended()
 	if err != nil {
 		return err
 	}
-	extendedB, err := phc.ReadPTPSysOffsetExtended(b, phc.ExtendedNumProbes)
+	extendedB, err := bdev.ReadSysoffExtended()
 	if err != nil {
 		return err
 	}
-	timeAndOffsetA := phc.SysoffEstimateExtended(extendedA)
-	timeAndOffsetB := phc.SysoffEstimateExtended(extendedB)
-	phcOffset := phc.OffsetBetweenExtendedReadings(extendedA, extendedB)
+	timeAndOffsetA := extendedA.BestSample()
+	timeAndOffsetB := extendedB.BestSample()
+	phcOffset := extendedB.Sub(extendedA)
 
 	if isJSON {
 		stats := phcStats{PHCOffset: phcOffset, PHC1Delay: timeAndOffsetA.Delay, PHC2Delay: timeAndOffsetB.Delay}
