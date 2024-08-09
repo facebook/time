@@ -66,9 +66,9 @@ func SysoffEstimateBasic(ts1, rt, ts2 time.Time) SysoffResult {
 	}
 }
 
-// SysoffEstimateExtended finds sample which took least time to be read,
-// logic loosely based on sysoff_estimate from ptp4l sysoff.c
-func SysoffEstimateExtended(extended *PTPSysOffsetExtended) SysoffResult {
+// BestSample finds a sample which took the least time to be read;
+// the logic is loosely based on sysoff_estimate from ptp4l sysoff.c
+func (extended *PTPSysOffsetExtended) BestSample() SysoffResult {
 	best := sysoffFromExtendedTS(extended.TS[0])
 	for i := 1; i < int(extended.NSamples); i++ {
 		sysoff := sysoffFromExtendedTS(extended.TS[i])
@@ -95,12 +95,13 @@ func TimeAndOffsetFromDevice(device string, method TimeMethod) (SysoffResult, er
 		return SysoffResult{}, err
 	}
 	defer f.Close()
+	dev := FromFile(f)
 
 	switch method {
 	case MethodSyscallClockGettime:
 		var ts unix.Timespec
 		ts1 := time.Now()
-		err = unix.ClockGettime(FDToClockID(f.Fd()), &ts)
+		err = unix.ClockGettime(dev.ClockID(), &ts)
 		ts2 := time.Now()
 		if err != nil {
 			return SysoffResult{}, fmt.Errorf("failed clock_gettime: %w", err)
@@ -108,11 +109,11 @@ func TimeAndOffsetFromDevice(device string, method TimeMethod) (SysoffResult, er
 
 		return SysoffEstimateBasic(ts1, time.Unix(ts.Unix()), ts2), nil
 	case MethodIoctlSysOffsetExtended:
-		extended, err := ReadPTPSysOffsetExtended(f, ExtendedNumProbes)
+		extended, err := dev.ReadSysoffExtended()
 		if err != nil {
 			return SysoffResult{}, err
 		}
-		return SysoffEstimateExtended(extended), nil
+		return extended.BestSample(), nil
 	}
 	return SysoffResult{}, fmt.Errorf("unknown method to get PHC time %q", method)
 }
@@ -125,8 +126,13 @@ func abs(value time.Duration) time.Duration {
 	return value
 }
 
-// OffsetBetweenExtendedReadings returns estimated difference between two PHC SYS_OFFSET_EXTENDED readings
-func OffsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) time.Duration {
+// Sub returns the estimated difference between two PHC SYS_OFFSET_EXTENDED readings
+func (extended *PTPSysOffsetExtended) Sub(a *PTPSysOffsetExtended) time.Duration {
+	return offsetBetweenExtendedReadings(a, extended)
+}
+
+// offsetBetweenExtendedReadings returns estimated difference between two PHC SYS_OFFSET_EXTENDED readings
+func offsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) time.Duration {
 	// we expect both probes to have same number of measures
 	numProbes := int(extendedA.NSamples)
 	if int(extendedB.NSamples) < numProbes {
@@ -156,13 +162,14 @@ func OffsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) t
 
 // OffsetBetweenDevices returns estimated difference between two PHC devices
 func OffsetBetweenDevices(deviceA, deviceB *os.File) (time.Duration, error) {
-	extendedA, err := ReadPTPSysOffsetExtended(deviceA, ExtendedNumProbes)
+	adev, bdev := FromFile(deviceA), FromFile(deviceB)
+	extendedA, err := adev.ReadSysoffExtended()
 	if err != nil {
 		return 0, err
 	}
-	extendedB, err := ReadPTPSysOffsetExtended(deviceB, ExtendedNumProbes)
+	extendedB, err := bdev.ReadSysoffExtended()
 	if err != nil {
 		return 0, err
 	}
-	return OffsetBetweenExtendedReadings(extendedA, extendedB), nil
+	return extendedB.Sub(extendedA), nil
 }

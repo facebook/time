@@ -205,10 +205,11 @@ func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
+	dev := phc.FromFile(f)
 
 	// function to get time from phc
-	s.getPHCTime = func() (time.Time, error) { return phc.TimeFromDevice(f) }
-	s.getPHCFreqPPB = func() (float64, error) { return phc.FrequencyPPBFromDevice(f) }
+	s.getPHCTime = func() (time.Time, error) { return dev.Time() }
+	s.getPHCFreqPPB = func() (float64, error) { return dev.FreqPPB() }
 	// calculated values
 	s.stats.SetCounter("m_ns", 0)
 	s.stats.SetCounter("w_ns", 0)

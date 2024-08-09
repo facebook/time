@@ -18,37 +18,46 @@ package phc
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/facebook/time/clock"
 	"golang.org/x/sys/unix"
 )
 
-// FrequencyPPBFromDevice reads PHC device frequency in PPB
-func FrequencyPPBFromDevice(phcDevice *os.File) (freqPPB float64, err error) {
-	var state int
-	freqPPB, state, err = clock.FrequencyPPB(FDToClockID(phcDevice.Fd()))
+// errorClockState is an error type returned in a situation when the clock is found in bad state
+type errorClockState struct {
+	path string
+	st   int
+}
+
+// Error implements the error interface
+func (e *errorClockState) Error() string {
+	return fmt.Sprintf("clock %q state %d is not TIME_OK", e.path, e.st)
+}
+
+// freqPPBFromDevice reads PHC device frequency in PPB
+func freqPPBFromDevice(dev *Device) (freqPPB float64, err error) {
+	freqPPB, state, err := clock.FrequencyPPB(dev.ClockID())
 	if err == nil && state != unix.TIME_OK {
-		return freqPPB, fmt.Errorf("clock %q state %d is not TIME_OK", phcDevice.Name(), state)
+		return freqPPB, &errorClockState{path: dev.File().Name(), st: state}
 	}
 	return freqPPB, err
 }
 
-// ClockAdjFreq adjusts PHC clock frequency in PPB
-func ClockAdjFreq(phcDevice *os.File, freqPPB float64) error {
-	state, err := clock.AdjFreqPPB(FDToClockID(phcDevice.Fd()), freqPPB)
+// clockAdjFreq adjusts PHC clock frequency in PPB
+func clockAdjFreq(dev *Device, freqPPB float64) error {
+	state, err := clock.AdjFreqPPB(dev.ClockID(), freqPPB)
 	if err == nil && state != unix.TIME_OK {
-		return fmt.Errorf("clock %q state %d is not TIME_OK", phcDevice.Name(), state)
+		return &errorClockState{path: dev.File().Name(), st: state}
 	}
 	return err
 }
 
-// ClockStep steps PHC clock by given step
-func ClockStep(phcDevice *os.File, step time.Duration) error {
-	state, err := clock.Step(FDToClockID(phcDevice.Fd()), step)
+// clockStep steps PHC clock by given step
+func clockStep(dev *Device, step time.Duration) error {
+	state, err := clock.Step(dev.ClockID(), step)
 	if err == nil && state != unix.TIME_OK {
-		return fmt.Errorf("clock %q state %d is not TIME_OK", phcDevice.Name(), state)
+		return &errorClockState{path: dev.File().Name(), st: state}
 	}
 	return err
 }
