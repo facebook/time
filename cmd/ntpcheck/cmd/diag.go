@@ -124,8 +124,8 @@ func checkJitter(r *checker.NTPCheckResult) (status, string) {
 }
 
 func checkCorrectionMetric(r *checker.NTPCheckResult) (status, string) {
-	const warnThreshold time.Duration = time.Minute
-	const failThreshold time.Duration = 10 * time.Minute
+	const warnThreshold time.Duration = time.Millisecond
+	const failThreshold time.Duration = time.Second
 	var correctionInMilliseconds = r.Correction * 1000.0
 	return checkAgainstThreshold(
 		"Current correction",
