@@ -56,6 +56,7 @@ type Config struct {
 	MessageType        ptp.MessageType
 	LLDPWaitTime       time.Duration
 	IcmpReplyTime      time.Duration
+	Raw                bool
 
 	// QueueCap used to store ICMP messages. Capacity is the number of late messages
 	// stored until the queue is cleared. After each traceRoute, sender clears the queue.

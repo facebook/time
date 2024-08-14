@@ -127,6 +127,13 @@ func debugPrint(routes []PathInfo) {
 	}
 }
 
+func correctionField(c *Config, swIndex int, switches []SwitchTrafficInfo) ptp.Correction {
+	if !c.Raw {
+		return switches[swIndex+1].corrField - switches[swIndex].corrField
+	}
+	return switches[swIndex+1].corrField
+}
+
 func computeInfo(c *Config, routes []PathInfo, cfThreshold ptp.Correction) map[keyPair]*SwitchPrintInfo {
 	discovered := make(map[keyPair]*SwitchPrintInfo)
 
@@ -147,7 +154,7 @@ func computeInfo(c *Config, routes []PathInfo, cfThreshold ptp.Correction) map[k
 				if route.switches[swIndex+1].hop != route.switches[swIndex].hop+1 {
 					last = true
 				} else {
-					corrField = route.switches[swIndex+1].corrField - route.switches[swIndex].corrField
+					corrField = correctionField(c, swIndex, route.switches)
 				}
 			}
 

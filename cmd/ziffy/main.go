@@ -81,6 +81,7 @@ func main() {
 	flag.DurationVar(&c.IcmpReplyTime, "replytime", 1*time.Second, "waiting time for late icmp packets (used by sender)")
 	flag.IntVar(&nsCFThreshold, "cfthreshold", 250, "CorrectionField threshold (CF difference < abs(CFThreshold) => switch not TC) (used by sender)")
 	flag.IntVar(&c.PTPRecvHandlers, "maxhandlers", 10000, "maximum number of simultaneous goroutines used to handle PTP packets (used by receiver)")
+	flag.BoolVar(&c.Raw, "raw", false, "report the raw CF value (the cumulative total of all CFs in the path) on each switch")
 
 	flag.Parse()
 
