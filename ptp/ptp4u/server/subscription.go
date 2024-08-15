@@ -22,7 +22,6 @@ package server
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"sync"
 	"time"
 
@@ -97,7 +96,7 @@ func (sc *SubscriptionClient) Start(ctx context.Context) {
 	sc.runningInterval = sc.interval
 	sc.intervalTicker = time.NewTicker(sc.runningInterval)
 
-	defer log.Infof(fmt.Sprintf("Subscription %s is over for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa)))
+	defer log.Infof("Subscription %s is over for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa))
 	if sc.subscriptionType != ptp.MessageDelayReq {
 		defer sc.sendSignalingCancel()
 	}

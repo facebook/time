@@ -51,13 +51,6 @@ type keyPair struct {
 	hop  int
 }
 
-func min(x int, y int) int {
-	if x < y {
-		return x
-	}
-	return y
-}
-
 // getHostNoPrefix has ip as input and returns device hostname without interface prefix
 func getHostNoPrefix(ip string) string {
 	lun := getLookUpName(ip)

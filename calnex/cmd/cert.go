@@ -76,7 +76,7 @@ func certFunc() error {
 	}
 
 	r, err := api.PushCert(certData)
-	log.Infof(r.Message)
+	log.Info(r.Message)
 	return err
 }
 
