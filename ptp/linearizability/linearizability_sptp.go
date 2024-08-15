@@ -18,6 +18,7 @@ package linearizability
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -134,7 +135,7 @@ func (lt *SPTPTester) RunTest(_ context.Context) TestResult {
 			result.Offset = s.Offset
 			result.ClockClass = s.ClockQuality.ClockClass
 			if s.Error != "" {
-				result.Error = fmt.Errorf(s.Error)
+				result.Error = errors.New(s.Error)
 			}
 			found = true
 			break

@@ -468,11 +468,11 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 		for _, res := range currentResults {
 			good, err := res.Good()
 			if err != nil {
-				log.Errorf(res.Explain())
+				log.Error(res.Explain())
 				continue
 			}
 			if !good {
-				log.Warningf(res.Explain())
+				log.Warning(res.Explain())
 			}
 			log.Debugf("got linearizability result: %s", res.Explain())
 			s.state.pushLinearizabilityTestResult(res)

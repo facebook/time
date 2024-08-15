@@ -24,14 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMin(t *testing.T) {
-	require.Equal(t, 2, min(2, 3))
-	require.Equal(t, 2, min(2, 100))
-	require.Equal(t, -3, min(2, -3))
-	require.Equal(t, 1, min(1, 1))
-	require.Equal(t, -4, min(-2, -4))
-}
-
 func TestComputeInfo(t *testing.T) {
 	s := Sender{
 		Config: &Config{},

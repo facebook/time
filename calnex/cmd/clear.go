@@ -34,7 +34,7 @@ func init() {
 	}
 }
 
-func clear() error {
+func clearDevice() error {
 	if !apply {
 		log.Info("dry run. Exiting")
 		return nil
@@ -54,7 +54,7 @@ var clearCmd = &cobra.Command{
 	Use:   "clear",
 	Short: "clear device data",
 	Run: func(_ *cobra.Command, _ []string) {
-		if err := clear(); err != nil {
+		if err := clearDevice(); err != nil {
 			log.Fatal(err)
 		}
 	},

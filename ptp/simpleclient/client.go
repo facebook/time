@@ -456,10 +456,10 @@ func (c *Client) setState(s state) {
 
 // couple of helpers to log nice lines about happening communication
 func (c *Client) logSent(t ptp.MessageType, msg string, v ...interface{}) {
-	log.Infof(color.GreenString("client -> %s (%s)", t, fmt.Sprintf(msg, v...)))
+	log.Info(color.GreenString("client -> %s (%s)", t, fmt.Sprintf(msg, v...)))
 }
 func (c *Client) logReceive(t ptp.MessageType, msg string, v ...interface{}) {
-	log.Infof(color.BlueString("server -> %s (%s)", t, fmt.Sprintf(msg, v...)))
+	log.Info(color.BlueString("server -> %s (%s)", t, fmt.Sprintf(msg, v...)))
 }
 
 // Run is the main function, it makes client talk to server provided in config

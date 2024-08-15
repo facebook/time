@@ -520,7 +520,7 @@ func (a *API) FetchCsv(channel Channel, allData bool) ([][]string, error) {
 	// Check for empty response
 	r := &Result{}
 	if err = json.Unmarshal(b, r); err == nil {
-		return nil, fmt.Errorf(r.Message)
+		return nil, errors.New(r.Message)
 	}
 
 	var res [][]string

@@ -105,7 +105,7 @@ type PiServo struct {
 	cfg *PiServoCfg
 }
 
-func max(a int64, b int64) int64 {
+func maximum(a int64, b int64) int64 {
 	if a > b {
 		return a
 	}
@@ -287,14 +287,14 @@ func (f *PiServoFilter) isSpike(offset int64, lastCorrection time.Time) filterSt
 	if offset < 0 {
 		offset *= -1
 	}
-	if offset > max(maxOffsetLocked, f.cfg.minOffsetLocked) && f.skippedCount < f.cfg.maxSkipCount {
+	if offset > maximum(maxOffsetLocked, f.cfg.minOffsetLocked) && f.skippedCount < f.cfg.maxSkipCount {
 		return filterSpike
 	}
 	return filterNoSpike
 }
 
-func inRange(value, min, max int64) bool {
-	if value >= min && value <= max {
+func inRange(value, minimum, maximum int64) bool {
+	if value >= minimum && value <= maximum {
 		return true
 	}
 	return false
