@@ -30,26 +30,32 @@ func TestPopAllQueue(t *testing.T) {
 	numInfos := 5
 	numRoutes := 2
 
-	s.inputQueue = make(chan *SwitchTrafficInfo, s.Config.QueueCap)
+	s.inputQueue = make([]chan *SwitchTrafficInfo, numRoutes)
 
-	s.routes = append(s.routes, PathInfo{switches: nil})
-	s.routes = append(s.routes, PathInfo{switches: nil})
+	s.inputQueue[0] = make(chan *SwitchTrafficInfo, s.Config.QueueCap)
+	s.inputQueue[1] = make(chan *SwitchTrafficInfo, s.Config.QueueCap)
+
+	routes := []*PathInfo{
+		{switches: nil},
+		{switches: nil},
+	}
 
 	for i := 0; i <= numInfos; i++ {
-		s.inputQueue <- &SwitchTrafficInfo{
+		routeIdx := i % numRoutes
+		s.inputQueue[routeIdx] <- &SwitchTrafficInfo{
 			hop:      i,
-			routeIdx: i % numRoutes,
+			routeIdx: routeIdx,
 		}
 	}
-	s.popAllQueue()
+	s.popAllQueue(routes)
 
-	require.Equal(t, 0, s.routes[0].switches[0].hop)
-	require.Equal(t, 2, s.routes[0].switches[1].hop)
-	require.Equal(t, 4, s.routes[0].switches[2].hop)
+	require.Equal(t, 0, routes[0].switches[0].hop)
+	require.Equal(t, 2, routes[0].switches[1].hop)
+	require.Equal(t, 4, routes[0].switches[2].hop)
 
-	require.Equal(t, 1, s.routes[1].switches[0].hop)
-	require.Equal(t, 3, s.routes[1].switches[1].hop)
-	require.Equal(t, 5, s.routes[1].switches[2].hop)
+	require.Equal(t, 1, routes[1].switches[0].hop)
+	require.Equal(t, 3, routes[1].switches[1].hop)
+	require.Equal(t, 5, routes[1].switches[2].hop)
 }
 
 func TestClearPaths(t *testing.T) {
@@ -69,10 +75,12 @@ func TestClearPaths(t *testing.T) {
 		{hop: 2, routeIdx: 1},
 		{hop: 3, routeIdx: 1},
 	}
-	s.routes = append(s.routes, PathInfo{switches: noOrderPath})
-	s.routes = append(s.routes, PathInfo{switches: duplicatePath})
+	routes := []*PathInfo{
+		{switches: noOrderPath},
+		{switches: duplicatePath},
+	}
 
-	res := s.clearPaths()
+	res := s.clearPaths(routes)
 	require.Equal(t, 1, res[noOrderIndex].switches[0].hop)
 	require.Equal(t, 2, res[noOrderIndex].switches[1].hop)
 	require.Equal(t, 4, res[noOrderIndex].switches[2].hop)
@@ -109,36 +117,16 @@ func TestSortSwitchesByHop(t *testing.T) {
 }
 
 func TestFormNewDest(t *testing.T) {
-	s := Sender{
-		Config: &Config{DestinationAddress: "2401:db00:251c:2608:1:2:c:d"},
-	}
+	c := &Config{DestinationAddress: "2401:db00:251c:2608:1:2:c:d"}
 
-	ip := s.formNewDest(4)
+	ip := formNewDest(c, 4)
 	require.Equal(t, "2401:db00:251c:2608:face:face:0:4", ip.String())
-	ip = s.formNewDest(int(0xffff))
+	ip = formNewDest(c, int(0xffff))
 	require.Equal(t, "2401:db00:251c:2608:face:face:0:ffff", ip.String())
-	ip = s.formNewDest(int(0xab))
+	ip = formNewDest(c, int(0xab))
 	require.Equal(t, "2401:db00:251c:2608:face:face:0:ab", ip.String())
-	ip = s.formNewDest(int(0xabcdef))
+	ip = formNewDest(c, int(0xabcdef))
 	require.Equal(t, "2401:db00:251c:2608:face:face:0:cdef", ip.String())
-}
-
-func TestSweepRackPrefix(t *testing.T) {
-	s := Sender{
-		Config: &Config{
-			DestinationAddress: "2401:db00:251c:2608:1:2:c:d",
-			IPCount:            3,
-			PortCount:          5,
-		},
-	}
-
-	s.routes = append(s.routes, PathInfo{switches: []SwitchTrafficInfo{}})
-	s.sweepRackPrefix()
-	require.Equal(t, 16, len(s.routes))
-	s.routes = append(s.routes, PathInfo{switches: []SwitchTrafficInfo{}})
-	s.routes = append(s.routes, PathInfo{switches: []SwitchTrafficInfo{}})
-	s.sweepRackPrefix()
-	require.Equal(t, 33, len(s.routes))
 }
 
 func TestRackSwHostnameMonitor(t *testing.T) {
