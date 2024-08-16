@@ -25,19 +25,16 @@ import (
 )
 
 func TestComputeInfo(t *testing.T) {
-	s := Sender{
-		Config: &Config{},
-	}
 	c := &Config{}
 	numInfos := 5
 	cfThold := 250
 	cfIncrement := 100
 	currentCf := 0
 
-	s.routes = append(s.routes, PathInfo{})
+	routes := []*PathInfo{{}}
 
 	for i := 0; i <= numInfos; i++ {
-		s.routes[0].switches = append(s.routes[0].switches, SwitchTrafficInfo{
+		routes[0].switches = append(routes[0].switches, SwitchTrafficInfo{
 			ip:        strconv.Itoa(i),
 			hop:       i,
 			corrField: ptp.NewCorrection(float64(currentCf)),
@@ -45,7 +42,7 @@ func TestComputeInfo(t *testing.T) {
 		currentCf += cfIncrement
 	}
 
-	info := computeInfo(c, s.routes, ptp.NewCorrection(float64(cfThold)))
+	info := computeInfo(c, routes, ptp.NewCorrection(float64(cfThold)))
 
 	for i := 0; i <= numInfos; i++ {
 		if info[keyPair{strconv.Itoa(i), i}].last {

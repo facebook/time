@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"sync"
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -43,24 +44,45 @@ const (
 	LLDPTypeStr = "0x88cc"
 )
 
+type traceTask struct {
+	destinationIP string
+	sendingPort   int
+	routeID       int
+}
+
 // Sender sweeps the network with PTP packets
 type Sender struct {
 	Config *Config
 
 	icmpConn *net.IPConn
 
-	inputQueue chan *SwitchTrafficInfo
+	inputQueue []chan *SwitchTrafficInfo
 	icmpDone   chan bool
 
-	routes         []PathInfo
-	destHop        int
 	rackSwHostname string
+}
 
-	currentRoute int
+func prepareTracing(c *Config) []traceTask {
+	destIPs := []string{c.DestinationAddress}
+	for i := 1; i <= c.IPCount; i++ {
+		newIP := formNewDest(c, i)
+		destIPs = append(destIPs, newIP.String())
+	}
+	tasks := []traceTask{}
+	for i, destIP := range destIPs {
+		for portID := 0; portID < c.PortCount; portID++ {
+			tasks = append(tasks, traceTask{
+				destinationIP: destIP,
+				sendingPort:   c.SourcePort + portID,
+				routeID:       i*c.PortCount + portID,
+			})
+		}
+	}
+	return tasks
 }
 
 // Start sending PTP packets
-func (s *Sender) Start() ([]PathInfo, error) {
+func (s *Sender) Start() ([]*PathInfo, error) {
 	icmpAddr, err := net.ResolveIPAddr("ip6:ipv6-icmp", "")
 	if err != nil {
 		return nil, fmt.Errorf("unable to resolve source address: %w", err)
@@ -75,12 +97,8 @@ func (s *Sender) Start() ([]PathInfo, error) {
 		log.Warn("unable to learn name of rack switch via LLDP")
 	}
 
-	s.inputQueue = make(chan *SwitchTrafficInfo, s.Config.QueueCap)
 	s.icmpDone = make(chan bool)
 	s.icmpConn = icmpConn
-	s.currentRoute = 0
-
-	go s.monitorIcmp(s.icmpConn)
 
 	log.Infof("sending %v flows of PTP %v packets to %v from source port range %v-%v to destination port %v with %v packets per hop, max hop count of %v and min hop count of %v and "+
 		"sweeping %v other addresses in target network prefix with a per hop timeout of %v. Total flows %v.\n\n",
@@ -90,34 +108,51 @@ func (s *Sender) Start() ([]PathInfo, error) {
 		s.Config.HopMax, s.Config.HopMin, s.Config.IPCount, s.Config.IcmpTimeout,
 		s.Config.PortCount+s.Config.PortCount*s.Config.IPCount)
 
-	for i := 0; i < s.Config.PortCount; i++ {
-		s.routes = append(s.routes, PathInfo{switches: nil, rackSwHostname: s.rackSwHostname})
-		if err := s.traceRoute(s.Config.DestinationAddress, s.Config.SourcePort+i, false, s.Config.PacketsPerHop); err != nil {
-			log.Errorf("traceRoute failed: %v", err)
-			continue
-		}
+	var g sync.WaitGroup
+	// prepare tasks
+	tasks := prepareTracing(s.Config)
+	// prepare input queue
+	s.inputQueue = make([]chan *SwitchTrafficInfo, len(tasks))
+	for i := range tasks {
+		s.inputQueue[i] = make(chan *SwitchTrafficInfo, s.Config.QueueCap)
+	}
+	// start icmp listener
+	go s.monitorIcmp(s.icmpConn)
 
-		s.currentRoute++
-		s.popAllQueue()
+	routes := make([]*PathInfo, len(tasks))
+	var mu sync.Mutex
+	for _, t := range tasks {
+		g.Add(1)
+		go func(t traceTask) {
+			defer g.Done()
+			route, err := s.traceRoute(t.destinationIP, t.sendingPort, t.routeID)
+			if err != nil {
+				log.Errorf("traceRoute failed: %v", err)
+				return
+			}
+			mu.Lock()
+			routes[t.routeID] = route
+			mu.Unlock()
+		}(t)
 	}
-	if s.Config.IPCount != 0 {
-		s.sweepRackPrefix()
-	}
+	g.Wait()
 
 	// Waiting for late packets, if any
 	time.Sleep(s.Config.IcmpReplyTime)
-	s.popAllQueue()
+	s.popAllQueue(routes)
 
 	s.icmpDone <- true
-	return s.clearPaths(), nil
+	return s.clearPaths(routes), nil
 }
 
 // Insert late packets into corresponding path
 // Fixes the scenario in which packets arrive after traceRoute finished
-func (s *Sender) popAllQueue() {
-	for len(s.inputQueue) > 0 {
-		sw := <-s.inputQueue
-		s.routes[sw.routeIdx].switches = append(s.routes[sw.routeIdx].switches, *sw)
+func (s *Sender) popAllQueue(routes []*PathInfo) {
+	for i := 0; i < len(routes); i++ {
+		for len(s.inputQueue[i]) > 0 {
+			sw := <-s.inputQueue[i]
+			routes[sw.routeIdx].switches = append(routes[sw.routeIdx].switches, *sw)
+		}
 	}
 }
 
@@ -128,11 +163,11 @@ func sortSwitchesByHop(swArray []SwitchTrafficInfo) {
 }
 
 // clearPaths fixes corner case scenarios
-func (s *Sender) clearPaths() []PathInfo {
-	retPaths := make([]PathInfo, 0, len(s.routes))
+func (s *Sender) clearPaths(routes []*PathInfo) []*PathInfo {
+	retPaths := make([]*PathInfo, 0, len(routes))
 	idx := 0
-	for _, route := range s.routes {
-		retPaths = append(retPaths, PathInfo{switches: nil, rackSwHostname: s.rackSwHostname})
+	for _, route := range routes {
+		retPaths = append(retPaths, &PathInfo{switches: nil, rackSwHostname: s.rackSwHostname})
 		// Sort each route. This fixes the scenario where a
 		// packet with lower hop arrives after a packet with higher hop
 		sortSwitchesByHop(route.switches)
@@ -149,32 +184,11 @@ func (s *Sender) clearPaths() []PathInfo {
 	return retPaths
 }
 
-// sweepRackPrefix iterates over additional IP addresses
-// (within the same /64 as the destination IP) and targets
-// those addresses.
-func (s *Sender) sweepRackPrefix() {
-	for i := 1; i <= s.Config.IPCount; i++ {
-		newIP := s.formNewDest(i)
-		for j := 0; j < s.Config.PortCount; j++ {
-			s.routes = append(s.routes, PathInfo{rackSwHostname: s.rackSwHostname})
-
-			if err := s.traceRoute(newIP.String(), s.Config.SourcePort+j, true, s.Config.PacketsPerHop); err != nil {
-				log.Errorf("sweepRackPrefix traceRoute failed: %v", err)
-				continue
-			}
-			s.currentRoute++
-
-			s.popAllQueue()
-		}
-		fmt.Printf("\r %v/%v IPs tested. Current: %v", i, s.Config.IPCount, newIP.String())
-	}
-	fmt.Printf("\n\n")
-}
-
-func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool, packetsPerHop int) error {
+func (s *Sender) traceRoute(destinationIP string, sendingPort int, routeID int) (*PathInfo, error) {
+	route := &PathInfo{switches: nil, rackSwHostname: s.rackSwHostname}
 	ptpUDPAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(destinationIP, fmt.Sprint(s.Config.DestinationPort)))
 	if err != nil {
-		return fmt.Errorf("traceRoute unable to resolve UDPAddr: %w", err)
+		return route, fmt.Errorf("traceRoute unable to resolve UDPAddr: %w", err)
 	}
 	ptpAddr := timestamp.IPToSockaddr(ptpUDPAddr.IP, s.Config.DestinationPort)
 	domain := unix.AF_INET6
@@ -183,57 +197,52 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool, p
 	}
 	connFd, err := unix.Socket(domain, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
 	if err != nil {
-		return fmt.Errorf("traceRoute unable to create connection: %w", err)
+		return route, fmt.Errorf("traceRoute unable to create connection: %w", err)
 	}
 	defer unix.Close(connFd)
 	// set SO_REUSEPORT so we can trace network path from same source port that ptp4u uses
 	if err = unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
-		return fmt.Errorf("setting SO_REUSEPORT on sender socket: %w", err)
+		return route, fmt.Errorf("setting SO_REUSEPORT on sender socket: %w", err)
 	}
 	localAddr := timestamp.IPToSockaddr(net.IPv6zero, sendingPort)
 	if err := unix.Bind(connFd, localAddr); err != nil {
-		return fmt.Errorf("traceRoute unable to bind %v connection: %w", localAddr, err)
+		return route, fmt.Errorf("traceRoute unable to bind %v connection: %w", localAddr, err)
 	}
 
 	destReached := false
 	hopMax := s.Config.HopMax
 
-	// if sweep is activated and the destination was found
-	if sweep && s.destHop > 0 {
-		hopMax = s.destHop - 1
-	}
 	// Stop incrementing hops when either the max hop count is reached or
 	// the destination has responded unless continue is specified
 	for hop := s.Config.HopMin; hop <= hopMax && (!destReached || s.Config.ContReached); hop++ {
-		for i := 0; i < packetsPerHop; i++ {
+		for i := 0; i < s.Config.PacketsPerHop; i++ {
 			if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_UNICAST_HOPS, hop); err != nil {
-				return err
+				return route, err
 			}
 			// First 2 bits from Traffic Class are unused, so we shift the value 2 bits
 			if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, s.Config.DSCP<<2); err != nil {
-				return err
+				return route, err
 			}
 			var p ptp.Packet
 			switch s.Config.MessageType {
 			case ptp.MessageSync, ptp.MessageDelayReq:
-				p = formSyncPacket(s.Config.MessageType, hop, s.currentRoute)
+				p = formSyncPacket(s.Config.MessageType, hop, routeID)
 			case ptp.MessageSignaling:
-				p = formSignalingPacket(hop, s.currentRoute)
+				p = formSignalingPacket(hop, routeID)
 			default:
-				return fmt.Errorf("unsupported packet type %v", s.Config.MessageType)
+				return route, fmt.Errorf("unsupported packet type %v", s.Config.MessageType)
 			}
 
 			if err := s.sendEventMsg(p, connFd, ptpAddr); err != nil {
-				return err
+				return route, err
 			}
 
 			select {
-			case sw := <-s.inputQueue:
-				trace := s.routes[sw.routeIdx]
-				l := len(trace.switches)
+			case sw := <-s.inputQueue[routeID]:
+				l := len(route.switches)
 				newSampleForHop := true
 				if l > 0 {
-					lastSample := trace.switches[l-1]
+					lastSample := route.switches[l-1]
 					// check previous sample for this hop to see if CF was lower.
 					// this is intended to eliminate use cases where CF has a transient spike
 					// which when subtracted from CF on subsequent hop can lead to negative values
@@ -241,24 +250,22 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, sweep bool, p
 						newSampleForHop = false
 						if sw.corrField < lastSample.corrField {
 							log.Debugf("Received better sample for hop %v", sw.hop)
-							trace.switches[l-1] = *sw
-							s.routes[sw.routeIdx] = trace
+							route.switches[l-1] = *sw
 						}
 					}
 				}
 				if newSampleForHop {
-					s.routes[sw.routeIdx].switches = append(s.routes[sw.routeIdx].switches, *sw)
+					route.switches = append(route.switches, *sw)
 				}
 				if net.ParseIP(sw.ip).Equal(ptpUDPAddr.IP) {
 					destReached = true
-					s.destHop = hop
 				}
 			case <-time.After(s.Config.IcmpTimeout):
 				continue
 			}
 		}
 	}
-	return nil
+	return route, nil
 }
 
 func (s *Sender) sendEventMsg(p ptp.Packet, ptpConn int, ptpAddr unix.Sockaddr) error {
@@ -320,22 +327,28 @@ func (s *Sender) handleIcmpPacket(rawPacket []byte, l int, rAddr net.Addr) {
 		portNum = v.Header.SourcePortIdentity.PortNumber
 	default:
 		log.Errorf("Received unexpected packet %T, ignoring", v)
+		return
 	}
 
-	s.inputQueue <- &SwitchTrafficInfo{
+	if int(portNum) >= len(s.inputQueue) {
+		log.Errorf("Received packet with invalid port number/traceID %v", portNum)
+		return
+	}
+
+	s.inputQueue[portNum] <- &SwitchTrafficInfo{
 		ip:        rAddr.String(),
 		corrField: corrField,
 		hop:       int(sequenceID),
 		routeIdx:  int(portNum),
 	}
-	log.Debugf("%v cf: %v hop: %v", getLookUpName(rAddr.String()), corrField, sequenceID)
+	log.Debugf("routeIdx %d: %v cf: %v hop: %v", portNum, getLookUpName(rAddr.String()), corrField, sequenceID)
 }
 
 // formNewDest generates new ip address using the
 // rack prefix /64 of DestinationAddress by adding
 // :face:face:0:$i to the ipv6
-func (s *Sender) formNewDest(i int) net.IP {
-	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(s.Config.DestinationAddress, fmt.Sprintf("%d", s.Config.DestinationPort)))
+func formNewDest(c *Config, i int) net.IP {
+	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(c.DestinationAddress, fmt.Sprintf("%d", c.DestinationPort)))
 	if err != nil {
 		return nil
 	}

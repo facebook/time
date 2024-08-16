@@ -70,13 +70,13 @@ func getHostIfPrefix(ip string) string {
 }
 
 // PrettyPrint formats and prints the output to stdout
-func PrettyPrint(c *Config, routes []PathInfo, cfThreshold ptp.Correction) {
+func PrettyPrint(c *Config, routes []*PathInfo, cfThreshold ptp.Correction) {
 	debugPrint(routes)
 	info := computeInfo(c, routes, cfThreshold)
 	detailedPrint(info)
 }
 
-func debugPrint(routes []PathInfo) {
+func debugPrint(routes []*PathInfo) {
 	var notTCEnabled []SwitchTrafficInfo
 	tested := make(map[string]bool)
 	enabled := 0
@@ -127,7 +127,7 @@ func correctionField(c *Config, swIndex int, switches []SwitchTrafficInfo) ptp.C
 	return switches[swIndex+1].corrField
 }
 
-func computeInfo(c *Config, routes []PathInfo, cfThreshold ptp.Correction) map[keyPair]*SwitchPrintInfo {
+func computeInfo(c *Config, routes []*PathInfo, cfThreshold ptp.Correction) map[keyPair]*SwitchPrintInfo {
 	discovered := make(map[keyPair]*SwitchPrintInfo)
 
 	for _, route := range routes {
@@ -307,7 +307,7 @@ func detailedPrint(info map[keyPair]*SwitchPrintInfo) {
 }
 
 // CsvPrint outputs the data in a csv file
-func CsvPrint(c *Config, routes []PathInfo, path string, cfThreshold ptp.Correction) {
+func CsvPrint(c *Config, routes []*PathInfo, path string, cfThreshold ptp.Correction) {
 	info := computeInfo(c, routes, cfThreshold)
 	aux := parseSwitchMap(info)
 	data := computePrintData(aux)
