@@ -500,6 +500,48 @@ func TestDecodeActivity(t *testing.T) {
 	require.Equal(t, want, packet)
 }
 
+func TestDecodeSelectData(t *testing.T) {
+	raw := []uint8{
+		0x06, 0x02, 0x00, 0x00, 0x00, 0x45, 0x00, 0x17, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x9b, 0x3f, 0x4e, 0xea,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8f, 0x52,
+		0x68, 0xdf, 0x24, 0x01, 0xdb, 0x00, 0x31, 0x20, 0x20, 0x6a,
+		0xfa, 0xce, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x02,
+		0x00, 0x00, 0x2b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0xa6, 0x04, 0x80, 0x00, 0x00, 0xeb, 0x28,
+		0xbb, 0x22, 0xea, 0x95, 0xb1, 0xa3,
+	}
+	packet, err := decodePacket(raw)
+	require.Nil(t, err)
+	// + 2401:db00:3120:206a:face:0:40:0 N ----- -----  166   1.0  -205us  +143us  N
+	want := &ReplySelectData{
+		ReplyHead: ReplyHead{
+			Version:  protoVersionNumber,
+			PKTType:  pktTypeCmdReply,
+			Res1:     0,
+			Res2:     0,
+			Command:  reqSelectData,
+			Reply:    RpySelectData,
+			Status:   sttSuccess,
+			Sequence: 2604617450,
+		},
+		SelectData: SelectData{
+			RefID:          2404542687,
+			IPAddr:         net.ParseIP("2401:db00:3120:206a:face:0:40:0"),
+			StateChar:      43,
+			Authentication: 0,
+			Leap:           0,
+			ConfOptions:    0,
+			EFFOptions:     0,
+			LastSampleAgo:  166,
+			Score:          1,
+			LoLimit:        -0.00020529652829281986,
+			HiLimit:        0.00014275922148954123,
+		},
+	}
+	require.Equal(t, want, packet)
+}
+
 func TestSourceStateTypeToString(t *testing.T) {
 	v := SourceStateUnreach
 	got := v.String()

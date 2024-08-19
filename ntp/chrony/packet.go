@@ -78,6 +78,7 @@ const (
 	reqServerStats   CommandType = 54
 	reqNTPData       CommandType = 57
 	reqNTPSourceName CommandType = 65
+	reqSelectData    CommandType = 69
 )
 
 // reply types
@@ -91,6 +92,7 @@ const (
 	RpyNTPData       ReplyType = 16
 	RpyNTPSourceName ReplyType = 19
 	RpyServerStats2  ReplyType = 22
+	RpySelectData    ReplyType = 23
 	RpyServerStats3  ReplyType = 24
 	RpyServerStats4  ReplyType = 25
 )
@@ -118,6 +120,14 @@ const (
 	FlagPrefer   uint16 = 0x2
 	FlagTrust    uint16 = 0x4
 	FlagRequire  uint16 = 0x8
+)
+
+// select data flags
+const (
+	FlagSDOptionNoSelect uint16 = 0x1
+	FlagSDOptionPrefer   uint16 = 0x2
+	FlagSDOptionTrust    uint16 = 0x4
+	FlagSDOptionRequire  uint16 = 0x8
 )
 
 // ntpdata flags
@@ -313,6 +323,15 @@ type RequestActivity struct {
 	RequestHead
 	// we actually need this to send proper packet
 	data [maxDataLen]uint8
+}
+
+// RequestSelectData - packet to request 'selectdata' data
+type RequestSelectData struct {
+	RequestHead
+	Index int32
+	EOR   int32
+	// we pass i32 - 4 bytes
+	data [maxDataLen - 4]uint8
 }
 
 // ReplyHead is the first (common) part of the reply packet,
@@ -725,6 +744,58 @@ type ReplyServerStats4 struct {
 	ServerStats4
 }
 
+type replySelectData struct {
+	RefID          uint32
+	IPAddr         ipAddr
+	StateChar      uint8
+	Authentication uint8
+	Leap           uint8
+	Pad            uint8
+	ConfOptions    uint16
+	EFFOptions     uint16
+	LastSampleAgo  uint32
+	Score          chronyFloat
+	LoLimit        chronyFloat
+	HiLimit        chronyFloat
+}
+
+// SelectData contains parsed version of 'selectdata' reply
+type SelectData struct {
+	RefID          uint32
+	IPAddr         net.IP
+	StateChar      uint8
+	Authentication uint8
+	Leap           uint8
+	ConfOptions    uint16
+	EFFOptions     uint16
+	LastSampleAgo  uint32
+	Score          float64
+	LoLimit        float64
+	HiLimit        float64
+}
+
+// ReplySelectData is a usable version of 'selectdata' response
+type ReplySelectData struct {
+	ReplyHead
+	SelectData
+}
+
+func newSelectData(r *replySelectData) *SelectData {
+	return &SelectData{
+		RefID:          r.RefID,
+		IPAddr:         r.IPAddr.ToNetIP(),
+		StateChar:      r.StateChar,
+		Authentication: r.Authentication,
+		Leap:           r.Leap,
+		ConfOptions:    r.ConfOptions,
+		EFFOptions:     r.EFFOptions,
+		LastSampleAgo:  r.LastSampleAgo,
+		Score:          r.Score.ToFloat(),
+		LoLimit:        r.LoLimit.ToFloat(),
+		HiLimit:        r.HiLimit.ToFloat(),
+	}
+}
+
 // here go request constructors
 
 // NewSourcesPacket creates new packet to request number of sources (peers)
@@ -827,6 +898,19 @@ func NewActivityPacket() *RequestActivity {
 	}
 }
 
+// NewSelectDataPacket creates new packet to request 'selectdata' information
+func NewSelectDataPacket(sourceID int32) *RequestSelectData {
+	return &RequestSelectData{
+		RequestHead: RequestHead{
+			Version: protoVersionNumber,
+			PKTType: pktTypeCmdRequest,
+			Command: reqSelectData,
+		},
+		Index: sourceID,
+		data:  [maxDataLen - 4]uint8{},
+	}
+}
+
 // possible clock sources
 const (
 	ClockSourceUnspec     = "unspec"
@@ -855,7 +939,8 @@ var ClockSourceDesc = [10]string{
 	ClockSourceTelephone,  // 09
 }
 
-// decodePacket decodes bytes to valid response packet
+// decodePacket decodes bytes to valid response packet.
+// an easy way to test this is to use 'testchrony' tool we have.
 func decodePacket(response []byte) (ResponsePacket, error) {
 	var err error
 	r := bytes.NewReader(response)
@@ -977,6 +1062,16 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		return &ReplyServerStats4{
 			ReplyHead:    *head,
 			ServerStats4: *data,
+		}, nil
+	case RpySelectData:
+		data := new(replySelectData)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		log.Debugf("response data: %+v", data)
+		return &ReplySelectData{
+			ReplyHead:  *head,
+			SelectData: *newSelectData(data),
 		}, nil
 	default:
 		return nil, fmt.Errorf("not implemented reply type %d from %+v", head.Reply, head)
