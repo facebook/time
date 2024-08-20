@@ -633,12 +633,13 @@ type replyNTPSourceNameContent struct {
 
 // NTPSourceName contains parsed version of 'sourcename' reply
 type NTPSourceName struct {
-	Name [256]uint8
+	Name string
 }
 
 func newNTPSourceName(r *replyNTPSourceNameContent) *NTPSourceName {
 	return &NTPSourceName{
-		Name: r.Name,
+		// this field is zero padded in chrony, so we need to trim it
+		Name: string(bytes.TrimRight(r.Name[:], "\x00")),
 	}
 }
 

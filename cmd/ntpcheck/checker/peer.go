@@ -17,7 +17,6 @@ limitations under the License.
 package checker
 
 import (
-	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -243,8 +242,7 @@ func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.ReplyNTPData, n *chr
 		peer.RootDisp = secToMS(p.RootDispersion)
 	}
 	if n != nil {
-		// this field is zero padded in chrony, so we need to trim it
-		peer.Hostname = string(bytes.TrimRight(n.Name[:], "\x00"))
+		peer.Hostname = n.Name
 	}
 
 	// no need for sanity check as we are not parsing k=v pairs in case of chrony proto
