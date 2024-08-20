@@ -17,6 +17,8 @@ limitations under the License.
 package checker
 
 import (
+	"slices"
+
 	"github.com/facebook/time/ntp/control"
 	"github.com/pkg/errors"
 )
@@ -71,6 +73,31 @@ func (r *NTPCheckResult) FindGoodPeers() ([]*Peer, error) {
 		return results, errors.New("no good peers present")
 	}
 	return results, nil
+}
+
+// FindNoSelectPeers returns list of peers in noselect state
+func (r *NTPCheckResult) FindNoSelectPeers() ([]*Peer, error) {
+	results := []*Peer{}
+	if len(r.Peers) == 0 {
+		return results, errors.New("no peers present")
+	}
+	for _, peer := range r.Peers {
+		if peer.NoSelect {
+			results = append(results, peer)
+		}
+	}
+	return results, nil
+}
+
+// FindAcceptableNonSysPeers returns list of peers suitable for checking time with excluding sys.peer
+func (r *NTPCheckResult) FindAcceptableNonSysPeers() ([]*Peer, error) {
+	results, err := r.FindGoodPeers()
+	if err != nil || len(results) == 1 {
+		results, err = r.FindNoSelectPeers()
+	}
+	return slices.DeleteFunc(results, func(p *Peer) bool {
+		return p.Selection == control.SelSYSPeer
+	}), err
 }
 
 // NewNTPCheckResult returns new instance of NewNTPCheckResult

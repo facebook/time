@@ -68,6 +68,7 @@ type Peer struct {
 	FiltDelay  string
 	FiltOffset string
 	FiltDisp   string
+	NoSelect   bool
 }
 
 // sanityCheckPeerVars checks if we parsed enough info from NTPD response
@@ -171,6 +172,7 @@ func NewPeerFromNTP(p *control.NTPControlMsg) (*Peer, error) {
 		SRCPort:    srcport,
 		Xleave:     xleave,
 		RootDisp:   rootdisp,
+		NoSelect:   psWord.PeerSelection == control.SelReject && psWord.PeerStatus.Reachable, // that's how noselect peers are visible in sources
 	}
 	if err := sanityCheckPeerVars(&peer); err != nil {
 		return nil, err
@@ -216,6 +218,7 @@ func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.ReplyNTPData, n *chr
 		Stratum:      int(s.Stratum),
 		SRCAdr:       s.IPAddr.String(),
 		Reach:        uint8(s.Reachability),
+		NoSelect:     s.State == chrony.SourceStateUnreach && s.Reachability == 255, // that's how noselect peers are visible in sources. Ideally we'd rather use Chrony SelectData, but it's not part of public API.
 	}
 	// populate data from ntpdata struct
 	if p != nil {

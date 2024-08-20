@@ -48,7 +48,7 @@ func TestNTPStatsNoPeers(t *testing.T) {
 		Peers:   map[uint16]*Peer{},
 	}
 	_, err := NewNTPStats(r)
-	require.EqualError(t, err, "no peers detected to output stats")
+	require.EqualError(t, err, "nothing to calculate stats from: no peers present")
 }
 
 func TestNTPStatsNoGoodPeer(t *testing.T) {
@@ -138,14 +138,60 @@ func TestNTPStatsWithSysPeer(t *testing.T) {
 	stats, err := NewNTPStats(r)
 	require.NoError(t, err)
 	want := &NTPStats{
-		PeerDelay:   3.21,
-		PeerOffset:  0.045,
-		PeerPoll:    1 << 4,
-		PeerStratum: 4,
-		PeerJitter:  4,
-		PeerCount:   2,
-		Offset:      s.Offset,
-		RootDelay:   s.RootDelay,
+		PeerDelay:             3.21,
+		PeerOffset:            0.045,
+		PeerPoll:              1 << 4,
+		PeerStratum:           4,
+		PeerJitter:            4,
+		PeerCount:             2,
+		Offset:                s.Offset,
+		RootDelay:             s.RootDelay,
+		OffsetComparedToPeers: r.Peers[1].Offset - r.Peers[0].Offset,
+	}
+	require.Equal(t, want, stats)
+}
+
+func TestNTPStatsWithSysPeerAndNoSelect(t *testing.T) {
+	s := SystemVariables{
+		Offset:    0.003,
+		RootDelay: 3.14,
+	}
+	r := &NTPCheckResult{
+		SysVars: &s,
+		Peers: map[uint16]*Peer{
+			0: {
+				Selection: control.SelReject,
+				Offset:    0.03,
+				Delay:     2.01,
+				Stratum:   3,
+				HPoll:     10,
+				PPoll:     9,
+				Jitter:    3.1,
+				NoSelect:  true,
+			},
+			1: {
+				Selection: control.SelSYSPeer,
+				Offset:    0.045,
+				Delay:     3.21,
+				Stratum:   1,
+				HPoll:     10,
+				PPoll:     4,
+				Jitter:    4,
+			},
+		},
+	}
+	stats, err := NewNTPStats(r)
+	require.NoError(t, err)
+	want := &NTPStats{
+		PeerDelay:             3.21,
+		PeerOffset:            0.045,
+		PeerPoll:              1 << 4,
+		PeerStratum:           1,
+		PeerJitter:            4,
+		PeerCount:             2,
+		Offset:                s.Offset,
+		RootDelay:             s.RootDelay,
+		OffsetComparedToPeers: r.Peers[1].Offset - r.Peers[0].Offset,
 	}
 	require.Equal(t, want, stats)
 }
