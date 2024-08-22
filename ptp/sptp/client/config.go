@@ -19,6 +19,7 @@ package client
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"time"
 
@@ -27,6 +28,23 @@ import (
 	log "github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
 )
+
+// LookupNetIP returns netip.Addr from addr string, which can be either IP or hostname
+func LookupNetIP(addr string) (netip.Addr, error) {
+	ip, err := netip.ParseAddr(addr)
+	if err != nil {
+		ips, err := net.LookupIP(addr)
+		if err != nil {
+			return netip.Addr{}, err
+		}
+		if len(ips) == 0 {
+			return netip.Addr{}, fmt.Errorf("no ips found for %s", addr)
+		}
+		ip, _ = netip.AddrFromSlice(ips[0])
+		return ip, nil
+	}
+	return ip, nil
+}
 
 // BackoffConfig describes configuration for backoff in case of unavailable GM
 type BackoffConfig struct {

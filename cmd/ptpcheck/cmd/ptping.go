@@ -176,7 +176,7 @@ func ptpingRun(iface string, dscp int, server string, count int, timeout time.Du
 		dscp:  dscp,
 	}
 
-	p.target, err = netip.ParseAddr(server)
+	p.target, err = client.LookupNetIP(server)
 	if err != nil {
 		return err
 	}

@@ -92,7 +92,7 @@ func (p *SPTP) initClients() error {
 	}
 	for server, prio := range p.cfg.Servers {
 		// normalize the address
-		ip, err := netip.ParseAddr(server)
+		ip, err := LookupNetIP(server)
 		if err != nil {
 			return fmt.Errorf("parsing server address %q: %w", server, err)
 		}
