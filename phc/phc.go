@@ -133,6 +133,11 @@ func (dev *Device) ReadSysoffExtended1() (*PTPSysOffsetExtended, error) {
 	return dev.readSysoffExtended(1)
 }
 
+// ReadSysoffPrecise reads the precise time from the PHC along with SYS time to measure the call delay.
+func (dev *Device) ReadSysoffPrecise() (*PTPSysOffsetPrecise, error) {
+	return dev.readSysoffPrecise()
+}
+
 func (dev *Device) readSysoffExtended(nsamples int) (*PTPSysOffsetExtended, error) {
 	res := &PTPSysOffsetExtended{
 		NSamples: uint32(nsamples),
@@ -144,6 +149,19 @@ func (dev *Device) readSysoffExtended(nsamples int) (*PTPSysOffsetExtended, erro
 	)
 	if errno != 0 {
 		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_EXTENDED: %w", errno)
+	}
+	return res, nil
+}
+
+func (dev *Device) readSysoffPrecise() (*PTPSysOffsetPrecise, error) {
+	res := &PTPSysOffsetPrecise{}
+	_, _, errno := unix.Syscall(
+		unix.SYS_IOCTL, dev.Fd(),
+		ioctlPTPSysOffsetPrecise,
+		uintptr(unsafe.Pointer(res)),
+	)
+	if errno != 0 {
+		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_PRECISE: %w", errno)
 	}
 	return res, nil
 }

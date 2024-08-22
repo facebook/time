@@ -34,6 +34,9 @@ const (
 // ioctlPTPSysOffsetExtended is an IOCTL to get extended offset
 var ioctlPTPSysOffsetExtended = ioctl.IOWR(ptpClkMagic, 9, unsafe.Sizeof(PTPSysOffsetExtended{}))
 
+// ioctlPTPSysOffsetPrecise is an IOCTL to get precise offset
+var ioctlPTPSysOffsetPrecise = ioctl.IOWR(ptpClkMagic, 8, unsafe.Sizeof(PTPSysOffsetPrecise{}))
+
 // ioctlPTPClockGetCaps is an IOCTL to get PTP clock capabilities
 var ioctlPTPClockGetcaps = ioctl.IOR(ptpClkMagic, 1, unsafe.Sizeof(PTPClockCaps{}))
 
@@ -68,6 +71,14 @@ type PTPSysOffsetExtended struct {
 	 * - system time immediately after reading the lowest bits of the PHC timestamp
 	 */
 	TS [ptpMaxSamples][3]PTPClockTime
+}
+
+// PTPSysOffsetPrecise as defined in linux/ptp_clock.h
+type PTPSysOffsetPrecise struct {
+	Device      PTPClockTime
+	SysRealTime PTPClockTime
+	SysMonoRaw  PTPClockTime
+	Reserved    [4]uint32 /* Reserved for future use. */
 }
 
 // PTPClockCaps as defined in linux/ptp_clock.h
