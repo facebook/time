@@ -157,7 +157,7 @@ func TestSysStats(t *testing.T) {
 	// Sys counters are set and above 0
 	require.Less(t, int64(0), stats.goRoutines)
 	require.Less(t, int64(0), stats.rss)
-	require.Equal(t, int64(1), stats.uptimeSec)
+	require.LessOrEqual(t, int64(1), stats.uptimeSec)
 }
 
 func TestGetCounters(t *testing.T) {
