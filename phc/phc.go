@@ -52,6 +52,32 @@ const (
 // SupportedMethods is a list of supported TimeMethods
 var SupportedMethods = []TimeMethod{MethodSyscallClockGettime, MethodIoctlSysOffsetExtended}
 
+// PinFunc type represents the pin function values.
+type PinFunc int
+
+func (pf PinFunc) String() string {
+	switch pf {
+	case PinFuncNone:
+		return "None"
+	case PinFuncExtTS:
+		return "PPS-In" // user friendly
+	case PinFuncPerOut:
+		return "PPS-Out" // user friendly
+	case PinFuncPhySync:
+		return "PhySync"
+	default:
+		return fmt.Sprintf("!(PinFunc=%d)", int(pf))
+	}
+}
+
+// Pin functions corresponding to `enum ptp_pin_function` in linux/ptp_clock.h
+const (
+	PinFuncNone    PinFunc = iota // PTP_PF_NONE
+	PinFuncExtTS                  // PTP_PF_EXTTS
+	PinFuncPerOut                 // PTP_PF_PEROUT
+	PinFuncPhySync                // PTP_PF_PHYSYNC
+)
+
 func ifaceInfoToPHCDevice(info *EthtoolTSinfo) (string, error) {
 	if info.PHCIndex < 0 {
 		return "", fmt.Errorf("interface doesn't support PHC")
@@ -121,6 +147,15 @@ func (dev *Device) Time() (time.Time, error) {
 	return time.Unix(ts.Unix()), nil
 }
 
+// similar to unix.ioctlPtr()
+func (dev *Device) ioctlPtr(req uintptr, arg unsafe.Pointer) (err error) {
+	_, _, errno := unix.Syscall(unix.SYS_IOCTL, dev.Fd(), req, uintptr(arg))
+	if errno != 0 {
+		err = errno // translate here if needed
+	}
+	return err
+}
+
 // ReadSysoffExtended reads the precise time from the PHC along with SYS time to measure the call delay.
 // The nsamples parameter is set to ExtendedNumProbes.
 func (dev *Device) ReadSysoffExtended() (*PTPSysOffsetExtended, error) {
@@ -142,26 +177,17 @@ func (dev *Device) readSysoffExtended(nsamples int) (*PTPSysOffsetExtended, erro
 	res := &PTPSysOffsetExtended{
 		NSamples: uint32(nsamples),
 	}
-	_, _, errno := unix.Syscall(
-		unix.SYS_IOCTL, dev.Fd(),
-		ioctlPTPSysOffsetExtended,
-		uintptr(unsafe.Pointer(res)),
-	)
-	if errno != 0 {
-		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_EXTENDED: %w", errno)
+	err := dev.ioctlPtr(ioctlPTPSysOffsetExtended, unsafe.Pointer(res))
+	if err != nil {
+		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_EXTENDED: %w", err)
 	}
 	return res, nil
 }
 
 func (dev *Device) readSysoffPrecise() (*PTPSysOffsetPrecise, error) {
 	res := &PTPSysOffsetPrecise{}
-	_, _, errno := unix.Syscall(
-		unix.SYS_IOCTL, dev.Fd(),
-		ioctlPTPSysOffsetPrecise,
-		uintptr(unsafe.Pointer(res)),
-	)
-	if errno != 0 {
-		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_PRECISE: %w", errno)
+	if err := dev.ioctlPtr(ioctlPTPSysOffsetPrecise, unsafe.Pointer(res)); err != nil {
+		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_PRECISE: %w", err)
 	}
 	return res, nil
 }
@@ -169,16 +195,41 @@ func (dev *Device) readSysoffPrecise() (*PTPSysOffsetPrecise, error) {
 // readCaps reads PTP capabilities using ioctl
 func (dev *Device) readCaps() (*PTPClockCaps, error) {
 	caps := &PTPClockCaps{}
-	_, _, errno := unix.Syscall(
-		unix.SYS_IOCTL, dev.Fd(),
-		ioctlPTPClockGetcaps,
-		uintptr(unsafe.Pointer(caps)),
-	)
-	if errno != 0 {
-		return nil, fmt.Errorf("clock didn't respond properly: %w", errno)
+	if err := dev.ioctlPtr(ioctlPTPClockGetcaps, unsafe.Pointer(caps)); err != nil {
+		return nil, fmt.Errorf("clock didn't respond properly: %w", err)
 	}
-
 	return caps, nil
+}
+
+// readPinDesc reads a single PTP pin descriptor
+func (dev *Device) readPinDesc(index int, desc *PinDesc) error {
+	var raw rawPinDesc
+
+	raw.Index = uint32(index)
+	if err := dev.ioctlPtr(iocPinGetfunc, unsafe.Pointer(&raw)); err != nil {
+		return fmt.Errorf("%s: ioctl(PTP_PIN_GETFUNC) failed: %w", dev.File().Name(), err)
+	}
+	desc.Name = unix.ByteSliceToString(raw.Name[:])
+	desc.Index = uint(raw.Index)
+	desc.Func = PinFunc(raw.Func)
+	desc.Chan = uint(raw.Chan)
+	return nil
+}
+
+// ReadPins reads all PTP pin descriptors
+func (dev *Device) ReadPins() ([]PinDesc, error) {
+	caps, err := dev.readCaps()
+	if err != nil {
+		return nil, err
+	}
+	npins := int(caps.NPins)
+	desc := make([]PinDesc, npins)
+	for i := range npins {
+		if err := dev.readPinDesc(i, &desc[i]); err != nil {
+			return nil, err
+		}
+	}
+	return desc, nil
 }
 
 // MaxFreqAdjPPB reads max value for frequency adjustments (in PPB) from ptp device

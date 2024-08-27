@@ -19,6 +19,7 @@ package phc
 import (
 	"fmt"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 )
@@ -33,4 +34,10 @@ func TestDeviceFromIfaceNotFound(t *testing.T) {
 	dev, err := DeviceFromIface("lol-does-not-exist")
 	require.Equal(t, fmt.Errorf("lol-does-not-exist interface is not found"), err)
 	require.Equal(t, "", dev)
+}
+
+func TestIoctlValues(t *testing.T) {
+	require.Equal(t, iocPinGetfunc, uintptr(3227532550))
+	require.Equal(t, iocPinSetfunc, uintptr(1080048903))
+	require.Equal(t, unsafe.Sizeof(rawPinDesc{}), uintptr(96))
 }

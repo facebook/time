@@ -40,6 +40,12 @@ var ioctlPTPSysOffsetPrecise = ioctl.IOWR(ptpClkMagic, 8, unsafe.Sizeof(PTPSysOf
 // ioctlPTPClockGetCaps is an IOCTL to get PTP clock capabilities
 var ioctlPTPClockGetcaps = ioctl.IOR(ptpClkMagic, 1, unsafe.Sizeof(PTPClockCaps{}))
 
+// iocPinGetfunc is an IOCTL req corresponding to PTP_PIN_GETFUNC in linux/ptp_clock.h
+var iocPinGetfunc = ioctl.IOWR(ptpClkMagic, 6, unsafe.Sizeof(rawPinDesc{}))
+
+// iocPinSetfunc is an IOCTL req corresponding to PTP_PIN_SETFUNC in linux/ptp_clock.h
+var iocPinSetfunc = ioctl.IOW(ptpClkMagic, 7, unsafe.Sizeof(rawPinDesc{}))
+
 // Ifreq is the request we send with SIOCETHTOOL IOCTL
 // as per Linux kernel's include/uapi/linux/if.h
 type Ifreq struct {
@@ -79,6 +85,22 @@ type PTPSysOffsetPrecise struct {
 	SysRealTime PTPClockTime
 	SysMonoRaw  PTPClockTime
 	Reserved    [4]uint32 /* Reserved for future use. */
+}
+
+// PinDesc represents the C struct ptp_pin_desc as defined in linux/ptp_clock.h
+type PinDesc struct {
+	Name  string  // Hardware specific human readable pin name
+	Index uint    // Pin index in the range of zero to ptp_clock_caps.n_pins - 1
+	Func  PinFunc // Which of the PTP_PF_xxx functions to use on this pin
+	Chan  uint    // The specific channel to use for this function.
+}
+
+type rawPinDesc struct {
+	Name  [64]byte  // Hardware specific human readable pin name
+	Index uint32    // Pin index in the range of zero to ptp_clock_caps.n_pins - 1
+	Func  uint32    // Which of the PTP_PF_xxx functions to use on this pin
+	Chan  uint32    // The specific channel to use for this function.
+	Rsv   [5]uint32 // Reserved for future use.
 }
 
 // PTPClockCaps as defined in linux/ptp_clock.h
