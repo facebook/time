@@ -98,11 +98,7 @@ func (p *SPTP) initClients() error {
 		}
 		econn := p.eventConn
 		if p.cfg.ParallelTX {
-			conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: ip.AsSlice(), Port: ptp.PortEvent})
-			if err != nil {
-				return err
-			}
-			econn, err = NewUDPConnTSConfig(conn, p.cfg)
+			econn, err = NewUDPConnTS(net.ParseIP(p.cfg.ListenAddress), ptp.PortEvent, p.cfg.Timestamping, p.cfg.Iface, p.cfg.DSCP)
 			if err != nil {
 				return err
 			}
@@ -130,24 +126,15 @@ func (p *SPTP) init() error {
 	}
 	p.clockID = cid
 
-	// bind to general port
-	genConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("::"), Port: ptp.PortGeneral})
+	p.genConn, err = NewUDPConn(net.ParseIP(p.cfg.ListenAddress), ptp.PortGeneral)
 	if err != nil {
-		return err
-	}
-	p.genConn, err = NewUDPConn(genConn)
-	if err != nil {
-		return err
-	}
-	// bind to event port
-	eventConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("::"), Port: ptp.PortEvent})
-	if err != nil {
-		return err
+		return fmt.Errorf("binding to %d: %w", ptp.PortGeneral, err)
 	}
 
-	p.eventConn, err = NewUDPConnTSConfig(eventConn, p.cfg)
+	// bind to event port
+	p.eventConn, err = NewUDPConnTS(net.ParseIP(p.cfg.ListenAddress), ptp.PortEvent, p.cfg.Timestamping, p.cfg.Iface, p.cfg.DSCP)
 	if err != nil {
-		return err
+		return fmt.Errorf("binding to %d: %w", ptp.PortEvent, err)
 	}
 
 	// Configure TX timestamp attempts and timemouts

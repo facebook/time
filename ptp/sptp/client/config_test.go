@@ -48,6 +48,7 @@ func TestReadConfigDefaults(t *testing.T) {
 		Measurement: MeasurementConfig{
 			PathDelayDiscardMultiplier: 1000,
 		},
+		ListenAddress: "::",
 	}
 	require.Equal(t, want, cfg)
 }
@@ -101,6 +102,7 @@ measurement:
 		SequenceIDMaskValue:      1,
 		MaxClockClass:            7,
 		MaxClockAccuracy:         37,
+		ListenAddress:            "::",
 	}
 	require.Equal(t, want, cfg)
 	mask, value := cfg.GenerateMaskAndValue()
@@ -625,6 +627,7 @@ func TestPrepareConfig(t *testing.T) {
 interval: 1s
 exchangetimeout: 200ms
 timestamping: hardware
+listenaddress: "192.168.0.1"
 monitoringport: 4269
 dscp: 35
 firststepthreshold: 1s
@@ -672,6 +675,7 @@ measurement:
 			PathDelayDiscardBelow:         2 * time.Microsecond,
 			PathDelayDiscardMultiplier:    3,
 		},
+		ListenAddress: "192.168.0.1",
 	}
 	require.Equal(t, want, cfg)
 }
@@ -702,6 +706,7 @@ func TestPrepareConfigDefaults(t *testing.T) {
 			PathDelayDiscardBelow:         0,
 			PathDelayDiscardMultiplier:    1000,
 		},
+		ListenAddress: "::",
 	}
 	require.Equal(t, want, cfg)
 }

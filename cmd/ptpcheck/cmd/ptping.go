@@ -24,26 +24,26 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/facebook/time/dscp"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/sptp/client"
 	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/sys/unix"
 )
 
 // flags
 var (
-	ifacef   string
-	countf   int
-	dscpf    int
-	timeoutf time.Duration
+	ifacef     string
+	countf     int
+	dscpf      int
+	timeoutf   time.Duration
+	listenAddr string
 )
 
 func init() {
 	RootCmd.AddCommand(ptpingCmd)
 	ptpingCmd.Flags().StringVarP(&ifacef, "iface", "i", "eth0", "network interface to use")
+	ptpingCmd.Flags().StringVarP(&listenAddr, "listenaddr", "l", "::", "IP address to use")
 	ptpingCmd.Flags().IntVarP(&countf, "count", "c", 5, "number of probes to send")
 	ptpingCmd.Flags().IntVarP(&dscpf, "dscp", "d", 35, "dscp value (QoS)")
 	ptpingCmd.Flags().DurationVarP(&timeoutf, "timeout", "t", time.Second, "request timeout/interval")
@@ -86,35 +86,10 @@ func (p *ptping) init() error {
 	}
 	p.clockID = cid
 
-	// bind to event port
-	eventConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("::"), Port: 0})
+	p.eventConn, err = client.NewUDPConnTS(net.ParseIP(listenAddr), 0, timestamp.HW, p.iface, p.dscp)
 	if err != nil {
 		return err
 	}
-
-	// get FD of the connection. Can be optimized by doing this when connection is created
-	connFd, err := timestamp.ConnFd(eventConn)
-	if err != nil {
-		return err
-	}
-
-	localEventAddr := eventConn.LocalAddr()
-	localEventIP := localEventAddr.(*net.UDPAddr).IP
-	localEventPort := localEventAddr.(*net.UDPAddr).Port
-	if err = dscp.Enable(connFd, localEventIP, p.dscp); err != nil {
-		return fmt.Errorf("setting DSCP on event socket: %w", err)
-	}
-
-	// we need to enable HW or SW timestamps on event port
-	if err = timestamp.EnableHWTimestamps(connFd, p.iface); err != nil {
-		return fmt.Errorf("failed to enable hardware timestamps on port %d: %w", localEventPort, err)
-	}
-	// set it to blocking mode, otherwise recvmsg will just return with nothing most of the time
-	if err = unix.SetNonblock(connFd, false); err != nil {
-		return fmt.Errorf("failed to set event socket to blocking: %w", err)
-	}
-
-	p.eventConn = client.NewUDPConnTS(eventConn, connFd)
 	timestamp.AttemptsTXTS = 5
 	timestamp.TimeoutTXTS = 100 * time.Millisecond
 	p.client, err = client.NewClient(p.target, ptp.PortEvent, p.clockID, p.eventConn, &client.Config{}, &client.JSONStats{})

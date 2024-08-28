@@ -20,15 +20,15 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	rnd "math/rand"
-	"net"
 	"net/netip"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/timestamp"
 )
 
 // ReqDelay is a helper to build ptp.SyncDelayReq
@@ -95,7 +95,7 @@ type Client struct {
 	// outgoing packet bytes buffer
 	delayReqBytes []byte
 
-	eventAddr *net.UDPAddr
+	eventAddr unix.Sockaddr
 
 	// where we store timestamps
 	m *measurements
@@ -155,12 +155,8 @@ func (c *Client) SendAnnounce(p *ptp.Announce) (uint16, error) {
 
 // NewClient initializes sptp client
 func NewClient(target netip.Addr, targetPort int, clockID ptp.ClockIdentity, eventConn UDPConnWithTS, cfg *Config, stats StatsServer) (*Client, error) {
-	// addresses
 	// where to send to
-	eventAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(target.String(), fmt.Sprintf("%d", targetPort)))
-	if err != nil {
-		return nil, err
-	}
+	eventAddr := timestamp.AddrToSockaddr(target, targetPort)
 	sequenceIDMask, sequenceIDMaskedValue := cfg.GenerateMaskAndValue()
 	c := &Client{
 		eventSequence:   uint16(rnd.Int31n(65536)) & sequenceIDMask,

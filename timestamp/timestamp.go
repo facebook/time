@@ -212,6 +212,14 @@ func IPToSockaddr(ip net.IP, port int) unix.Sockaddr {
 	return sa
 }
 
+// AddrToSockaddr converts netip.Addr + port into a socket address
+func AddrToSockaddr(ip netip.Addr, port int) unix.Sockaddr {
+	if ip.Is4() {
+		return &unix.SockaddrInet4{Port: port, Addr: ip.As4()}
+	}
+	return &unix.SockaddrInet6{Port: port, Addr: ip.As16()}
+}
+
 // SockaddrToIP converts socket address to an IP
 // Somewhat copy from https://github.com/golang/go/blob/658b5e66ecbc41a49e6fb5aa63c5d9c804cf305f/src/net/udpsock_posix.go#L15
 func SockaddrToIP(sa unix.Sockaddr) net.IP {

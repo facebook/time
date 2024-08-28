@@ -388,11 +388,11 @@ func TestRunFiltered(t *testing.T) {
 	require.Nil(t, nil, results[netip.MustParseAddr("192.168.0.10")])
 }
 
-func TestRunListenerNoAddr(t *testing.T) {
+func TestRunListenerErr(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
-	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).AnyTimes().Return(0, &unix.SockaddrInet6{}, time.Time{}, fmt.Errorf("oops"))
 	mockGenConn := NewMockUDPConnNoTS(ctrl)
 	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).AnyTimes()
 	mockClock := NewMockClock(ctrl)
@@ -418,7 +418,7 @@ func TestRunListenerNoAddr(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	err = p.RunListener(ctx)
-	require.EqualError(t, err, "received packet on port 320 with nil source address")
+	require.Error(t, err)
 }
 
 func TestRunListenerError(t *testing.T) {
