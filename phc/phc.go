@@ -224,7 +224,7 @@ func (dev *Device) ReadPins() ([]PinDesc, error) {
 	}
 	npins := int(caps.NPins)
 	desc := make([]PinDesc, npins)
-	for i := range npins {
+	for i := 0; i < npins; i++ {
 		if err := dev.readPinDesc(i, &desc[i]); err != nil {
 			return nil, err
 		}
