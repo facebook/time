@@ -19,13 +19,13 @@ package client
 import (
 	"context"
 	"encoding/binary"
-	"net"
 	"net/netip"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 
 	ptp "github.com/facebook/time/ptp/protocol"
 )
@@ -92,7 +92,7 @@ func TestClientRun(t *testing.T) {
 	// handle whatever client is sending over eventConn
 	statsServer.EXPECT().IncTXDelayReq()
 	// unexpected packet we just ignore
-	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ net.Addr) (int, time.Time, error) {
+	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ unix.Sockaddr) (int, time.Time, error) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
 		require.Nil(t, err, "reading delayReq msg")
@@ -175,7 +175,7 @@ func TestClientBadPacket(t *testing.T) {
 
 	// handle whatever client is sending over eventConn
 	statsServer.EXPECT().IncTXDelayReq()
-	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ net.Addr) (int, time.Time, error) {
+	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ unix.Sockaddr) (int, time.Time, error) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
 		require.Nil(t, err, "reading delayReq msg")

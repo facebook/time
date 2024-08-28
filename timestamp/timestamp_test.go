@@ -19,6 +19,7 @@ package timestamp
 import (
 	"errors"
 	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -61,6 +62,24 @@ func TestIPToSockaddr(t *testing.T) {
 
 	sa4 := IPToSockaddr(ip4, port)
 	sa6 := IPToSockaddr(ip6, port)
+
+	require.Equal(t, expectedSA4, sa4)
+	require.Equal(t, expectedSA6, sa6)
+}
+
+func TestAddrToSockaddr(t *testing.T) {
+	ip4 := netip.MustParseAddr("192.168.0.1")
+	ip6 := netip.MustParseAddr("::1")
+	port := 123
+
+	expectedSA4 := &unix.SockaddrInet4{Port: port}
+	copy(expectedSA4.Addr[:], ip4.AsSlice())
+
+	expectedSA6 := &unix.SockaddrInet6{Port: port}
+	copy(expectedSA6.Addr[:], ip6.AsSlice())
+
+	sa4 := AddrToSockaddr(ip4, port)
+	sa6 := AddrToSockaddr(ip6, port)
 
 	require.Equal(t, expectedSA4, sa4)
 	require.Equal(t, expectedSA6, sa6)

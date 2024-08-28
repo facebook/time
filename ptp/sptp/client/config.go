@@ -113,6 +113,7 @@ type Config struct {
 	SequenceIDMaskBits       uint
 	SequenceIDMaskValue      uint
 	ParallelTX               bool
+	ListenAddress            string
 }
 
 // DefaultConfig returns Config initialized with default values
@@ -129,6 +130,7 @@ func DefaultConfig() *Config {
 		Measurement: MeasurementConfig{
 			PathDelayDiscardMultiplier: 1000,
 		},
+		ListenAddress: "::",
 	}
 }
 
