@@ -48,9 +48,10 @@ func TestProcessResultsNoResults(t *testing.T) {
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
 	p := &SPTP{
-		clock: mockClock,
-		pi:    mockServo,
-		stats: mockStatsServer,
+		clock:      mockClock,
+		pi:         mockServo,
+		stats:      mockStatsServer,
+		eventConns: []UDPConnWithTS{nil},
 	}
 	results := map[netip.Addr]*RunResult{}
 	mockServo.EXPECT().MeanFreq()
@@ -75,10 +76,11 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 		"192.168.0.10": 1,
 	}
 	p := &SPTP{
-		clock: mockClock,
-		pi:    mockServo,
-		stats: mockStatsServer,
-		cfg:   cfg,
+		clock:      mockClock,
+		pi:         mockServo,
+		stats:      mockStatsServer,
+		cfg:        cfg,
+		eventConns: []UDPConnWithTS{nil},
 	}
 	err := p.initClients()
 	require.NoError(t, err)
@@ -121,10 +123,11 @@ func TestProcessResultsSingle(t *testing.T) {
 		"192.168.0.10": 1,
 	}
 	p := &SPTP{
-		clock: mockClock,
-		pi:    mockServo,
-		stats: mockStatsServer,
-		cfg:   cfg,
+		clock:      mockClock,
+		pi:         mockServo,
+		stats:      mockStatsServer,
+		cfg:        cfg,
+		eventConns: []UDPConnWithTS{nil},
 	}
 	results := map[netip.Addr]*RunResult{
 		netip.MustParseAddr("192.168.0.10"): {
@@ -181,10 +184,11 @@ func TestProcessResultsFastSamples(t *testing.T) {
 		"192.168.0.10": 1,
 	}
 	p := &SPTP{
-		clock: mockClock,
-		pi:    mockServo,
-		stats: mockStatsServer,
-		cfg:   cfg,
+		clock:      mockClock,
+		pi:         mockServo,
+		stats:      mockStatsServer,
+		cfg:        cfg,
+		eventConns: []UDPConnWithTS{nil},
 	}
 	results := map[netip.Addr]*RunResult{
 		netip.MustParseAddr("192.168.0.10"): {
@@ -240,10 +244,11 @@ func TestProcessResultsMulti(t *testing.T) {
 		"192.168.0.11": 1,
 	}
 	p := &SPTP{
-		clock: mockClock,
-		pi:    mockServo,
-		stats: mockStatsServer,
-		cfg:   cfg,
+		clock:      mockClock,
+		pi:         mockServo,
+		stats:      mockStatsServer,
+		cfg:        cfg,
+		eventConns: []UDPConnWithTS{nil},
 	}
 	err = p.initClients()
 	require.NoError(t, err)
@@ -333,7 +338,7 @@ func TestRunInternalAllDead(t *testing.T) {
 				PathDelayDiscardBelow:         2 * time.Microsecond,
 			},
 		},
-		eventConn: mockEventConn,
+		eventConns: []UDPConnWithTS{mockEventConn},
 	}
 	err := p.initClients()
 	require.NoError(t, err)
@@ -363,10 +368,11 @@ func TestRunFiltered(t *testing.T) {
 		"192.168.0.10": 1,
 	}
 	p := &SPTP{
-		clock: mockClock,
-		pi:    mockServo,
-		stats: mockStatsServer,
-		cfg:   cfg,
+		clock:      mockClock,
+		pi:         mockServo,
+		stats:      mockStatsServer,
+		cfg:        cfg,
+		eventConns: []UDPConnWithTS{nil},
 	}
 	results := map[netip.Addr]*RunResult{
 		netip.MustParseAddr("192.168.0.10"): {
@@ -410,8 +416,8 @@ func TestRunListenerErr(t *testing.T) {
 				"192.168.0.11": 2,
 			},
 		},
-		eventConn: mockEventConn,
-		genConn:   mockGenConn,
+		eventConns: []UDPConnWithTS{mockEventConn},
+		genConn:    mockGenConn,
 	}
 	err := p.initClients()
 	require.NoError(t, err)
@@ -443,8 +449,8 @@ func TestRunListenerError(t *testing.T) {
 				"192.168.0.11": 2,
 			},
 		},
-		eventConn: mockEventConn,
-		genConn:   mockGenConn,
+		eventConns: []UDPConnWithTS{mockEventConn},
+		genConn:    mockGenConn,
 	}
 	err := p.initClients()
 	require.NoError(t, err)
@@ -522,8 +528,8 @@ func TestRunListenerGood(t *testing.T) {
 				"192.168.0.11": 2,
 			},
 		},
-		eventConn: mockEventConn,
-		genConn:   mockGenConn,
+		eventConns: []UDPConnWithTS{mockEventConn},
+		genConn:    mockGenConn,
 	}
 	err := p.initClients()
 	require.NoError(t, err)
@@ -561,11 +567,11 @@ func TestPTPing(t *testing.T) {
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
 	p := &SPTP{
-		clock:     mockClock,
-		pi:        mockServo,
-		stats:     mockStatsServer,
-		cfg:       &Config{},
-		eventConn: mockEventConn,
+		clock:      mockClock,
+		pi:         mockServo,
+		stats:      mockStatsServer,
+		cfg:        &Config{},
+		eventConns: []UDPConnWithTS{mockEventConn},
 	}
 
 	response := []byte{}

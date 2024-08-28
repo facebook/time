@@ -138,6 +138,9 @@ func listenUDP(address net.IP, port int) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("unable to create connection: %w", err)
 	}
+	if err = unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
+		return 0, fmt.Errorf("setting SO_REUSEPORT on socket: %w", err)
+	}
 	// set the connection to blocking mode, otherwise recvmsg will just return with nothing most of the time
 	if err := unix.SetNonblock(connFd, false); err != nil {
 		return 0, fmt.Errorf("failed to set event socket to blocking: %w", err)

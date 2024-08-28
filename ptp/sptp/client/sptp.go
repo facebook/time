@@ -64,8 +64,10 @@ type SPTP struct {
 
 	clockID ptp.ClockIdentity
 	genConn UDPConnNoTS
-	// listening connection on port 319
-	eventConn UDPConnWithTS
+	// connections on port 319
+	// if parallel TX is enabled, there will be one connection per server, as TX timestamping happens per socket.
+	// otherwise, there will be only one connection for all servers.
+	eventConns []UDPConnWithTS
 }
 
 // NewSPTP creates SPTP client
@@ -88,7 +90,7 @@ func (p *SPTP) initClients() error {
 	p.priorities = map[netip.Addr]int{}
 	p.backoff = map[netip.Addr]*backoff{}
 	if p.cfg.ParallelTX {
-		log.Info("Initialise clients with parallel TX feature")
+		log.Info("Initialising clients with parallel TX feature")
 	}
 	for server, prio := range p.cfg.Servers {
 		// normalize the address
@@ -96,12 +98,16 @@ func (p *SPTP) initClients() error {
 		if err != nil {
 			return fmt.Errorf("parsing server address %q: %w", server, err)
 		}
-		econn := p.eventConn
+		var econn UDPConnWithTS
 		if p.cfg.ParallelTX {
 			econn, err = NewUDPConnTS(net.ParseIP(p.cfg.ListenAddress), ptp.PortEvent, p.cfg.Timestamping, p.cfg.Iface, p.cfg.DSCP)
 			if err != nil {
 				return err
 			}
+			// keep track of the event connections
+			p.eventConns = append(p.eventConns, econn)
+		} else {
+			econn = p.eventConns[0]
 		}
 		c, err := NewClient(ip, ptp.PortEvent, p.clockID, econn, p.cfg, p.stats)
 		if err != nil {
@@ -131,10 +137,13 @@ func (p *SPTP) init() error {
 		return fmt.Errorf("binding to %d: %w", ptp.PortGeneral, err)
 	}
 
-	// bind to event port
-	p.eventConn, err = NewUDPConnTS(net.ParseIP(p.cfg.ListenAddress), ptp.PortEvent, p.cfg.Timestamping, p.cfg.Iface, p.cfg.DSCP)
-	if err != nil {
-		return fmt.Errorf("binding to %d: %w", ptp.PortEvent, err)
+	if !p.cfg.ParallelTX {
+		// bind to event port
+		eventConn, err := NewUDPConnTS(net.ParseIP(p.cfg.ListenAddress), ptp.PortEvent, p.cfg.Timestamping, p.cfg.Iface, p.cfg.DSCP)
+		if err != nil {
+			return fmt.Errorf("binding to %d: %w", ptp.PortEvent, err)
+		}
+		p.eventConns = append(p.eventConns, eventConn)
 	}
 
 	// Configure TX timestamp attempts and timemouts
@@ -191,7 +200,8 @@ func (p *SPTP) ptping(sourceIP netip.Addr, sourcePort int, response []byte, rxtx
 	if err := ptp.FromBytes(response, b); err != nil {
 		return fmt.Errorf("failed to read delay request %w", err)
 	}
-	c, err := NewClient(sourceIP, sourcePort, p.clockID, p.eventConn, p.cfg, p.stats)
+	// use first event connection, doesn't really matter which one we use
+	c, err := NewClient(sourceIP, sourcePort, p.clockID, p.eventConns[0], p.cfg, p.stats)
 	if err != nil {
 		return fmt.Errorf("failed to respond to a delay request %w", err)
 	}
@@ -245,48 +255,53 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 			return err
 		}
 	})
-	// get packets from event port
-	eg.Go(func() error {
-		// it's done in non-blocking way, so if context is cancelled we exit correctly
-		doneChan := make(chan error, 1)
-		go func() {
-			sync := &ptp.SyncDelayReq{}
-			buf := make([]byte, timestamp.PayloadSizeBytes)
-			oob := make([]byte, timestamp.ControlSizeBytes)
-			for {
-				bbuf, addr, rxtx, err := p.eventConn.ReadPacketWithRXTimestampBuf(buf, oob)
-				if err != nil {
-					doneChan <- err
-					return
-				}
-				log.Debugf("got packet on port 319, addr = %v", addr)
-				ip := timestamp.SockaddrToAddr(addr)
-				cc, found := p.clients[ip]
-				if !found {
-					log.Warningf("ignoring packets from server %v. Trying ptping", ip)
-					// Try ptping
-					if err = p.ptping(ip, timestamp.SockaddrToPort(addr), buf, rxtx); err != nil {
-						log.Warning(err)
+	// if we have parallel TX, we need to listen on all event ports since they all bind to same port with SO_REUSEPORT,
+	// and kernel will distribute incoming packets between them evenly
+	for _, econn := range p.eventConns {
+		econn := econn
+		// get packets from event port
+		eg.Go(func() error {
+			// it's done in non-blocking way, so if context is cancelled we exit correctly
+			doneChan := make(chan error, 1)
+			go func() {
+				sync := &ptp.SyncDelayReq{}
+				buf := make([]byte, timestamp.PayloadSizeBytes)
+				oob := make([]byte, timestamp.ControlSizeBytes)
+				for {
+					bbuf, addr, rxtx, err := econn.ReadPacketWithRXTimestampBuf(buf, oob)
+					if err != nil {
+						doneChan <- err
+						return
 					}
-					continue
+					log.Debugf("got packet on port 319, addr = %v", addr)
+					ip := timestamp.SockaddrToAddr(addr)
+					cc, found := p.clients[ip]
+					if !found {
+						log.Warningf("ignoring packets from server %v. Trying ptping", ip)
+						// Try ptping
+						if err = p.ptping(ip, timestamp.SockaddrToPort(addr), buf, rxtx); err != nil {
+							log.Warning(err)
+						}
+						continue
+					}
+					if err = ptp.FromBytes(buf[:bbuf], sync); err != nil {
+						log.Warningf("reading sync msg: %v", err)
+						continue
+					}
+					cc.stats.IncRXSync()
+					cc.handleSync(sync, rxtx)
+					cc.inChan <- true
 				}
-				if err = ptp.FromBytes(buf[:bbuf], sync); err != nil {
-					log.Warningf("reading sync msg: %v", err)
-					continue
-				}
-				cc.stats.IncRXSync()
-				cc.handleSync(sync, rxtx)
-				cc.inChan <- true
+			}()
+			select {
+			case <-ctx.Done():
+				log.Debugf("cancelled event port receiver")
+				return ctx.Err()
+			case err := <-doneChan:
+				return err
 			}
-		}()
-		select {
-		case <-ctx.Done():
-			log.Debugf("cancelled event port receiver")
-			return ctx.Err()
-		case err := <-doneChan:
-			return err
-		}
-	})
+		})
+	}
 
 	return eg.Wait()
 }
