@@ -221,6 +221,7 @@ func main() {
 
 	log.SetLevel(log.InfoLevel)
 	if verboseFlag {
+		chrony.Logger = log.StandardLogger()
 		log.SetLevel(log.DebugLevel)
 	}
 

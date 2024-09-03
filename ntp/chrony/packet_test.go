@@ -17,12 +17,19 @@ limitations under the License.
 package chrony
 
 import (
+	"log"
 	"net"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+func init() {
+	// Set up the logger for debugging
+	Logger = log.New(os.Stderr, "", 0)
+}
 
 /*
 The unittests here contain packets in binary form.

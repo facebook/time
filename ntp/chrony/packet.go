@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"net"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // original C++ versions of those consts/structs
@@ -949,7 +947,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 	if err = binary.Read(r, binary.BigEndian, head); err != nil {
 		return nil, err
 	}
-	log.Debugf("response head: %+v", head)
+	Logger.Printf("response head: %+v", head)
 	if head.Status != sttSuccess {
 		return nil, fmt.Errorf("got status %s (%d)", head.Status, head.Status)
 	}
@@ -959,7 +957,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplySources{
 			ReplyHead: *head,
 			NSources:  int(data.NSources),
@@ -969,7 +967,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplySourceData{
 			ReplyHead:  *head,
 			SourceData: *newSourceData(data),
@@ -979,7 +977,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplyTracking{
 			ReplyHead: *head,
 			Tracking:  *newTracking(data),
@@ -989,7 +987,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplySourceStats{
 			ReplyHead:   *head,
 			SourceStats: *newSourceStats(data),
@@ -999,7 +997,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplyActivity{
 			ReplyHead: *head,
 			Activity:  *data,
@@ -1009,7 +1007,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplyServerStats{
 			ReplyHead:   *head,
 			ServerStats: *data,
@@ -1019,7 +1017,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplyNTPData{
 			ReplyHead: *head,
 			NTPData:   *newNTPData(data),
@@ -1029,7 +1027,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplyNTPSourceName{
 			ReplyHead:     *head,
 			NTPSourceName: *newNTPSourceName(data),
@@ -1039,7 +1037,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplyServerStats2{
 			ReplyHead:    *head,
 			ServerStats2: *data,
@@ -1049,7 +1047,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplyServerStats3{
 			ReplyHead:    *head,
 			ServerStats3: *data,
@@ -1059,7 +1057,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplyServerStats4{
 			ReplyHead:    *head,
 			ServerStats4: *data,
@@ -1069,7 +1067,7 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		if err = binary.Read(r, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		log.Debugf("response data: %+v", data)
+		Logger.Printf("response data: %+v", data)
 		return &ReplySelectData{
 			ReplyHead:  *head,
 			SelectData: *newSelectData(data),

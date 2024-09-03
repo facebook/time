@@ -16,30 +16,21 @@ limitations under the License.
 
 package chrony
 
-import (
-	"encoding/binary"
-	"io"
-)
-
-// Client talks to chronyd
-type Client struct {
-	Connection io.ReadWriter
-	Sequence   uint32
+// LoggerInterface is an interface for debug logging.
+type LoggerInterface interface {
+	Printf(format string, v ...interface{})
 }
 
-// Communicate sends the packet to chronyd, parse response into something usable
-func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
-	n.Sequence++
-	var err error
-	packet.SetSequence(n.Sequence)
-	err = binary.Write(n.Connection, binary.BigEndian, packet)
-	if err != nil {
-		return nil, err
-	}
-	response := make([]uint8, 1024)
-	read, err := n.Connection.Read(response)
-	if err != nil {
-		return nil, err
-	}
-	return decodePacket(response[:read])
-}
+type noopLogger struct{}
+
+func (noopLogger) Printf(_ string, _ ...interface{}) {}
+
+// Logger is a default debug logger which simply discards all messages.
+// It can be overridden by setting the global variable to a different implementation, like std log
+//
+//	chrony.Logger = log.New(os.Stderr, "", 0)
+//
+// or logrus
+//
+//	chrony.Logger = logrus.StandardLogger()
+var Logger LoggerInterface = &noopLogger{}
