@@ -17,10 +17,9 @@ limitations under the License.
 package control
 
 import (
+	"fmt"
+	"log"
 	"strings"
-
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // Mode is NTP Control operation mode code
@@ -39,7 +38,7 @@ func NormalizeData(data []byte) (map[string]string, error) {
 	for _, pair := range pairs {
 		split := strings.Split(pair, "=")
 		if len(split) != 2 {
-			log.Debugf("WARNING: Malformed packet, bad k=v pair '%s'", pair)
+			log.Printf("WARNING: Malformed packet, bad k=v pair '%s'", pair)
 			continue
 		}
 		k := strings.TrimSpace(split[0])
@@ -47,7 +46,7 @@ func NormalizeData(data []byte) (map[string]string, error) {
 		result[k] = v
 	}
 	if len(result) == 0 {
-		return result, errors.Errorf("Malformed packet, no k=v pairs decoded")
+		return result, fmt.Errorf("Malformed packet, no k=v pairs decoded")
 	}
 	return result, nil
 }
@@ -327,7 +326,7 @@ func (n NTPControlMsgHead) GetOperation() uint8 {
 // GetSystemStatus returns parsed SystemStatusWord struct if present
 func (n NTPControlMsg) GetSystemStatus() (*SystemStatusWord, error) {
 	if n.GetOperation() != OpReadStatus {
-		return nil, errors.Errorf("no System Status Word supported for operation=%d", n.GetOperation())
+		return nil, fmt.Errorf("no System Status Word supported for operation=%d", n.GetOperation())
 	}
 	return ReadSystemStatusWord(n.Status), nil
 }
@@ -335,7 +334,7 @@ func (n NTPControlMsg) GetSystemStatus() (*SystemStatusWord, error) {
 // GetPeerStatus returns parsed PeerStatusWord struct if present
 func (n NTPControlMsg) GetPeerStatus() (*PeerStatusWord, error) {
 	if n.GetOperation() != OpReadVariables {
-		return nil, errors.Errorf("no Peer Status Word supported for operation=%d", n.GetOperation())
+		return nil, fmt.Errorf("no Peer Status Word supported for operation=%d", n.GetOperation())
 	}
 	return ReadPeerStatusWord(n.Status), nil
 }
@@ -344,7 +343,7 @@ func (n NTPControlMsg) GetPeerStatus() (*PeerStatusWord, error) {
 func (n NTPControlMsg) GetAssociations() (map[uint16]*PeerStatusWord, error) {
 	result := map[uint16]*PeerStatusWord{}
 	if n.GetOperation() != OpReadStatus {
-		return result, errors.Errorf("no peer list supported for operation=%d", n.GetOperation())
+		return result, fmt.Errorf("no peer list supported for operation=%d", n.GetOperation())
 	}
 	for i := 0; i < int(n.Count/4); i++ {
 		assoc := n.Data[i*4 : i*4+4]                         // 2 uint16 encoded as 4 bytes
@@ -359,7 +358,7 @@ func (n NTPControlMsg) GetAssociations() (map[uint16]*PeerStatusWord, error) {
 func (n NTPControlMsg) GetAssociationInfo() (map[string]string, error) {
 	result := map[string]string{}
 	if n.GetOperation() != OpReadVariables {
-		return result, errors.Errorf("no variables supported for operation=%d", n.GetOperation())
+		return result, fmt.Errorf("no variables supported for operation=%d", n.GetOperation())
 	}
 	data, err := NormalizeData(n.Data)
 	if err != nil {
