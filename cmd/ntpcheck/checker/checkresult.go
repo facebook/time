@@ -17,10 +17,10 @@ limitations under the License.
 package checker
 
 import (
+	"errors"
 	"slices"
 
 	"github.com/facebook/time/ntp/control"
-	"github.com/pkg/errors"
 )
 
 // NTPCheckResult represents result of NTPCheck run populated with information about the server and its peers.

@@ -21,14 +21,12 @@ import (
 	"math"
 	"net"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 // NewNTPPeerStats constructs NTPStats from NTPCheckResult
 func NewNTPPeerStats(r *NTPCheckResult, noDNS bool) (map[string]any, error) {
 	if r.SysVars == nil {
-		return nil, errors.New("no system variables to output stats")
+		return nil, fmt.Errorf("no system variables to output stats")
 	}
 
 	result := make(map[string]any, len(r.Peers))
