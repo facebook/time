@@ -25,7 +25,6 @@ import (
 
 	"github.com/facebook/time/ntp/chrony"
 	"github.com/facebook/time/ntp/control"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -85,13 +84,13 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 	trackReq := chrony.NewTrackingPacket()
 	packet, err = n.Client.Communicate(trackReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get 'tracking' response")
+		return nil, fmt.Errorf("failed to get 'tracking' response: %w", err)
 	}
 	log.Debugf("Got 'tracking' response:")
 	log.Debugf("Status: %v", packet.GetStatus())
 	tracking, ok := packet.(*chrony.ReplyTracking)
 	if !ok {
-		return nil, errors.Errorf("Got wrong 'tracking' response %+v", packet)
+		return nil, fmt.Errorf("Got wrong 'tracking' response %+v", packet)
 	}
 	result.Correction = tracking.CurrentCorrection
 	result.LIDesc = control.LeapDesc[uint8(tracking.LeapStatus)]
@@ -103,11 +102,11 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 	sourcesReq := chrony.NewSourcesPacket()
 	packet, err = n.Client.Communicate(sourcesReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get 'sources' response")
+		return nil, fmt.Errorf("failed to get 'sources' response: %w", err)
 	}
 	sources, ok := packet.(*chrony.ReplySources)
 	if !ok {
-		return nil, errors.Errorf("Got wrong 'sources' response %+v", packet)
+		return nil, fmt.Errorf("Got wrong 'sources' response %+v", packet)
 	}
 	log.Debugf("Got %d sources", sources.NSources)
 
@@ -117,11 +116,11 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 		sourceDataReq := chrony.NewSourceDataPacket(int32(i))
 		packet, err = n.Client.Communicate(sourceDataReq)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get 'sourcedata' response for source #%d", i)
+			return nil, fmt.Errorf("failed to get 'sourcedata' response for source #%d: %w", i, err)
 		}
 		sourceData, ok := packet.(*chrony.ReplySourceData)
 		if !ok {
-			return nil, errors.Errorf("Got wrong 'sourcedata' response %+v", packet)
+			return nil, fmt.Errorf("Got wrong 'sourcedata' response %+v", packet)
 		}
 		// get ntpdata when using a unix socket
 		var ntpData *chrony.ReplyNTPData
@@ -129,11 +128,11 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 			ntpDataReq := chrony.NewNTPDataPacket(sourceData.IPAddr)
 			packet, err = n.Client.Communicate(ntpDataReq)
 			if err != nil {
-				return nil, errors.Wrapf(err, "failed to get 'ntpdata' response for source #%d", i)
+				return nil, fmt.Errorf("failed to get 'ntpdata' response for source #%d: %w", i, err)
 			}
 			ntpData, ok = packet.(*chrony.ReplyNTPData)
 			if !ok {
-				return nil, errors.Errorf("Got wrong 'ntpdata' response %+v", packet)
+				return nil, fmt.Errorf("Got wrong 'ntpdata' response %+v", packet)
 			}
 		}
 		// get peer sourcename using a unix socket
@@ -142,16 +141,16 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 			ntpSourceNameReq := chrony.NewNTPSourceNamePacket(sourceData.IPAddr)
 			packet, err = n.Client.Communicate(ntpSourceNameReq)
 			if err != nil {
-				return nil, errors.Wrapf(err, "failed to get 'sourcename' response for source #%d", i)
+				return nil, fmt.Errorf("failed to get 'sourcename' response for source #%d: %w", i, err)
 			}
 			ntpSourceName, ok = packet.(*chrony.ReplyNTPSourceName)
 			if !ok {
-				return nil, errors.Errorf("Got wrong 'sourcename' response %+v", packet)
+				return nil, fmt.Errorf("Got wrong 'sourcename' response %+v", packet)
 			}
 		}
 		peer, err := NewPeerFromChrony(sourceData, ntpData, ntpSourceName)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to create Peer structure from response packet for peer=%s", sourceData.IPAddr)
+			return nil, fmt.Errorf("failed to create Peer structure from response packet for peer=%s: %w", sourceData.IPAddr, err)
 		}
 		result.Peers[uint16(i)] = peer
 		// if main sync source, update ClockSource info
@@ -172,7 +171,7 @@ func (n *ChronyCheck) ServerStats() (*ServerStats, error) {
 	statsReq := chrony.NewServerStatsPacket()
 	packet, err := n.Client.Communicate(statsReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get 'serverstats' response")
+		return nil, fmt.Errorf("failed to get 'serverstats' response: %w", err)
 	}
 	var serverStats *ServerStats
 	switch stats := packet.(type) {
@@ -185,7 +184,7 @@ func (n *ChronyCheck) ServerStats() (*ServerStats, error) {
 	case *chrony.ReplyServerStats4:
 		serverStats = NewServerStatsFromChrony4(stats)
 	default:
-		return nil, errors.Errorf("Got wrong 'serverstats' response %+v", packet)
+		return nil, fmt.Errorf("Got wrong 'serverstats' response %+v", packet)
 	}
 	log.Debugf("ServerStats: %v", serverStats)
 	return serverStats, nil

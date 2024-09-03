@@ -17,12 +17,12 @@ limitations under the License.
 package server
 
 import (
+	"fmt"
 	"net"
 	"time"
 
 	"github.com/facebook/time/phc"
 	"github.com/jsimonetti/rtnetlink/rtnl"
-	errors "github.com/pkg/errors"
 )
 
 // bitsInBytes is a number of bits in byte
@@ -46,7 +46,7 @@ func addIfaceIP(iface *net.Interface, addr *net.IP) error {
 
 	conn, err := rtnl.Dial(nil)
 	if err != nil {
-		return errors.Wrap(err, "can't establish netlink connection")
+		return fmt.Errorf("can't establish netlink connection: %w", err)
 	}
 	defer conn.Close()
 
@@ -59,7 +59,7 @@ func addIfaceIP(iface *net.Interface, addr *net.IP) error {
 
 	err = conn.AddrAdd(iface, &net.IPNet{IP: *addr, Mask: mask})
 	if err != nil {
-		return errors.Wrap(err, "can't add address")
+		return fmt.Errorf("can't add address: %w", err)
 	}
 	return nil
 }
@@ -76,7 +76,7 @@ func deleteIfaceIP(iface *net.Interface, addr *net.IP) error {
 
 	conn, err := rtnl.Dial(nil)
 	if err != nil {
-		return errors.Wrap(err, "can't establish netlink connection")
+		return fmt.Errorf("can't establish netlink connection: %w", err)
 	}
 	defer conn.Close()
 
@@ -89,7 +89,7 @@ func deleteIfaceIP(iface *net.Interface, addr *net.IP) error {
 
 	err = conn.AddrDel(iface, &net.IPNet{IP: *addr, Mask: mask})
 	if err != nil {
-		return errors.Wrap(err, "can't remove address")
+		return fmt.Errorf("can't remove address: %w", err)
 	}
 
 	return nil

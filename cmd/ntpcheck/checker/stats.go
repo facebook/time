@@ -17,10 +17,10 @@ limitations under the License.
 package checker
 
 import (
+	"fmt"
 	"math"
 	"time"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -52,7 +52,7 @@ func peersAverages(peers []*Peer) (*averages, error) {
 	// calculate averages
 	total := len(peers)
 	if total == 0 {
-		return nil, errors.New("no peers detected to output stats")
+		return nil, fmt.Errorf("no peers detected to output stats")
 	}
 	totalDelay := 0.0
 	totalJitter := 0.0
@@ -86,7 +86,7 @@ func peersAverages(peers []*Peer) (*averages, error) {
 // NewNTPStats constructs NTPStats from NTPCheckResult
 func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 	if r.SysVars == nil {
-		return nil, errors.New("no system variables to output stats")
+		return nil, fmt.Errorf("no system variables to output stats")
 	}
 	var delay, jitter, offset float64
 	var poll uint
@@ -97,11 +97,11 @@ func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 		log.Warningf("Can't get system peer: %v", err)
 		goodPeers, err := r.FindGoodPeers()
 		if err != nil {
-			return nil, errors.Wrap(err, "nothing to calculate stats from")
+			return nil, fmt.Errorf("nothing to calculate stats from: %w", err)
 		}
 		peerAvgs, err := peersAverages(goodPeers)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to calculate stats from peers")
+			return nil, fmt.Errorf("failed to calculate stats from peers: %w", err)
 		}
 
 		delay = peerAvgs.delay

@@ -17,13 +17,13 @@ limitations under the License.
 package checker
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/facebook/time/ntp/chrony"
 	"github.com/facebook/time/ntp/control"
-	"github.com/pkg/errors"
 )
 
 // Peer contains parsed information from Peer Variables and peer status word, as described in http://doc.ntp.org/current-stable/ntpq.html

@@ -17,11 +17,11 @@ limitations under the License.
 package checker
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/facebook/time/ntp/chrony"
 	"github.com/facebook/time/ntp/control"
-	"github.com/pkg/errors"
 )
 
 // SystemVariables holds System Variables extracted from k=v pairs, as described in http://doc.ntp.org/current-stable/ntpq.html

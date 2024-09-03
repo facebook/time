@@ -21,8 +21,6 @@ import (
 	"net"
 	"os/exec"
 	"time"
-
-	errors "github.com/pkg/errors"
 )
 
 func addIfaceIP(iface *net.Interface, addr *net.IP) error {
@@ -47,7 +45,7 @@ func addIfaceIP(iface *net.Interface, addr *net.IP) error {
 
 	cmd := exec.Command("ifconfig", iface.Name, proto, "alias", fmt.Sprintf("%s/%d", addr.String(), mask))
 	if err := cmd.Run(); err != nil {
-		return errors.Wrap(err, "can't add address")
+		return fmt.Errorf("can't add address: %w", err)
 	}
 	return nil
 }
@@ -71,7 +69,7 @@ func deleteIfaceIP(iface *net.Interface, addr *net.IP) error {
 
 	cmd := exec.Command("ifconfig", iface.Name, proto, "-alias", addr.String())
 	if err := cmd.Run(); err != nil {
-		return errors.Wrap(err, "can't remove address")
+		return fmt.Errorf("can't remove address: %w", err)
 	}
 
 	return nil

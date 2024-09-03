@@ -17,10 +17,10 @@ limitations under the License.
 package checker
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/facebook/time/ntp/control"
-	"github.com/pkg/errors"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -87,7 +87,7 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 	result := NewNTPCheckResult()
 	packet, err := n.ReadStatus()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get 'read status' packet from NTP server")
+		return nil, fmt.Errorf("failed to get 'read status' packet from NTP server: %w", err)
 	}
 	log.Debugf("Got 'read status' response:")
 	log.Debugf("Version: %v", packet.GetVersion())
@@ -101,7 +101,7 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 
 	sysStatus, err := packet.GetSystemStatus()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to parse SystemStatusWord")
+		return nil, fmt.Errorf("failed to parse SystemStatusWord: %w", err)
 	}
 	result.LIDesc = control.LeapDesc[sysStatus.LI]
 	result.LI = sysStatus.LI
@@ -111,7 +111,7 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 
 	infoPacket, err := n.ReadVariables(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get 'read variables' packet from NTP server for associationID=0")
+		return nil, fmt.Errorf("failed to get 'read variables' packet from NTP server for associationID=0: %w", err)
 	}
 	log.Debugf("Got 'read variables' response:")
 	log.Debugf("Version: %v", infoPacket.GetVersion())
@@ -123,36 +123,36 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 
 	sys, err := NewSystemVariablesFromNTP(infoPacket)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create System structure from response packet")
+		return nil, fmt.Errorf("failed to create System structure from response packet: %w", err)
 	}
 	result.SysVars = sys
 
 	assocs, err := packet.GetAssociations()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get associations list from response packet for associationID=0")
+		return nil, fmt.Errorf("failed to get associations list from response packet for associationID=0: %w", err)
 	}
 	for id, peerStatus := range assocs {
 		log.Debugf("Peer %x Status Word: %#v", id, peerStatus)
 		assocInfo, err := n.ReadVariables(id)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get 'read variables' packet from NTP server for associationID=%x", id)
+			return nil, fmt.Errorf("failed to get 'read variables' packet from NTP server for associationID=%x: %w", id, err)
 		}
 		s, err := assocInfo.GetPeerStatus()
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get peer status list from response packet for associationID=%x", id)
+			return nil, fmt.Errorf("failed to get peer status list from response packet for associationID=%x: %w", id, err)
 		}
 		log.Debugf("Assoc ID: %x", assocInfo.AssociationID)
 		log.Debugf("Peer Status: %#v", s)
 		m, err := assocInfo.GetAssociationInfo()
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get associations list from response packet for associationID=%x", id)
+			return nil, fmt.Errorf("failed to get associations list from response packet for associationID=%x: %w", id, err)
 		}
 		for k, v := range m {
 			log.Debugf("%s: %s", k, v)
 		}
 		peer, err := NewPeerFromNTP(assocInfo)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to create Peer structure from response packet for associationID=%x", id)
+			return nil, fmt.Errorf("failed to create Peer structure from response packet for associationID=%x: %w", id, err)
 		}
 		result.Peers[id] = peer
 	}
@@ -163,7 +163,7 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 func (n *NTPCheck) ServerStats() (*ServerStats, error) {
 	serverVars, err := n.ReadServerVariables()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get 'server variables' packet from NTP server")
+		return nil, fmt.Errorf("failed to get 'server variables' packet from NTP server: %w", err)
 	}
 
 	log.Debugf("Got system 'read variables' response:")
@@ -175,12 +175,12 @@ func (n *NTPCheck) ServerStats() (*ServerStats, error) {
 	log.Debugf("Data string: '%s'", string(serverVars.Data))
 
 	if serverVars.HasError() || !(len(serverVars.Data) > 0) {
-		return nil, errors.Errorf("Got bad 'server variables' response %+v", serverVars)
+		return nil, fmt.Errorf("Got bad 'server variables' response %+v", serverVars)
 	}
 
 	serverStats, err := NewServerStatsFromNTP(serverVars)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create ServerStats structure from response packet")
+		return nil, fmt.Errorf("failed to create ServerStats structure from response packet: %w", err)
 	}
 
 	return serverStats, nil
