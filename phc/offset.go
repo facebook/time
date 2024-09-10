@@ -52,6 +52,17 @@ func sysoffFromExtendedTS(extendedTS [3]PTPClockTime) SysoffResult {
 	}
 }
 
+// SysoffFromPrecise returns SysoffResult from *PTPSysOffsetPrecise . Code based on sysoff_precise from ptp4l sysoff.c
+func SysoffFromPrecise(precise *PTPSysOffsetPrecise) SysoffResult {
+	offset := precise.SysRealTime.Time().Sub(precise.Device.Time())
+	return SysoffResult{
+		SysTime: precise.SysRealTime.Time(),
+		PHCTime: precise.Device.Time(),
+		Delay:   0, // They are measured at the same time
+		Offset:  offset,
+	}
+}
+
 // SysoffEstimateBasic logic based on calculate_offset from ptp4l phc_ctl.c
 func SysoffEstimateBasic(ts1, rt, ts2 time.Time) SysoffResult {
 	interval := ts2.Sub(ts1)
@@ -131,6 +142,11 @@ func (extended *PTPSysOffsetExtended) Sub(a *PTPSysOffsetExtended) time.Duration
 	return offsetBetweenExtendedReadings(a, extended)
 }
 
+// Sub returns the estimated difference between two PHC SYS_OFFSET_PRECISE readings
+func (extended *PTPSysOffsetPrecise) Sub(a *PTPSysOffsetPrecise) time.Duration {
+	return offsetBetweenPreciseReadings(a, extended)
+}
+
 // offsetBetweenExtendedReadings returns estimated difference between two PHC SYS_OFFSET_EXTENDED readings
 func offsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) time.Duration {
 	// we expect both probes to have same number of measures
@@ -160,9 +176,29 @@ func offsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) t
 	return shortest
 }
 
+// offsetBetweenPreciseReadings returns estimated difference between two PHC SYS_OFFSET_PRECISE readings
+func offsetBetweenPreciseReadings(preciseA, preciseB *PTPSysOffsetPrecise) time.Duration {
+	// calculate sys time midpoint from both samples
+	sysoffA := SysoffFromPrecise(preciseA)
+	sysoffB := SysoffFromPrecise(preciseB)
+	// offset between sys time midpoints
+	sysOffset := sysoffB.SysTime.Sub(sysoffA.SysTime)
+	// compensate difference between PHC time by difference in system time
+	phcOffset := sysoffB.PHCTime.Sub(sysoffA.PHCTime) - sysOffset
+	return phcOffset
+}
+
 // OffsetBetweenDevices returns estimated difference between two PHC devices
 func OffsetBetweenDevices(deviceA, deviceB *os.File) (time.Duration, error) {
 	adev, bdev := FromFile(deviceA), FromFile(deviceB)
+	preciseA, err := adev.ReadSysoffPrecise()
+	if err == nil {
+		preciseB, err := bdev.ReadSysoffPrecise()
+		if err != nil {
+			return 0, err
+		}
+		return preciseB.Sub(preciseA), nil
+	}
 	extendedA, err := adev.ReadSysoffExtended()
 	if err != nil {
 		return 0, err

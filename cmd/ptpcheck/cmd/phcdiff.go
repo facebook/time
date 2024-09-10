@@ -58,18 +58,29 @@ func phcdiffRun(deviceA, deviceB string, isJSON bool) error {
 	}
 	defer b.Close()
 	adev, bdev := phc.FromFile(a), phc.FromFile(b)
-
-	extendedA, err := adev.ReadSysoffExtended()
-	if err != nil {
-		return err
+	var phcOffset time.Duration
+	var timeAndOffsetA, timeAndOffsetB phc.SysoffResult
+	if preciseA, err := adev.ReadSysoffPrecise(); err != nil {
+		extendedA, err := adev.ReadSysoffExtended()
+		if err != nil {
+			return err
+		}
+		extendedB, err := bdev.ReadSysoffExtended()
+		if err != nil {
+			return err
+		}
+		timeAndOffsetA = extendedA.BestSample()
+		timeAndOffsetB = extendedB.BestSample()
+		phcOffset = extendedB.Sub(extendedA)
+	} else {
+		preciseB, err := bdev.ReadSysoffPrecise()
+		if err != nil {
+			return err
+		}
+		timeAndOffsetA = phc.SysoffFromPrecise(preciseA)
+		timeAndOffsetB = phc.SysoffFromPrecise(preciseB)
+		phcOffset = preciseB.Sub(preciseA)
 	}
-	extendedB, err := bdev.ReadSysoffExtended()
-	if err != nil {
-		return err
-	}
-	timeAndOffsetA := extendedA.BestSample()
-	timeAndOffsetB := extendedB.BestSample()
-	phcOffset := extendedB.Sub(extendedA)
 
 	if isJSON {
 		stats := phcStats{PHCOffset: phcOffset, PHC1Delay: timeAndOffsetA.Delay, PHC2Delay: timeAndOffsetB.Delay}

@@ -84,20 +84,34 @@ func phc2phcRun(srcDevice string, dstDevice string, interval time.Duration, step
 	log.Debugf("max PHC frequency: %v", maxFreq)
 
 	for ; ; time.Sleep(interval) {
-		extendedSrc, err := srcdev.ReadSysoffExtended()
-		if err != nil {
-			log.Errorf("failed to read data from %v: %v", srcDevice, err)
-			continue
-		}
-		extendedDst, err := dstdev.ReadSysoffExtended()
-		if err != nil {
-			log.Errorf("failed to read data from %v: %v", dstDevice, err)
-			continue
-		}
+		var phcOffset time.Duration
+		var timeAndOffsetSrc, timeAndOffsetDst phc.SysoffResult
+		if preciseSrc, err := srcdev.ReadSysoffPrecise(); err != nil {
+			log.Warningf("Failed to read precise offset from %v: %v", srcDevice, err)
+			extendedSrc, err := srcdev.ReadSysoffExtended()
+			if err != nil {
+				log.Errorf("failed to read data from %v: %v", srcDevice, err)
+				continue
+			}
+			extendedDst, err := dstdev.ReadSysoffExtended()
+			if err != nil {
+				log.Errorf("failed to read data from %v: %v", dstDevice, err)
+				continue
+			}
 
-		phcOffset := extendedDst.Sub(extendedSrc)
-		timeAndOffsetSrc := extendedSrc.BestSample()
-		timeAndOffsetDst := extendedDst.BestSample()
+			phcOffset = extendedDst.Sub(extendedSrc)
+			timeAndOffsetSrc = extendedSrc.BestSample()
+			timeAndOffsetDst = extendedDst.BestSample()
+		} else {
+			preciseDst, err := dstdev.ReadSysoffPrecise()
+			if err != nil {
+				log.Errorf("failed to read data from %v: %v", srcDevice, err)
+				continue
+			}
+			phcOffset = preciseDst.Sub(preciseSrc)
+			timeAndOffsetSrc = phc.SysoffFromPrecise(preciseSrc)
+			timeAndOffsetDst = phc.SysoffFromPrecise(preciseDst)
+		}
 		freqAdj, state := pi.Sample(int64(phcOffset), uint64(timeAndOffsetDst.SysTime.UnixNano()))
 		log.Infof("offset %12d freq %+9.0f path delay %5d", phcOffset, freqAdj, timeAndOffsetSrc.Delay.Nanoseconds()+timeAndOffsetDst.Delay.Nanoseconds())
 		if state == servo.StateJump {
