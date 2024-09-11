@@ -19,6 +19,7 @@ package phc
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -55,6 +56,10 @@ var SupportedMethods = []TimeMethod{MethodSyscallClockGettime, MethodIoctlSysOff
 // PinFunc type represents the pin function values.
 type PinFunc int
 
+// Type implements cobra.Value
+func (pf *PinFunc) Type() string { return "{ PPS-In | PPS-Out | PhySync | None }" }
+
+// String implements flags.Value
 func (pf PinFunc) String() string {
 	switch pf {
 	case PinFuncNone:
@@ -68,6 +73,23 @@ func (pf PinFunc) String() string {
 	default:
 		return fmt.Sprintf("!(PinFunc=%d)", int(pf))
 	}
+}
+
+// Set implements flags.Value
+func (pf *PinFunc) Set(s string) error {
+	switch strings.ToLower(s) {
+	case "none", "-":
+		*pf = PinFuncNone
+	case "pps-in", "ppsin", "extts":
+		*pf = PinFuncExtTS
+	case "pps-out", "ppsout", "perout":
+		*pf = PinFuncPerOut
+	case "phy-sync", "physync", "sync":
+		*pf = PinFuncPhySync
+	default:
+		return fmt.Errorf("use either of: %s", pf.Type())
+	}
+	return nil
 }
 
 // Pin functions corresponding to `enum ptp_pin_function` in linux/ptp_clock.h
@@ -213,6 +235,20 @@ func (dev *Device) readPinDesc(index int, desc *PinDesc) error {
 	desc.Index = uint(raw.Index)
 	desc.Func = PinFunc(raw.Func)
 	desc.Chan = uint(raw.Chan)
+	desc.dev = dev
+	return nil
+}
+
+// readPinDesc reads a single PTP pin descriptor
+func (dev *Device) setPinFunc(index uint, pf PinFunc, ch uint) error {
+	var raw rawPinDesc
+
+	raw.Index = uint32(index) //#nosec G115
+	raw.Func = uint32(pf)     //#nosec G115
+	raw.Chan = uint32(ch)     //#nosec G115
+	if err := dev.ioctlPtr(iocPinSetfunc, unsafe.Pointer(&raw)); err != nil {
+		return fmt.Errorf("%s: ioctl(PTP_PIN_SETFUNC) failed: %w", dev.File().Name(), err)
+	}
 	return nil
 }
 
