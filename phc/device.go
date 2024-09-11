@@ -93,6 +93,17 @@ type PinDesc struct {
 	Index uint    // Pin index in the range of zero to ptp_clock_caps.n_pins - 1
 	Func  PinFunc // Which of the PTP_PF_xxx functions to use on this pin
 	Chan  uint    // The specific channel to use for this function.
+	// private fields
+	dev *Device
+}
+
+// SetFunc uses an ioctl to change the pin function
+func (pd *PinDesc) SetFunc(pf PinFunc) error {
+	if err := pd.dev.setPinFunc(pd.Index, pf, pd.Chan); err != nil {
+		return err
+	}
+	pd.Func = pf
+	return nil
 }
 
 type rawPinDesc struct {

@@ -27,10 +27,16 @@ import (
 
 // flags
 var devPath string
+var pinName string
+var pinFunc phc.PinFunc
+var setMode bool
 
 func init() {
 	RootCmd.AddCommand(pinsCmd)
 	pinsCmd.Flags().StringVarP(&devPath, "device", "d", "/dev/ptp0", "the PTP device")
+	pinsCmd.Flags().StringVarP(&pinName, "name", "n", "", "name of the pin")
+	pinsCmd.Flags().VarP(&pinFunc, "mode", "m", "the PTP function")
+	pinsCmd.Flags().BoolVarP(&setMode, "set", "s", false, "set PTP function")
 }
 
 var pinsCmd = &cobra.Command{
@@ -38,6 +44,9 @@ var pinsCmd = &cobra.Command{
 	Short: "Print PHC pins and their functions",
 	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
+		if setMode && pinName == "" {
+			log.Fatal("-set needs -name")
+		}
 		if err := doListPins(devPath); err != nil {
 			log.Fatal(err)
 		}
@@ -58,7 +67,14 @@ func doListPins(device string) error {
 		return err
 	}
 	for _, p := range pins {
-		fmt.Printf("%s: pin %d function %-7[3]s (%[3]d) chan %d\n", p.Name, p.Index, p.Func, p.Chan)
+		if setMode && pinName == p.Name {
+			if err := p.SetFunc(pinFunc); err != nil {
+				log.Fatal(err)
+			}
+		}
+		if pinName == "" || pinName == p.Name {
+			fmt.Printf("%s: pin %d function %-7[3]s (%[3]d) chan %d\n", p.Name, p.Index, p.Func, p.Chan)
+		}
 	}
 	return nil
 }
