@@ -29,6 +29,7 @@ import (
 const (
 	ptpMaxSamples = 25
 	ptpClkMagic   = '='
+	nsPerSec      = int32(1000000000)
 )
 
 // ioctlPTPSysOffsetExtended is an IOCTL to get extended offset
@@ -45,6 +46,12 @@ var iocPinGetfunc = ioctl.IOWR(ptpClkMagic, 6, unsafe.Sizeof(rawPinDesc{}))
 
 // iocPinSetfunc is an IOCTL req corresponding to PTP_PIN_SETFUNC in linux/ptp_clock.h
 var iocPinSetfunc = ioctl.IOW(ptpClkMagic, 7, unsafe.Sizeof(rawPinDesc{}))
+
+// iocPinSetfunc is an IOCTL req corresponding to PTP_PIN_SETFUNC2 in linux/ptp_clock.h
+var iocPinSetfunc2 = ioctl.IOW(ptpClkMagic, 16, unsafe.Sizeof(rawPinDesc{}))
+
+// ioctlPTPPeroutRequest2 is an IOCTL req corresponding to PTP_PEROUT_REQUEST2 in linux/ptp_clock.h
+var ioctlPTPPeroutRequest2 = ioctl.IOW(ptpClkMagic, 12, unsafe.Sizeof(PTPPeroutRequest{}))
 
 // Ifreq is the request we send with SIOCETHTOOL IOCTL
 // as per Linux kernel's include/uapi/linux/if.h
@@ -112,6 +119,28 @@ type rawPinDesc struct {
 	Func  uint32    // Which of the PTP_PF_xxx functions to use on this pin
 	Chan  uint32    // The specific channel to use for this function.
 	Rsv   [5]uint32 // Reserved for future use.
+}
+
+// PTPPeroutRequest as defined in linux/ptp_clock.h
+type PTPPeroutRequest struct {
+	//   * Represents either absolute start time or phase offset.
+	//   * Absolute start time if (flags & PTP_PEROUT_PHASE) is unset.
+	//   * Phase offset if (flags & PTP_PEROUT_PHASE) is set.
+	//   * If set the signal should start toggling at an
+	//	 * unspecified integer multiple of the period, plus this value.
+	//	 * The start time should be "as soon as possible".
+	StartOrPhase PTPClockTime
+	Period       PTPClockTime // Desired period, zero means disable
+	Index        uint32       // Which channel to configure
+	Flags        uint32       // Configuration flags
+	On           PTPClockTime // "On" time of the signal. Must be lower than the period. Valid only if (flags & PTP_PEROUT_DUTY_CYCLE) is set.
+}
+
+// PTPClockTime as defined in linux/ptp_clock.h
+type PTPClockTime struct {
+	Sec      int64  /* seconds */
+	NSec     uint32 /* nanoseconds */
+	Reserved uint32
 }
 
 // PTPClockCaps as defined in linux/ptp_clock.h

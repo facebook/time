@@ -39,5 +39,7 @@ func TestDeviceFromIfaceNotFound(t *testing.T) {
 func TestIoctlValues(t *testing.T) {
 	require.Equal(t, iocPinGetfunc, uintptr(3227532550))
 	require.Equal(t, iocPinSetfunc, uintptr(1080048903))
+	require.Equal(t, ioctlPTPPeroutRequest2, uintptr(0x40383d0c))
+	require.Equal(t, iocPinSetfunc2, uintptr(0x40603d10))
 	require.Equal(t, unsafe.Sizeof(rawPinDesc{}), uintptr(96))
 }
