@@ -23,18 +23,25 @@ import (
 	"time"
 	"unsafe"
 
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
 // DefaultMaxClockFreqPPB value came from linuxptp project (clockadj.c)
 const DefaultMaxClockFreqPPB = 500000.0
 
-// PTPClockTime as defined in linux/ptp_clock.h
-type PTPClockTime struct {
-	Sec      int64  /* seconds */
-	NSec     uint32 /* nanoseconds */
-	Reserved uint32
-}
+// PPS related constants
+const (
+	ptpPeroutDutyCycle   = (1 << 1)
+	ptpPeroutPhase       = (1 << 2)
+	defaultTs2PhcChannel = uint32(0)
+	defaultTs2PhcIndex   = uint32(0)
+	defaultPulseWidth    = int32(500000000)
+	// should default to 0 if config specified. Otherwise -1 (ignore phase)
+	defaultPeroutPhase = int32(-1) //nolint:all
+	// ppsStartDelay is the delay in seconds before the first PPS signal is sent
+	ppsStartDelay = 2
+)
 
 // Time returns PTPClockTime as time.Time
 func (t PTPClockTime) Time() time.Time {
@@ -169,11 +176,11 @@ func (dev *Device) Time() (time.Time, error) {
 	return time.Unix(ts.Unix()), nil
 }
 
-// similar to unix.ioctlPtr()
-func (dev *Device) ioctlPtr(req uintptr, arg unsafe.Pointer) (err error) {
+// ioctl makes a unis.SYS_IOCTL unix.Syscall with the given device, request and argument
+func (dev *Device) ioctl(req uintptr, arg unsafe.Pointer) (err error) {
 	_, _, errno := unix.Syscall(unix.SYS_IOCTL, dev.Fd(), req, uintptr(arg))
 	if errno != 0 {
-		err = errno // translate here if needed
+		err = fmt.Errorf("errno %w during IOCTL %d on FD %s", errno, req, dev.File().Name())
 	}
 	return err
 }
@@ -199,7 +206,7 @@ func (dev *Device) readSysoffExtended(nsamples int) (*PTPSysOffsetExtended, erro
 	res := &PTPSysOffsetExtended{
 		NSamples: uint32(nsamples),
 	}
-	err := dev.ioctlPtr(ioctlPTPSysOffsetExtended, unsafe.Pointer(res))
+	err := dev.ioctl(ioctlPTPSysOffsetExtended, unsafe.Pointer(res))
 	if err != nil {
 		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_EXTENDED: %w", err)
 	}
@@ -208,7 +215,7 @@ func (dev *Device) readSysoffExtended(nsamples int) (*PTPSysOffsetExtended, erro
 
 func (dev *Device) readSysoffPrecise() (*PTPSysOffsetPrecise, error) {
 	res := &PTPSysOffsetPrecise{}
-	if err := dev.ioctlPtr(ioctlPTPSysOffsetPrecise, unsafe.Pointer(res)); err != nil {
+	if err := dev.ioctl(ioctlPTPSysOffsetPrecise, unsafe.Pointer(res)); err != nil {
 		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_PRECISE: %w", err)
 	}
 	return res, nil
@@ -217,7 +224,7 @@ func (dev *Device) readSysoffPrecise() (*PTPSysOffsetPrecise, error) {
 // readCaps reads PTP capabilities using ioctl
 func (dev *Device) readCaps() (*PTPClockCaps, error) {
 	caps := &PTPClockCaps{}
-	if err := dev.ioctlPtr(ioctlPTPClockGetcaps, unsafe.Pointer(caps)); err != nil {
+	if err := dev.ioctl(ioctlPTPClockGetcaps, unsafe.Pointer(caps)); err != nil {
 		return nil, fmt.Errorf("clock didn't respond properly: %w", err)
 	}
 	return caps, nil
@@ -228,7 +235,7 @@ func (dev *Device) readPinDesc(index int, desc *PinDesc) error {
 	var raw rawPinDesc
 
 	raw.Index = uint32(index)
-	if err := dev.ioctlPtr(iocPinGetfunc, unsafe.Pointer(&raw)); err != nil {
+	if err := dev.ioctl(iocPinGetfunc, unsafe.Pointer(&raw)); err != nil {
 		return fmt.Errorf("%s: ioctl(PTP_PIN_GETFUNC) failed: %w", dev.File().Name(), err)
 	}
 	desc.Name = unix.ByteSliceToString(raw.Name[:])
@@ -246,7 +253,7 @@ func (dev *Device) setPinFunc(index uint, pf PinFunc, ch uint) error {
 	raw.Index = uint32(index) //#nosec G115
 	raw.Func = uint32(pf)     //#nosec G115
 	raw.Chan = uint32(ch)     //#nosec G115
-	if err := dev.ioctlPtr(iocPinSetfunc, unsafe.Pointer(&raw)); err != nil {
+	if err := dev.ioctl(iocPinSetfunc, unsafe.Pointer(&raw)); err != nil {
 		return fmt.Errorf("%s: ioctl(PTP_PIN_SETFUNC) failed: %w", dev.File().Name(), err)
 	}
 	return nil
@@ -285,3 +292,51 @@ func (dev *Device) AdjFreq(freqPPB float64) error { return clockAdjFreq(dev, fre
 
 // Step steps the PHC clock by given duration
 func (dev *Device) Step(step time.Duration) error { return clockStep(dev, step) }
+
+// ActivatePPSSource configures the PHC device to be a PPS timestamp source
+func ActivatePPSSource(dev Device) error {
+	// Initialize the PTPPeroutRequest struct
+	peroutRequest := PTPPeroutRequest{}
+
+	err := dev.ioctl(iocPinSetfunc2, unsafe.Pointer(&rawPinDesc{
+		Index: defaultTs2PhcIndex,
+		Chan:  defaultTs2PhcChannel,
+		Func:  uint32(PinFuncPerOut),
+	}))
+
+	if err != nil {
+		log.Errorf("Failed to set PPS Perout on pin index %d, channel %d, PHC %s. Error: %s. Continuing bravely on...",
+			defaultTs2PhcIndex, defaultTs2PhcChannel, dev.File().Name(), err)
+	}
+
+	ts, err := dev.Time()
+	if err != nil {
+		return fmt.Errorf("failed (clock_gettime) on %s", dev.File().Name())
+	}
+
+	// Set the index and period
+	peroutRequest.Index = defaultTs2PhcIndex
+	peroutRequest.Period = PTPClockTime{Sec: 1, NSec: 0}
+
+	// Set flags and pulse width
+	pulsewidth := defaultPulseWidth
+
+	// TODO: skip this block if pulsewidth > 0 once pulsewidth is configurable
+	peroutRequest.Flags |= ptpPeroutDutyCycle
+	peroutRequest.On = PTPClockTime{Sec: int64(pulsewidth / nsPerSec), NSec: uint32(pulsewidth % nsPerSec)}
+
+	// Set phase or start time
+	// TODO: reintroduce peroutPhase != -1 condition once peroutPhase is configurable
+	peroutRequest.StartOrPhase = PTPClockTime{Sec: int64(ts.Second() + ppsStartDelay), NSec: 0}
+
+	err = dev.ioctl(ioctlPTPPeroutRequest2, unsafe.Pointer(&peroutRequest))
+
+	if err != nil {
+		log.Debugf("retrying PTP_PEROUT_REQUEST2 with DUTY_CYCLE flag unset for backwards compatibility")
+		peroutRequest.Flags &^= ptpPeroutDutyCycle
+		err = dev.ioctl(ioctlPTPPeroutRequest2, unsafe.Pointer(&peroutRequest))
+		return err
+	}
+
+	return nil
+}
