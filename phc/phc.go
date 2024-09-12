@@ -34,8 +34,8 @@ const DefaultMaxClockFreqPPB = 500000.0
 const (
 	ptpPeroutDutyCycle   = (1 << 1)
 	ptpPeroutPhase       = (1 << 2)
-	defaultTs2PhcChannel = uint32(0)
-	defaultTs2PhcIndex   = uint32(0)
+	defaultTs2PhcChannel = 0
+	defaultTs2PhcIndex   = 0
 	defaultPulseWidth    = int32(500000000)
 	// should default to 0 if config specified. Otherwise -1 (ignore phase)
 	defaultPeroutPhase = int32(-1) //nolint:all
@@ -154,6 +154,14 @@ func Time(iface string, method TimeMethod) (time.Time, error) {
 
 // Device represents a PHC device
 type Device os.File
+
+// DeviceController defines a subset of functions to interact with a phc device. Enables mocking.
+type DeviceController interface {
+	Time() (time.Time, error)
+	setPinFunc(index uint, pf PinFunc, ch uint) error
+	setPTPPerout(req PTPPeroutRequest) error
+	File() *os.File
+}
 
 // FromFile returns a *Device corresponding to an *os.File
 func FromFile(file *os.File) *Device { return (*Device)(file) }
@@ -284,6 +292,10 @@ func (dev *Device) MaxFreqAdjPPB() (maxFreq float64, err error) {
 	return caps.maxAdj(), nil
 }
 
+func (dev *Device) setPTPPerout(req PTPPeroutRequest) error {
+	return dev.ioctl(ioctlPTPPeroutRequest2, unsafe.Pointer(&req))
+}
+
 // FreqPPB reads PHC device frequency in PPB (parts per billion)
 func (dev *Device) FreqPPB() (freqPPB float64, err error) { return freqPPBFromDevice(dev) }
 
@@ -294,15 +306,11 @@ func (dev *Device) AdjFreq(freqPPB float64) error { return clockAdjFreq(dev, fre
 func (dev *Device) Step(step time.Duration) error { return clockStep(dev, step) }
 
 // ActivatePPSSource configures the PHC device to be a PPS timestamp source
-func ActivatePPSSource(dev Device) error {
+func ActivatePPSSource(dev DeviceController) error {
 	// Initialize the PTPPeroutRequest struct
 	peroutRequest := PTPPeroutRequest{}
 
-	err := dev.ioctl(iocPinSetfunc2, unsafe.Pointer(&rawPinDesc{
-		Index: defaultTs2PhcIndex,
-		Chan:  defaultTs2PhcChannel,
-		Func:  uint32(PinFuncPerOut),
-	}))
+	err := dev.setPinFunc(defaultTs2PhcIndex, PinFuncPerOut, defaultTs2PhcChannel)
 
 	if err != nil {
 		log.Errorf("Failed to set PPS Perout on pin index %d, channel %d, PHC %s. Error: %s. Continuing bravely on...",
@@ -329,12 +337,12 @@ func ActivatePPSSource(dev Device) error {
 	// TODO: reintroduce peroutPhase != -1 condition once peroutPhase is configurable
 	peroutRequest.StartOrPhase = PTPClockTime{Sec: int64(ts.Second() + ppsStartDelay), NSec: 0}
 
-	err = dev.ioctl(ioctlPTPPeroutRequest2, unsafe.Pointer(&peroutRequest))
+	err = dev.setPTPPerout(peroutRequest)
 
 	if err != nil {
 		log.Debugf("retrying PTP_PEROUT_REQUEST2 with DUTY_CYCLE flag unset for backwards compatibility")
 		peroutRequest.Flags &^= ptpPeroutDutyCycle
-		err = dev.ioctl(ioctlPTPPeroutRequest2, unsafe.Pointer(&peroutRequest))
+		err = dev.setPTPPerout(peroutRequest)
 		return err
 	}
 
