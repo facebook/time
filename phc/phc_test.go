@@ -22,33 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/mock"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 )
-
-type deviceControllerMock struct {
-	mock.Mock
-}
-
-func (_m *deviceControllerMock) Time() (time.Time, error) {
-	ret := _m.Called()
-	return ret.Get(0).(time.Time), ret.Error(1)
-}
-
-func (_m *deviceControllerMock) setPinFunc(index uint, pf PinFunc, ch uint) error {
-	ret := _m.Called(index, pf, ch)
-	return ret.Error(0)
-}
-
-func (_m *deviceControllerMock) setPTPPerout(req PTPPeroutRequest) error {
-	ret := _m.Called(req)
-	return ret.Error(0)
-}
-
-func (_m *deviceControllerMock) File() *os.File {
-	ret := _m.Called()
-	return ret.Get(0).(*os.File)
-}
 
 func TestIfaceInfoToPHCDevice(t *testing.T) {
 	info := &EthtoolTSinfo{
@@ -83,91 +60,158 @@ func TestMaxAdjFreq(t *testing.T) {
 
 func TestActivatePPSSource(t *testing.T) {
 	// Prepare
-	mockDevice := new(deviceControllerMock)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockDeviceController := NewMockDeviceController(ctrl)
+	var actualPeroutRequest PTPPeroutRequest
+	gomock.InOrder(
+		// Should set default pin to PPS
+		mockDeviceController.EXPECT().setPinFunc(uint(0), PinFuncPerOut, uint(0)).Return(nil),
+		// Should call Time once
+		mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 500000000), nil),
+		mockDeviceController.EXPECT().setPTPPerout(gomock.Any()).Return(nil).Do(func(arg PTPPeroutRequest) { actualPeroutRequest = arg }),
+	)
 
-	// Should set default pin to PPS
-	mockDevice.On("setPinFunc", uint(0), PinFuncPerOut, uint(0)).Return(nil).Once()
-
-	// Should call Time once
-	mockDevice.On("Time").Return(time.Unix(824635825488, 1397965136), nil).Once()
-
-	// Should issue ioctlPTPPeroutRequest2
+	// Should call setPTPPerout with correct parameters
 	expectedPeroutRequest := PTPPeroutRequest{
 		Index:        uint32(0),
-		Flags:        uint32(0x2),
-		StartOrPhase: PTPClockTime{Sec: 51},
+		Flags:        uint32(2),
+		StartOrPhase: PTPClockTime{Sec: 2},
 		Period:       PTPClockTime{Sec: 1},
 		On:           PTPClockTime{NSec: 500000000},
 	}
-	mockDevice.On("setPTPPerout", expectedPeroutRequest).Return(nil).Once()
 
 	// Act
-	err := ActivatePPSSource(mockDevice)
+	ppsSource, err := ActivatePPSSource(mockDeviceController)
 
-	// Assert calls
+	// Assert
 	require.NoError(t, err)
-	mockDevice.AssertExpectations(t)
+	require.EqualValues(t, expectedPeroutRequest, actualPeroutRequest, "setPTPPerout parameter mismatch")
+	require.Equal(t, PPSSet, ppsSource.state)
 }
 
 func TestActivatePPSSourceIgnoreSetPinFailure(t *testing.T) {
 	// Prepare
-	mockDevice := new(deviceControllerMock)
-	mockDevice.On("File").Return(os.NewFile(3, "mock_file"))
-	mockDevice.On("Time").Return(time.Unix(824635825488, 1397965136), nil)
-
-	// If ioctl set pin fails, we continue bravely on...
-	mockDevice.On("setPinFunc", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("error")).Once()
-	mockDevice.On("setPTPPerout", mock.Anything).Return(nil).Once()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockDeviceController := NewMockDeviceController(ctrl)
+	gomock.InOrder(
+		// If ioctl set pin fails, we continue bravely on...
+		mockDeviceController.EXPECT().setPinFunc(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("error")),
+		mockDeviceController.EXPECT().File().Return(os.NewFile(3, "mock_file")),
+		mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 500000000), nil),
+		mockDeviceController.EXPECT().setPTPPerout(gomock.Any()).Return(nil),
+	)
 
 	// Act
-	err := ActivatePPSSource(mockDevice)
+	ppsSource, err := ActivatePPSSource(mockDeviceController)
 
-	// Assert calls
-	mockDevice.AssertExpectations(t)
+	// Assert
 	require.NoError(t, err)
+	require.Equal(t, PPSSet, ppsSource.state)
 }
 
 func TestActivatePPSSourceSetPTPPeroutFailure(t *testing.T) {
 	// Prepare
-	mockDevice := new(deviceControllerMock)
-	mockDevice.On("File").Return(os.NewFile(3, "mock_file"))
-	mockDevice.On("Time").Return(time.Unix(824635825488, 1397965136), nil)
-
-	mockDevice.On("setPinFunc", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("error")).Once()
-	// If first attempt to set PTPPerout fails
-	mockDevice.On("setPTPPerout", mock.Anything).Return(fmt.Errorf("error")).Once()
-
-	// Should retry setPTPPerout with backward compatible flag
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockDeviceController := NewMockDeviceController(ctrl)
+	var actualPeroutRequest PTPPeroutRequest
+	gomock.InOrder(
+		mockDeviceController.EXPECT().setPinFunc(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("error")),
+		mockDeviceController.EXPECT().File().Return(os.NewFile(3, "mock_file")),
+		mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 500000000), nil),
+		// If first attempt to set PTPPerout fails
+		mockDeviceController.EXPECT().setPTPPerout(gomock.Any()).Return(fmt.Errorf("error")),
+		// Should retry setPTPPerout with backward compatible flag
+		mockDeviceController.EXPECT().setPTPPerout(gomock.Any()).Return(nil).Do(func(arg PTPPeroutRequest) { actualPeroutRequest = arg }),
+	)
 	expectedPeroutRequest := PTPPeroutRequest{
 		Index:        uint32(0),
 		Flags:        uint32(0x0),
-		StartOrPhase: PTPClockTime{Sec: 51},
+		StartOrPhase: PTPClockTime{Sec: 2},
 		Period:       PTPClockTime{Sec: 1},
 		On:           PTPClockTime{NSec: 500000000},
 	}
-	mockDevice.On("setPTPPerout", expectedPeroutRequest).Return(nil).Once()
 
 	// Act
-	err := ActivatePPSSource(mockDevice)
+	ppsSource, err := ActivatePPSSource(mockDeviceController)
 
 	// Assert
-	mockDevice.AssertExpectations(t)
 	require.NoError(t, err)
+	require.EqualValues(t, expectedPeroutRequest, actualPeroutRequest, "setPTPPerout parameter mismatch")
+	require.Equal(t, PPSSet, ppsSource.state)
 }
 
 func TestActivatePPSSourceSetPTPPeroutDoubleFailure(t *testing.T) {
 	// Prepare
-	mockDevice := new(deviceControllerMock)
-	mockDevice.On("File").Return(os.NewFile(3, "mock_file"))
-	mockDevice.On("Time").Return(time.Unix(824635825488, 1397965136), nil)
-	mockDevice.On("setPinFunc", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("error")).Once()
-	mockDevice.On("setPTPPerout", mock.Anything).Return(fmt.Errorf("error")).Once()
-	mockDevice.On("setPTPPerout", mock.Anything).Return(fmt.Errorf("error")).Once()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockDeviceController := NewMockDeviceController(ctrl)
+	gomock.InOrder(
+		mockDeviceController.EXPECT().setPinFunc(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("error")),
+		mockDeviceController.EXPECT().File().Return(os.NewFile(3, "mock_file")),
+		mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 500000000), nil),
+		mockDeviceController.EXPECT().setPTPPerout(gomock.Any()).Return(fmt.Errorf("error")),
+		mockDeviceController.EXPECT().setPTPPerout(gomock.Any()).Return(fmt.Errorf("error")),
+	)
 
 	// Act
-	err := ActivatePPSSource(mockDevice)
+	ppsSource, err := ActivatePPSSource(mockDeviceController)
 
 	// Assert
-	mockDevice.AssertExpectations(t)
 	require.Error(t, err)
+	require.Nil(t, ppsSource)
+}
+
+func TestGetPPSTimestampSourceUnset(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockDeviceController := NewMockDeviceController(ctrl)
+	ppsSource := PPSSource{PHCDevice: mockDeviceController}
+
+	// Act
+	_, err := ppsSource.Timestamp()
+
+	// Assert
+	require.Error(t, err)
+}
+
+func TestGetPPSTimestampMoreThanHalfNanossecondShouldAddSecond(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockDeviceController := NewMockDeviceController(ctrl)
+	ppsSource := PPSSource{PHCDevice: mockDeviceController, state: PPSSet, peroutPhase: 23312}
+	mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 500023313), nil)
+
+	// Act
+	timestamp, err := ppsSource.Timestamp()
+
+	// Assert
+	expected := time.Unix(1075896001, 23312)
+	require.NoError(t, err)
+	require.EqualValues(t, expected, *timestamp)
+}
+
+func TestGetPPSTimestampLessThanHalfNanossecondShouldKeepNanosseconds(t *testing.T) {
+	// Prepare
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockDeviceController := NewMockDeviceController(ctrl)
+	ppsSource := PPSSource{PHCDevice: mockDeviceController, state: PPSSet, peroutPhase: 23312}
+	mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 500023312), nil)
+
+	// Act
+	timestamp, err := ppsSource.Timestamp()
+
+	// Assert
+	expected := time.Unix(1075896000, 500023312)
+	require.NoError(t, err)
+	require.EqualValues(t, expected, *timestamp)
+}
+
+func TestTimeToTimespec(t *testing.T) {
+	someTime := time.Unix(1075896000, 500000000)
+	result := timeToTimespec(someTime)
+	require.Equal(t, result, unix.Timespec{Sec: 1075896000, Nsec: 500000000})
 }

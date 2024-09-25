@@ -152,6 +152,23 @@ func Time(iface string, method TimeMethod) (time.Time, error) {
 	}
 }
 
+// PPSSource represents a PPS source
+type PPSSource struct {
+	PHCDevice   DeviceController
+	state       PPSSourceState
+	peroutPhase int
+}
+
+// PPSSourceState represents the state of a PPS source
+type PPSSourceState int
+
+const (
+	// UnknownStatus is the initial state of a PPS source, which means PPS may or may not be configured
+	UnknownStatus PPSSourceState = iota
+	// PPSSet means the underlying device is activated as a PPS source
+	PPSSet
+)
+
 // Device represents a PHC device
 type Device os.File
 
@@ -306,7 +323,7 @@ func (dev *Device) AdjFreq(freqPPB float64) error { return clockAdjFreq(dev, fre
 func (dev *Device) Step(step time.Duration) error { return clockStep(dev, step) }
 
 // ActivatePPSSource configures the PHC device to be a PPS timestamp source
-func ActivatePPSSource(dev DeviceController) error {
+func ActivatePPSSource(dev DeviceController) (*PPSSource, error) {
 	// Initialize the PTPPeroutRequest struct
 	peroutRequest := PTPPeroutRequest{}
 
@@ -319,7 +336,7 @@ func ActivatePPSSource(dev DeviceController) error {
 
 	ts, err := dev.Time()
 	if err != nil {
-		return fmt.Errorf("failed (clock_gettime) on %s", dev.File().Name())
+		return nil, fmt.Errorf("failed (clock_gettime) on %s", dev.File().Name())
 	}
 
 	// Set the index and period
@@ -343,8 +360,50 @@ func ActivatePPSSource(dev DeviceController) error {
 		log.Debugf("retrying PTP_PEROUT_REQUEST2 with DUTY_CYCLE flag unset for backwards compatibility")
 		peroutRequest.Flags &^= ptpPeroutDutyCycle
 		err = dev.setPTPPerout(peroutRequest)
-		return err
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return nil
+	return &PPSSource{PHCDevice: dev, state: PPSSet}, nil
+}
+
+// Timestamp returns the timestamp of the last PPS output edge from the given PPS source
+// A Pointer is returned to avoid additional memory allocation
+func (ppsSource *PPSSource) Timestamp() (*time.Time, error) {
+	if ppsSource.state != PPSSet {
+		return nil, fmt.Errorf("PPS source not set")
+	}
+
+	currTime, err := ppsSource.PHCDevice.Time()
+
+	if err != nil {
+		return nil, fmt.Errorf("error getting time (clock_gettime) on %s", ppsSource.PHCDevice.File().Name())
+	}
+
+	// subtract device perout phase from current time to get the time of the last perout output edge
+	// TODO: optimize section below using binary operations instead of type conversions
+	currTime = currTime.Add(-time.Duration(ppsSource.peroutPhase))
+	sourceTs := timeToTimespec(currTime)
+
+	/*
+	* As long as the kernel doesn't support a proper API for reporting
+	* back a precise perout timestamp, we have to assume that the current
+	* time on the PPS source is still within +/- half a second of the last
+	* perout output edge, and hence, we can deduce the current second
+	* (nanossecond is omitted) of this edge at the emitter based on the
+	* emitter's current time. We support only PHC sources, so we can ignore
+	* the NMEA source edge case described in ts2phc.c
+	 */
+	//nolint:unconvert
+	if int64(sourceTs.Nsec) > int64(nsPerSec/2) {
+		sourceTs.Sec++
+		sourceTs.Nsec = 0
+	}
+	//nolint:unconvert
+	currTime = time.Unix(int64(sourceTs.Sec), int64(sourceTs.Nsec))
+	currTime = currTime.Add(time.Duration(ppsSource.peroutPhase))
+
+	return &currTime, nil
 }
