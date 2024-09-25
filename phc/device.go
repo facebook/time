@@ -29,7 +29,7 @@ import (
 const (
 	ptpMaxSamples = 25
 	ptpClkMagic   = '='
-	nsPerSec      = int32(1000000000)
+	nsPerSec      = uint32(1000000000)
 )
 
 // ioctlPTPSysOffsetExtended is an IOCTL to get extended offset
