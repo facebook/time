@@ -141,14 +141,6 @@ func Time(iface string, method TimeMethod) (time.Time, error) {
 // Device represents a PHC device
 type Device os.File
 
-// DeviceController defines a subset of functions to interact with a phc device. Enables mocking.
-type DeviceController interface {
-	Time() (time.Time, error)
-	setPinFunc(index uint, pf PinFunc, ch uint) error
-	setPTPPerout(req PTPPeroutRequest) error
-	File() *os.File
-}
-
 // FromFile returns a *Device corresponding to an *os.File
 func FromFile(file *os.File) *Device { return (*Device)(file) }
 

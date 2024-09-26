@@ -19,7 +19,10 @@ package phc
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
+
+	"github.com/facebook/time/servo"
 )
 
 // PPSSource represents a PPS source
@@ -51,6 +54,26 @@ const (
 	// ppsStartDelay is the delay in seconds before the first PPS signal is sent
 	ppsStartDelay = 2
 )
+
+// ServoController abstracts away servo
+type ServoController interface {
+	Sample(offset int64, localTs uint64) (float64, servo.State)
+}
+
+// Timestamper represents a device that can return a Timestamp
+type Timestamper interface {
+	Timestamp() (*time.Time, error)
+}
+
+// DeviceController defines a subset of functions to interact with a phc device. Enables mocking.
+type DeviceController interface {
+	Time() (time.Time, error)
+	setPinFunc(index uint, pf PinFunc, ch uint) error
+	setPTPPerout(req PTPPeroutRequest) error
+	File() *os.File
+	AdjFreq(freq float64) error
+	Step(offset time.Duration) error
+}
 
 // ActivatePPSSource configures the PHC device to be a PPS timestamp source
 func ActivatePPSSource(dev DeviceController) (*PPSSource, error) {
@@ -135,4 +158,36 @@ func (ppsSource *PPSSource) Timestamp() (*time.Time, error) {
 	currTime = currTime.Add(time.Duration(ppsSource.peroutPhase))
 
 	return &currTime, nil
+}
+
+// PPSClockSync adjusts the frequency of the destination device based on the PPS from the ppsSource
+func PPSClockSync(pi ServoController, ppsSource Timestamper, dstDevice DeviceController) error {
+	srcTimestamp, err := ppsSource.Timestamp()
+	if err != nil {
+		return fmt.Errorf("error getting timestamp from PPS source: %w", err)
+	}
+
+	dstTimestamp, err := dstDevice.Time()
+	if err != nil {
+		return fmt.Errorf("error getting time from destination device: %w", err)
+	}
+	phcOffset := dstTimestamp.Sub(*srcTimestamp)
+	//nolint:gosec
+	freqAdj, servoState := pi.Sample(int64(phcOffset), uint64(dstTimestamp.UnixNano())) // unix nano is never negative
+
+	log.Printf("%s offset %10d s%d freq %+7.0f", dstDevice.File().Name(), int64(phcOffset), servoState, freqAdj)
+
+	switch servoState {
+	case servo.StateJump:
+		if err := dstDevice.Step(-phcOffset); err != nil {
+			return fmt.Errorf("failed to step clock by %v: %w", -phcOffset, err)
+		}
+	case servo.StateLocked:
+		if err := dstDevice.AdjFreq(-freqAdj); err != nil {
+			return fmt.Errorf("failed to adjust freq to %v: %w", -freqAdj, err)
+		}
+	default:
+		return fmt.Errorf("skipping clock update: servo state is %v", servoState)
+	}
+	return nil
 }

@@ -22,16 +22,36 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebook/time/servo"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 )
 
+type Finisher func()
+
+func SetupMocks(t *testing.T) (servoMock *MockServoController, srcMock *MockTimestamper, mockDeviceController *MockDeviceController, finish Finisher) {
+	dstController := gomock.NewController(t)
+	srcController := gomock.NewController(t)
+	servoController := gomock.NewController(t)
+	defer srcController.Finish()
+	defer dstController.Finish()
+	defer servoController.Finish()
+	servoMock = NewMockServoController(servoController)
+	mockDeviceController = NewMockDeviceController(dstController)
+	mockTimestamper := NewMockTimestamper(srcController)
+	return servoMock, mockTimestamper, mockDeviceController, func() {
+		srcController.Finish()
+		dstController.Finish()
+		servoController.Finish()
+	}
+}
+
 func TestActivatePPSSource(t *testing.T) {
 	// Prepare
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockDeviceController := NewMockDeviceController(ctrl)
+	_, _, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
 	var actualPeroutRequest PTPPeroutRequest
 	gomock.InOrder(
 		// Should set default pin to PPS
@@ -61,9 +81,8 @@ func TestActivatePPSSource(t *testing.T) {
 
 func TestActivatePPSSourceIgnoreSetPinFailure(t *testing.T) {
 	// Prepare
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockDeviceController := NewMockDeviceController(ctrl)
+	_, _, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
 	gomock.InOrder(
 		// If ioctl set pin fails, we continue bravely on...
 		mockDeviceController.EXPECT().setPinFunc(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("error")),
@@ -82,9 +101,8 @@ func TestActivatePPSSourceIgnoreSetPinFailure(t *testing.T) {
 
 func TestActivatePPSSourceSetPTPPeroutFailure(t *testing.T) {
 	// Prepare
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockDeviceController := NewMockDeviceController(ctrl)
+	_, _, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
 	var actualPeroutRequest PTPPeroutRequest
 	gomock.InOrder(
 		mockDeviceController.EXPECT().setPinFunc(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("error")),
@@ -114,9 +132,8 @@ func TestActivatePPSSourceSetPTPPeroutFailure(t *testing.T) {
 
 func TestActivatePPSSourceSetPTPPeroutDoubleFailure(t *testing.T) {
 	// Prepare
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockDeviceController := NewMockDeviceController(ctrl)
+	_, _, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
 	gomock.InOrder(
 		mockDeviceController.EXPECT().setPinFunc(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("error")),
 		mockDeviceController.EXPECT().File().Return(os.NewFile(3, "mock_file")),
@@ -134,9 +151,8 @@ func TestActivatePPSSourceSetPTPPeroutDoubleFailure(t *testing.T) {
 }
 
 func TestGetPPSTimestampSourceUnset(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockDeviceController := NewMockDeviceController(ctrl)
+	_, _, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
 	ppsSource := PPSSource{PHCDevice: mockDeviceController}
 
 	// Act
@@ -147,9 +163,8 @@ func TestGetPPSTimestampSourceUnset(t *testing.T) {
 }
 
 func TestGetPPSTimestampMoreThanHalfNanossecondShouldAddSecond(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockDeviceController := NewMockDeviceController(ctrl)
+	_, _, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
 	ppsSource := PPSSource{PHCDevice: mockDeviceController, state: PPSSet, peroutPhase: 23312}
 	mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 500023313), nil)
 
@@ -164,9 +179,8 @@ func TestGetPPSTimestampMoreThanHalfNanossecondShouldAddSecond(t *testing.T) {
 
 func TestGetPPSTimestampLessThanHalfNanossecondShouldKeepNanosseconds(t *testing.T) {
 	// Prepare
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockDeviceController := NewMockDeviceController(ctrl)
+	_, _, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
 	ppsSource := PPSSource{PHCDevice: mockDeviceController, state: PPSSet, peroutPhase: 23312}
 	mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 500023312), nil)
 
@@ -183,4 +197,121 @@ func TestTimeToTimespec(t *testing.T) {
 	someTime := time.Unix(1075896000, 500000000)
 	result := timeToTimespec(someTime)
 	require.Equal(t, result, unix.Timespec{Sec: 1075896000, Nsec: 500000000})
+}
+
+func TestPPSClockSyncServoLockedSuccess(t *testing.T) {
+	// Prepare
+	servoMock, mockTimestamper, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
+
+	ppsTimestamp := time.Unix(1075896000, 100)
+
+	gomock.InOrder(
+		mockTimestamper.EXPECT().Timestamp().Return(&ppsTimestamp, nil),
+		mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 0), nil),
+		servoMock.EXPECT().Sample(gomock.Any(), gomock.Any()).Return(0.1, servo.StateLocked),
+		mockDeviceController.EXPECT().File().Return(os.NewFile(0, "test")),
+		mockDeviceController.EXPECT().AdjFreq(-0.1).Return(nil),
+	)
+
+	// Act
+	err := PPSClockSync(servoMock, mockTimestamper, mockDeviceController)
+
+	// Assert
+	require.NoError(t, err)
+}
+
+func TestPPSClockSyncServoLockedFailure(t *testing.T) {
+	// Prepare
+	servoMock, mockTimestamper, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
+
+	ppsTimestamp := time.Unix(1075896000, 100)
+	gomock.InOrder(
+		mockTimestamper.EXPECT().Timestamp().Return(&ppsTimestamp, nil),
+		mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 0), nil),
+		servoMock.EXPECT().Sample(gomock.Any(), gomock.Any()).Return(0.1, servo.StateLocked),
+		mockDeviceController.EXPECT().File().Return(os.NewFile(0, "test")),
+		mockDeviceController.EXPECT().AdjFreq(-0.1).Return(fmt.Errorf("error")),
+	)
+
+	// Act
+	err := PPSClockSync(servoMock, mockTimestamper, mockDeviceController)
+
+	// Assert
+	require.Error(t, err)
+}
+
+func TestPPSClockSyncServoJumpSuccess(t *testing.T) {
+	// Prepare
+	servoMock, mockTimestamper, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
+	ppsTimestamp := time.Unix(1075896000, 100)
+	gomock.InOrder(
+		mockTimestamper.EXPECT().Timestamp().Return(&ppsTimestamp, nil),
+		mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 0), nil),
+		servoMock.EXPECT().Sample(gomock.Any(), gomock.Any()).Return(0.1, servo.StateJump),
+		mockDeviceController.EXPECT().File().Return(os.NewFile(0, "test")),
+		// TODO: Improve comparison as, due to issues with typing, gomock comparison is not precise
+		mockDeviceController.EXPECT().Step(time.Duration(100)).Return(nil),
+	)
+
+	// Act
+	err := PPSClockSync(servoMock, mockTimestamper, mockDeviceController)
+
+	// Assert
+	require.NoError(t, err)
+}
+
+func TestPPSClockSyncServoJumpFailure(t *testing.T) {
+	// Prepare
+	servoMock, mockTimestamper, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
+	ppsTimestamp := time.Unix(1075896000, 100)
+	gomock.InOrder(
+		mockTimestamper.EXPECT().Timestamp().Return(&ppsTimestamp, nil),
+		mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 0), nil),
+		servoMock.EXPECT().Sample(gomock.Any(), gomock.Any()).Return(0.1, servo.StateJump),
+		mockDeviceController.EXPECT().File().Return(os.NewFile(0, "test")),
+		// TODO: Improve comparison as, due to issues with typing, gomock comparison is not precise
+		mockDeviceController.EXPECT().Step(gomock.Any()).Return(fmt.Errorf("error")),
+	)
+
+	// Act
+	err := PPSClockSync(servoMock, mockTimestamper, mockDeviceController)
+
+	// Assert
+	require.Error(t, err)
+}
+
+func TestPPSClockSyncSrcFailure(t *testing.T) {
+	// Prepare
+	servoMock, mockTimestamper, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
+	gomock.InOrder(
+		mockTimestamper.EXPECT().Timestamp().Return(nil, fmt.Errorf("error")),
+	)
+
+	// Act
+	err := PPSClockSync(servoMock, mockTimestamper, mockDeviceController)
+
+	// Assert
+	require.Error(t, err)
+}
+
+func TestPPSClockSyncDstFailure(t *testing.T) {
+	// Prepare
+	servoMock, mockTimestamper, mockDeviceController, finish := SetupMocks(t)
+	defer finish()
+	ppsTimestamp := time.Unix(1075896000, 100)
+	gomock.InOrder(
+		mockTimestamper.EXPECT().Timestamp().Return(&ppsTimestamp, nil),
+		mockDeviceController.EXPECT().Time().Return(time.Now(), fmt.Errorf("error")),
+	)
+
+	// Act
+	err := PPSClockSync(servoMock, mockTimestamper, mockDeviceController)
+
+	// Assert
+	require.Error(t, err)
 }
