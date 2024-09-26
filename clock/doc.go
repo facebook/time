@@ -19,6 +19,21 @@ Package clock contains a wrapper around CLOCK_ADJTIME syscall.
 
 It allows interactions with supported clocks, such as system realtime clock or PHC.
 
-Supported methods include getting the frequency, adjusting the frequency, stepping the clock, etc.
+Supported methods include 
+ - calling CLOCK_ADJTIME syscall through Adjtime 
+ - getting the frequency through FrequencyPPB, which reads and converts the clock's current
+   frequency to PPB.
+ - adjusting the frequency through AdjFreqPPB 
+ - stepping the clock through Step function, which adjusts the clock forwards or backwards
+   by a given step size.
+ - returning maximum frequency adjustment possible for the clock
+ - updating clock's status after synchronization.
+
+The purpose of this library is to allow access to system clocks and allow for precise
+adjustments through stepping forwards and backwards. 
+ - grants ability for precise timekeeping in systems, which is essential to NTP
+ - allows for proper synchronization between networks
+ - creates accurate time-series data for storage in databases
+
 */
 package clock

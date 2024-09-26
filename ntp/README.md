@@ -10,6 +10,18 @@ Collection of Facebook's NTP libraries.
 ## Protocol
 Basic NTPv4 protocol implementation
 
+ntp.go
+ - Time function converts Time object from Unix time to NTP format
+ - Unix function converts Time object from NTP format to Unix format
+ - Offset function calculates difference between clock times for client and server
+ - RoundTripDelay function calculates delay during transmission between server and client
+ - CorrectTime function calculates the real time for client based on the received time and a given clock offset
+
+packet.go
+ - in charge of converting packet data into byte data, and vice versa
+ - ReadNTPPacket function takes in raw byte data from a given connection, converts data into an NTP packet and
+   returns the data packet with original connection's remote address
+
 ## Chrony
 Chrony control protocol implementation
 
