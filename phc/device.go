@@ -53,6 +53,9 @@ var iocPinSetfunc2 = ioctl.IOW(ptpClkMagic, 16, unsafe.Sizeof(rawPinDesc{}))
 // ioctlPTPPeroutRequest2 is an IOCTL req corresponding to PTP_PEROUT_REQUEST2 in linux/ptp_clock.h
 var ioctlPTPPeroutRequest2 = ioctl.IOW(ptpClkMagic, 12, unsafe.Sizeof(PTPPeroutRequest{}))
 
+// ioctlExtTTSRequest2 is an IOCTL req corresponding to PTP_EXTTS_REQUEST2 in linux/ptp_clock.h
+var ioctlExtTTSRequest2 = ioctl.IOW(ptpClkMagic, 11, unsafe.Sizeof(PTPExtTTSRequest{}))
+
 // Ifreq is the request we send with SIOCETHTOOL IOCTL
 // as per Linux kernel's include/uapi/linux/if.h
 type Ifreq struct {
@@ -134,6 +137,30 @@ type PTPPeroutRequest struct {
 	Index        uint32       // Which channel to configure
 	Flags        uint32       // Configuration flags
 	On           PTPClockTime // "On" time of the signal. Must be lower than the period. Valid only if (flags & PTP_PEROUT_DUTY_CYCLE) is set.
+}
+
+// Bits of the ptp_extts_request.flags field:
+const (
+	PTPEnableFeature uint32 = 1 << 0 // Enable feature
+	PTPRisingEdge    uint32 = 1 << 1 // Rising edge
+	PTPFallingEdge   uint32 = 1 << 2 // Falling edge
+	PTPStrictFlags   uint32 = 1 << 3 // Strict flags
+	PTPExtOffset     uint32 = 1 << 4 // External offset
+)
+
+// PTPExtTTSRequest as defined in linux/ptp_clock.h
+type PTPExtTTSRequest struct {
+	index uint32
+	flags uint32
+	rsv   [2]uint32
+}
+
+// PTPExtTTS as defined in linux/ptp_clock.h
+type PTPExtTTS struct {
+	T     PTPClockTime /* Time when event occurred. */
+	Index uint32       /* Which channel produced the event. Corresponds to the 'index' field of the PTP_EXTTS_REQUEST and PTP_PEROUT_REQUEST ioctls.*/
+	Flags uint32       /* Event flags */
+	Rsv   [2]uint32    /* Reserved for future use. */
 }
 
 // PTPClockTime as defined in linux/ptp_clock.h

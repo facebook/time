@@ -17,12 +17,17 @@ limitations under the License.
 package phc
 
 import (
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/facebook/time/servo"
+	"golang.org/x/sys/unix"
 )
 
 // PPSSource represents a PPS source
@@ -30,6 +35,7 @@ type PPSSource struct {
 	PHCDevice   DeviceController
 	state       PPSSourceState
 	peroutPhase int
+	PPSPinIndex uint
 }
 
 // PPSSourceState represents the state of a PPS source
@@ -44,15 +50,18 @@ const (
 
 // PPS related constants
 const (
-	ptpPeroutDutyCycle   = (1 << 1)
-	ptpPeroutPhase       = (1 << 2)
-	defaultTs2PhcChannel = 0
-	defaultTs2PhcIndex   = 0
-	defaultPulseWidth    = uint32(500000000)
+	ptpPeroutDutyCycle     = (1 << 1)
+	ptpPeroutPhase         = (1 << 2)
+	defaultTs2PhcChannel   = 0
+	DefaultTs2PhcIndex     = 3
+	DefaultTs2PhcSinkIndex = 0
+	defaultPulseWidth      = uint32(500000000)
 	// should default to 0 if config specified. Otherwise -1 (ignore phase)
 	defaultPeroutPhase = int32(-1) //nolint:all
 	// ppsStartDelay is the delay in seconds before the first PPS signal is sent
-	ppsStartDelay = 2
+	ppsStartDelay         = 2
+	defaultPollerInterval = 40 * time.Millisecond
+	PPSPollMaxAttempts    = 20
 )
 
 // ServoController abstracts away servo
@@ -73,18 +82,42 @@ type DeviceController interface {
 	File() *os.File
 	AdjFreq(freq float64) error
 	Step(offset time.Duration) error
+	Read(buf []byte) (int, error)
+	Fd() uintptr
+	extTTSRequest(req PTPExtTTSRequest) error
+}
+
+// PPSPoller represents a device which can be polled for PPS events
+type PPSPoller interface {
+	pollPPSSink() (time.Time, error)
+}
+
+// FrequencyGetter is an interface for getting PHC frequency and max frequency adjustment
+type FrequencyGetter interface {
+	MaxFreqAdjPPB() (float64, error)
+	FreqPPB() (float64, error)
+}
+
+// PPSSink represents a device which is a sink of PPS signals
+type PPSSink struct {
+	InputPin        uint
+	Polarity        uint32
+	PulseWidth      uint32
+	Device          DeviceController
+	CollectedEvents []*time.Time
+	pollDescriptor  unix.PollFd
 }
 
 // ActivatePPSSource configures the PHC device to be a PPS timestamp source
-func ActivatePPSSource(dev DeviceController) (*PPSSource, error) {
+func ActivatePPSSource(dev DeviceController, pinIndex uint) (*PPSSource, error) {
 	// Initialize the PTPPeroutRequest struct
 	peroutRequest := PTPPeroutRequest{}
 
-	err := dev.setPinFunc(defaultTs2PhcIndex, PinFuncPerOut, defaultTs2PhcChannel)
+	err := dev.setPinFunc(pinIndex, PinFuncPerOut, defaultTs2PhcChannel)
 
 	if err != nil {
 		log.Printf("Failed to set PPS Perout on pin index %d, channel %d, PHC %s. Error: %s. Continuing bravely on...",
-			defaultTs2PhcIndex, defaultTs2PhcChannel, dev.File().Name(), err)
+			pinIndex, defaultTs2PhcChannel, dev.File().Name(), err)
 	}
 
 	ts, err := dev.Time()
@@ -93,13 +126,14 @@ func ActivatePPSSource(dev DeviceController) (*PPSSource, error) {
 	}
 
 	// Set the index and period
-	peroutRequest.Index = defaultTs2PhcIndex
+	// nolint:gosec
+	peroutRequest.Index = uint32(defaultTs2PhcChannel)
 	peroutRequest.Period = PTPClockTime{Sec: 1, NSec: 0}
 
 	// Set flags and pulse width
 	pulsewidth := defaultPulseWidth
 
-	// TODO: skip this block if pulsewidth > 0 once pulsewidth is configurable
+	// TODO: skip this block if pulsewidth unset once pulsewidth is configurable
 	peroutRequest.Flags |= ptpPeroutDutyCycle
 	peroutRequest.On = PTPClockTime{Sec: int64(pulsewidth / nsPerSec), NSec: pulsewidth % nsPerSec}
 
@@ -118,7 +152,7 @@ func ActivatePPSSource(dev DeviceController) (*PPSSource, error) {
 		}
 	}
 
-	return &PPSSource{PHCDevice: dev, state: PPSSet}, nil
+	return &PPSSource{PHCDevice: dev, state: PPSSet, PPSPinIndex: pinIndex}, nil
 }
 
 // Timestamp returns the timestamp of the last PPS output edge from the given PPS source
@@ -129,7 +163,6 @@ func (ppsSource *PPSSource) Timestamp() (*time.Time, error) {
 	}
 
 	currTime, err := ppsSource.PHCDevice.Time()
-
 	if err != nil {
 		return nil, fmt.Errorf("error getting time (clock_gettime) on %s", ppsSource.PHCDevice.File().Name())
 	}
@@ -139,20 +172,7 @@ func (ppsSource *PPSSource) Timestamp() (*time.Time, error) {
 	currTime = currTime.Add(-time.Duration(ppsSource.peroutPhase))
 	sourceTs := timeToTimespec(currTime)
 
-	/*
-	* As long as the kernel doesn't support a proper API for reporting
-	* back a precise perout timestamp, we have to assume that the current
-	* time on the PPS source is still within +/- half a second of the last
-	* perout output edge, and hence, we can deduce the current second
-	* (nanossecond is omitted) of this edge at the emitter based on the
-	* emitter's current time. We support only PHC sources, so we can ignore
-	* the NMEA source edge case described in ts2phc.c
-	 */
-	//nolint:unconvert
-	if int64(sourceTs.Nsec) > int64(nsPerSec/2) {
-		sourceTs.Sec++
-		sourceTs.Nsec = 0
-	}
+	sourceTs.Nsec = 0
 	//nolint:unconvert
 	currTime = time.Unix(int64(sourceTs.Sec), int64(sourceTs.Nsec))
 	currTime = currTime.Add(time.Duration(ppsSource.peroutPhase))
@@ -160,22 +180,44 @@ func (ppsSource *PPSSource) Timestamp() (*time.Time, error) {
 	return &currTime, nil
 }
 
+// NewPiServo returns a servo.PiServo object configure for synchronizing the given device
+func NewPiServo(interval time.Duration, stepth time.Duration, device FrequencyGetter) (*servo.PiServo, error) {
+	servoCfg := servo.DefaultServoConfig()
+	if stepth != 0 {
+		// allow stepping clock on first update
+		servoCfg.FirstUpdate = true
+		servoCfg.FirstStepThreshold = int64(stepth)
+	}
+
+	freq, err := device.FreqPPB()
+	if err != nil {
+		return nil, err
+	}
+
+	pi := servo.NewPiServo(servoCfg, servo.DefaultPiServoCfg(), -freq)
+	pi.SyncInterval(interval.Seconds())
+
+	maxFreq, err := device.MaxFreqAdjPPB()
+	if err != nil {
+		maxFreq = float64(DefaultMaxClockFreqPPB)
+	}
+	pi.SetMaxFreq(maxFreq)
+
+	return pi, nil
+}
+
 // PPSClockSync adjusts the frequency of the destination device based on the PPS from the ppsSource
-func PPSClockSync(pi ServoController, ppsSource Timestamper, dstDevice DeviceController) error {
-	srcTimestamp, err := ppsSource.Timestamp()
+func PPSClockSync(pi ServoController, ppsSource Timestamper, dstEventTimestamp time.Time, dstDevice DeviceController) error {
+	srcTimestamp, err := ppsSource.Timestamp() // seconds set, nanosseconds set to 0
 	if err != nil {
 		return fmt.Errorf("error getting timestamp from PPS source: %w", err)
 	}
 
-	dstTimestamp, err := dstDevice.Time()
-	if err != nil {
-		return fmt.Errorf("error getting time from destination device: %w", err)
-	}
-	phcOffset := dstTimestamp.Sub(*srcTimestamp)
+	phcOffset := dstEventTimestamp.Sub(*srcTimestamp)
 	//nolint:gosec
-	freqAdj, servoState := pi.Sample(int64(phcOffset), uint64(dstTimestamp.UnixNano())) // unix nano is never negative
+	freqAdj, servoState := pi.Sample(int64(phcOffset), uint64(dstEventTimestamp.UnixNano())) // unix nano is never negative
 
-	log.Printf("%s offset %10d s%d freq %+7.0f", dstDevice.File().Name(), int64(phcOffset), servoState, freqAdj)
+	log.Printf("%s offset %10d servo %s freq %+7.0f", dstDevice.File().Name(), int64(phcOffset), servoState.String(), freqAdj)
 
 	switch servoState {
 	case servo.StateJump:
@@ -186,8 +228,117 @@ func PPSClockSync(pi ServoController, ppsSource Timestamper, dstDevice DeviceCon
 		if err := dstDevice.AdjFreq(-freqAdj); err != nil {
 			return fmt.Errorf("failed to adjust freq to %v: %w", -freqAdj, err)
 		}
+	case servo.StateInit:
+		return nil
 	default:
 		return fmt.Errorf("skipping clock update: servo state is %v", servoState)
 	}
 	return nil
+}
+
+// PPSSinkFromDevice configures the targetDevice to be a PPS sink and report PPS timestamp events
+func PPSSinkFromDevice(targetDevice DeviceController, pinIndex uint) (*PPSSink, error) {
+	pfd := unix.PollFd{
+		Events: unix.POLLIN | unix.POLLPRI,
+		Fd:     int32(targetDevice.Fd()),
+	}
+	ppsSink := PPSSink{
+		InputPin:        pinIndex,
+		Polarity:        PTPRisingEdge,
+		PulseWidth:      defaultPulseWidth,
+		Device:          targetDevice,
+		CollectedEvents: []*time.Time{},
+		pollDescriptor:  pfd,
+	}
+
+	req := PTPExtTTSRequest{
+		flags: PTPEnableFeature | ppsSink.Polarity,
+		//nolint:gosec
+		index: uint32(ppsSink.InputPin),
+	}
+
+	err := targetDevice.setPinFunc(pinIndex, PinFuncExtTS, defaultTs2PhcChannel)
+	if err != nil {
+		return nil, fmt.Errorf("error setting extts input pin for device %s: %w", targetDevice.File().Name(), err)
+	}
+
+	err = targetDevice.extTTSRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("error during extts request for device %s: %w", targetDevice.File().Name(), err)
+	}
+
+	return &ppsSink, nil
+}
+
+// getPPSEventTimestamp reads the first PPS event from the sink file descriptor and returns the timestamp of the event
+func (ppsSink *PPSSink) getPPSEventTimestamp() (time.Time, error) {
+	var event PTPExtTTS
+	buf := make([]byte, binary.Size(event))
+	_, err := ppsSink.Device.Read(buf)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("error reading from sink %v: %w", ppsSink.Device.File().Name(), err)
+	}
+	event = *(*PTPExtTTS)(unsafe.Pointer(&buf[0]))
+	if uint(event.Index) != ppsSink.InputPin {
+		return time.Time{}, fmt.Errorf("extts on unexpected pin index %d, expected %d", event.Index, ppsSink.InputPin)
+	}
+
+	eventTime := ptpClockTimeToTime(event.T)
+
+	return eventTime, nil
+}
+
+// pollFd polls the file descriptor for an event, and returns the number of events, the file descriptor, and error
+func pollFd(pfd unix.PollFd) (int, unix.PollFd, error) {
+	fdSlice := []unix.PollFd{pfd}
+	for {
+		eventCount, err := unix.Poll(fdSlice, int(defaultPollerInterval.Milliseconds()))
+		// swallow EINTR
+		if !errors.Is(err, syscall.EINTR) {
+			return eventCount, fdSlice[0], err
+		}
+	}
+}
+
+// pollPPSSink polls the sink for the timestamp of the first available PPS event
+func (ppsSink *PPSSink) pollPPSSink() (time.Time, error) {
+	eventCount, newPollDescriptor, err := pollFd(ppsSink.pollDescriptor)
+	ppsSink.pollDescriptor = newPollDescriptor
+	ppsSink.CollectedEvents = []*time.Time{}
+
+	if err != nil || eventCount <= 0 {
+		return time.Time{}, fmt.Errorf("error polling sink %s, event count: %d, error: %w", ppsSink.Device.File().Name(), eventCount, err)
+	}
+
+	if ppsSink.pollDescriptor.Revents&unix.POLLERR != 0 {
+		return time.Time{}, fmt.Errorf("error polling sink %v: POLLERR", ppsSink.Device.File().Name())
+	}
+
+	result, err := ppsSink.getPPSEventTimestamp()
+	if err != nil {
+		return time.Time{}, fmt.Errorf("error while fetching pps event on sink %v: %w", ppsSink.Device.File().Name(), err)
+	}
+	return result, nil
+}
+
+// PollLatestPPSEvent returns the timestamp of the latest available PPS event
+func PollLatestPPSEvent(ppsSink PPSPoller) (resultEvent time.Time, err error) {
+	var newEvent time.Time
+
+	for attempts := 0; attempts < PPSPollMaxAttempts; attempts++ {
+		newEvent, err = ppsSink.pollPPSSink()
+		if err != nil {
+			// Error without resultEvent, we try again
+			if resultEvent.IsZero() {
+				continue
+			}
+			// Error but we already have an event, stop retrying
+			return resultEvent, nil
+		}
+		// New event, it is the new result event
+		resultEvent = newEvent
+	}
+
+	// we exceeded max attempts, so we return the last event
+	return resultEvent, err
 }

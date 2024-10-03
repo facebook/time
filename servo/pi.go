@@ -128,6 +128,11 @@ func (s *PiServo) SetMaxFreq(freq float64) {
 	s.maxFreq = freq
 }
 
+// GetMaxFreq gets current configured max frequency
+func (s *PiServo) GetMaxFreq() float64 {
+	return s.maxFreq
+}
+
 // IsSpike function to check if offset is considered as spike
 func (s *PiServo) IsSpike(offset int64) bool {
 	if s.filter == nil || s.count < 2 {
