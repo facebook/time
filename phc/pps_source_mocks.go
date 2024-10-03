@@ -142,6 +142,20 @@ func (mr *MockDeviceControllerMockRecorder) AdjFreq(freq interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdjFreq", reflect.TypeOf((*MockDeviceController)(nil).AdjFreq), freq)
 }
 
+// Fd mocks base method.
+func (m *MockDeviceController) Fd() uintptr {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Fd")
+	ret0, _ := ret[0].(uintptr)
+	return ret0
+}
+
+// Fd indicates an expected call of Fd.
+func (mr *MockDeviceControllerMockRecorder) Fd() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fd", reflect.TypeOf((*MockDeviceController)(nil).Fd))
+}
+
 // File mocks base method.
 func (m *MockDeviceController) File() *os.File {
 	m.ctrl.T.Helper()
@@ -154,6 +168,21 @@ func (m *MockDeviceController) File() *os.File {
 func (mr *MockDeviceControllerMockRecorder) File() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "File", reflect.TypeOf((*MockDeviceController)(nil).File))
+}
+
+// Read mocks base method.
+func (m *MockDeviceController) Read(buf []byte) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Read", buf)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Read indicates an expected call of Read.
+func (mr *MockDeviceControllerMockRecorder) Read(buf interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockDeviceController)(nil).Read), buf)
 }
 
 // Step mocks base method.
@@ -185,6 +214,20 @@ func (mr *MockDeviceControllerMockRecorder) Time() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Time", reflect.TypeOf((*MockDeviceController)(nil).Time))
 }
 
+// extTTSRequest mocks base method.
+func (m *MockDeviceController) extTTSRequest(req PTPExtTTSRequest) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "extTTSRequest", req)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// extTTSRequest indicates an expected call of extTTSRequest.
+func (mr *MockDeviceControllerMockRecorder) extTTSRequest(req interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "extTTSRequest", reflect.TypeOf((*MockDeviceController)(nil).extTTSRequest), req)
+}
+
 // setPTPPerout mocks base method.
 func (m *MockDeviceController) setPTPPerout(req PTPPeroutRequest) error {
 	m.ctrl.T.Helper()
@@ -211,4 +254,95 @@ func (m *MockDeviceController) setPinFunc(index uint, pf PinFunc, ch uint) error
 func (mr *MockDeviceControllerMockRecorder) setPinFunc(index, pf, ch interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setPinFunc", reflect.TypeOf((*MockDeviceController)(nil).setPinFunc), index, pf, ch)
+}
+
+// MockPPSPoller is a mock of PPSPoller interface.
+type MockPPSPoller struct {
+	ctrl     *gomock.Controller
+	recorder *MockPPSPollerMockRecorder
+}
+
+// MockPPSPollerMockRecorder is the mock recorder for MockPPSPoller.
+type MockPPSPollerMockRecorder struct {
+	mock *MockPPSPoller
+}
+
+// NewMockPPSPoller creates a new mock instance.
+func NewMockPPSPoller(ctrl *gomock.Controller) *MockPPSPoller {
+	mock := &MockPPSPoller{ctrl: ctrl}
+	mock.recorder = &MockPPSPollerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPPSPoller) EXPECT() *MockPPSPollerMockRecorder {
+	return m.recorder
+}
+
+// pollPPSSink mocks base method.
+func (m *MockPPSPoller) pollPPSSink() (time.Time, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "pollPPSSink")
+	ret0, _ := ret[0].(time.Time)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// pollPPSSink indicates an expected call of pollPPSSink.
+func (mr *MockPPSPollerMockRecorder) pollPPSSink() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "pollPPSSink", reflect.TypeOf((*MockPPSPoller)(nil).pollPPSSink))
+}
+
+// MockFrequencyGetter is a mock of FrequencyGetter interface.
+type MockFrequencyGetter struct {
+	ctrl     *gomock.Controller
+	recorder *MockFrequencyGetterMockRecorder
+}
+
+// MockFrequencyGetterMockRecorder is the mock recorder for MockFrequencyGetter.
+type MockFrequencyGetterMockRecorder struct {
+	mock *MockFrequencyGetter
+}
+
+// NewMockFrequencyGetter creates a new mock instance.
+func NewMockFrequencyGetter(ctrl *gomock.Controller) *MockFrequencyGetter {
+	mock := &MockFrequencyGetter{ctrl: ctrl}
+	mock.recorder = &MockFrequencyGetterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockFrequencyGetter) EXPECT() *MockFrequencyGetterMockRecorder {
+	return m.recorder
+}
+
+// FreqPPB mocks base method.
+func (m *MockFrequencyGetter) FreqPPB() (float64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FreqPPB")
+	ret0, _ := ret[0].(float64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FreqPPB indicates an expected call of FreqPPB.
+func (mr *MockFrequencyGetterMockRecorder) FreqPPB() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FreqPPB", reflect.TypeOf((*MockFrequencyGetter)(nil).FreqPPB))
+}
+
+// MaxFreqAdjPPB mocks base method.
+func (m *MockFrequencyGetter) MaxFreqAdjPPB() (float64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MaxFreqAdjPPB")
+	ret0, _ := ret[0].(float64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MaxFreqAdjPPB indicates an expected call of MaxFreqAdjPPB.
+func (mr *MockFrequencyGetterMockRecorder) MaxFreqAdjPPB() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxFreqAdjPPB", reflect.TypeOf((*MockFrequencyGetter)(nil).MaxFreqAdjPPB))
 }

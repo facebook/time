@@ -24,6 +24,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func timeToTimespec(time time.Time) (ts unix.Timespec) {
-	return unix.Timespec{Sec: int32(time.Unix()), Nsec: int32(time.Nanosecond())}
+func timeToTimespec(t time.Time) unix.Timespec {
+	return unix.Timespec{Sec: int32(t.Unix()), Nsec: int32(t.Nanosecond())}
+}
+
+func ptpClockTimeToTime(t PTPClockTime) time.Time {
+	return time.Unix(int64(t.Sec), int64(t.NSec))
 }

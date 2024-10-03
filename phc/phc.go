@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -274,6 +275,10 @@ func (dev *Device) setPTPPerout(req PTPPeroutRequest) error {
 	return dev.ioctl(ioctlPTPPeroutRequest2, unsafe.Pointer(&req))
 }
 
+func (dev *Device) extTTSRequest(req PTPExtTTSRequest) error {
+	return dev.ioctl(ioctlExtTTSRequest2, unsafe.Pointer(&req))
+}
+
 // FreqPPB reads PHC device frequency in PPB (parts per billion)
 func (dev *Device) FreqPPB() (freqPPB float64, err error) { return freqPPBFromDevice(dev) }
 
@@ -282,3 +287,7 @@ func (dev *Device) AdjFreq(freqPPB float64) error { return clockAdjFreq(dev, fre
 
 // Step steps the PHC clock by given duration
 func (dev *Device) Step(step time.Duration) error { return clockStep(dev, step) }
+
+func (dev *Device) Read(buffer []byte) (int, error) {
+	return syscall.Read(int(dev.Fd()), buffer)
+}
