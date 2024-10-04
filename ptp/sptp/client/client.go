@@ -276,7 +276,9 @@ func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult 
 	case err := <-errchan:
 		result.Error = err
 	case <-ctx.Done():
-		result.Error = ctx.Err()
+		if result.Measurement == nil {
+			result.Error = ctx.Err()
+		}
 	}
 
 	return result

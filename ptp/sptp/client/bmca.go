@@ -30,7 +30,7 @@ func bmca(results map[netip.Addr]*RunResult, prios map[ptp.ClockIdentity]int, cf
 	}
 	var best *ptp.Announce
 	for _, result := range results {
-		if result.Measurement == nil {
+		if result.Measurement == nil || result.Error != nil {
 			continue
 		}
 		if best == nil {

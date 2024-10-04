@@ -17,6 +17,7 @@ limitations under the License.
 package client
 
 import (
+	"fmt"
 	"net/netip"
 	"testing"
 
@@ -63,7 +64,7 @@ func TestBmcaNoMasterForCalibrating(t *testing.T) {
 		},
 	}
 	selected := bmca(results, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
-	require.Empty(t, selected)
+	require.Nil(t, selected)
 }
 
 func TestBmcaNoMasterForLowAccuracy(t *testing.T) {
@@ -76,5 +77,20 @@ func TestBmcaNoMasterForLowAccuracy(t *testing.T) {
 		},
 	}
 	selected := bmca(results, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
-	require.Empty(t, selected)
+	require.Nil(t, selected)
+}
+
+func TestBmcaError(t *testing.T) {
+	results := map[netip.Addr]*RunResult{
+		best: {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass7}}}},
+			Error:       fmt.Errorf("error"),
+		},
+		worse: {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass13}}}},
+			Error:       fmt.Errorf("error"),
+		},
+	}
+	selected := bmca(results, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
+	require.Nil(t, selected)
 }
