@@ -323,7 +323,7 @@ func (p *SPTP) setMeanFreq() float64 {
 	freqAdj := p.pi.MeanFreq()
 	p.pi.SetLastFreq(freqAdj)
 	if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
-		log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
+		log.Errorf("failed to adjust freq to %v: %v", -freqAdj, err)
 	}
 	return freqAdj
 }
@@ -426,15 +426,15 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 		freqAdj, state = p.pi.Sample(bmOffset, uint64(bm.Timestamp.UnixNano()))
 	}
 	p.stats.SetServoState(int(state))
-	log.Infof("offset %10d s%d freq %+7.0f path delay %10d (%6d:%6d)", bmOffset, state, freqAdj, bmDelay, bm.C2SDelay, bm.S2CDelay)
+	log.Infof("offset %10d s%d freq %+7.0f path delay %10d (%6d:%6d)", bmOffset, state, -freqAdj, bmDelay, bm.C2SDelay, bm.S2CDelay)
 	switch state {
 	case servo.StateJump:
-		if err := p.clock.Step(-1 * bm.Offset); err != nil {
-			log.Errorf("failed to step freq by %v: %v", -1*bm.Offset, err)
+		if err := p.clock.Step(-bm.Offset); err != nil {
+			log.Errorf("failed to step freq by %v: %v", -bm.Offset, err)
 		}
 	case servo.StateLocked:
-		if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
-			log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
+		if err := p.clock.AdjFreqPPB(-freqAdj); err != nil {
+			log.Errorf("failed to adjust freq to %v: %v", -freqAdj, err)
 		}
 		if err := p.clock.SetSync(); err != nil {
 			log.Errorf("failed to set clock sync state")
@@ -483,9 +483,9 @@ func (p *SPTP) runInternal(ctx context.Context) error {
 		case <-ctx.Done():
 			log.Debugf("cancelled main loop")
 			freqAdj := p.pi.MeanFreq()
-			log.Infof("Existing, setting freq to: %v", -1*freqAdj)
+			log.Infof("Existing, setting freq to: %v", -freqAdj)
 			if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
-				log.Errorf("failed to adjust freq to %v: %v", -1*freqAdj, err)
+				log.Errorf("failed to adjust freq to %v: %v", -freqAdj, err)
 			}
 			return ctx.Err()
 		case <-timer.C:
