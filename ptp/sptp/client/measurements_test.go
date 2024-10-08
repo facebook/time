@@ -417,8 +417,19 @@ func TestBadDelay(t *testing.T) {
 	require.Equal(t, 2*time.Millisecond, m.pathDelay)
 
 	// We add a huge delay and it's being ignored
-	m.delay(time.Second)
+	m.delay(10 * time.Millisecond)
 	require.Equal(t, 2*time.Millisecond, m.pathDelay)
+
+	// We force filter to work only from high values
+	m.cfg.PathDelayDiscardFrom = 11 * time.Millisecond
+
+	// Triggering on > PathDelayDiscardFrom
+	m.delay(13 * time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, m.pathDelay)
+
+	// Ignoring < PathDelayDiscardFrom
+	m.delay(11 * time.Millisecond)
+	require.Equal(t, 7*time.Millisecond, m.pathDelay)
 }
 
 func TestBadCF(t *testing.T) {

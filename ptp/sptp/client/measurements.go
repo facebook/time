@@ -154,8 +154,8 @@ func (m *measurements) delay(newDelay time.Duration) {
 	if newDelay < m.cfg.PathDelayDiscardBelow {
 		// Discard below min from the beginning
 		log.Warningf("(%s) low path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
-	} else if newDelay > maxPathDelay && maxPathDelay > m.cfg.PathDelayDiscardBelow && m.delaysWindow.Full() {
-		// Ignore spikes above max
+	} else if newDelay > m.cfg.PathDelayDiscardFrom && newDelay > maxPathDelay && maxPathDelay > m.cfg.PathDelayDiscardBelow && m.delaysWindow.Full() {
+		// Ignore spikes above maxPathDelay starting from m.cfg.PathDelayDiscardFrom
 		log.Warningf("(%s) high path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
 	} else if m.lastData != nil && (m.lastData.c1 < 0 || m.lastData.c2 < 0) {
 		// Ignore negative CF

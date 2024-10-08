@@ -208,6 +208,23 @@ func TestMeasurementConfigValidate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "bad_path_delay_discard_multiplier",
+			in: MeasurementConfig{
+				PathDelayDiscardFilterEnabled: true,
+				PathDelayDiscardMultiplier:    1,
+			},
+			wantErr: true,
+		},
+		{
+			name: "bad_path_delay_discard_from",
+			in: MeasurementConfig{
+				PathDelayDiscardFilterEnabled: true,
+				PathDelayDiscardFrom:          42,
+				PathDelayDiscardBelow:         42,
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tc := range testCases {

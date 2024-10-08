@@ -75,6 +75,7 @@ type MeasurementConfig struct {
 	PathDelayFilter               string        `yaml:"path_delay_filter"`                 // which filter to use, see supported path delay filters const
 	PathDelayDiscardFilterEnabled bool          `yaml:"path_delay_discard_filter_enabled"` // controls filter that allows us to discard anomalously small path delays
 	PathDelayDiscardBelow         time.Duration `yaml:"path_delay_discard_below"`          // discard path delays that are below this threshold
+	PathDelayDiscardFrom          time.Duration `yaml:"path_delay_discard_from"`           // do not apply discard filter to the values below this threshold
 	PathDelayDiscardMultiplier    int           `yaml:"path_delay_discard_multiplier"`     // discard path delays that are above path delay multiplied by this value
 }
 
@@ -86,8 +87,11 @@ func (c *MeasurementConfig) Validate() error {
 	if c.PathDelayFilter != FilterNone && c.PathDelayFilter != FilterMean && c.PathDelayFilter != FilterMedian {
 		return fmt.Errorf("path_delay_filter must be either %q, %q or %q", FilterNone, FilterMean, FilterMedian)
 	}
-	if c.PathDelayDiscardFilterEnabled && (c.PathDelayDiscardMultiplier < 2) {
+	if c.PathDelayDiscardFilterEnabled && c.PathDelayDiscardMultiplier < 2 {
 		return fmt.Errorf("path_delay_discard_multiplier must be at least 2 times the path delay")
+	}
+	if c.PathDelayDiscardFilterEnabled && c.PathDelayDiscardFrom > 0 && c.PathDelayDiscardFrom <= c.PathDelayDiscardBelow {
+		return fmt.Errorf("path_delay_discard_from must be greater than path_delay_discard_below")
 	}
 	return nil
 }
