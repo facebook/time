@@ -141,17 +141,32 @@ func (m *measurements) addT4(seq uint16, ts time.Time) {
 	}
 }
 
-func (m *measurements) delay(newDelay time.Duration) time.Duration {
+func (m *measurements) delay(newDelay time.Duration) {
 	lastDelay := m.delaysWindow.lastSample()
 	maxPathDelay := time.Duration(m.cfg.PathDelayDiscardMultiplier) * m.pathDelay
 	// we want to have at least one sample recorded, even if it doesn't meet the filter, otherwise we'll never sync
-	if !math.IsNaN(lastDelay) && (m.cfg.PathDelayDiscardFilterEnabled && m.delaysWindow.Full() && m.cfg.PathDelayDiscardBelow < maxPathDelay && (newDelay < m.cfg.PathDelayDiscardBelow || newDelay > maxPathDelay)) {
-		log.Warningf("(%s) bad path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
-	} else if !math.IsNaN(lastDelay) && m.lastData != nil && m.cfg.PathDelayDiscardFilterEnabled && (m.lastData.c1 < 0 || m.lastData.c2 < 0) {
+	if math.IsNaN(lastDelay) || !m.cfg.PathDelayDiscardFilterEnabled {
+		m.applyDelay(newDelay)
+		return
+	}
+
+	// Filter territory
+	if newDelay < m.cfg.PathDelayDiscardBelow {
+		// Discard below min from the beginning
+		log.Warningf("(%s) low path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
+	} else if newDelay > maxPathDelay && maxPathDelay > m.cfg.PathDelayDiscardBelow && m.delaysWindow.Full() {
+		// Ignore spikes above max
+		log.Warningf("(%s) high path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
+	} else if m.lastData != nil && (m.lastData.c1 < 0 || m.lastData.c2 < 0) {
+		// Ignore negative CF
 		log.Warningf("(%s) bad correction fields: CF1 (sync): %v, CF2 (announce): %v - filtered out", m.announce.GrandmasterIdentity, m.lastData.c1, m.lastData.c2)
 	} else {
-		m.delaysWindow.add(float64(newDelay))
+		m.applyDelay(newDelay)
 	}
+}
+
+func (m *measurements) applyDelay(newDelay time.Duration) {
+	m.delaysWindow.add(float64(newDelay))
 
 	switch m.cfg.PathDelayFilter {
 	case FilterMedian:
@@ -161,8 +176,6 @@ func (m *measurements) delay(newDelay time.Duration) time.Duration {
 	default:
 		m.pathDelay = newDelay
 	}
-
-	return m.pathDelay
 }
 
 // we take last complete sample of sync/followup data and last complete sample of delay req/resp data
@@ -187,12 +200,12 @@ func (m *measurements) latest() (*MeasurementResult, error) {
 	C2SDelay := m.lastData.t4.Sub(m.lastData.t3) - m.lastData.c2
 	S2CDelay := m.lastData.t2.Sub(m.lastData.t1) - m.lastData.c1
 	newDelay := (C2SDelay + S2CDelay) / 2
-	delay := m.delay(newDelay)
-	offset := S2CDelay - delay
+	m.delay(newDelay)
+	offset := S2CDelay - m.pathDelay
 	// or this expression of same formula
 	// offset := (S2CDelay - C2SDelay)/2
 	return &MeasurementResult{
-		Delay:             delay,
+		Delay:             m.pathDelay,
 		Offset:            offset,
 		S2CDelay:          S2CDelay,
 		C2SDelay:          C2SDelay,

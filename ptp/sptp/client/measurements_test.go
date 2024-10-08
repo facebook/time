@@ -406,19 +406,19 @@ func TestBadDelay(t *testing.T) {
 	}
 	m := newMeasurements(mcfg)
 
-	newDelay := m.delay(time.Millisecond)
-	require.Equal(t, time.Millisecond, newDelay)
+	m.delay(time.Millisecond)
+	require.Equal(t, time.Millisecond, m.pathDelay)
 
-	newDelay = m.delay(3 * time.Millisecond)
-	require.Equal(t, 2*time.Millisecond, newDelay)
+	m.delay(3 * time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, m.pathDelay)
 
 	// We add a negative delay and it's being ignored
-	newDelay = m.delay(-time.Second)
-	require.Equal(t, 2*time.Millisecond, newDelay)
+	m.delay(-time.Second)
+	require.Equal(t, 2*time.Millisecond, m.pathDelay)
 
 	// We add a huge delay and it's being ignored
-	newDelay = m.delay(time.Second)
-	require.Equal(t, 2*time.Millisecond, newDelay)
+	m.delay(time.Second)
+	require.Equal(t, 2*time.Millisecond, m.pathDelay)
 }
 
 func TestBadCF(t *testing.T) {
@@ -431,21 +431,21 @@ func TestBadCF(t *testing.T) {
 	}
 	m := newMeasurements(mcfg)
 
-	newDelay := m.delay(time.Millisecond)
-	require.Equal(t, time.Millisecond, newDelay)
+	m.delay(time.Millisecond)
+	require.Equal(t, time.Millisecond, m.pathDelay)
 
-	newDelay = m.delay(3 * time.Millisecond)
-	require.Equal(t, 2*time.Millisecond, newDelay)
+	m.delay(3 * time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, m.pathDelay)
 
 	m.lastData = &mData{}
 
 	// Valid delay, bad CF1
 	m.lastData.c1 = -time.Millisecond
-	newDelay = m.delay(time.Millisecond)
-	require.Equal(t, 2*time.Millisecond, newDelay)
+	m.delay(time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, m.pathDelay)
 
 	// Valid delay, bad CF2
 	m.lastData.c2 = -time.Millisecond
-	newDelay = m.delay(time.Millisecond)
-	require.Equal(t, 2*time.Millisecond, newDelay)
+	m.delay(time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, m.pathDelay)
 }
