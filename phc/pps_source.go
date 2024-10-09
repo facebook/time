@@ -62,6 +62,7 @@ const (
 	ppsStartDelay         = 2
 	defaultPollerInterval = 40 * time.Millisecond
 	PPSPollMaxAttempts    = 20
+	defaultMaxFreqAdj     = 500000.0
 )
 
 // ServoController abstracts away servo
@@ -180,8 +181,8 @@ func (ppsSource *PPSSource) Timestamp() (*time.Time, error) {
 	return &currTime, nil
 }
 
-// NewPiServo returns a servo.PiServo object configure for synchronizing the given device
-func NewPiServo(interval time.Duration, stepth time.Duration, device FrequencyGetter) (*servo.PiServo, error) {
+// NewPiServo returns a servo.PiServo object configure for synchronizing the given device. maxFreq 0 is equivalent to no maxFreq
+func NewPiServo(interval time.Duration, stepth time.Duration, device FrequencyGetter, maxFreq float64) (*servo.PiServo, error) {
 	servoCfg := servo.DefaultServoConfig()
 	if stepth != 0 {
 		// allow stepping clock on first update
@@ -197,10 +198,14 @@ func NewPiServo(interval time.Duration, stepth time.Duration, device FrequencyGe
 	pi := servo.NewPiServo(servoCfg, servo.DefaultPiServoCfg(), -freq)
 	pi.SyncInterval(interval.Seconds())
 
-	maxFreq, err := device.MaxFreqAdjPPB()
-	if err != nil {
-		maxFreq = float64(DefaultMaxClockFreqPPB)
+	if maxFreq == 0 {
+		maxFreq, err = device.MaxFreqAdjPPB()
+		if err != nil {
+			log.Printf("unable to get max frequency adjustment from device, using default: %f", defaultMaxFreqAdj)
+			maxFreq = defaultMaxFreqAdj
+		}
 	}
+
 	pi.SetMaxFreq(maxFreq)
 
 	return pi, nil
