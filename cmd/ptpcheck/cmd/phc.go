@@ -34,6 +34,7 @@ var (
 	method      string
 	freq        float64
 	step        time.Duration
+	unixSec     int64
 	setAndPrint bool
 )
 
@@ -52,6 +53,7 @@ func init() {
 	)
 	flags.Float64VarP(&freq, "freq", "f", math.NaN(), "set the frequency (PPB)")
 	flags.DurationVarP(&step, "step", "t", 0, "step the clock")
+	flags.Int64VarP(&unixSec, "set", "s", -1, "set the clock to Unix seconds, like $(date +%s)")
 	flags.BoolVarP(&setAndPrint, "print", "p", false, "print clock status after changes")
 }
 
@@ -59,6 +61,12 @@ func runPhcCmd(_ *cobra.Command, _ []string) {
 	var doPrint = true
 
 	ConfigureVerbosity()
+	if unixSec != -1 {
+		if err := setPHC(device, unixSec); err != nil {
+			log.Fatal(err)
+		}
+		doPrint = setAndPrint
+	}
 	if step != 0 {
 		if err := stepPHC(device, step); err != nil {
 			log.Fatal(err)
@@ -76,6 +84,20 @@ func runPhcCmd(_ *cobra.Command, _ []string) {
 			log.Fatal(err)
 		}
 	}
+}
+
+func setPHC(device string, unixSec int64) error {
+	f, err := os.OpenFile(device, os.O_RDWR, 0)
+	if err != nil {
+		return fmt.Errorf("opening device %q: %w", device, err)
+	}
+	defer f.Close()
+	dev := phc.FromFile(f)
+
+	t := time.Unix(unixSec, 0)
+
+	fmt.Printf("Setting the clock to %v (%v in Unix seconds)\n", t, unixSec)
+	return dev.SetTime(t)
 }
 
 func stepPHC(device string, step time.Duration) error {
@@ -121,8 +143,12 @@ func printPHC(device string, method phc.TimeMethod) error {
 			return err
 		}
 	}
-	fmt.Printf("PHC clock: %s\n", timeAndOffset.PHCTime)
-	fmt.Printf("SYS clock: %s\n", timeAndOffset.SysTime)
+
+	timePHC := timeAndOffset.PHCTime
+	timeSys := timeAndOffset.SysTime
+
+	fmt.Printf("PHC clock: %s (%v in Unix seconds)\n", timePHC, timePHC.Unix())
+	fmt.Printf("SYS clock: %s (%v in Unix seconds)\n", timeSys, timeSys.Unix())
 	fmt.Printf("Offset: %s\n", timeAndOffset.Offset)
 	fmt.Printf("Delay: %s\n", timeAndOffset.Delay)
 
