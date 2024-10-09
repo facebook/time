@@ -27,13 +27,14 @@ import (
 )
 
 var (
-	srcDeviceTS2PHCFlag string
-	dstDeviceTS2PHCFlag string
-	intervalTS2PHCFlag  time.Duration
-	firstStepTS2PHCFlag time.Duration
-	srcPinTS2PHCFlag    uint
-	dstPinTS2PHCFlag    uint
-	maxFreqTS2PHCFlag   float64
+	srcDeviceTS2PHCFlag     string
+	dstDeviceTS2PHCFlag     string
+	intervalTS2PHCFlag      time.Duration
+	srcPinTS2PHCFlag        uint
+	dstPinTS2PHCFlag        uint
+	maxFreqTS2PHCFlag       float64
+	firstStepTS2PHCFlag     time.Duration
+	stepThresholdTS2PHCFlag time.Duration
 )
 
 func init() {
@@ -41,13 +42,14 @@ func init() {
 	ts2phcCmd.Flags().StringVarP(&srcDeviceTS2PHCFlag, "source", "s", "/dev/ptp_tcard", "Source for Time of Day (ToD) data. Only PHC devices are supported at the moment")
 	ts2phcCmd.Flags().StringVarP(&dstDeviceTS2PHCFlag, "destination", "d", "eth0", "PHC to be synchronized. The clock may be identified by its character device (like /dev/ptp0) or its associated network interface (like eth0).")
 	ts2phcCmd.Flags().DurationVarP(&intervalTS2PHCFlag, "interval", "i", time.Second, "Interval between syncs in nanosseconds")
-	ts2phcCmd.Flags().DurationVarP(&firstStepTS2PHCFlag, "first_step", "f", 20*time.Microsecond, "The maximum offset, specified in seconds, that the servo will correct by changing the clock frequency instead of stepping the clock. This is only applied on the first update. When set to 0.0, the servo will not step the clock on start.")
+	ts2phcCmd.Flags().DurationVarP(&firstStepTS2PHCFlag, "first_step", "f", 20*time.Microsecond, "The maximum offset that the servo will correct by changing the clock frequency instead of stepping the clock. This is only applied on the first update. When set to 0, the servo will not step the clock on start.")
 	ts2phcCmd.Flags().UintVarP(&srcPinTS2PHCFlag, "out-pin", "n", phc.DefaultTs2PhcIndex, "output pin number of the PPS signal on source device.")
 	ts2phcCmd.Flags().UintVarP(&dstPinTS2PHCFlag, "in-pin", "o", phc.DefaultTs2PhcSinkIndex, "input pin number of the PPS signal on destination device. (default 0)")
 	ts2phcCmd.Flags().Float64VarP(&maxFreqTS2PHCFlag, "max_frequency", "m", 0, "maximum frequency in parts per billion (PPB) that the servo will correct by changing the clock frequency instead of stepping the clock. If unset, uses the maximum frequency reported by the PHC device.")
+	ts2phcCmd.Flags().DurationVarP(&stepThresholdTS2PHCFlag, "step_threshold", "t", 0, "The maximum offset that the servo will correct by changing the clock frequency instead of stepping the clock. When set to 0, the servo will never step the clock except on start.")
 }
 
-func ts2phcRun(srcDevicePath string, dstDeviceName string, interval time.Duration, stepth time.Duration, srcPinIndex uint) error {
+func ts2phcRun(srcDevicePath string, dstDeviceName string, interval time.Duration, firstStepth time.Duration, stepth time.Duration, srcPinIndex uint) error {
 	ppsSource, err := getPPSSourceFromPath(srcDevicePath, srcPinIndex)
 	if err != nil {
 		return fmt.Errorf("error opening source phc device: %w", err)
@@ -61,7 +63,7 @@ func ts2phcRun(srcDevicePath string, dstDeviceName string, interval time.Duratio
 		return fmt.Errorf("error setting target device as PPS sink: %w", err)
 	}
 
-	pi, err := phc.NewPiServo(interval, stepth, dstDevice, maxFreqTS2PHCFlag)
+	pi, err := phc.NewPiServo(interval, firstStepth, stepth, dstDevice, maxFreqTS2PHCFlag)
 	if err != nil {
 		return fmt.Errorf("error getting servo: %w", err)
 	}
@@ -117,7 +119,7 @@ var ts2phcCmd = &cobra.Command{
 	Short: "Sync PHC with external timestamps",
 	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
-		if err := ts2phcRun(srcDeviceTS2PHCFlag, dstDeviceTS2PHCFlag, intervalTS2PHCFlag, firstStepTS2PHCFlag, srcPinTS2PHCFlag); err != nil {
+		if err := ts2phcRun(srcDeviceTS2PHCFlag, dstDeviceTS2PHCFlag, intervalTS2PHCFlag, firstStepTS2PHCFlag, stepThresholdTS2PHCFlag, srcPinTS2PHCFlag); err != nil {
 			log.Fatal(err)
 		}
 	},
