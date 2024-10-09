@@ -182,14 +182,14 @@ func (ppsSource *PPSSource) Timestamp() (*time.Time, error) {
 }
 
 // NewPiServo returns a servo.PiServo object configure for synchronizing the given device. maxFreq 0 is equivalent to no maxFreq
-func NewPiServo(interval time.Duration, stepth time.Duration, device FrequencyGetter, maxFreq float64) (*servo.PiServo, error) {
+func NewPiServo(interval time.Duration, firstStepth time.Duration, stepth time.Duration, device FrequencyGetter, maxFreq float64) (*servo.PiServo, error) {
 	servoCfg := servo.DefaultServoConfig()
-	if stepth != 0 {
+	if firstStepth != 0 {
 		// allow stepping clock on first update
 		servoCfg.FirstUpdate = true
-		servoCfg.FirstStepThreshold = int64(stepth)
+		servoCfg.FirstStepThreshold = int64(firstStepth)
 	}
-
+	servoCfg.StepThreshold = int64(stepth)
 	freq, err := device.FreqPPB()
 	if err != nil {
 		return nil, err
