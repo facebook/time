@@ -61,3 +61,11 @@ func clockStep(dev *Device, step time.Duration) error {
 	}
 	return err
 }
+
+func clockSetTime(dev *Device, t time.Time) error {
+	ts, err := unix.TimeToTimespec(t)
+	if err != nil {
+		return err
+	}
+	return clock.Settime(dev.ClockID(), &ts)
+}

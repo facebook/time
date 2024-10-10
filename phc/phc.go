@@ -288,6 +288,9 @@ func (dev *Device) AdjFreq(freqPPB float64) error { return clockAdjFreq(dev, fre
 // Step steps the PHC clock by given duration
 func (dev *Device) Step(step time.Duration) error { return clockStep(dev, step) }
 
+// SetTime sets the time of the PHC clock
+func (dev *Device) SetTime(t time.Time) error { return clockSetTime(dev, t) }
+
 func (dev *Device) Read(buffer []byte) (int, error) {
 	return syscall.Read(int(dev.Fd()), buffer)
 }

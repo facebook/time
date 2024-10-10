@@ -58,6 +58,7 @@ const (
 
 // Adjtime issues CLOCK_ADJTIME syscall to either adjust the parameters of given clock,
 // or read them if buf is empty.  man(2) clock_adjtime
+// TODO: replace this with a call to https://pkg.go.dev/golang.org/x/sys/unix#ClockAdjtime
 func Adjtime(clockid int32, buf *unix.Timex) (state int, err error) {
 	r0, _, errno := unix.Syscall(unix.SYS_CLOCK_ADJTIME, uintptr(clockid), uintptr(unsafe.Pointer(buf)), 0)
 	state = int(r0)
@@ -65,6 +66,16 @@ func Adjtime(clockid int32, buf *unix.Timex) (state int, err error) {
 		err = errno
 	}
 	return state, err
+}
+
+// Settime issues clock_settime(3) syscall to set the time of the specified clock.
+// TODO: issue a PR for golang.org/x/sys/unix to add this function there
+func Settime(clockid int32, time *unix.Timespec) (err error) {
+	_, _, errno := unix.Syscall(unix.SYS_CLOCK_SETTIME, uintptr(clockid), uintptr(unsafe.Pointer(time)), 0)
+	if errno != 0 {
+		err = errno
+	}
+	return err
 }
 
 // FrequencyPPB reads device frequency in PPB
