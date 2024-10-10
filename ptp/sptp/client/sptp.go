@@ -368,17 +368,20 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 	idsToClients := map[ptp.ClockIdentity]netip.Addr{}
 	localPrioMap := map[ptp.ClockIdentity]int{}
 	for addr, res := range results {
-		if res.Error == nil {
-			p.backoff[addr].reset()
-			log.Debugf("result %s: %+v", addr, res.Measurement)
-		} else {
+		if res.Error != nil {
 			p.handleExchangeError(addr, res.Error, tickDuration)
 			continue
 		}
+		p.backoff[addr].reset()
+		log.Debugf("result %s: %+v", addr, res.Measurement)
 		if res.Measurement == nil {
 			log.Errorf("result for %s is missing Measurement", addr)
 			continue
 		}
+		if res.Measurement.BadDelay {
+			p.stats.IncFiltered()
+		}
+
 		gmsAvailable++
 		idsToClients[res.Measurement.Announce.GrandmasterIdentity] = addr
 		localPrioMap[res.Measurement.Announce.GrandmasterIdentity] = p.priorities[addr]

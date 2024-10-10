@@ -64,12 +64,12 @@ type MeasurementResult struct {
 	T2                time.Time
 	T3                time.Time
 	T4                time.Time
+	BadDelay          bool
 }
 
 // measurements abstracts away tracking and calculation of various packet timestamps
 type measurements struct {
 	sync.Mutex
-
 	cfg              *MeasurementConfig
 	currentUTCoffset time.Duration
 	data             map[uint16]*mData
@@ -141,28 +141,34 @@ func (m *measurements) addT4(seq uint16, ts time.Time) {
 	}
 }
 
-func (m *measurements) delay(newDelay time.Duration) {
+// delay evaluates the latest path delay and applies filter logic
+// It returns false if delay is bad and wasn't used
+func (m *measurements) delay(newDelay time.Duration) bool {
 	lastDelay := m.delaysWindow.lastSample()
 	maxPathDelay := time.Duration(m.cfg.PathDelayDiscardMultiplier) * m.pathDelay
 	// we want to have at least one sample recorded, even if it doesn't meet the filter, otherwise we'll never sync
 	if math.IsNaN(lastDelay) || !m.cfg.PathDelayDiscardFilterEnabled {
 		m.applyDelay(newDelay)
-		return
+		return true
 	}
 
 	// Filter territory
 	if newDelay < m.cfg.PathDelayDiscardBelow {
 		// Discard below min from the beginning
 		log.Warningf("(%s) low path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
+		return false
 	} else if newDelay > m.cfg.PathDelayDiscardFrom && newDelay > maxPathDelay && maxPathDelay > m.cfg.PathDelayDiscardBelow && m.delaysWindow.Full() {
 		// Ignore spikes above maxPathDelay starting from m.cfg.PathDelayDiscardFrom
 		log.Warningf("(%s) high path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
+		return false
 	} else if m.lastData != nil && (m.lastData.c1 < 0 || m.lastData.c2 < 0) {
 		// Ignore negative CF
 		log.Warningf("(%s) bad correction fields: CF1 (sync): %v, CF2 (announce): %v - filtered out", m.announce.GrandmasterIdentity, m.lastData.c1, m.lastData.c2)
-	} else {
-		m.applyDelay(newDelay)
+		return false
 	}
+
+	m.applyDelay(newDelay)
+	return true
 }
 
 func (m *measurements) applyDelay(newDelay time.Duration) {
@@ -200,7 +206,7 @@ func (m *measurements) latest() (*MeasurementResult, error) {
 	C2SDelay := m.lastData.t4.Sub(m.lastData.t3) - m.lastData.c2
 	S2CDelay := m.lastData.t2.Sub(m.lastData.t1) - m.lastData.c1
 	newDelay := (C2SDelay + S2CDelay) / 2
-	m.delay(newDelay)
+	badDelay := !m.delay(newDelay)
 	offset := S2CDelay - m.pathDelay
 	// or this expression of same formula
 	// offset := (S2CDelay - C2SDelay)/2
@@ -217,6 +223,7 @@ func (m *measurements) latest() (*MeasurementResult, error) {
 		T3:                m.lastData.t3,
 		T4:                m.lastData.t4,
 		Announce:          m.announce,
+		BadDelay:          badDelay,
 	}, nil
 }
 

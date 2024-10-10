@@ -333,6 +333,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T2:                timeSyncReceived,
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
+		BadDelay:          true,
 	}
 	require.Equal(t, want, got, "measurements with mean path delay filter and skipped path delay sample")
 
