@@ -307,13 +307,13 @@ func TestProcessResultsFilteredDelay(t *testing.T) {
 	defer ctrl.Finish()
 	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
-	mockServo.EXPECT().IsSpike(int64(0)).Return(false)
-	mockServo.EXPECT().Sample(int64(0), gomock.Any()).Return(12.3, servo.StateFilter)
+	mockServo.EXPECT().MeanFreq().Times(1)
+	mockServo.EXPECT().SetLastFreq(float64(0)).Times(1)
+	mockClock.EXPECT().AdjFreqPPB(gomock.Any())
 	mockStatsServer := NewMockStatsServer(ctrl)
 	mockStatsServer.EXPECT().SetGmsTotal(1)
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
-	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
 	mockStatsServer.EXPECT().IncFiltered()
 
 	cfg := DefaultConfig()
@@ -333,13 +333,14 @@ func TestProcessResultsFilteredDelay(t *testing.T) {
 		netip.MustParseAddr("192.168.0.10"): {
 			Server: netip.MustParseAddr("192.168.0.10"),
 			Measurement: &MeasurementResult{
-				BadDelay: true,
+				BadDelay:          true,
+				CorrectionFieldRX: -42,
 			},
 		},
 	}
 	// we step here
 	p.processResults(results)
-	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
+	require.Equal(t, netip.Addr{}, p.bestGM)
 }
 
 func TestRunInternalAllDead(t *testing.T) {

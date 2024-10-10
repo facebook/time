@@ -94,3 +94,16 @@ func TestBmcaError(t *testing.T) {
 	selected := bmca(results, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
 	require.Nil(t, selected)
 }
+
+func TestBmcaBadDelay(t *testing.T) {
+	results := map[netip.Addr]*RunResult{
+		best: {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 1, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass7}}}},
+		},
+		worse: {
+			Measurement: &MeasurementResult{Announce: ptp.Announce{AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 2, GrandmasterClockQuality: ptp.ClockQuality{ClockClass: ptp.ClockClass6}}}, CorrectionFieldRX: -42, CorrectionFieldTX: -42},
+		},
+	}
+	selected := bmca(results, map[ptp.ClockIdentity]int{1: 2, 2: 1}, DefaultConfig())
+	require.Equal(t, results[best].Measurement.Announce, *selected)
+}
