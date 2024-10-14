@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebook/time/hostendian"
 	"github.com/facebook/time/servo"
 
 	"github.com/golang/mock/gomock"
@@ -547,7 +548,7 @@ func TestPPSSink_getPPSEventTimestamp(t *testing.T) {
 
 		mockDevice.EXPECT().Read(gomock.Any()).Return(1, nil).Do(func(buf []byte) {
 			var intBuffer bytes.Buffer
-			err := binary.Write(&intBuffer, binary.LittleEndian, &event)
+			err := binary.Write(&intBuffer, hostendian.Order, &event)
 			require.NoError(t, err)
 			copy(buf, intBuffer.Bytes())
 			fmt.Print(buf)
@@ -580,7 +581,7 @@ func TestPPSSink_getPPSEventTimestamp(t *testing.T) {
 
 		mockDevice.EXPECT().Read(gomock.Any()).Return(1, nil).Do(func(buf []byte) {
 			var intBuffer bytes.Buffer
-			err := binary.Write(&intBuffer, binary.LittleEndian, &event)
+			err := binary.Write(&intBuffer, hostendian.Order, &event)
 			require.NoError(t, err)
 			copy(buf, intBuffer.Bytes())
 		})
