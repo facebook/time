@@ -148,6 +148,7 @@ func (r *Receiver) sendResponse(sourceIP string, rawPacket gopacket.Packet) erro
 	return nil
 }
 
+// parseSyncPacket parses SYNC/DELAY_REQ packets and returns the packet, source IP and source port
 func parseSyncPacket(packet gopacket.Packet) (*ptp.SyncDelayReq, string, string, error) {
 	ipHeader, ok := packet.NetworkLayer().(*layers.IPv6)
 	if !ok {
@@ -160,7 +161,10 @@ func parseSyncPacket(packet gopacket.Packet) (*ptp.SyncDelayReq, string, string,
 
 	ptpPacket, err := ptp.DecodePacket(packet.ApplicationLayer().Payload())
 	if err != nil {
-		return nil, "", "", fmt.Errorf("unable to decode ptp packet: %w", err)
+		return nil, "", "", fmt.Errorf("unable to decode PTP packet: %w", err)
+	}
+	if ptpPacket.MessageType() != ptp.MessageSync && ptpPacket.MessageType() != ptp.MessageDelayReq {
+		return nil, "", "", fmt.Errorf("not parsing %v: not a SYNC/DELAY_REQ packet", ptpPacket.MessageType().String())
 	}
 	return ptpPacket.(*ptp.SyncDelayReq), ipHeader.SrcIP.String(), strconv.Itoa(int(udpHeader.SrcPort)), nil
 }
