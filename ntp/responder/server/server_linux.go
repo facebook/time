@@ -97,7 +97,7 @@ func deleteIfaceIP(iface *net.Interface, addr *net.IP) error {
 
 // PHCOffset periodically checks for PHC-SYS offset and updates it in the config
 func phcOffset(iface string) (time.Duration, error) {
-	device, err := phc.DeviceFromIface(iface)
+	device, err := phc.IfaceToPHCDevice(iface)
 	if err != nil {
 		return 0, err
 	}
