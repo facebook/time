@@ -18,7 +18,6 @@ package phc
 
 import (
 	"fmt"
-	"net"
 	"unsafe"
 
 	"github.com/vtolstov/go-ioctl"
@@ -215,34 +214,7 @@ func IfaceInfo(iface string) (*EthtoolTSinfo, error) {
 		uintptr(unsafe.Pointer(ifreq)),
 	)
 	if errno != 0 {
-		return nil, fmt.Errorf("failed get phc ID: %w", errno)
+		return nil, fmt.Errorf("failed get phc ID for %s: %w", iface, errno)
 	}
 	return data, nil
-}
-
-// IfaceData has both net.Interface and EthtoolTSinfo
-type IfaceData struct {
-	Iface  net.Interface
-	TSInfo EthtoolTSinfo
-}
-
-// IfacesInfo is like net.Interfaces() but with added EthtoolTSinfo
-func IfacesInfo() ([]IfaceData, error) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return nil, err
-	}
-	res := []IfaceData{}
-	for _, iface := range ifaces {
-		data, err := IfaceInfo(iface.Name)
-		if err != nil {
-			return nil, err
-		}
-		res = append(res,
-			IfaceData{
-				Iface:  iface,
-				TSInfo: *data,
-			})
-	}
-	return res, nil
 }
