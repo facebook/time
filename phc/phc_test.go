@@ -22,24 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIfaceInfoToPHCDevice(t *testing.T) {
-	info := &EthtoolTSinfo{
-		PHCIndex: 0,
-	}
-	got, err := ifaceInfoToPHCDevice(info)
-	require.NoError(t, err)
-	require.Equal(t, "/dev/ptp0", got)
-
-	info.PHCIndex = 23
-	got, err = ifaceInfoToPHCDevice(info)
-	require.NoError(t, err)
-	require.Equal(t, "/dev/ptp23", got)
-
-	info.PHCIndex = -1
-	_, err = ifaceInfoToPHCDevice(info)
-	require.Error(t, err)
-}
-
 func TestMaxAdjFreq(t *testing.T) {
 	caps := &PTPClockCaps{
 		MaxAdj: 1000000000,
@@ -51,4 +33,16 @@ func TestMaxAdjFreq(t *testing.T) {
 	caps.MaxAdj = 0
 	got = caps.maxAdj()
 	require.InEpsilon(t, 500000.0, got, 0.00001)
+}
+
+func TestIfaceToPHCDeviceNotSupported(t *testing.T) {
+	dev, err := IfaceToPHCDevice("lo")
+	require.Error(t, err)
+	require.Equal(t, "", dev)
+}
+
+func TestIfaceToPHCDeviceNotFound(t *testing.T) {
+	dev, err := IfaceToPHCDevice("lol-does-not-exist")
+	require.Error(t, err)
+	require.Equal(t, "", dev)
 }
