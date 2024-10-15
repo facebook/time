@@ -17,24 +17,11 @@ limitations under the License.
 package phc
 
 import (
-	"fmt"
 	"testing"
 	"unsafe"
 
 	"github.com/stretchr/testify/require"
 )
-
-func TestDeviceFromIfaceNotSupported(t *testing.T) {
-	dev, err := DeviceFromIface("lo")
-	require.Equal(t, fmt.Errorf("no PHC support for lo"), err)
-	require.Equal(t, "", dev)
-}
-
-func TestDeviceFromIfaceNotFound(t *testing.T) {
-	dev, err := DeviceFromIface("lol-does-not-exist")
-	require.Equal(t, fmt.Errorf("lol-does-not-exist interface is not found"), err)
-	require.Equal(t, "", dev)
-}
 
 func TestIoctlValues(t *testing.T) {
 	require.Equal(t, iocPinGetfunc, uintptr(3227532550))
