@@ -102,12 +102,10 @@ func ioctlHWTimestampCaps(fd int, ifname string) (int32, int32, error) {
 		txFilter = hwtstampTXON
 	}
 
-	if hw.rxFilters&(1<<hwtstampFilterAll) > 0 {
-		rxFilter = hwtstampFilterAll
-	} else if hw.rxFilters&(1<<hwtstampFilterPTPv2Event) > 0 {
-		rxFilter = hwtstampFilterPTPv2Event
-	} else if hw.rxFilters&(1<<hwtstampFilterPTPv2L4Event) > 0 {
+	if hw.rxFilters&(1<<hwtstampFilterPTPv2L4Event) > 0 {
 		rxFilter = hwtstampFilterPTPv2L4Event
+	} else if hw.rxFilters&(1<<hwtstampFilterAll) > 0 {
+		rxFilter = hwtstampFilterAll
 	}
 
 	if txFilter == 0 || rxFilter == 0 {
