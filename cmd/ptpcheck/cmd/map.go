@@ -51,11 +51,12 @@ func printIfaceData(ifname string, tsinfo *phc.EthtoolTSinfo, reverse bool) {
 		fmt.Printf("No PHC support for %s\n", ifname)
 		return
 	}
+	attrs := fmt.Sprintf("cap-tx-types %x cap-rx-filters %x", tsinfo.TXTypes, tsinfo.RXFilters)
 	if reverse {
-		fmt.Printf("/dev/ptp%d -> %s\n", tsinfo.PHCIndex, ifname)
+		fmt.Printf("/dev/ptp%d -> %s\t%s\n", tsinfo.PHCIndex, ifname, attrs)
 		return
 	}
-	fmt.Printf("%s -> /dev/ptp%d\n", ifname, tsinfo.PHCIndex)
+	fmt.Printf("%s -> /dev/ptp%d\t%s\n", ifname, tsinfo.PHCIndex, attrs)
 }
 
 func getDevice(iface string) error {
