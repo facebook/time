@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"net"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -45,64 +46,45 @@ func ptpDeviceNum(ptpPath string) (int, error) {
 	}))
 }
 
-func printIfaceData(d phc.IfaceData, reverse bool) {
-	if d.TSInfo.PHCIndex < 0 {
-		fmt.Printf("No PHC support for %s\n", d.Iface.Name)
+func printIfaceData(ifname string, tsinfo *phc.EthtoolTSinfo, reverse bool) {
+	if tsinfo.PHCIndex < 0 {
+		fmt.Printf("No PHC support for %s\n", ifname)
 		return
 	}
 	if reverse {
-		fmt.Printf("/dev/ptp%d -> %s\n", d.TSInfo.PHCIndex, d.Iface.Name)
+		fmt.Printf("/dev/ptp%d -> %s\n", tsinfo.PHCIndex, ifname)
 		return
 	}
-	fmt.Printf("%s -> /dev/ptp%d\n", d.Iface.Name, d.TSInfo.PHCIndex)
+	fmt.Printf("%s -> /dev/ptp%d\n", ifname, tsinfo.PHCIndex)
 }
 
 func getDevice(iface string) error {
-	ifaces, err := phc.IfacesInfo()
+	tsinfo, err := phc.IfaceInfo(iface)
 	if err != nil {
 		return err
 	}
-	if len(ifaces) == 0 {
-		return fmt.Errorf("no network devices found")
-	}
-	found := []phc.IfaceData{}
-	for _, d := range ifaces {
-		if d.Iface.Name == iface {
-			found = append(found, d)
-		}
-	}
-	if len(found) == 0 {
-		return fmt.Errorf("no nic information for %s", iface)
-	}
-	for _, d := range found {
-		printIfaceData(d, false)
-	}
+	printIfaceData(iface, tsinfo, false)
 	return nil
 }
 
 func getIface(ptpDevice int) error {
-	ifaces, err := phc.IfacesInfo()
+	ifaces, err := net.Interfaces()
 	if err != nil {
 		return err
 	}
-	if len(ifaces) == 0 {
-		return fmt.Errorf("no network devices found")
-	}
-	found := []phc.IfaceData{}
-	if ptpDevice < 0 {
-		found = ifaces
-	} else {
-		for _, d := range ifaces {
-			if int(d.TSInfo.PHCIndex) == ptpDevice {
-				found = append(found, d)
-			}
+	n := 0
+	for _, iface := range ifaces {
+		tsinfo, err := phc.IfaceInfo(iface.Name)
+		if err != nil {
+			continue
+		}
+		if int(tsinfo.PHCIndex) == ptpDevice || ptpDevice < 0 {
+			printIfaceData(iface.Name, tsinfo, true)
+			n++
 		}
 	}
-	if len(found) == 0 {
+	if n == 0 {
 		return fmt.Errorf("no nic found for /dev/ptp%d", ptpDevice)
-	}
-	for _, d := range found {
-		printIfaceData(d, true)
 	}
 	return nil
 }
@@ -131,7 +113,6 @@ var mapCmd = &cobra.Command{
 				if err := getDevice(arg); err != nil {
 					log.Fatal(err)
 				}
-
 			}
 			return
 		}
