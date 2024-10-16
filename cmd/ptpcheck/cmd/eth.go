@@ -52,7 +52,7 @@ func printIfaceData(ifname string, tsinfo *unix.EthtoolTsInfo, reverse bool) {
 	}
 
 	var attrs string
-	if tscfg, err := unix.IoctlGetHwTstamp(mapIofd, ifname); err == nil {
+	if tscfg, err := unix.IoctlGetHwTstamp(ethIofd, ifname); err == nil {
 		attrs = fmt.Sprintf("tx-type %d rx-filter %d", tscfg.Tx_type, tscfg.Rx_filter)
 	} else {
 		log.Warningf("%s: IoctlGetHwTstamp: %v", ifname, err)
@@ -66,7 +66,7 @@ func printIfaceData(ifname string, tsinfo *unix.EthtoolTsInfo, reverse bool) {
 }
 
 func getDevice(ifname string) error {
-	tsinfo, err := unix.IoctlGetEthtoolTsInfo(mapIofd, ifname)
+	tsinfo, err := unix.IoctlGetEthtoolTsInfo(ethIofd, ifname)
 	if err != nil {
 		return fmt.Errorf("%v: IoctlGetEthtoolTsInfo: %w", ifname, err)
 	}
@@ -81,7 +81,7 @@ func getIface(ptpDevice int) error {
 	}
 	n := 0
 	for _, iface := range ifaces {
-		tsinfo, err := unix.IoctlGetEthtoolTsInfo(mapIofd, iface.Name)
+		tsinfo, err := unix.IoctlGetEthtoolTsInfo(ethIofd, iface.Name)
 		if err != nil {
 			log.Errorf("%v: IoctlGetEthtoolTsInfo: %v", iface.Name, err)
 			continue
@@ -98,36 +98,36 @@ func getIface(ptpDevice int) error {
 }
 
 var (
-	mapIofd      int
-	mapIfaceFlag bool
+	ethIofd      int
+	ethIfaceFlag bool
 )
 
 func init() {
-	RootCmd.AddCommand(mapCmd)
-	mapCmd.Flags().BoolVarP(&mapIfaceFlag, "iface", "i", false, "Treat args as network interfaces")
+	RootCmd.AddCommand(ethCmd)
+	ethCmd.Flags().BoolVarP(&ethIfaceFlag, "iface", "i", false, "Treat args as network interfaces")
 }
 
-var mapCmd = &cobra.Command{
-	Use:   "map [ptp device/network interface]...",
+var ethCmd = &cobra.Command{
+	Use:   "eth [ptp device/network interface]...",
 	Short: "Find network interfaces for ptp devices and vice versa",
 	Run: func(_ *cobra.Command, args []string) {
 		var err error
 		ConfigureVerbosity()
 
-		mapIofd, err = unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, 0)
+		ethIofd, err = unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, 0)
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer unix.Close(mapIofd)
+		defer unix.Close(ethIofd)
 
-		// no args - just print map of all ptp devices to all interfaces
+		// no args - print all interfaces with PHC devices
 		if len(args) == 0 {
 			if err := getIface(-1); err != nil {
 				log.Fatal(err)
 			}
 		}
-		// treat args as network interfaces
-		if mapIfaceFlag {
+		if ethIfaceFlag {
+			// match by network interface name
 			for _, arg := range args {
 				if err := getDevice(arg); err != nil {
 					log.Fatal(err)
@@ -135,7 +135,7 @@ var mapCmd = &cobra.Command{
 			}
 			return
 		}
-		// map from ptp device to network interface
+		// match by ptp device name
 		for _, arg := range args {
 			i, err := ptpDeviceNum(arg)
 			if err != nil {
