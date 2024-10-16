@@ -24,10 +24,9 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-
-	"github.com/facebook/time/phc"
 )
 
 func ptpDeviceNum(ptpPath string) (int, error) {
@@ -46,25 +45,32 @@ func ptpDeviceNum(ptpPath string) (int, error) {
 	}))
 }
 
-func printIfaceData(ifname string, tsinfo *phc.EthtoolTSinfo, reverse bool) {
-	if tsinfo.PHCIndex < 0 {
+func printIfaceData(ifname string, tsinfo *unix.EthtoolTsInfo, reverse bool) {
+	if tsinfo.Phc_index < 0 {
 		fmt.Printf("No PHC support for %s\n", ifname)
 		return
 	}
-	attrs := fmt.Sprintf("cap-tx-types %x cap-rx-filters %x", tsinfo.TXTypes, tsinfo.RXFilters)
-	if reverse {
-		fmt.Printf("/dev/ptp%d -> %s\t%s\n", tsinfo.PHCIndex, ifname, attrs)
-		return
+
+	var attrs string
+	if tscfg, err := unix.IoctlGetHwTstamp(mapIofd, ifname); err == nil {
+		attrs = fmt.Sprintf("tx-type %d rx-filter %d", tscfg.Tx_type, tscfg.Rx_filter)
+	} else {
+		log.Warningf("%s: IoctlGetHwTstamp: %v", ifname, err)
 	}
-	fmt.Printf("%s -> /dev/ptp%d\t%s\n", ifname, tsinfo.PHCIndex, attrs)
+
+	if reverse {
+		fmt.Printf("/dev/ptp%d -> %s\t%s\n", tsinfo.Phc_index, ifname, attrs)
+	} else {
+		fmt.Printf("%s -> /dev/ptp%d\t%s\n", ifname, tsinfo.Phc_index, attrs)
+	}
 }
 
-func getDevice(iface string) error {
-	tsinfo, err := phc.IfaceInfo(iface)
+func getDevice(ifname string) error {
+	tsinfo, err := unix.IoctlGetEthtoolTsInfo(mapIofd, ifname)
 	if err != nil {
-		return err
+		return fmt.Errorf("%v: IoctlGetEthtoolTsInfo: %w", ifname, err)
 	}
-	printIfaceData(iface, tsinfo, false)
+	printIfaceData(ifname, tsinfo, false)
 	return nil
 }
 
@@ -75,22 +81,26 @@ func getIface(ptpDevice int) error {
 	}
 	n := 0
 	for _, iface := range ifaces {
-		tsinfo, err := phc.IfaceInfo(iface.Name)
+		tsinfo, err := unix.IoctlGetEthtoolTsInfo(mapIofd, iface.Name)
 		if err != nil {
+			log.Errorf("%v: IoctlGetEthtoolTsInfo: %v", iface.Name, err)
 			continue
 		}
-		if int(tsinfo.PHCIndex) == ptpDevice || ptpDevice < 0 {
+		if int(tsinfo.Phc_index) == ptpDevice || ptpDevice < 0 {
 			printIfaceData(iface.Name, tsinfo, true)
 			n++
 		}
 	}
-	if n == 0 {
+	if ptpDevice >= 0 && n == 0 {
 		return fmt.Errorf("no nic found for /dev/ptp%d", ptpDevice)
 	}
 	return nil
 }
 
-var mapIfaceFlag bool
+var (
+	mapIofd      int
+	mapIfaceFlag bool
+)
 
 func init() {
 	RootCmd.AddCommand(mapCmd)
@@ -101,7 +111,15 @@ var mapCmd = &cobra.Command{
 	Use:   "map [ptp device/network interface]...",
 	Short: "Find network interfaces for ptp devices and vice versa",
 	Run: func(_ *cobra.Command, args []string) {
+		var err error
 		ConfigureVerbosity()
+
+		mapIofd, err = unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, 0)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer unix.Close(mapIofd)
+
 		// no args - just print map of all ptp devices to all interfaces
 		if len(args) == 0 {
 			if err := getIface(-1); err != nil {
