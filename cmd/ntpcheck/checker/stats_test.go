@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/facebook/time/ntp/control"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -83,7 +82,7 @@ func TestNTPStatsNoSysPeer(t *testing.T) {
 			},
 			1: {
 				Selection: control.SelBackup,
-				Offset:    0.045,
+				Offset:    0.040,
 				Delay:     3.21,
 				Stratum:   4,
 				HPoll:     10,
@@ -95,14 +94,15 @@ func TestNTPStatsNoSysPeer(t *testing.T) {
 	stats, err := NewNTPStats(r)
 	require.NoError(t, err)
 	want := &NTPStats{
-		PeerDelay:   2.61,
-		PeerOffset:  0.0275,
-		PeerPoll:    1 << 4,
-		PeerStratum: 3,
-		PeerJitter:  3.55,
-		PeerCount:   2,
-		Offset:      s.Offset,
-		RootDelay:   s.RootDelay,
+		PeerDelay:             2.61,
+		PeerOffset:            0.025,
+		PeerPoll:              1 << 4,
+		PeerStratum:           3,
+		PeerJitter:            3.55,
+		PeerCount:             2,
+		Offset:                s.Offset,
+		RootDelay:             s.RootDelay,
+		OffsetComparedToPeers: 0.015,
 	}
 	require.Equal(t, want, stats)
 }
@@ -194,4 +194,18 @@ func TestNTPStatsWithSysPeerAndNoSelect(t *testing.T) {
 		OffsetComparedToPeers: r.Peers[1].Offset - r.Peers[0].Offset,
 	}
 	require.Equal(t, want, stats)
+}
+
+func TestMeanOffset(t *testing.T) {
+	peers := []*Peer{
+		0: {Offset: 1},
+		1: {Offset: 2},
+		2: {Offset: 3},
+		3: {Offset: 4},
+		4: {Offset: 5},
+		5: {Offset: 6},
+		6: {Offset: 100500},
+	}
+	meanOffset := meanOffset(peers)
+	require.Equal(t, float64(4), meanOffset)
 }

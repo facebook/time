@@ -19,6 +19,7 @@ package checker
 import (
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -26,18 +27,18 @@ import (
 
 // NTPStats are metrics for upstream reporting
 type NTPStats struct {
-	PeerDelay             float64 `json:"ntp.peer.delay"`                          // sys.peer delay in ms
-	PeerPoll              int     `json:"ntp.peer.poll"`                           // sys.peer poll in seconds
-	PeerJitter            float64 `json:"ntp.peer.jitter"`                         // sys.peer jitter in ms
-	PeerOffset            float64 `json:"ntp.peer.offset"`                         // sys.peer offset in ms
-	PeerStratum           int     `json:"ntp.peer.stratum"`                        // sys.peer stratum
-	Frequency             float64 `json:"ntp.sys.frequency"`                       // clock frequency in PPM
-	Offset                float64 `json:"ntp.sys.offset"`                          // tracking clock offset in MS
-	RootDelay             float64 `json:"ntp.sys.root_delay"`                      // tracking root delay in MS
-	StatError             bool    `json:"ntp.stat.error"`                          // error reported in Leap Status
-	Correction            float64 `json:"ntp.correction"`                          // current correction
-	PeerCount             int     `json:"ntp.peer.count"`                          // number of upstream peers
-	OffsetComparedToPeers float64 `json:"ntp.sys.offset_selected_vs_avg_peers_ms"` // sys peer offset vs avg peer offset in ms
+	PeerDelay             float64 `json:"ntp.peer.delay"`                      // sys.peer delay in ms
+	PeerPoll              int     `json:"ntp.peer.poll"`                       // sys.peer poll in seconds
+	PeerJitter            float64 `json:"ntp.peer.jitter"`                     // sys.peer jitter in ms
+	PeerOffset            float64 `json:"ntp.peer.offset"`                     // sys.peer offset in ms
+	PeerStratum           int     `json:"ntp.peer.stratum"`                    // sys.peer stratum
+	Frequency             float64 `json:"ntp.sys.frequency"`                   // clock frequency in PPM
+	Offset                float64 `json:"ntp.sys.offset"`                      // tracking clock offset in MS
+	RootDelay             float64 `json:"ntp.sys.root_delay"`                  // tracking root delay in MS
+	StatError             bool    `json:"ntp.stat.error"`                      // error reported in Leap Status
+	Correction            float64 `json:"ntp.correction"`                      // current correction
+	PeerCount             int     `json:"ntp.peer.count"`                      // number of upstream peers
+	OffsetComparedToPeers float64 `json:"ntp.sys.offset_selected_vs_peers_ms"` // sys peer offset vs mean peer offset in ms
 }
 
 type averages struct {
@@ -83,6 +84,15 @@ func peersAverages(peers []*Peer) (*averages, error) {
 	}, nil
 }
 
+func meanOffset(peers []*Peer) float64 {
+	offsets := []float64{}
+	for _, p := range peers {
+		offsets = append(offsets, p.Offset)
+	}
+	sort.Float64s(offsets)
+	return offsets[len(offsets)/2]
+}
+
 // NewNTPStats constructs NTPStats from NTPCheckResult
 func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 	if r.SysVars == nil {
@@ -125,7 +135,7 @@ func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 		peerAvgs, err := peersAverages(okPeers)
 		if err == nil {
 			log.Debugf("Sys Offset: %v, Avg Peer Offset: %v", time.Duration(offset*float64(time.Millisecond)), time.Duration(peerAvgs.offset*float64(time.Millisecond)))
-			offsetComparedToPeers = math.Abs(math.Abs(offset) - math.Abs(peerAvgs.offset))
+			offsetComparedToPeers = math.Abs(math.Abs(offset) - math.Abs(meanOffset(okPeers)))
 		}
 	}
 	output := NTPStats{
