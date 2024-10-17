@@ -24,17 +24,7 @@ import (
 	"net/netip"
 	"time"
 
-	"golang.org/x/sys/unix"
-)
-
-// from include/uapi/linux/net_tstamp.h
-const (
-	// HWTSTAMP_TX_ON int 1
-	hwtstampTXON int32 = 0x00000001
-	// HWTSTAMP_FILTER_ALL int 1
-	hwtstampFilterAll int32 = 0x00000001
-	//HWTSTAMP_FILTER_PTP_V2_L4_EVENT int 6
-	hwtstampFilterPTPv2L4Event int32 = 0x00000006
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 )
 
 const (
@@ -120,37 +110,6 @@ func (t *Timestamp) Set(value string) error {
 // Type is required by the cobra.Value interface
 func (t *Timestamp) Type() string {
 	return "timestamp"
-}
-
-// EthtoolGetTSInfo is get time stamping and PHC info command
-const EthtoolGetTSInfo uint32 = 0x00000041
-
-// Ifreq is a struct for ioctl ethernet manipulation syscalls.
-type ifreq struct {
-	name [unix.IFNAMSIZ]byte
-	data uintptr
-}
-
-// from include/uapi/linux/net_tstamp.h
-type hwtstampConfig struct {
-	flags    int32
-	txType   int32
-	rxFilter int32
-}
-
-// from include/uapi/linux/ethtool.h struct ethtool_ts_info
-type hwtstampCaps struct {
-	cmd             uint32
-	sofTimestamping uint32 /* SOF_TIMESTAMPING_* bitmask */
-	phcIndex        int32
-	txTypes         uint32 /* HWTSTAMP_TX_* */
-	txReserved0     uint32
-	txReserved1     uint32
-	txReserved2     uint32
-	rxFilters       uint32 /* HWTSTAMP_FILTER_ */
-	rxReserved0     uint32
-	rxReserved1     uint32
-	rxReserved2     uint32
 }
 
 // AttemptsTXTS is configured amount of attempts to read TX timestamp
