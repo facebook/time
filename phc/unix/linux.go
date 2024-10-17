@@ -87,16 +87,16 @@ func Syscall(a, b, c, d uintptr) (uintptr, uintptr, Errno) { return unix.Syscall
 func ByteSliceToString(b []byte) string                    { return unix.ByteSliceToString(b) }
 
 const (
-	AF_INET             = unix.AF_INET //nolint:staticcheck
-	ETHTOOL_GET_TS_INFO = unix.ETHTOOL_GET_TS_INFO
-	SIOCETHTOOL         = unix.SIOCETHTOOL
-	SIOCGHWTSTAMP       = unix.SIOCGHWTSTAMP
-	SOCK_DGRAM          = unix.SOCK_DGRAM
-	SYS_IOCTL           = unix.SYS_IOCTL
-	EAGAIN              = unix.EAGAIN
-	EINVAL              = unix.EINVAL
-	ENOENT              = unix.ENOENT
-	IFNAMSIZ            = unix.IFNAMSIZ
+	AF_INET             = unix.AF_INET             //nolint:revive
+	ETHTOOL_GET_TS_INFO = unix.ETHTOOL_GET_TS_INFO //nolint:revive
+	SIOCETHTOOL         = unix.SIOCETHTOOL         //nolint:revive
+	SIOCGHWTSTAMP       = unix.SIOCGHWTSTAMP       //nolint:revive
+	SOCK_DGRAM          = unix.SOCK_DGRAM          //nolint:revive
+	SYS_IOCTL           = unix.SYS_IOCTL           //nolint:revive
+	EAGAIN              = unix.EAGAIN              //nolint:revive
+	EINVAL              = unix.EINVAL              //nolint:revive
+	ENOENT              = unix.ENOENT              //nolint:revive
+	IFNAMSIZ            = unix.IFNAMSIZ            //nolint:revive
 	SizeofSockaddrInet4 = unix.SizeofSockaddrInet4
 	SizeofPtr           = unix.SizeofPtr
 )
