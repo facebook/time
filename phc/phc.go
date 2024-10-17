@@ -100,10 +100,10 @@ func IfaceToPHCDevice(iface string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("getting interface %s info: %w", iface, err)
 	}
-	if info.PHCIndex < 0 {
+	if info.Phc_index < 0 {
 		return "", fmt.Errorf("%s: no PHC support", iface)
 	}
-	return fmt.Sprintf("/dev/ptp%d", info.PHCIndex), nil
+	return fmt.Sprintf("/dev/ptp%d", info.Phc_index), nil
 }
 
 // Time returns time we got from network card

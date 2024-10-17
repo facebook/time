@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 	"github.com/vtolstov/go-ioctl"
-	"golang.org/x/sys/unix"
 )
 
 // Missing from sys/unix package, defined in Linux include/uapi/linux/ptp_clock.h
@@ -54,25 +54,6 @@ var ioctlPTPPeroutRequest2 = ioctl.IOW(ptpClkMagic, 12, unsafe.Sizeof(PTPPeroutR
 
 // ioctlExtTTSRequest2 is an IOCTL req corresponding to PTP_EXTTS_REQUEST2 in linux/ptp_clock.h
 var ioctlExtTTSRequest2 = ioctl.IOW(ptpClkMagic, 11, unsafe.Sizeof(PTPExtTTSRequest{}))
-
-// Ifreq is the request we send with SIOCETHTOOL IOCTL
-// as per Linux kernel's include/uapi/linux/if.h
-type Ifreq struct {
-	Name [unix.IFNAMSIZ]byte
-	Data uintptr
-}
-
-// EthtoolTSinfo holds a device's timestamping and PHC association
-// as per Linux kernel's include/uapi/linux/ethtool.h
-type EthtoolTSinfo struct {
-	Cmd            uint32
-	SOtimestamping uint32
-	PHCIndex       int32
-	TXTypes        uint32
-	TXReserved     [3]uint32
-	RXFilters      uint32
-	RXReserved     [3]uint32
-}
 
 // PTPSysOffsetExtended as defined in linux/ptp_clock.h
 type PTPSysOffsetExtended struct {
@@ -191,30 +172,12 @@ func (caps *PTPClockCaps) maxAdj() float64 {
 	return float64(caps.MaxAdj)
 }
 
-// IfaceInfo uses SIOCETHTOOL ioctl to get information for the give nic, i.e. eth0.
-func IfaceInfo(iface string) (*EthtoolTSinfo, error) {
+// IfaceInfo uses an ioctl to get information for the named nic, e.g. eth0.
+func IfaceInfo(iface string) (*unix.EthtoolTsInfo, error) {
 	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create socket for ioctl: %w", err)
 	}
 	defer unix.Close(fd)
-	// this is what we want to be populated, but we need to provide Cmd first
-	data := &EthtoolTSinfo{
-		Cmd: unix.ETHTOOL_GET_TS_INFO,
-	}
-	// actual request we send
-	ifreq := &Ifreq{}
-	// set Name in the request
-	copy(ifreq.Name[:unix.IFNAMSIZ-1], iface)
-	// pointer to the data we need to be populated
-	ifreq.Data = uintptr(unsafe.Pointer(data))
-	_, _, errno := unix.Syscall(
-		unix.SYS_IOCTL, uintptr(fd),
-		uintptr(unix.SIOCETHTOOL),
-		uintptr(unsafe.Pointer(ifreq)),
-	)
-	if errno != 0 {
-		return nil, fmt.Errorf("failed get phc ID for %s: %w", iface, errno)
-	}
-	return data, nil
+	return unix.IoctlGetEthtoolTsInfo(fd, iface)
 }

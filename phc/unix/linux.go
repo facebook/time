@@ -28,10 +28,11 @@ import (
 
 // https://go-review.googlesource.com/c/sys/+/620376
 
+// HwTstampConfig is used in SIOCGHWTSTAMP and SIOCSHWTSTAMP ioctls
 type HwTstampConfig struct {
-	Flags     int32
-	Tx_type   int32
-	Rx_filter int32
+	Flags     int32 //nolint:revive
+	Tx_type   int32 //nolint:revive
+	Rx_filter int32 //nolint:revive
 }
 
 // IoctlGetHwTstamp retrieves the hardware timestamping configuration
@@ -51,14 +52,16 @@ func IoctlGetHwTstamp(fd int, ifname string) (*HwTstampConfig, error) {
 
 // https://go-review.googlesource.com/c/sys/+/619335
 
+// EthtoolTsInfo a struct returned by ETHTOOL_GET_TS_INFO function of
+// SIOCETHTOOL ioctl.
 type EthtoolTsInfo struct {
 	Cmd             uint32
-	So_timestamping uint32
-	Phc_index       int32
-	Tx_types        uint32
-	Tx_reserved     [3]uint32
-	Rx_filters      uint32
-	Rx_reserved     [3]uint32
+	So_timestamping uint32    //nolint:revive
+	Phc_index       int32     //nolint:revive
+	Tx_types        uint32    //nolint:revive
+	Tx_reserved     [3]uint32 //nolint:revive
+	Rx_filters      uint32    //nolint:revive
+	Rx_reserved     [3]uint32 //nolint:revive
 }
 
 // IoctlGetEthtoolTsInfo fetches ethtool timestamping and PHC
@@ -87,18 +90,18 @@ func Syscall(a, b, c, d uintptr) (uintptr, uintptr, Errno) { return unix.Syscall
 func ByteSliceToString(b []byte) string                    { return unix.ByteSliceToString(b) }
 
 const (
-	AF_INET             = unix.AF_INET //nolint:staticcheck
-	ETHTOOL_GET_TS_INFO = unix.ETHTOOL_GET_TS_INFO
-	SIOCETHTOOL         = unix.SIOCETHTOOL
-	SIOCGHWTSTAMP       = unix.SIOCGHWTSTAMP
-	SOCK_DGRAM          = unix.SOCK_DGRAM
-	SYS_IOCTL           = unix.SYS_IOCTL
-	EAGAIN              = unix.EAGAIN
-	EINVAL              = unix.EINVAL
-	ENOENT              = unix.ENOENT
-	IFNAMSIZ            = unix.IFNAMSIZ
-	SizeofSockaddrInet4 = unix.SizeofSockaddrInet4
+	AF_INET             = unix.AF_INET             //nolint:revive
+	EAGAIN              = unix.EAGAIN              //nolint:revive
+	EINVAL              = unix.EINVAL              //nolint:revive
+	ENOENT              = unix.ENOENT              //nolint:revive
+	ETHTOOL_GET_TS_INFO = unix.ETHTOOL_GET_TS_INFO //nolint:revive
+	IFNAMSIZ            = unix.IFNAMSIZ            //nolint:revive
+	SIOCETHTOOL         = unix.SIOCETHTOOL         //nolint:revive
+	SIOCGHWTSTAMP       = unix.SIOCGHWTSTAMP       //nolint:revive
 	SizeofPtr           = unix.SizeofPtr
+	SizeofSockaddrInet4 = unix.SizeofSockaddrInet4
+	SOCK_DGRAM          = unix.SOCK_DGRAM //nolint:revive
+	SYS_IOCTL           = unix.SYS_IOCTL  //nolint:revive
 )
 
 var (
