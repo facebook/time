@@ -24,7 +24,7 @@ import (
 	"time"
 	"unsafe"
 
-	"golang.org/x/sys/unix"
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 )
 
 // unix.Cmsghdr size differs depending on platform
@@ -85,27 +85,21 @@ func byteToTime(data []byte) (time.Time, error) {
 }
 
 func ioctlHWTimestampCaps(fd int, ifname string) (int32, int32, error) {
-	// empty config, will be populated after we call SIOCETHTOOL
-	hw := &hwtstampCaps{
-		cmd: EthtoolGetTSInfo,
-	}
-	var rxFilter int32
-	var txFilter int32
+	var rxFilter, txFilter int32
 
-	i := &ifreq{data: uintptr(unsafe.Pointer(hw))}
-	copy(i.name[:unix.IFNAMSIZ-1], ifname)
-	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SIOCETHTOOL, uintptr(unsafe.Pointer(i))); errno != 0 {
-		return rxFilter, txFilter, fmt.Errorf("failed to run ioctl SIOCETHTOOL to see what is supported: %s (%w)", unix.ErrnoName(errno), errno)
+	hw, err := unix.IoctlGetEthtoolTsInfo(fd, ifname)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to run ioctl SIOCETHTOOL to see what is supported: (%w)", err)
 	}
 
-	if hw.txTypes&(1<<hwtstampTXON) > 0 {
-		txFilter = hwtstampTXON
+	if hw.Tx_types&(1<<unix.HWTSTAMP_TX_ON) > 0 {
+		txFilter = unix.HWTSTAMP_TX_ON
 	}
 
-	if hw.rxFilters&(1<<hwtstampFilterPTPv2L4Event) > 0 {
-		rxFilter = hwtstampFilterPTPv2L4Event
-	} else if hw.rxFilters&(1<<hwtstampFilterAll) > 0 {
-		rxFilter = hwtstampFilterAll
+	if hw.Rx_filters&(1<<unix.HWTSTAMP_FILTER_PTP_V2_L4_EVENT) > 0 {
+		rxFilter = unix.HWTSTAMP_FILTER_PTP_V2_L4_EVENT
+	} else if hw.Rx_filters&(1<<unix.HWTSTAMP_FILTER_ALL) > 0 {
+		rxFilter = unix.HWTSTAMP_FILTER_ALL
 	}
 
 	if txFilter == 0 || rxFilter == 0 {
@@ -115,28 +109,23 @@ func ioctlHWTimestampCaps(fd int, ifname string) (int32, int32, error) {
 }
 
 func ioctlTimestamp(fd int, ifname string, filter int32) error {
-	// empty config, will be populated after we call SIOCGHWTSTAMP
-	hw := &hwtstampConfig{
-		flags:    0,
-		txType:   0,
-		rxFilter: 0,
-	}
-
-	i := &ifreq{data: uintptr(unsafe.Pointer(hw))}
-	copy(i.name[:unix.IFNAMSIZ-1], ifname)
-	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SIOCGHWTSTAMP, uintptr(unsafe.Pointer(i))); errno != 0 && errno != unix.ENOTSUP {
-		return fmt.Errorf("failed to run ioctl SIOCGHWTSTAMP to see what is enabled: %s (%w)", unix.ErrnoName(errno), errno)
+	hw, err := unix.IoctlGetHwTstamp(fd, ifname)
+	if errors.Is(err, unix.ENOTSUP) {
+		// for the loopback interface
+		hw = &unix.HwTstampConfig{}
+	} else if err != nil {
+		return fmt.Errorf("failed to run ioctl SIOCGHWTSTAMP to see what is enabled: %w", err)
 	}
 
 	// now check if it matches what we want
-	if hw.txType == hwtstampTXON && hw.rxFilter == filter {
+	if hw.Tx_type == unix.HWTSTAMP_TX_ON && hw.Rx_filter == filter {
 		return nil
 	}
 	// set to desired values
-	hw.txType = hwtstampTXON
-	hw.rxFilter = filter
-	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SIOCSHWTSTAMP, uintptr(unsafe.Pointer(i))); errno != 0 {
-		return fmt.Errorf("failed to run ioctl SIOCSHWTSTAMP to set timestamps enabled: %s (%w)", unix.ErrnoName(errno), errno)
+	hw.Tx_type = unix.HWTSTAMP_TX_ON
+	hw.Rx_filter = filter
+	if err := unix.IoctlSetHwTstamp(fd, ifname, hw); err != nil {
+		return fmt.Errorf("failed to run ioctl SIOCSHWTSTAMP to set timestamps enabled: %w", err)
 	}
 	return nil
 }
