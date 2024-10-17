@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/facebook/time/clock"
-	"golang.org/x/sys/unix"
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 )
 
 // errorClockState is an error type returned in a situation when the clock is found in bad state
@@ -67,5 +67,5 @@ func clockSetTime(dev *Device, t time.Time) error {
 	if err != nil {
 		return err
 	}
-	return clock.Settime(dev.ClockID(), &ts)
+	return unix.ClockSettime(dev.ClockID(), &ts)
 }

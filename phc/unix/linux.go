@@ -21,6 +21,7 @@ package unix
 
 import (
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -79,29 +80,46 @@ func IoctlGetEthtoolTsInfo(fd int, ifname string) (*EthtoolTsInfo, error) {
 	return &value, err
 }
 
+// https://go-review.googlesource.com/c/sys/+/619255
+
+// ClockSettime calls the CLOCK_SETTIME syscall
+func ClockSettime(clockid int32, time *Timespec) (err error) {
+	_, _, e1 := Syscall(SYS_CLOCK_SETTIME, uintptr(clockid), uintptr(unsafe.Pointer(time)), 0)
+	if e1 != 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
 // bridging to upstream
 
 type Errno = unix.Errno
 type RawSockaddrInet4 = unix.RawSockaddrInet4
+type Timex = unix.Timex
+type Timespec = unix.Timespec
 
 func Socket(domain, typ, proto int) (fd int, err error)    { return unix.Socket(domain, typ, proto) }
 func Close(fd int) (err error)                             { return unix.Close(fd) }
 func Syscall(a, b, c, d uintptr) (uintptr, uintptr, Errno) { return unix.Syscall(a, b, c, d) }
 func ByteSliceToString(b []byte) string                    { return unix.ByteSliceToString(b) }
+func ClockAdjtime(c int32, t *Timex) (int, error)          { return unix.ClockAdjtime(c, t) }
+func TimeToTimespec(t time.Time) (Timespec, error)         { return unix.TimeToTimespec(t) }
 
 const (
-	AF_INET             = unix.AF_INET             //nolint:revive
-	EAGAIN              = unix.EAGAIN              //nolint:revive
-	EINVAL              = unix.EINVAL              //nolint:revive
-	ENOENT              = unix.ENOENT              //nolint:revive
+	AF_INET = unix.AF_INET                         //nolint:revive
+	EAGAIN = unix.EAGAIN                           //nolint:revive
+	EINVAL = unix.EINVAL                           //nolint:revive
+	ENOENT = unix.ENOENT                           //nolint:revive
 	ETHTOOL_GET_TS_INFO = unix.ETHTOOL_GET_TS_INFO //nolint:revive
-	IFNAMSIZ            = unix.IFNAMSIZ            //nolint:revive
-	SIOCETHTOOL         = unix.SIOCETHTOOL         //nolint:revive
-	SIOCGHWTSTAMP       = unix.SIOCGHWTSTAMP       //nolint:revive
-	SizeofPtr           = unix.SizeofPtr
+	IFNAMSIZ = unix.IFNAMSIZ                       //nolint:revive
+	SIOCETHTOOL = unix.SIOCETHTOOL                 //nolint:revive
+	SIOCGHWTSTAMP = unix.SIOCGHWTSTAMP             //nolint:revive
+	SizeofPtr = unix.SizeofPtr
 	SizeofSockaddrInet4 = unix.SizeofSockaddrInet4
-	SOCK_DGRAM          = unix.SOCK_DGRAM //nolint:revive
-	SYS_IOCTL           = unix.SYS_IOCTL  //nolint:revive
+	SOCK_DGRAM = unix.SOCK_DGRAM               //nolint:revive
+	SYS_CLOCK_SETTIME = unix.SYS_CLOCK_SETTIME //nolint:revive
+	SYS_IOCTL = unix.SYS_IOCTL                 //nolint:revive
+	TIME_OK = unix.TIME_OK                     //nolint:revive
 )
 
 var (

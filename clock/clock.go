@@ -19,9 +19,8 @@ package clock
 import (
 	"fmt"
 	"time"
-	"unsafe"
 
-	"golang.org/x/sys/unix"
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 )
 
 // PPBToTimexPPM is what we use to conver PPB to PPM.
@@ -56,32 +55,10 @@ const (
 	AdjTick uint32 = 0x4000
 )
 
-// Adjtime issues CLOCK_ADJTIME syscall to either adjust the parameters of given clock,
-// or read them if buf is empty.  man(2) clock_adjtime
-// TODO: replace this with a call to https://pkg.go.dev/golang.org/x/sys/unix#ClockAdjtime
-func Adjtime(clockid int32, buf *unix.Timex) (state int, err error) {
-	r0, _, errno := unix.Syscall(unix.SYS_CLOCK_ADJTIME, uintptr(clockid), uintptr(unsafe.Pointer(buf)), 0)
-	state = int(r0)
-	if errno != 0 {
-		err = errno
-	}
-	return state, err
-}
-
-// Settime issues clock_settime(3) syscall to set the time of the specified clock.
-// TODO: issue a PR for golang.org/x/sys/unix to add this function there
-func Settime(clockid int32, time *unix.Timespec) (err error) {
-	_, _, errno := unix.Syscall(unix.SYS_CLOCK_SETTIME, uintptr(clockid), uintptr(unsafe.Pointer(time)), 0)
-	if errno != 0 {
-		err = errno
-	}
-	return err
-}
-
 // FrequencyPPB reads device frequency in PPB
 func FrequencyPPB(clockid int32) (freqPPB float64, state int, err error) {
 	tx := &unix.Timex{}
-	state, err = Adjtime(clockid, tx)
+	state, err = unix.ClockAdjtime(clockid, tx)
 	// man(2) clock_adjtime
 	freqPPB = float64(tx.Freq) / PPBToTimexPPM
 	return freqPPB, state, err
@@ -93,7 +70,7 @@ func AdjFreqPPB(clockid int32, freqPPB float64) (state int, err error) {
 	// this way we can have platform-dependent code isolated
 	setFreq(tx, freqPPB)
 	tx.Modes = AdjFrequency
-	return Adjtime(clockid, tx)
+	return unix.ClockAdjtime(clockid, tx)
 }
 
 // Step steps clock by given step
@@ -117,13 +94,13 @@ func Step(clockid int32, step time.Duration) (state int, err error) {
 		tx.Time.Sec--
 		tx.Time.Usec += 1000000000
 	}
-	return Adjtime(clockid, tx)
+	return unix.ClockAdjtime(clockid, tx)
 }
 
 // MaxFreqPPB returns maximum frequency adjustment supported by the clock
 func MaxFreqPPB(clockid int32) (freqPPB float64, state int, err error) {
 	tx := &unix.Timex{}
-	state, err = Adjtime(clockid, tx)
+	state, err = unix.ClockAdjtime(clockid, tx)
 	if err != nil {
 		return 0.0, state, err
 	}
@@ -139,7 +116,7 @@ func MaxFreqPPB(clockid int32) (freqPPB float64, state int, err error) {
 func SetSync(clockid int32) error {
 	tx := &unix.Timex{}
 	tx.Modes = AdjStatus | AdjMaxError
-	state, err := Adjtime(clockid, tx)
+	state, err := unix.ClockAdjtime(clockid, tx)
 
 	if err == nil && state != unix.TIME_OK {
 		return fmt.Errorf("clock state %d is not TIME_OK after setting sync state", state)
