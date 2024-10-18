@@ -38,7 +38,7 @@ type NTPStats struct {
 	StatError             bool    `json:"ntp.stat.error"`                      // error reported in Leap Status
 	Correction            float64 `json:"ntp.correction"`                      // current correction
 	PeerCount             int     `json:"ntp.peer.count"`                      // number of upstream peers
-	OffsetComparedToPeers float64 `json:"ntp.sys.offset_selected_vs_peers_ms"` // sys peer offset vs mean peer offset in ms
+	OffsetComparedToPeers float64 `json:"ntp.sys.offset_selected_vs_peers_ms"` // sys peer offset vs median peer offset in ms
 }
 
 type averages struct {
@@ -84,7 +84,7 @@ func peersAverages(peers []*Peer) (*averages, error) {
 	}, nil
 }
 
-func meanOffset(peers []*Peer) float64 {
+func medianOffset(peers []*Peer) float64 {
 	offsets := []float64{}
 	for _, p := range peers {
 		offsets = append(offsets, p.Offset)
@@ -135,7 +135,7 @@ func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 		peerAvgs, err := peersAverages(okPeers)
 		if err == nil {
 			log.Debugf("Sys Offset: %v, Avg Peer Offset: %v", time.Duration(offset*float64(time.Millisecond)), time.Duration(peerAvgs.offset*float64(time.Millisecond)))
-			offsetComparedToPeers = math.Abs(math.Abs(offset) - math.Abs(meanOffset(okPeers)))
+			offsetComparedToPeers = math.Abs(math.Abs(offset) - math.Abs(medianOffset(okPeers)))
 		}
 	}
 	output := NTPStats{

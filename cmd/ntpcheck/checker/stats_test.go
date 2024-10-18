@@ -196,7 +196,7 @@ func TestNTPStatsWithSysPeerAndNoSelect(t *testing.T) {
 	require.Equal(t, want, stats)
 }
 
-func TestMeanOffset(t *testing.T) {
+func TestMedianOffset(t *testing.T) {
 	peers := []*Peer{
 		0: {Offset: 1},
 		1: {Offset: 2},
@@ -206,6 +206,6 @@ func TestMeanOffset(t *testing.T) {
 		5: {Offset: 6},
 		6: {Offset: 100500},
 	}
-	meanOffset := meanOffset(peers)
-	require.Equal(t, float64(4), meanOffset)
+	medianOffset := medianOffset(peers)
+	require.Equal(t, float64(4), medianOffset)
 }
