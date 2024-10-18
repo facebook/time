@@ -43,6 +43,7 @@ type Servo interface {
 	MeanFreq() float64
 	IsSpike(offset int64) bool
 	GetState() servo.State
+	UnsetFirstUpdate()
 }
 
 // SPTP is a Simple Unicast PTP client
@@ -432,6 +433,7 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 	log.Infof("offset %10d s%d freq %+7.0f path delay %10d (%6d:%6d)", bmOffset, state, -freqAdj, bmDelay, bm.C2SDelay, bm.S2CDelay)
 	switch state {
 	case servo.StateJump:
+		log.Infof("stepping clock by %v", -bm.Offset)
 		if err := p.clock.Step(-bm.Offset); err != nil {
 			log.Errorf("failed to step freq by %v: %v", -bm.Offset, err)
 		}
@@ -442,6 +444,8 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 		if err := p.clock.SetSync(); err != nil {
 			log.Errorf("failed to set clock sync state")
 		}
+		// make sure we don't step after we get into the locked state
+		p.pi.UnsetFirstUpdate()
 	}
 }
 

@@ -142,3 +142,15 @@ func (mr *MockServoMockRecorder) SyncInterval(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncInterval", reflect.TypeOf((*MockServo)(nil).SyncInterval), arg0)
 }
+
+// UnsetFirstUpdate mocks base method.
+func (m *MockServo) UnsetFirstUpdate() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UnsetFirstUpdate")
+}
+
+// UnsetFirstUpdate indicates an expected call of UnsetFirstUpdate.
+func (mr *MockServoMockRecorder) UnsetFirstUpdate() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnsetFirstUpdate", reflect.TypeOf((*MockServo)(nil).UnsetFirstUpdate))
+}

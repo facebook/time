@@ -128,6 +128,11 @@ func (s *PiServo) SetMaxFreq(freq float64) {
 	s.maxFreq = freq
 }
 
+// UnsetFirstUpdate function to unset first update flag
+func (s *PiServo) UnsetFirstUpdate() {
+	s.FirstUpdate = false
+}
+
 // GetMaxFreq gets current configured max frequency
 func (s *PiServo) GetMaxFreq() float64 {
 	return s.maxFreq
