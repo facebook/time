@@ -51,6 +51,33 @@ func IoctlGetHwTstamp(fd int, ifname string) (*HwTstampConfig, error) {
 	return &value, err
 }
 
+// IoctlSetHwTstamp updates the hardware timestamping configuration for
+// the network device specified by ifname.
+func IoctlSetHwTstamp(fd int, ifname string, cfg *HwTstampConfig) error {
+	ifr, err := NewIfreq(ifname)
+	if err != nil {
+		return err
+	}
+	ifrd := ifr.withData(unsafe.Pointer(cfg))
+	return ioctlIfreqData(fd, SIOCSHWTSTAMP, &ifrd)
+}
+
+const (
+	HWTSTAMP_FILTER_NONE            = 0x0 //nolint:revive
+	HWTSTAMP_FILTER_ALL             = 0x1 //nolint:revive
+	HWTSTAMP_FILTER_SOME            = 0x2 //nolint:revive
+	HWTSTAMP_FILTER_PTP_V1_L4_EVENT = 0x3 //nolint:revive
+	HWTSTAMP_FILTER_PTP_V2_L4_EVENT = 0x6 //nolint:revive
+	HWTSTAMP_FILTER_PTP_V2_L2_EVENT = 0x9 //nolint:revive
+	HWTSTAMP_FILTER_PTP_V2_EVENT    = 0xc //nolint:revive
+)
+
+const (
+	HWTSTAMP_TX_OFF          = 0x0 //nolint:revive
+	HWTSTAMP_TX_ON           = 0x1 //nolint:revive
+	HWTSTAMP_TX_ONESTEP_SYNC = 0x2 //nolint:revive
+)
+
 // https://go-review.googlesource.com/c/sys/+/619335
 
 // EthtoolTsInfo a struct returned by ETHTOOL_GET_TS_INFO function of
@@ -93,33 +120,63 @@ func ClockSettime(clockid int32, time *Timespec) (err error) {
 
 // bridging to upstream
 
+type Cmsghdr = unix.Cmsghdr
 type Errno = unix.Errno
+type Msghdr = unix.Msghdr
+type PollFd = unix.PollFd
 type RawSockaddrInet4 = unix.RawSockaddrInet4
-type Timex = unix.Timex
+type SockaddrInet4 = unix.SockaddrInet4
+type SockaddrInet6 = unix.SockaddrInet6
+type Sockaddr = unix.Sockaddr
 type Timespec = unix.Timespec
+type Timex = unix.Timex
+type Utsname = unix.Utsname
 
+func ByteSliceToString(b []byte) string           { return unix.ByteSliceToString(b) }
+func ClockAdjtime(c int32, t *Timex) (int, error) { return unix.ClockAdjtime(c, t) }
+func Close(fd int) (err error)                    { return unix.Close(fd) }
+func ErrnoName(e syscall.Errno) string            { return unix.ErrnoName(e) }
+func Poll(f []PollFd, t int) (int, error)         { return unix.Poll(f, t) }
+func Recvmsg(a int, b, c []byte, d int) (int, int, int, Sockaddr, error) {
+	return unix.Recvmsg(a, b, c, d)
+}
+func SetsockoptInt(a, b, c, d int) error                   { return unix.SetsockoptInt(a, b, c, d) }
 func Socket(domain, typ, proto int) (fd int, err error)    { return unix.Socket(domain, typ, proto) }
-func Close(fd int) (err error)                             { return unix.Close(fd) }
 func Syscall(a, b, c, d uintptr) (uintptr, uintptr, Errno) { return unix.Syscall(a, b, c, d) }
-func ByteSliceToString(b []byte) string                    { return unix.ByteSliceToString(b) }
-func ClockAdjtime(c int32, t *Timex) (int, error)          { return unix.ClockAdjtime(c, t) }
 func TimeToTimespec(t time.Time) (Timespec, error)         { return unix.TimeToTimespec(t) }
+func Uname(s *Utsname) error                               { return unix.Uname(s) }
 
 const (
-	AF_INET = unix.AF_INET                         //nolint:revive
-	EAGAIN = unix.EAGAIN                           //nolint:revive
-	EINVAL = unix.EINVAL                           //nolint:revive
-	ENOENT = unix.ENOENT                           //nolint:revive
-	ETHTOOL_GET_TS_INFO = unix.ETHTOOL_GET_TS_INFO //nolint:revive
-	IFNAMSIZ = unix.IFNAMSIZ                       //nolint:revive
-	SIOCETHTOOL = unix.SIOCETHTOOL                 //nolint:revive
-	SIOCGHWTSTAMP = unix.SIOCGHWTSTAMP             //nolint:revive
-	SizeofPtr = unix.SizeofPtr
-	SizeofSockaddrInet4 = unix.SizeofSockaddrInet4
-	SOCK_DGRAM = unix.SOCK_DGRAM               //nolint:revive
-	SYS_CLOCK_SETTIME = unix.SYS_CLOCK_SETTIME //nolint:revive
-	SYS_IOCTL = unix.SYS_IOCTL                 //nolint:revive
-	TIME_OK = unix.TIME_OK                     //nolint:revive
+	AF_INET                       = unix.AF_INET             //nolint:revive
+	EAGAIN                        = unix.EAGAIN              //nolint:revive
+	EINVAL                        = unix.EINVAL              //nolint:revive
+	ENOENT                        = unix.ENOENT              //nolint:revive
+	ENOTSUP                       = unix.ENOTSUP             //nolint:revive
+	ETHTOOL_GET_TS_INFO           = unix.ETHTOOL_GET_TS_INFO //nolint:revive
+	IFNAMSIZ                      = unix.IFNAMSIZ            //nolint:revive
+	MSG_ERRQUEUE                  = unix.MSG_ERRQUEUE        //nolint:revive
+	POLLERR                       = unix.POLLERR             //nolint:revive
+	SIOCETHTOOL                   = unix.SIOCETHTOOL         //nolint:revive
+	SIOCGHWTSTAMP                 = unix.SIOCGHWTSTAMP       //nolint:revive
+	SIOCSHWTSTAMP                 = unix.SIOCSHWTSTAMP       //nolint:revive
+	SizeofPtr                     = unix.SizeofPtr
+	SizeofSockaddrInet4           = unix.SizeofSockaddrInet4
+	SOCK_DGRAM                    = unix.SOCK_DGRAM                    //nolint:revive
+	SOF_TIMESTAMPING_OPT_TSONLY   = unix.SOF_TIMESTAMPING_OPT_TSONLY   //nolint:revive
+	SOF_TIMESTAMPING_RAW_HARDWARE = unix.SOF_TIMESTAMPING_RAW_HARDWARE //nolint:revive
+	SOF_TIMESTAMPING_RX_HARDWARE  = unix.SOF_TIMESTAMPING_RX_HARDWARE  //nolint:revive
+	SOF_TIMESTAMPING_RX_SOFTWARE  = unix.SOF_TIMESTAMPING_RX_SOFTWARE  //nolint:revive
+	SOF_TIMESTAMPING_SOFTWARE     = unix.SOF_TIMESTAMPING_SOFTWARE     //nolint:revive
+	SOF_TIMESTAMPING_TX_HARDWARE  = unix.SOF_TIMESTAMPING_TX_HARDWARE  //nolint:revive
+	SOF_TIMESTAMPING_TX_SOFTWARE  = unix.SOF_TIMESTAMPING_TX_SOFTWARE  //nolint:revive
+	SOL_SOCKET                    = unix.SOL_SOCKET                    //nolint:revive
+	SO_SELECT_ERR_QUEUE           = unix.SO_SELECT_ERR_QUEUE           //nolint:revive
+	SO_TIMESTAMPING_NEW           = unix.SO_TIMESTAMPING_NEW           //nolint:revive
+	SO_TIMESTAMPING               = unix.SO_TIMESTAMPING               //nolint:revive
+	SYS_CLOCK_SETTIME             = unix.SYS_CLOCK_SETTIME             //nolint:revive
+	SYS_IOCTL                     = unix.SYS_IOCTL                     //nolint:revive
+	SYS_RECVMSG                   = unix.SYS_RECVMSG                   //nolint:revive
+	TIME_OK                       = unix.TIME_OK                       //nolint:revive
 )
 
 var (
