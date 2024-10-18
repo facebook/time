@@ -68,7 +68,10 @@ func sourcesRunPTP4l(server string, noDNS bool) error {
 	// obtain time from clock that ptp4l uses
 	var currentTime time.Time
 	if ppn.Timestamping == ptp.TimestampingHardware {
-		currentTime, err = phc.Time(string(ppn.Interface), phc.MethodIoctlSysOffsetExtended)
+		currentTime, err = phc.Time(string(ppn.Interface), phc.MethodIoctlSysOffsetPrecise)
+		if err != nil {
+			currentTime, err = phc.Time(string(ppn.Interface), phc.MethodIoctlSysOffsetExtended)
+		}
 		if err != nil {
 			log.Errorf("No PHC time data available: %v", err)
 		}

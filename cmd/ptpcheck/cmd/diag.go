@@ -128,8 +128,10 @@ func checkSyncActive(r *checker.PTPCheckResult) (status, string) {
 	if r.IngressTimeNS == 0 {
 		return WARN, "No ingress time data available"
 	}
-
-	phcTime, err := phc.Time(diagIfaceFlag, phc.MethodIoctlSysOffsetExtended)
+	phcTime, err := phc.Time(diagIfaceFlag, phc.MethodIoctlSysOffsetPrecise)
+	if err != nil {
+		phcTime, err = phc.Time(diagIfaceFlag, phc.MethodIoctlSysOffsetExtended)
+	}
 	if err != nil {
 		return WARN, fmt.Sprintf("No PHC time data available: %v", err)
 	}

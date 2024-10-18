@@ -125,6 +125,12 @@ func TimeAndOffsetFromDevice(device string, method TimeMethod) (SysoffResult, er
 			return SysoffResult{}, err
 		}
 		return extended.BestSample(), nil
+	case MethodIoctlSysOffsetPrecise:
+		precise, err := dev.ReadSysoffPrecise()
+		if err != nil {
+			return SysoffResult{}, err
+		}
+		return SysoffFromPrecise(precise), nil
 	}
 	return SysoffResult{}, fmt.Errorf("unknown method to get PHC time %q", method)
 }

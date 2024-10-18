@@ -48,9 +48,6 @@ func init() {
 	RootCmd.AddCommand(phcCmd)
 	flags := phcCmd.Flags()
 	flags.StringVarP(&device, "device", "d", "/dev/ptp0", "PTP device to get time from")
-	flags.StringVarP(&method, "method", "m", string(phc.MethodIoctlSysOffsetExtended),
-		fmt.Sprintf("Method to get PHC time: %v", phc.SupportedMethods),
-	)
 	flags.Float64VarP(&freq, "freq", "f", math.NaN(), "set the frequency (PPB)")
 	flags.DurationVarP(&step, "step", "t", 0, "step the clock")
 	flags.Int64VarP(&unixSec, "set", "s", -1, "set the clock to Unix seconds, like $(date +%s)")
@@ -80,7 +77,7 @@ func runPhcCmd(_ *cobra.Command, _ []string) {
 		doPrint = setAndPrint
 	}
 	if doPrint {
-		if err := printPHC(device, phc.TimeMethod(method)); err != nil {
+		if err := printPHC(device); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -131,12 +128,12 @@ func tunePHC(device string, freq float64) error {
 	return dev.AdjFreq(freq)
 }
 
-func printPHC(device string, method phc.TimeMethod) error {
-	timeAndOffset, err := phc.TimeAndOffsetFromDevice(device, method)
+func printPHC(device string) error {
+	timeAndOffset, err := phc.TimeAndOffsetFromDevice(device, phc.MethodIoctlSysOffsetPrecise)
 	if err != nil {
-		if method == phc.MethodSyscallClockGettime {
-			return err
-		}
+		timeAndOffset, err = phc.TimeAndOffsetFromDevice(device, phc.MethodIoctlSysOffsetExtended)
+	}
+	if err != nil {
 		log.Warningf("Falling back to clock_gettime method: %v", err)
 		timeAndOffset, err = phc.TimeAndOffsetFromDevice(device, phc.MethodSyscallClockGettime)
 		if err != nil {

@@ -42,10 +42,8 @@ type TimeMethod string
 const (
 	MethodSyscallClockGettime    TimeMethod = "syscall_clock_gettime"
 	MethodIoctlSysOffsetExtended TimeMethod = "ioctl_PTP_SYS_OFFSET_EXTENDED"
+	MethodIoctlSysOffsetPrecise  TimeMethod = "ioctl_PTP_SYS_OFFSET_PRECISE"
 )
-
-// SupportedMethods is a list of supported TimeMethods
-var SupportedMethods = []TimeMethod{MethodSyscallClockGettime, MethodIoctlSysOffsetExtended}
 
 // PinFunc type represents the pin function values.
 type PinFunc int
@@ -130,6 +128,12 @@ func Time(iface string, method TimeMethod) (time.Time, error) {
 		}
 		latest := extended.TS[extended.NSamples-1]
 		return latest[1].Time(), nil
+	case MethodIoctlSysOffsetPrecise:
+		precise, err := dev.ReadSysoffPrecise()
+		if err != nil {
+			return time.Time{}, err
+		}
+		return precise.Device.Time(), nil
 	default:
 		return time.Time{}, fmt.Errorf("unknown method to get PHC time %q", method)
 	}
