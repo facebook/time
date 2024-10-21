@@ -31,7 +31,6 @@ import (
 // flags
 var (
 	device      string
-	method      string
 	freq        float64
 	step        time.Duration
 	unixSec     int64
