@@ -147,36 +147,36 @@ func TimeToTimespec(t time.Time) (Timespec, error)         { return unix.TimeToT
 func Uname(s *Utsname) error                               { return unix.Uname(s) }
 
 const (
-	AF_INET                       = unix.AF_INET             //nolint:revive
-	EAGAIN                        = unix.EAGAIN              //nolint:revive
-	EINVAL                        = unix.EINVAL              //nolint:revive
-	ENOENT                        = unix.ENOENT              //nolint:revive
-	ENOTSUP                       = unix.ENOTSUP             //nolint:revive
-	ETHTOOL_GET_TS_INFO           = unix.ETHTOOL_GET_TS_INFO //nolint:revive
-	IFNAMSIZ                      = unix.IFNAMSIZ            //nolint:revive
-	MSG_ERRQUEUE                  = unix.MSG_ERRQUEUE        //nolint:revive
-	POLLERR                       = unix.POLLERR             //nolint:revive
-	SIOCETHTOOL                   = unix.SIOCETHTOOL         //nolint:revive
-	SIOCGHWTSTAMP                 = unix.SIOCGHWTSTAMP       //nolint:revive
-	SIOCSHWTSTAMP                 = unix.SIOCSHWTSTAMP       //nolint:revive
-	SizeofPtr                     = unix.SizeofPtr
-	SizeofSockaddrInet4           = unix.SizeofSockaddrInet4
-	SOCK_DGRAM                    = unix.SOCK_DGRAM                    //nolint:revive
-	SOF_TIMESTAMPING_OPT_TSONLY   = unix.SOF_TIMESTAMPING_OPT_TSONLY   //nolint:revive
+	AF_INET = unix.AF_INET                         //nolint:revive
+	EAGAIN = unix.EAGAIN                           //nolint:revive
+	EINVAL = unix.EINVAL                           //nolint:revive
+	ENOENT = unix.ENOENT                           //nolint:revive
+	ENOTSUP = unix.ENOTSUP                         //nolint:revive
+	ETHTOOL_GET_TS_INFO = unix.ETHTOOL_GET_TS_INFO //nolint:revive
+	IFNAMSIZ = unix.IFNAMSIZ                       //nolint:revive
+	MSG_ERRQUEUE = unix.MSG_ERRQUEUE               //nolint:revive
+	POLLERR = unix.POLLERR                         //nolint:revive
+	SIOCETHTOOL = unix.SIOCETHTOOL                 //nolint:revive
+	SIOCGHWTSTAMP = unix.SIOCGHWTSTAMP             //nolint:revive
+	SIOCSHWTSTAMP = unix.SIOCSHWTSTAMP             //nolint:revive
+	SizeofPtr = unix.SizeofPtr
+	SizeofSockaddrInet4 = unix.SizeofSockaddrInet4
+	SOCK_DGRAM = unix.SOCK_DGRAM                                       //nolint:revive
+	SOF_TIMESTAMPING_OPT_TSONLY = unix.SOF_TIMESTAMPING_OPT_TSONLY     //nolint:revive
 	SOF_TIMESTAMPING_RAW_HARDWARE = unix.SOF_TIMESTAMPING_RAW_HARDWARE //nolint:revive
-	SOF_TIMESTAMPING_RX_HARDWARE  = unix.SOF_TIMESTAMPING_RX_HARDWARE  //nolint:revive
-	SOF_TIMESTAMPING_RX_SOFTWARE  = unix.SOF_TIMESTAMPING_RX_SOFTWARE  //nolint:revive
-	SOF_TIMESTAMPING_SOFTWARE     = unix.SOF_TIMESTAMPING_SOFTWARE     //nolint:revive
-	SOF_TIMESTAMPING_TX_HARDWARE  = unix.SOF_TIMESTAMPING_TX_HARDWARE  //nolint:revive
-	SOF_TIMESTAMPING_TX_SOFTWARE  = unix.SOF_TIMESTAMPING_TX_SOFTWARE  //nolint:revive
-	SOL_SOCKET                    = unix.SOL_SOCKET                    //nolint:revive
-	SO_SELECT_ERR_QUEUE           = unix.SO_SELECT_ERR_QUEUE           //nolint:revive
-	SO_TIMESTAMPING_NEW           = unix.SO_TIMESTAMPING_NEW           //nolint:revive
-	SO_TIMESTAMPING               = unix.SO_TIMESTAMPING               //nolint:revive
-	SYS_CLOCK_SETTIME             = unix.SYS_CLOCK_SETTIME             //nolint:revive
-	SYS_IOCTL                     = unix.SYS_IOCTL                     //nolint:revive
-	SYS_RECVMSG                   = unix.SYS_RECVMSG                   //nolint:revive
-	TIME_OK                       = unix.TIME_OK                       //nolint:revive
+	SOF_TIMESTAMPING_RX_HARDWARE = unix.SOF_TIMESTAMPING_RX_HARDWARE   //nolint:revive
+	SOF_TIMESTAMPING_RX_SOFTWARE = unix.SOF_TIMESTAMPING_RX_SOFTWARE   //nolint:revive
+	SOF_TIMESTAMPING_SOFTWARE = unix.SOF_TIMESTAMPING_SOFTWARE         //nolint:revive
+	SOF_TIMESTAMPING_TX_HARDWARE = unix.SOF_TIMESTAMPING_TX_HARDWARE   //nolint:revive
+	SOF_TIMESTAMPING_TX_SOFTWARE = unix.SOF_TIMESTAMPING_TX_SOFTWARE   //nolint:revive
+	SOL_SOCKET = unix.SOL_SOCKET                                       //nolint:revive
+	SO_SELECT_ERR_QUEUE = unix.SO_SELECT_ERR_QUEUE                     //nolint:revive
+	SO_TIMESTAMPING_NEW = unix.SO_TIMESTAMPING_NEW                     //nolint:revive
+	SO_TIMESTAMPING = unix.SO_TIMESTAMPING                             //nolint:revive
+	SYS_CLOCK_SETTIME = unix.SYS_CLOCK_SETTIME                         //nolint:revive
+	SYS_IOCTL = unix.SYS_IOCTL                                         //nolint:revive
+	SYS_RECVMSG = unix.SYS_RECVMSG                                     //nolint:revive
+	TIME_OK = unix.TIME_OK                                             //nolint:revive
 )
 
 var (

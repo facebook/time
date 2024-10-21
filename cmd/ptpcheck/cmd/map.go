@@ -50,18 +50,10 @@ func printIfaceData(ifname string, tsinfo *unix.EthtoolTsInfo, reverse bool) {
 		fmt.Printf("No PHC support for %s\n", ifname)
 		return
 	}
-
-	var attrs string
-	if tscfg, err := unix.IoctlGetHwTstamp(mapIofd, ifname); err == nil {
-		attrs = fmt.Sprintf("tx-type %d rx-filter %d", tscfg.Tx_type, tscfg.Rx_filter)
-	} else {
-		log.Warningf("%s: IoctlGetHwTstamp: %v", ifname, err)
-	}
-
 	if reverse {
-		fmt.Printf("/dev/ptp%d -> %s\t%s\n", tsinfo.Phc_index, ifname, attrs)
+		fmt.Printf("/dev/ptp%d -> %s\n", tsinfo.Phc_index, ifname)
 	} else {
-		fmt.Printf("%s -> /dev/ptp%d\t%s\n", ifname, tsinfo.Phc_index, attrs)
+		fmt.Printf("%s -> /dev/ptp%d\n", ifname, tsinfo.Phc_index)
 	}
 }
 
