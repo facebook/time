@@ -18,15 +18,22 @@ package phc
 
 import (
 	"fmt"
-	"golang.org/x/sys/unix"
 	"os"
 	"time"
+
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 )
 
 const (
-	// ExtendedNumProbes is the number of samples we request for IOCTL SYS_OFFSET_EXTENDED
+	// ExtendedNumProbes is the number of samples we request for IoctlPtpSysOffsetExtended
 	ExtendedNumProbes = 9
 )
+
+// PTPSysOffsetExtended wraps unix.PtpSysOffsetExtended to add methods
+type PTPSysOffsetExtended unix.PtpSysOffsetExtended
+
+// PTPSysOffsetPrecise wraps unix.PtpSysOffsetPrecise to add methods
+type PTPSysOffsetPrecise unix.PtpSysOffsetPrecise
 
 // SysoffResult is a result of PHC time measurement with related data
 type SysoffResult struct {
@@ -37,7 +44,7 @@ type SysoffResult struct {
 }
 
 // based on sysoff_estimate from ptp4l sysoff.c
-func sysoffFromExtendedTS(extendedTS [3]PTPClockTime) SysoffResult {
+func sysoffFromExtendedTS(extendedTS [3]PtpClockTime) SysoffResult {
 	t1 := extendedTS[0].Time()
 	tp := extendedTS[1].Time()
 	t2 := extendedTS[2].Time()
@@ -54,9 +61,9 @@ func sysoffFromExtendedTS(extendedTS [3]PTPClockTime) SysoffResult {
 
 // SysoffFromPrecise returns SysoffResult from *PTPSysOffsetPrecise . Code based on sysoff_precise from ptp4l sysoff.c
 func SysoffFromPrecise(precise *PTPSysOffsetPrecise) SysoffResult {
-	offset := precise.SysRealTime.Time().Sub(precise.Device.Time())
+	offset := precise.Realtime.Time().Sub(precise.Device.Time())
 	return SysoffResult{
-		SysTime: precise.SysRealTime.Time(),
+		SysTime: precise.Realtime.Time(),
 		PHCTime: precise.Device.Time(),
 		Delay:   0, // They are measured at the same time
 		Offset:  offset,
@@ -80,9 +87,9 @@ func SysoffEstimateBasic(ts1, rt, ts2 time.Time) SysoffResult {
 // BestSample finds a sample which took the least time to be read;
 // the logic is loosely based on sysoff_estimate from ptp4l sysoff.c
 func (extended *PTPSysOffsetExtended) BestSample() SysoffResult {
-	best := sysoffFromExtendedTS(extended.TS[0])
-	for i := 1; i < int(extended.NSamples); i++ {
-		sysoff := sysoffFromExtendedTS(extended.TS[i])
+	best := sysoffFromExtendedTS(extended.Ts[0])
+	for i := 1; i < int(extended.Samples); i++ {
+		sysoff := sysoffFromExtendedTS(extended.Ts[i])
 		if sysoff.Delay < best.Delay {
 			best = sysoff
 		}
@@ -149,20 +156,20 @@ func (extended *PTPSysOffsetExtended) Sub(a *PTPSysOffsetExtended) time.Duration
 }
 
 // Sub returns the estimated difference between two PHC SYS_OFFSET_PRECISE readings
-func (extended *PTPSysOffsetPrecise) Sub(a *PTPSysOffsetPrecise) time.Duration {
-	return offsetBetweenPreciseReadings(a, extended)
+func (precise *PTPSysOffsetPrecise) Sub(a *PTPSysOffsetPrecise) time.Duration {
+	return offsetBetweenPreciseReadings(a, precise)
 }
 
 // offsetBetweenExtendedReadings returns estimated difference between two PHC SYS_OFFSET_EXTENDED readings
 func offsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) time.Duration {
 	// we expect both probes to have same number of measures
-	numProbes := int(extendedA.NSamples)
-	if int(extendedB.NSamples) < numProbes {
-		numProbes = int(extendedB.NSamples)
+	numProbes := int(extendedA.Samples)
+	if int(extendedB.Samples) < numProbes {
+		numProbes = int(extendedB.Samples)
 	}
 	// calculate sys time midpoint from both samples
-	sysoffA := sysoffFromExtendedTS(extendedA.TS[0])
-	sysoffB := sysoffFromExtendedTS(extendedB.TS[0])
+	sysoffA := sysoffFromExtendedTS(extendedA.Ts[0])
+	sysoffB := sysoffFromExtendedTS(extendedB.Ts[0])
 	// offset between sys time midpoints
 	sysOffset := sysoffB.SysTime.Sub(sysoffA.SysTime)
 	// compensate difference between PHC time by difference in system time
@@ -170,8 +177,8 @@ func offsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) t
 	shortest := phcOffset
 	// look for smallest difference between system time midpoints
 	for i := 1; i < numProbes; i++ {
-		sysoffA = sysoffFromExtendedTS(extendedA.TS[i])
-		sysoffB = sysoffFromExtendedTS(extendedB.TS[i])
+		sysoffA = sysoffFromExtendedTS(extendedA.Ts[i])
+		sysoffB = sysoffFromExtendedTS(extendedB.Ts[i])
 		sysOffset = sysoffB.SysTime.Sub(sysoffA.SysTime)
 		phcOffset = sysoffB.PHCTime.Sub(sysoffA.PHCTime) - sysOffset
 

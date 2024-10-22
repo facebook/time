@@ -26,8 +26,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 	"github.com/facebook/time/servo"
-	"golang.org/x/sys/unix"
 )
 
 // PPSSource represents a PPS source
@@ -78,14 +78,14 @@ type Timestamper interface {
 // DeviceController defines a subset of functions to interact with a phc device. Enables mocking.
 type DeviceController interface {
 	Time() (time.Time, error)
-	setPinFunc(index uint, pf PinFunc, ch uint) error
-	setPTPPerout(req PTPPeroutRequest) error
+	setPinFunc(index uint, pf int, ch uint) error
+	setPTPPerout(req *PtpPeroutRequest) error
 	File() *os.File
 	AdjFreq(freq float64) error
 	Step(offset time.Duration) error
 	Read(buf []byte) (int, error)
 	Fd() uintptr
-	extTTSRequest(req PTPExtTTSRequest) error
+	extTTSRequest(req *PtpExttsRequest) error
 }
 
 // PPSPoller represents a device which can be polled for PPS events
@@ -111,11 +111,7 @@ type PPSSink struct {
 
 // ActivatePPSSource configures the PHC device to be a PPS timestamp source
 func ActivatePPSSource(dev DeviceController, pinIndex uint) (*PPSSource, error) {
-	// Initialize the PTPPeroutRequest struct
-	peroutRequest := PTPPeroutRequest{}
-
-	err := dev.setPinFunc(pinIndex, PinFuncPerOut, defaultTs2PhcChannel)
-
+	err := dev.setPinFunc(pinIndex, unix.PTP_PF_PEROUT, defaultTs2PhcChannel)
 	if err != nil {
 		log.Printf("Failed to set PPS Perout on pin index %d, channel %d, PHC %s. Error: %s. Continuing bravely on...",
 			pinIndex, defaultTs2PhcChannel, dev.File().Name(), err)
@@ -126,21 +122,27 @@ func ActivatePPSSource(dev DeviceController, pinIndex uint) (*PPSSource, error) 
 		return nil, fmt.Errorf("failed (clock_gettime) on %s", dev.File().Name())
 	}
 
-	// Set the index and period
-	// nolint:gosec
-	peroutRequest.Index = uint32(defaultTs2PhcChannel)
-	peroutRequest.Period = PTPClockTime{Sec: 1, NSec: 0}
+	// Initialize the PTPPeroutRequest struct
+	peroutRequest := &PtpPeroutRequest{}
+	peroutRequest.Index = uint32(defaultTs2PhcChannel) // nolint:gosec
+	peroutRequest.Period = PtpClockTime{Sec: 1, Nsec: 0}
 
 	// Set flags and pulse width
 	pulsewidth := defaultPulseWidth
 
 	// TODO: skip this block if pulsewidth unset once pulsewidth is configurable
 	peroutRequest.Flags |= ptpPeroutDutyCycle
-	peroutRequest.On = PTPClockTime{Sec: int64(pulsewidth / nsPerSec), NSec: pulsewidth % nsPerSec}
+	peroutRequest.On = PtpClockTime{
+		Sec:  int64(pulsewidth / 1e9),
+		Nsec: pulsewidth % 1e9,
+	}
 
 	// Set phase or start time
 	// TODO: reintroduce peroutPhase != -1 condition once peroutPhase is configurable
-	peroutRequest.StartOrPhase = PTPClockTime{Sec: int64(ts.Second() + ppsStartDelay), NSec: 0}
+	peroutRequest.StartOrPhase = PtpClockTime{
+		Sec:  int64(ts.Second() + ppsStartDelay),
+		Nsec: 0,
+	}
 
 	err = dev.setPTPPerout(peroutRequest)
 
@@ -171,7 +173,10 @@ func (ppsSource *PPSSource) Timestamp() (*time.Time, error) {
 	// subtract device perout phase from current time to get the time of the last perout output edge
 	// TODO: optimize section below using binary operations instead of type conversions
 	currTime = currTime.Add(-time.Duration(ppsSource.peroutPhase))
-	sourceTs := timeToTimespec(currTime)
+	sourceTs, err := unix.TimeToTimespec(currTime)
+	if err != nil {
+		return nil, err
+	}
 
 	sourceTs.Nsec = 0
 	//nolint:unconvert
@@ -249,20 +254,19 @@ func PPSSinkFromDevice(targetDevice DeviceController, pinIndex uint) (*PPSSink, 
 	}
 	ppsSink := PPSSink{
 		InputPin:        pinIndex,
-		Polarity:        PTPRisingEdge,
+		Polarity:        unix.PTP_RISING_EDGE,
 		PulseWidth:      defaultPulseWidth,
 		Device:          targetDevice,
 		CollectedEvents: []*time.Time{},
 		pollDescriptor:  pfd,
 	}
 
-	req := PTPExtTTSRequest{
-		flags: PTPEnableFeature | ppsSink.Polarity,
-		//nolint:gosec
-		index: uint32(ppsSink.InputPin),
+	req := &PtpExttsRequest{
+		Flags: unix.PTP_ENABLE_FEATURE | ppsSink.Polarity,
+		Index: uint32(ppsSink.InputPin), //nolint:gosec
 	}
 
-	err := targetDevice.setPinFunc(pinIndex, PinFuncExtTS, defaultTs2PhcChannel)
+	err := targetDevice.setPinFunc(pinIndex, unix.PTP_PF_EXTTS, defaultTs2PhcChannel)
 	if err != nil {
 		return nil, fmt.Errorf("error setting extts input pin for device %s: %w", targetDevice.File().Name(), err)
 	}
@@ -277,18 +281,18 @@ func PPSSinkFromDevice(targetDevice DeviceController, pinIndex uint) (*PPSSink, 
 
 // getPPSEventTimestamp reads the first PPS event from the sink file descriptor and returns the timestamp of the event
 func (ppsSink *PPSSink) getPPSEventTimestamp() (time.Time, error) {
-	var event PTPExtTTS
+	var event PtpExttsEvent
 	buf := make([]byte, binary.Size(event))
 	_, err := ppsSink.Device.Read(buf)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("error reading from sink %v: %w", ppsSink.Device.File().Name(), err)
 	}
-	event = *(*PTPExtTTS)(unsafe.Pointer(&buf[0]))
+	event = *(*PtpExttsEvent)(unsafe.Pointer(&buf[0])) // urgh...
 	if uint(event.Index) != ppsSink.InputPin {
 		return time.Time{}, fmt.Errorf("extts on unexpected pin index %d, expected %d", event.Index, ppsSink.InputPin)
 	}
 
-	eventTime := ptpClockTimeToTime(event.T)
+	eventTime := event.T.Time()
 
 	return eventTime, nil
 }

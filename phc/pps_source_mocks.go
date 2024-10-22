@@ -215,7 +215,7 @@ func (mr *MockDeviceControllerMockRecorder) Time() *gomock.Call {
 }
 
 // extTTSRequest mocks base method.
-func (m *MockDeviceController) extTTSRequest(req PTPExtTTSRequest) error {
+func (m *MockDeviceController) extTTSRequest(req *PtpExttsRequest) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "extTTSRequest", req)
 	ret0, _ := ret[0].(error)
@@ -229,7 +229,7 @@ func (mr *MockDeviceControllerMockRecorder) extTTSRequest(req interface{}) *gomo
 }
 
 // setPTPPerout mocks base method.
-func (m *MockDeviceController) setPTPPerout(req PTPPeroutRequest) error {
+func (m *MockDeviceController) setPTPPerout(req *PtpPeroutRequest) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "setPTPPerout", req)
 	ret0, _ := ret[0].(error)
@@ -243,7 +243,7 @@ func (mr *MockDeviceControllerMockRecorder) setPTPPerout(req interface{}) *gomoc
 }
 
 // setPinFunc mocks base method.
-func (m *MockDeviceController) setPinFunc(index uint, pf PinFunc, ch uint) error {
+func (m *MockDeviceController) setPinFunc(index uint, pf int, ch uint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "setPinFunc", index, pf, ch)
 	ret0, _ := ret[0].(error)

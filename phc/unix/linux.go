@@ -261,6 +261,34 @@ func IoctlPtpExttsRequest(fd int, r *PtpExttsRequest) error {
 	return ioctlPtr(fd, PTP_EXTTS_REQUEST2, unsafe.Pointer(r))
 }
 
+// https://go-review.googlesource.com/c/sys/+/621735
+
+const (
+	PTP_PF_NONE    = iota //nolint:revive
+	PTP_PF_EXTTS          //nolint:revive
+	PTP_PF_PEROUT         //nolint:revive
+	PTP_PF_PHYSYNC        //nolint:revive
+)
+
+// https://go-review.googlesource.com/c/sys/+/621498
+
+// TimeToPtpClockTime returns t as PtpClockTime
+func TimeToPtpClockTime(t time.Time) PtpClockTime {
+	sec := t.Unix()
+	nsec := uint32(t.Nanosecond())
+	return PtpClockTime{Sec: sec, Nsec: nsec}
+}
+
+// Time returns PTPClockTime as time.Time
+func (t *PtpClockTime) Time() time.Time {
+	return time.Unix(t.Sec, int64(t.Nsec))
+}
+
+// Unix returns the time stored in t as seconds plus nanoseconds.
+func (t *PtpClockTime) Unix() (sec int64, nsec int64) {
+	return t.Sec, int64(t.Nsec)
+}
+
 // bridging to upstream
 
 type Cmsghdr = unix.Cmsghdr
@@ -277,6 +305,7 @@ type Utsname = unix.Utsname
 
 func ByteSliceToString(b []byte) string           { return unix.ByteSliceToString(b) }
 func ClockAdjtime(c int32, t *Timex) (int, error) { return unix.ClockAdjtime(c, t) }
+func ClockGettime(c int32, t *Timespec) error     { return unix.ClockGettime(c, t) }
 func Close(fd int) (err error)                    { return unix.Close(fd) }
 func ErrnoName(e syscall.Errno) string            { return unix.ErrnoName(e) }
 func Poll(f []PollFd, t int) (int, error)         { return unix.Poll(f, t) }
@@ -299,9 +328,11 @@ const (
 	IFNAMSIZ                      = unix.IFNAMSIZ            //nolint:revive
 	MSG_ERRQUEUE                  = unix.MSG_ERRQUEUE        //nolint:revive
 	POLLERR                       = unix.POLLERR             //nolint:revive
-	SIOCETHTOOL                   = unix.SIOCETHTOOL         //nolint:revive
-	SIOCGHWTSTAMP                 = unix.SIOCGHWTSTAMP       //nolint:revive
-	SIOCSHWTSTAMP                 = unix.SIOCSHWTSTAMP       //nolint:revive
+	POLLIN                        = unix.POLLIN
+	POLLPRI                       = unix.POLLPRI
+	SIOCETHTOOL                   = unix.SIOCETHTOOL   //nolint:revive
+	SIOCGHWTSTAMP                 = unix.SIOCGHWTSTAMP //nolint:revive
+	SIOCSHWTSTAMP                 = unix.SIOCSHWTSTAMP //nolint:revive
 	SizeofPtr                     = unix.SizeofPtr
 	SizeofSockaddrInet4           = unix.SizeofSockaddrInet4
 	SOCK_DGRAM                    = unix.SOCK_DGRAM                    //nolint:revive

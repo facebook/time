@@ -19,21 +19,13 @@ package phc
 import (
 	"fmt"
 	"os"
-	"strings"
-	"syscall"
 	"time"
-	"unsafe"
 
-	"golang.org/x/sys/unix"
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 )
 
 // DefaultMaxClockFreqPPB value came from linuxptp project (clockadj.c)
 const DefaultMaxClockFreqPPB = 500000.0
-
-// Time returns PTPClockTime as time.Time
-func (t PTPClockTime) Time() time.Time {
-	return time.Unix(t.Sec, int64(t.NSec))
-}
 
 // TimeMethod is method we use to get time
 type TimeMethod string
@@ -45,56 +37,27 @@ const (
 	MethodIoctlSysOffsetPrecise  TimeMethod = "ioctl_PTP_SYS_OFFSET_PRECISE"
 )
 
-// PinFunc type represents the pin function values.
-type PinFunc int
-
-// Type implements cobra.Value
-func (pf *PinFunc) Type() string { return "{ PPS-In | PPS-Out | PhySync | None }" }
-
-// String implements flags.Value
-func (pf PinFunc) String() string {
-	switch pf {
-	case PinFuncNone:
-		return "None"
-	case PinFuncExtTS:
-		return "PPS-In" // user friendly
-	case PinFuncPerOut:
-		return "PPS-Out" // user friendly
-	case PinFuncPhySync:
-		return "PhySync"
-	default:
-		return fmt.Sprintf("!(PinFunc=%d)", int(pf))
-	}
-}
-
-// Set implements flags.Value
-func (pf *PinFunc) Set(s string) error {
-	switch strings.ToLower(s) {
-	case "none", "-":
-		*pf = PinFuncNone
-	case "pps-in", "ppsin", "extts":
-		*pf = PinFuncExtTS
-	case "pps-out", "ppsout", "perout":
-		*pf = PinFuncPerOut
-	case "phy-sync", "physync", "sync":
-		*pf = PinFuncPhySync
-	default:
-		return fmt.Errorf("use either of: %s", pf.Type())
-	}
-	return nil
-}
-
-// Pin functions corresponding to `enum ptp_pin_function` in linux/ptp_clock.h
-const (
-	PinFuncNone    PinFunc = iota // PTP_PF_NONE
-	PinFuncExtTS                  // PTP_PF_EXTTS
-	PinFuncPerOut                 // PTP_PF_PEROUT
-	PinFuncPhySync                // PTP_PF_PHYSYNC
+type (
+	// PtpPeroutRequest is an alias
+	PtpPeroutRequest = unix.PtpPeroutRequest
+	// PtpExttsRequest is an alias
+	PtpExttsRequest = unix.PtpExttsRequest
+	// PtpExttsEvent is an alias
+	PtpExttsEvent = unix.PtpExttsEvent
+	// PtpClockTime is an alias
+	PtpClockTime = unix.PtpClockTime
+	// PtpClockCaps is an alias
+	PtpClockCaps = unix.PtpClockCaps
 )
 
 // IfaceToPHCDevice returns path to PHC device associated with given network card iface
 func IfaceToPHCDevice(iface string) (string, error) {
-	info, err := IfaceInfo(iface)
+	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to create socket for ioctl: %w", err)
+	}
+	defer unix.Close(fd)
+	info, err := unix.IoctlGetEthtoolTsInfo(fd, iface)
 	if err != nil {
 		return "", fmt.Errorf("getting interface %s info: %w", iface, err)
 	}
@@ -126,7 +89,7 @@ func Time(iface string, method TimeMethod) (time.Time, error) {
 		if err != nil {
 			return time.Time{}, err
 		}
-		latest := extended.TS[extended.NSamples-1]
+		latest := extended.Ts[extended.Samples-1]
 		return latest[1].Time(), nil
 	case MethodIoctlSysOffsetPrecise:
 		precise, err := dev.ReadSysoffPrecise()
@@ -137,160 +100,4 @@ func Time(iface string, method TimeMethod) (time.Time, error) {
 	default:
 		return time.Time{}, fmt.Errorf("unknown method to get PHC time %q", method)
 	}
-}
-
-// Device represents a PHC device
-type Device os.File
-
-// FromFile returns a *Device corresponding to an *os.File
-func FromFile(file *os.File) *Device { return (*Device)(file) }
-
-// File returns the underlying *os.File
-func (dev *Device) File() *os.File { return (*os.File)(dev) }
-
-// Fd returns the underlying file descriptor
-func (dev *Device) Fd() uintptr { return dev.File().Fd() }
-
-// ClockID derives the clock ID from the file descriptor number - see clock_gettime(3), FD_TO_CLOCKID macros
-func (dev *Device) ClockID() int32 { return int32((int(^dev.Fd()) << 3) | 3) }
-
-// Time returns time from the PTP device using the clock_gettime syscall
-func (dev *Device) Time() (time.Time, error) {
-	var ts unix.Timespec
-	if err := unix.ClockGettime(dev.ClockID(), &ts); err != nil {
-		return time.Time{}, fmt.Errorf("failed clock_gettime: %w", err)
-	}
-	return time.Unix(ts.Unix()), nil
-}
-
-// ioctl makes a unis.SYS_IOCTL unix.Syscall with the given device, request and argument
-func (dev *Device) ioctl(req uintptr, arg unsafe.Pointer) (err error) {
-	_, _, errno := unix.Syscall(unix.SYS_IOCTL, dev.Fd(), req, uintptr(arg))
-	if errno != 0 {
-		err = fmt.Errorf("errno %w during IOCTL %d on FD %s", errno, req, dev.File().Name())
-	}
-	return err
-}
-
-// ReadSysoffExtended reads the precise time from the PHC along with SYS time to measure the call delay.
-// The nsamples parameter is set to ExtendedNumProbes.
-func (dev *Device) ReadSysoffExtended() (*PTPSysOffsetExtended, error) {
-	return dev.readSysoffExtended(ExtendedNumProbes)
-}
-
-// ReadSysoffExtended1 reads the precise time from the PHC along with SYS time to measure the call delay.
-// The nsamples parameter is set to 1.
-func (dev *Device) ReadSysoffExtended1() (*PTPSysOffsetExtended, error) {
-	return dev.readSysoffExtended(1)
-}
-
-// ReadSysoffPrecise reads the precise time from the PHC along with SYS time to measure the call delay.
-func (dev *Device) ReadSysoffPrecise() (*PTPSysOffsetPrecise, error) {
-	return dev.readSysoffPrecise()
-}
-
-func (dev *Device) readSysoffExtended(nsamples int) (*PTPSysOffsetExtended, error) {
-	res := &PTPSysOffsetExtended{
-		NSamples: uint32(nsamples),
-	}
-	err := dev.ioctl(ioctlPTPSysOffsetExtended, unsafe.Pointer(res))
-	if err != nil {
-		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_EXTENDED: %w", err)
-	}
-	return res, nil
-}
-
-func (dev *Device) readSysoffPrecise() (*PTPSysOffsetPrecise, error) {
-	res := &PTPSysOffsetPrecise{}
-	if err := dev.ioctl(ioctlPTPSysOffsetPrecise, unsafe.Pointer(res)); err != nil {
-		return nil, fmt.Errorf("failed PTP_SYS_OFFSET_PRECISE: %w", err)
-	}
-	return res, nil
-}
-
-// readCaps reads PTP capabilities using ioctl
-func (dev *Device) readCaps() (*PTPClockCaps, error) {
-	caps := &PTPClockCaps{}
-	if err := dev.ioctl(ioctlPTPClockGetcaps, unsafe.Pointer(caps)); err != nil {
-		return nil, fmt.Errorf("clock didn't respond properly: %w", err)
-	}
-	return caps, nil
-}
-
-// readPinDesc reads a single PTP pin descriptor
-func (dev *Device) readPinDesc(index int, desc *PinDesc) error {
-	var raw rawPinDesc
-
-	raw.Index = uint32(index)
-	if err := dev.ioctl(iocPinGetfunc, unsafe.Pointer(&raw)); err != nil {
-		return fmt.Errorf("%s: ioctl(PTP_PIN_GETFUNC) failed: %w", dev.File().Name(), err)
-	}
-	desc.Name = unix.ByteSliceToString(raw.Name[:])
-	desc.Index = uint(raw.Index)
-	desc.Func = PinFunc(raw.Func)
-	desc.Chan = uint(raw.Chan)
-	desc.dev = dev
-	return nil
-}
-
-// readPinDesc reads a single PTP pin descriptor
-func (dev *Device) setPinFunc(index uint, pf PinFunc, ch uint) error {
-	var raw rawPinDesc
-
-	raw.Index = uint32(index) //#nosec G115
-	raw.Func = uint32(pf)     //#nosec G115
-	raw.Chan = uint32(ch)     //#nosec G115
-	if err := dev.ioctl(iocPinSetfunc, unsafe.Pointer(&raw)); err != nil {
-		return fmt.Errorf("%s: ioctl(PTP_PIN_SETFUNC) failed: %w", dev.File().Name(), err)
-	}
-	return nil
-}
-
-// ReadPins reads all PTP pin descriptors
-func (dev *Device) ReadPins() ([]PinDesc, error) {
-	caps, err := dev.readCaps()
-	if err != nil {
-		return nil, err
-	}
-	npins := int(caps.NPins)
-	desc := make([]PinDesc, npins)
-	for i := 0; i < npins; i++ {
-		if err := dev.readPinDesc(i, &desc[i]); err != nil {
-			return nil, err
-		}
-	}
-	return desc, nil
-}
-
-// MaxFreqAdjPPB reads max value for frequency adjustments (in PPB) from ptp device
-func (dev *Device) MaxFreqAdjPPB() (maxFreq float64, err error) {
-	caps, err := dev.readCaps()
-	if err != nil {
-		return 0, err
-	}
-	return caps.maxAdj(), nil
-}
-
-func (dev *Device) setPTPPerout(req PTPPeroutRequest) error {
-	return dev.ioctl(ioctlPTPPeroutRequest2, unsafe.Pointer(&req))
-}
-
-func (dev *Device) extTTSRequest(req PTPExtTTSRequest) error {
-	return dev.ioctl(ioctlExtTTSRequest2, unsafe.Pointer(&req))
-}
-
-// FreqPPB reads PHC device frequency in PPB (parts per billion)
-func (dev *Device) FreqPPB() (freqPPB float64, err error) { return freqPPBFromDevice(dev) }
-
-// AdjFreq adjusts the PHC clock frequency in PPB
-func (dev *Device) AdjFreq(freqPPB float64) error { return clockAdjFreq(dev, freqPPB) }
-
-// Step steps the PHC clock by given duration
-func (dev *Device) Step(step time.Duration) error { return clockStep(dev, step) }
-
-// SetTime sets the time of the PHC clock
-func (dev *Device) SetTime(t time.Time) error { return clockSetTime(dev, t) }
-
-func (dev *Device) Read(buffer []byte) (int, error) {
-	return syscall.Read(int(dev.Fd()), buffer)
 }
