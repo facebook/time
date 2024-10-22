@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,6 +28,7 @@ func TestMeasurementsFullRun(t *testing.T) {
 	mcfg := &MeasurementConfig{}
 	m := newMeasurements(mcfg)
 	var seq uint16 = 1
+	announce := ptp.Announce{Header: ptp.Header{SequenceID: seq}, AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 42}}
 	t.Run("symmetrical delay, no offset", func(t *testing.T) {
 		netDelay := 100 * time.Millisecond
 		netDelayBack := netDelay
@@ -56,6 +58,7 @@ func TestMeasurementsFullRun(t *testing.T) {
 		// time when SYNC was actually sent by GM
 		m.addT1(seq, timeSyncSent)
 		m.addCF2(seq, 0)
+		m.addAnnounce(announce)
 
 		got, err := m.latest()
 		require.Nil(t, err)
@@ -69,6 +72,7 @@ func TestMeasurementsFullRun(t *testing.T) {
 			T2:        timeSyncReceived,
 			T3:        timeDelaySent,
 			T4:        timeDelayReceived,
+			Announce:  announce,
 		}
 		require.Equal(t, want, got)
 	})
@@ -115,6 +119,7 @@ func TestMeasurementsFullRun(t *testing.T) {
 			T2:        timeSyncReceived,
 			T3:        timeDelaySent,
 			T4:        timeDelayReceived,
+			Announce:  announce,
 		}
 		require.Equal(t, want, got)
 	})
@@ -165,6 +170,7 @@ func TestMeasurementsFullRun(t *testing.T) {
 			T2:                timeSyncReceived,
 			T3:                timeDelaySent,
 			T4:                timeDelayReceived,
+			Announce:          announce,
 		}
 		require.Equal(t, want, got)
 	})
@@ -210,6 +216,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 	// time when SYNC was actually sent by GM
 	m.addT1(seq, timeSyncSent)
 	m.addCF2(seq, netCorrectionBack)
+	m.addAnnounce(ptp.Announce{Header: ptp.Header{SequenceID: seq}, AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 42}})
 
 	got, err := m.latest()
 	require.Nil(t, err)
@@ -225,6 +232,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T2:                timeSyncReceived,
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
+		Announce:          ptp.Announce{Header: ptp.Header{SequenceID: seq}, AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 42}},
 	}
 	require.Equal(t, want, got, "initial measurements check")
 
@@ -248,7 +256,9 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		m.addT4(seq, timeDelayReceived)
 		m.addT1(seq, timeSyncSent)
 		m.addCF2(seq, netCorrectionBack)
+		m.addAnnounce(ptp.Announce{Header: ptp.Header{SequenceID: seq}, AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 42}})
 	}
+	announce := ptp.Announce{Header: ptp.Header{SequenceID: 6}, AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 42}}
 	got, err = m.latest()
 	require.Nil(t, err)
 	want = &MeasurementResult{
@@ -263,6 +273,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T2:                timeSyncReceived,
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
+		Announce:          announce,
 	}
 	require.Equal(t, want, got, "measurements after 6 more exchanges")
 
@@ -283,6 +294,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T2:                timeSyncReceived,
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
+		Announce:          announce,
 	}
 	require.Equal(t, want, got, "measurements with median path delay filter")
 
@@ -302,6 +314,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T2:                timeSyncReceived,
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
+		Announce:          announce,
 	}
 	require.Equal(t, want, got, "measurements with mean path delay filter")
 
@@ -318,6 +331,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 	m.addT4(seq, timeDelayReceived)
 	m.addT1(seq, timeSyncSent)
 	m.addCF2(seq, netCorrectionBack)
+	m.addAnnounce(announce)
 
 	got, err = m.latest()
 	require.Nil(t, err)
@@ -334,6 +348,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
 		BadDelay:          true,
+		Announce:          announce,
 	}
 	require.Equal(t, want, got, "measurements with mean path delay filter and skipped path delay sample")
 
@@ -351,6 +366,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 	m.addT4(seq, timeDelayReceived)
 	m.addT1(seq, timeSyncSent)
 	m.addCF2(seq, netCorrectionBack)
+	m.addAnnounce(announce)
 
 	got, err = m.latest()
 	require.Nil(t, err)
@@ -366,6 +382,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		T2:                timeSyncReceived,
 		T3:                timeDelaySent,
 		T4:                timeDelayReceived,
+		Announce:          announce,
 	}
 	require.Equal(t, want, got, "measurements with mean path delay filter and skipped path delay sample")
 }
@@ -394,6 +411,8 @@ func TestMDataComplete(t *testing.T) {
 	d.t3 = time.Now()
 	require.False(t, d.Complete())
 	d.t4 = time.Now()
+	require.False(t, d.Complete())
+	d.announce.GrandmasterIdentity = 42
 	require.True(t, d.Complete())
 }
 
@@ -406,6 +425,7 @@ func TestBadDelay(t *testing.T) {
 		PathDelayDiscardMultiplier:    3,
 	}
 	m := newMeasurements(mcfg)
+	m.lastData = &mData{}
 
 	m.delay(time.Millisecond)
 	require.Equal(t, time.Millisecond, m.pathDelay)
@@ -442,14 +462,13 @@ func TestBadCF(t *testing.T) {
 		PathDelayDiscardMultiplier:    3,
 	}
 	m := newMeasurements(mcfg)
+	m.lastData = &mData{}
 
 	m.delay(time.Millisecond)
 	require.Equal(t, time.Millisecond, m.pathDelay)
 
 	m.delay(3 * time.Millisecond)
 	require.Equal(t, 2*time.Millisecond, m.pathDelay)
-
-	m.lastData = &mData{}
 
 	// Valid delay, bad CF1
 	m.lastData.c1 = -time.Millisecond
@@ -460,4 +479,42 @@ func TestBadCF(t *testing.T) {
 	m.lastData.c2 = -time.Millisecond
 	m.delay(time.Millisecond)
 	require.Equal(t, 2*time.Millisecond, m.pathDelay)
+}
+
+func TestNoAnnounce(t *testing.T) {
+	mcfg := &MeasurementConfig{}
+	m := newMeasurements(mcfg)
+	var seq uint16 = 42
+	now := time.Now()
+
+	m.addT3(seq, now)
+	m.addT2andCF1(seq, now, time.Second)
+	m.addT4(seq, now)
+	m.addT1(seq, now)
+	m.addCF2(seq, time.Second)
+
+	// But not the latest measurement
+	got, err := m.latest()
+	require.ErrorIs(t, err, errNotEnoughData)
+	require.Nil(t, got)
+
+	// trying to add wrong ID
+	m.addAnnounce(ptp.Announce{Header: ptp.Header{SequenceID: 1}, AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 42}})
+	got, err = m.latest()
+	require.ErrorIs(t, err, errNotEnoughData)
+	require.Nil(t, got)
+
+	// trying good ID add wrong GM identity
+	m.addAnnounce(ptp.Announce{Header: ptp.Header{SequenceID: 1}, AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 0}})
+	got, err = m.latest()
+	require.ErrorIs(t, err, errNotEnoughData)
+	require.Nil(t, got)
+
+	m.addAnnounce(ptp.Announce{Header: ptp.Header{SequenceID: seq}, AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 42}})
+	got, err = m.latest()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	// Timestamp data is complete
+	require.True(t, m.lastData.Complete())
 }

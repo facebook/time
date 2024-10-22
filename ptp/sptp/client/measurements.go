@@ -38,16 +38,17 @@ const (
 
 // mData is a single measured raw data of GM to OC communication
 type mData struct {
-	t1 time.Time     // departure time of Sync packet from GM
-	t2 time.Time     // arrival time of Sync packet on OC
-	t3 time.Time     // departure time of DelayReq from OC
-	t4 time.Time     // arrival time of DelayReq packet on GM
-	c2 time.Duration // correctionFiled of DelayReq
-	c1 time.Duration // correctionField of Sync
+	t1       time.Time     // departure time of Sync packet from GM
+	t2       time.Time     // arrival time of Sync packet on OC
+	t3       time.Time     // departure time of DelayReq from OC
+	t4       time.Time     // arrival time of DelayReq packet on GM
+	c2       time.Duration // correctionFiled of DelayReq
+	c1       time.Duration // correctionField of Sync
+	announce ptp.Announce
 }
 
 func (d *mData) Complete() bool {
-	return !d.t1.IsZero() && !d.t2.IsZero() && !d.t3.IsZero() && !d.t4.IsZero()
+	return !d.t1.IsZero() && !d.t2.IsZero() && !d.t3.IsZero() && !d.t4.IsZero() && d.announce.GrandmasterIdentity != 0
 }
 
 // MeasurementResult is a single measured datapoint
@@ -74,7 +75,6 @@ type measurements struct {
 	currentUTCoffset time.Duration
 	data             map[uint16]*mData
 	lastData         *mData
-	announce         ptp.Announce
 	delaysWindow     *slidingWindow
 	pathDelay        time.Duration
 }
@@ -82,7 +82,11 @@ type measurements struct {
 func (m *measurements) addAnnounce(announce ptp.Announce) {
 	m.Lock()
 	defer m.Unlock()
-	m.announce = announce
+	if v, found := m.data[announce.SequenceID]; found {
+		v.announce = announce
+	} else {
+		m.data[announce.SequenceID] = &mData{announce: announce}
+	}
 }
 
 func (m *measurements) addT2andCF1(seq uint16, ts time.Time, correction time.Duration) {
@@ -155,15 +159,15 @@ func (m *measurements) delay(newDelay time.Duration) bool {
 	// Filter territory
 	if newDelay < m.cfg.PathDelayDiscardBelow {
 		// Discard below min from the beginning
-		log.Warningf("(%s) low path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
+		log.Warningf("(%s) low path delay %v is not in (%v, %v) - filtered out", m.lastData.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
 		return false
 	} else if newDelay > m.cfg.PathDelayDiscardFrom && newDelay > maxPathDelay && maxPathDelay > m.cfg.PathDelayDiscardBelow && m.delaysWindow.Full() {
 		// Ignore spikes above maxPathDelay starting from m.cfg.PathDelayDiscardFrom
-		log.Warningf("(%s) high path delay %v is not in (%v, %v) - filtered out", m.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
+		log.Warningf("(%s) high path delay %v is not in (%v, %v) - filtered out", m.lastData.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
 		return false
-	} else if m.lastData != nil && (m.lastData.c1 < 0 || m.lastData.c2 < 0) {
+	} else if m.lastData.c1 < 0 || m.lastData.c2 < 0 {
 		// Ignore negative CF
-		log.Warningf("(%s) bad correction fields: CF1 (sync): %v, CF2 (announce): %v - filtered out", m.announce.GrandmasterIdentity, m.lastData.c1, m.lastData.c2)
+		log.Warningf("(%s) bad correction fields: CF1 (sync): %v, CF2 (announce): %v - filtered out", m.lastData.announce.GrandmasterIdentity, m.lastData.c1, m.lastData.c2)
 		return false
 	}
 
@@ -222,7 +226,7 @@ func (m *measurements) latest() (*MeasurementResult, error) {
 		T2:                m.lastData.t2,
 		T3:                m.lastData.t3,
 		T4:                m.lastData.t4,
-		Announce:          m.announce,
+		Announce:          m.lastData.announce,
 		BadDelay:          badDelay,
 	}, nil
 }
