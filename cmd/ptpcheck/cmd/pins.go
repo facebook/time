@@ -19,8 +19,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
-	"github.com/facebook/time/phc"
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -28,7 +29,7 @@ import (
 // flags
 var devPath string
 var pinName string
-var pinFunc phc.PinFunc
+var pinFunc PinFunc
 var setMode bool
 
 func init() {
@@ -60,21 +61,74 @@ func doListPins(device string) error {
 		return fmt.Errorf("opening device %q: %w", device, err)
 	}
 	defer f.Close()
-	dev := phc.FromFile(f)
 
-	pins, err := dev.ReadPins()
+	caps, err := unix.IoctlPtpClockGetcaps(int(f.Fd()))
 	if err != nil {
 		return err
 	}
-	for _, p := range pins {
-		if setMode && pinName == p.Name {
-			if err := p.SetFunc(pinFunc); err != nil {
-				log.Fatal(err)
+	npins := int(caps.N_pins)
+
+	pins := make([]*unix.PtpPinDesc, npins)
+	names := make([]string, npins)
+	for i := 0; i < npins; i++ {
+		pin, err := unix.IoctlPtpPinGetfunc(int(f.Fd()), uint(i)) //#nosec G115
+		if err != nil {
+			return err
+		}
+		pins[i] = pin
+		names[i] = unix.ByteSliceToString(pin.Name[:])
+	}
+
+	for i, pin := range pins {
+		if setMode && pinName == names[i] {
+			pin.Func = uint32(pinFunc)
+			if err := unix.IoctlPtpPinSetfunc(int(f.Fd()), pin); err != nil {
+				return fmt.Errorf("%s: IoctlPtpPinSetfunc: %w", f.Name(), err)
 			}
 		}
-		if pinName == "" || pinName == p.Name {
-			fmt.Printf("%s: pin %d function %-7[3]s (%[3]d) chan %d\n", p.Name, p.Index, p.Func, p.Chan)
+		if pinName == "" || pinName == names[i] {
+			fmt.Printf("%s: pin %d function %-7[3]s (%[3]d) chan %d\n",
+				pin.Name, pin.Index, PinFunc(pin.Func), pin.Chan)
 		}
+	}
+	return nil
+}
+
+// PinFunc type represents the pin function values.
+type PinFunc uint32
+
+// Type implements cobra.Value
+func (pf *PinFunc) Type() string { return "{ PPS-In | PPS-Out | PhySync | None }" }
+
+// String implements flags.Value
+func (pf PinFunc) String() string {
+	switch pf {
+	case unix.PTP_PF_NONE:
+		return "None"
+	case unix.PTP_PF_EXTTS:
+		return "PPS-In" // user friendly
+	case unix.PTP_PF_PEROUT:
+		return "PPS-Out" // user friendly
+	case unix.PTP_PF_PHYSYNC:
+		return "PhySync"
+	default:
+		return fmt.Sprintf("!(PinFunc=%d)", int(pf))
+	}
+}
+
+// Set implements flags.Value
+func (pf *PinFunc) Set(s string) error {
+	switch strings.ToLower(s) {
+	case "none", "-":
+		*pf = unix.PTP_PF_NONE
+	case "pps-in", "ppsin", "extts":
+		*pf = unix.PTP_PF_EXTTS
+	case "pps-out", "ppsout", "perout":
+		*pf = unix.PTP_PF_PEROUT
+	case "phy-sync", "physync", "sync":
+		*pf = unix.PTP_PF_PHYSYNC
+	default:
+		return fmt.Errorf("use either of: %s", pf.Type())
 	}
 	return nil
 }

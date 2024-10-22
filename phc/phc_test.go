@@ -23,16 +23,19 @@ import (
 )
 
 func TestMaxAdjFreq(t *testing.T) {
-	caps := &PTPClockCaps{
-		MaxAdj: 1000000000,
+	var testcases = []struct {
+		in   int32
+		targ float64
+	}{
+		{in: 1000000000, targ: 1000000000.0},
+		{in: 0, targ: 500000.0},
 	}
 
-	got := caps.maxAdj()
-	require.InEpsilon(t, 1000000000.0, got, 0.00001)
-
-	caps.MaxAdj = 0
-	got = caps.maxAdj()
-	require.InEpsilon(t, 500000.0, got, 0.00001)
+	for _, tc := range testcases {
+		caps := &PtpClockCaps{Max_adj: tc.in}
+		got := maxAdj(caps)
+		require.InEpsilon(t, tc.targ, got, 0.00001)
+	}
 }
 
 func TestIfaceToPHCDeviceNotSupported(t *testing.T) {

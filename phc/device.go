@@ -18,166 +18,127 @@ package phc
 
 import (
 	"fmt"
-	"unsafe"
+	"os"
+	"syscall"
+	"time"
 
 	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
-	"github.com/vtolstov/go-ioctl"
 )
 
-// Missing from sys/unix package, defined in Linux include/uapi/linux/ptp_clock.h
-const (
-	ptpMaxSamples = 25
-	ptpClkMagic   = '='
-	nsPerSec      = uint32(1000000000)
-)
+// Device represents a PHC device
+type Device os.File
 
-// ioctlPTPSysOffsetExtended is an IOCTL to get extended offset
-var ioctlPTPSysOffsetExtended = ioctl.IOWR(ptpClkMagic, 9, unsafe.Sizeof(PTPSysOffsetExtended{}))
+// FromFile returns a *Device corresponding to an *os.File
+func FromFile(file *os.File) *Device { return (*Device)(file) }
 
-// ioctlPTPSysOffsetPrecise is an IOCTL to get precise offset
-var ioctlPTPSysOffsetPrecise = ioctl.IOWR(ptpClkMagic, 8, unsafe.Sizeof(PTPSysOffsetPrecise{}))
+// File returns the underlying *os.File
+func (dev *Device) File() *os.File { return (*os.File)(dev) }
 
-// ioctlPTPClockGetCaps is an IOCTL to get PTP clock capabilities
-var ioctlPTPClockGetcaps = ioctl.IOR(ptpClkMagic, 1, unsafe.Sizeof(PTPClockCaps{}))
+// Fd returns the underlying file descriptor
+func (dev *Device) Fd() uintptr { return dev.File().Fd() }
 
-// iocPinGetfunc is an IOCTL req corresponding to PTP_PIN_GETFUNC in linux/ptp_clock.h
-var iocPinGetfunc = ioctl.IOWR(ptpClkMagic, 6, unsafe.Sizeof(rawPinDesc{}))
+// ClockID derives the clock ID from the file descriptor number -
+// see clock_gettime(3), FD_TO_CLOCKID macros
+func (dev *Device) ClockID() int32 { return unix.FdToClockID(int(dev.Fd())) }
 
-// iocPinSetfunc is an IOCTL req corresponding to PTP_PIN_SETFUNC in linux/ptp_clock.h
-var iocPinSetfunc = ioctl.IOW(ptpClkMagic, 7, unsafe.Sizeof(rawPinDesc{}))
-
-// iocPinSetfunc is an IOCTL req corresponding to PTP_PIN_SETFUNC2 in linux/ptp_clock.h
-var iocPinSetfunc2 = ioctl.IOW(ptpClkMagic, 16, unsafe.Sizeof(rawPinDesc{}))
-
-// ioctlPTPPeroutRequest2 is an IOCTL req corresponding to PTP_PEROUT_REQUEST2 in linux/ptp_clock.h
-var ioctlPTPPeroutRequest2 = ioctl.IOW(ptpClkMagic, 12, unsafe.Sizeof(PTPPeroutRequest{}))
-
-// ioctlExtTTSRequest2 is an IOCTL req corresponding to PTP_EXTTS_REQUEST2 in linux/ptp_clock.h
-var ioctlExtTTSRequest2 = ioctl.IOW(ptpClkMagic, 11, unsafe.Sizeof(PTPExtTTSRequest{}))
-
-// PTPSysOffsetExtended as defined in linux/ptp_clock.h
-type PTPSysOffsetExtended struct {
-	NSamples uint32    /* Desired number of measurements. */
-	Reserved [3]uint32 /* Reserved for future use. */
-	/*
-	 * Array of [system, phc, system] time stamps. The kernel will provide
-	 * 3*n_samples time stamps.
-	 * - system time right before reading the lowest bits of the PHC timestamp
-	 * - PHC time
-	 * - system time immediately after reading the lowest bits of the PHC timestamp
-	 */
-	TS [ptpMaxSamples][3]PTPClockTime
-}
-
-// PTPSysOffsetPrecise as defined in linux/ptp_clock.h
-type PTPSysOffsetPrecise struct {
-	Device      PTPClockTime
-	SysRealTime PTPClockTime
-	SysMonoRaw  PTPClockTime
-	Reserved    [4]uint32 /* Reserved for future use. */
-}
-
-// PinDesc represents the C struct ptp_pin_desc as defined in linux/ptp_clock.h
-type PinDesc struct {
-	Name  string  // Hardware specific human readable pin name
-	Index uint    // Pin index in the range of zero to ptp_clock_caps.n_pins - 1
-	Func  PinFunc // Which of the PTP_PF_xxx functions to use on this pin
-	Chan  uint    // The specific channel to use for this function.
-	// private fields
-	dev *Device
-}
-
-// SetFunc uses an ioctl to change the pin function
-func (pd *PinDesc) SetFunc(pf PinFunc) error {
-	if err := pd.dev.setPinFunc(pd.Index, pf, pd.Chan); err != nil {
-		return err
+// Time returns time from the PTP device using the clock_gettime syscall
+func (dev *Device) Time() (time.Time, error) {
+	var ts unix.Timespec
+	if err := unix.ClockGettime(dev.ClockID(), &ts); err != nil {
+		return time.Time{}, fmt.Errorf("failed clock_gettime: %w", err)
 	}
-	pd.Func = pf
+	return time.Unix(ts.Unix()), nil
+}
+
+// ReadSysoffExtended reads the precise time from the PHC along with SYS time to measure the call delay.
+// The nsamples parameter is set to ExtendedNumProbes.
+func (dev *Device) ReadSysoffExtended() (*PTPSysOffsetExtended, error) {
+	return dev.readSysoffExtended(ExtendedNumProbes)
+}
+
+// ReadSysoffExtended1 reads the precise time from the PHC along with SYS time to measure the call delay.
+// The samples parameter is set to 1.
+func (dev *Device) ReadSysoffExtended1() (*PTPSysOffsetExtended, error) {
+	return dev.readSysoffExtended(1)
+}
+
+// ReadSysoffPrecise reads the precise time from the PHC along with SYS time to measure the call delay.
+func (dev *Device) ReadSysoffPrecise() (*PTPSysOffsetPrecise, error) {
+	return dev.readSysoffPrecise()
+}
+
+func (dev *Device) readSysoffExtended(samples uint) (*PTPSysOffsetExtended, error) {
+	value, err := unix.IoctlPtpSysOffsetExtended(int(dev.Fd()), samples)
+	if err != nil {
+		return nil, err
+	}
+	our := PTPSysOffsetExtended(*value)
+	return &our, nil
+}
+
+func (dev *Device) readSysoffPrecise() (*PTPSysOffsetPrecise, error) {
+	value, err := unix.IoctlPtpSysOffsetPrecise(int(dev.Fd()))
+	if err != nil {
+		return nil, err
+	}
+	our := PTPSysOffsetPrecise(*value)
+	return &our, nil
+}
+
+// readCaps reads PTP capabilities using ioctl
+func (dev *Device) readCaps() (*PtpClockCaps, error) {
+	return unix.IoctlPtpClockGetcaps(int(dev.Fd()))
+}
+
+// setPinFunc sets the function on a single PTP pin descriptor
+func (dev *Device) setPinFunc(index uint, pf int, ch uint) error {
+	raw := unix.PtpPinDesc{
+		Index: uint32(index), //#nosec G115
+		Func:  uint32(pf),    //#nosec G115
+		Chan:  uint32(ch),    //#nosec G115
+	}
+	if err := unix.IoctlPtpPinSetfunc(int(dev.Fd()), &raw); err != nil {
+		return fmt.Errorf("%s: ioctl(PTP_PIN_SETFUNC) failed: %w", dev.File().Name(), err)
+	}
 	return nil
 }
 
-type rawPinDesc struct {
-	Name  [64]byte  // Hardware specific human readable pin name
-	Index uint32    // Pin index in the range of zero to ptp_clock_caps.n_pins - 1
-	Func  uint32    // Which of the PTP_PF_xxx functions to use on this pin
-	Chan  uint32    // The specific channel to use for this function.
-	Rsv   [5]uint32 // Reserved for future use.
+// MaxFreqAdjPPB reads max value for frequency adjustments (in PPB) from ptp device
+func (dev *Device) MaxFreqAdjPPB() (maxFreq float64, err error) {
+	caps, err := dev.readCaps()
+	if err != nil {
+		return 0, err
+	}
+	return maxAdj(caps), nil
 }
 
-// PTPPeroutRequest as defined in linux/ptp_clock.h
-type PTPPeroutRequest struct {
-	//   * Represents either absolute start time or phase offset.
-	//   * Absolute start time if (flags & PTP_PEROUT_PHASE) is unset.
-	//   * Phase offset if (flags & PTP_PEROUT_PHASE) is set.
-	//   * If set the signal should start toggling at an
-	//	 * unspecified integer multiple of the period, plus this value.
-	//	 * The start time should be "as soon as possible".
-	StartOrPhase PTPClockTime
-	Period       PTPClockTime // Desired period, zero means disable
-	Index        uint32       // Which channel to configure
-	Flags        uint32       // Configuration flags
-	On           PTPClockTime // "On" time of the signal. Must be lower than the period. Valid only if (flags & PTP_PEROUT_DUTY_CYCLE) is set.
-}
-
-// Bits of the ptp_extts_request.flags field:
-const (
-	PTPEnableFeature uint32 = 1 << 0 // Enable feature
-	PTPRisingEdge    uint32 = 1 << 1 // Rising edge
-	PTPFallingEdge   uint32 = 1 << 2 // Falling edge
-	PTPStrictFlags   uint32 = 1 << 3 // Strict flags
-	PTPExtOffset     uint32 = 1 << 4 // External offset
-)
-
-// PTPExtTTSRequest as defined in linux/ptp_clock.h
-type PTPExtTTSRequest struct {
-	index uint32
-	flags uint32
-	rsv   [2]uint32
-}
-
-// PTPExtTTS as defined in linux/ptp_clock.h
-type PTPExtTTS struct {
-	T     PTPClockTime /* Time when event occurred. */
-	Index uint32       /* Which channel produced the event. Corresponds to the 'index' field of the PTP_EXTTS_REQUEST and PTP_PEROUT_REQUEST ioctls.*/
-	Flags uint32       /* Event flags */
-	Rsv   [2]uint32    /* Reserved for future use. */
-}
-
-// PTPClockTime as defined in linux/ptp_clock.h
-type PTPClockTime struct {
-	Sec      int64  /* seconds */
-	NSec     uint32 /* nanoseconds */
-	Reserved uint32
-}
-
-// PTPClockCaps as defined in linux/ptp_clock.h
-type PTPClockCaps struct {
-	MaxAdj  int32 /* Maximum frequency adjustment in parts per billon. */
-	NAalarm int32 /* Number of programmable alarms. */
-	NExtTs  int32 /* Number of external time stamp channels. */
-	NPerOut int32 /* Number of programmable periodic signals. */
-	PPS     int32 /* Whether the clock supports a PPS callback. */
-	NPins   int32 /* Number of input/output pins. */
-	/* Whether the clock supports precise system-device cross timestamps */
-	CrossTimestamping int32
-	/* Whether the clock supports adjust phase */
-	AdjustPhase int32
-	Rsv         [12]int32 /* Reserved for future use. */
-}
-
-func (caps *PTPClockCaps) maxAdj() float64 {
-	if caps == nil || caps.MaxAdj == 0 {
+func maxAdj(caps *PtpClockCaps) float64 {
+	if caps == nil || caps.Max_adj == 0 {
 		return DefaultMaxClockFreqPPB
 	}
-	return float64(caps.MaxAdj)
+	return float64(caps.Max_adj)
 }
 
-// IfaceInfo uses an ioctl to get information for the named nic, e.g. eth0.
-func IfaceInfo(iface string) (*unix.EthtoolTsInfo, error) {
-	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create socket for ioctl: %w", err)
-	}
-	defer unix.Close(fd)
-	return unix.IoctlGetEthtoolTsInfo(fd, iface)
+func (dev *Device) setPTPPerout(req *PtpPeroutRequest) error {
+	return unix.IoctlPtpPeroutRequest(int(dev.Fd()), req)
+}
+
+func (dev *Device) extTTSRequest(req *PtpExttsRequest) error {
+	return unix.IoctlPtpExttsRequest(int(dev.Fd()), req)
+}
+
+// FreqPPB reads PHC device frequency in PPB (parts per billion)
+func (dev *Device) FreqPPB() (freqPPB float64, err error) { return freqPPBFromDevice(dev) }
+
+// AdjFreq adjusts the PHC clock frequency in PPB
+func (dev *Device) AdjFreq(freqPPB float64) error { return clockAdjFreq(dev, freqPPB) }
+
+// Step steps the PHC clock by given duration
+func (dev *Device) Step(step time.Duration) error { return clockStep(dev, step) }
+
+// SetTime sets the time of the PHC clock
+func (dev *Device) SetTime(t time.Time) error { return clockSetTime(dev, t) }
+
+func (dev *Device) Read(buffer []byte) (int, error) {
+	return syscall.Read(int(dev.Fd()), buffer)
 }

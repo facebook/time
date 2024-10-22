@@ -27,9 +27,9 @@ import (
 	"github.com/facebook/time/hostendian"
 	"github.com/facebook/time/servo"
 
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/sys/unix"
 )
 
 type Finisher func()
@@ -61,22 +61,22 @@ func TestActivatePPSSource(t *testing.T) {
 	// Prepare
 	_, _, mockDeviceController, finish := SetupMocks(t)
 	defer finish()
-	var actualPeroutRequest PTPPeroutRequest
+	var actualPeroutRequest *PtpPeroutRequest
 	gomock.InOrder(
 		// Should set default pin to PPS
-		mockDeviceController.EXPECT().setPinFunc(uint(4), PinFuncPerOut, uint(0)).Return(nil),
+		mockDeviceController.EXPECT().setPinFunc(uint(4), unix.PTP_PF_PEROUT, uint(0)).Return(nil),
 		// Should call Time once
 		mockDeviceController.EXPECT().Time().Return(time.Unix(1075896000, 500000000), nil),
-		mockDeviceController.EXPECT().setPTPPerout(gomock.Any()).Return(nil).Do(func(arg PTPPeroutRequest) { actualPeroutRequest = arg }),
+		mockDeviceController.EXPECT().setPTPPerout(gomock.Any()).Return(nil).Do(func(arg *PtpPeroutRequest) { actualPeroutRequest = arg }),
 	)
 
 	// Should call setPTPPerout with correct parameters
-	expectedPeroutRequest := PTPPeroutRequest{
+	expectedPeroutRequest := &PtpPeroutRequest{
 		Index:        uint32(0),
 		Flags:        uint32(2),
-		StartOrPhase: PTPClockTime{Sec: 2},
-		Period:       PTPClockTime{Sec: 1},
-		On:           PTPClockTime{NSec: 500000000},
+		StartOrPhase: PtpClockTime{Sec: 2},
+		Period:       PtpClockTime{Sec: 1},
+		On:           PtpClockTime{Nsec: 500000000},
 	}
 
 	// Act
@@ -112,7 +112,7 @@ func TestActivatePPSSourceSetPTPPeroutFailure(t *testing.T) {
 	// Prepare
 	_, _, mockDeviceController, finish := SetupMocks(t)
 	defer finish()
-	var actualPeroutRequest PTPPeroutRequest
+	var actualPeroutRequest *PtpPeroutRequest
 	gomock.InOrder(
 		mockDeviceController.EXPECT().setPinFunc(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("error")),
 		mockDeviceController.EXPECT().File().Return(os.NewFile(3, "mock_file")),
@@ -120,14 +120,14 @@ func TestActivatePPSSourceSetPTPPeroutFailure(t *testing.T) {
 		// If first attempt to set PTPPerout fails
 		mockDeviceController.EXPECT().setPTPPerout(gomock.Any()).Return(fmt.Errorf("error")),
 		// Should retry setPTPPerout with backward compatible flag
-		mockDeviceController.EXPECT().setPTPPerout(gomock.Any()).Return(nil).Do(func(arg PTPPeroutRequest) { actualPeroutRequest = arg }),
+		mockDeviceController.EXPECT().setPTPPerout(gomock.Any()).Return(nil).Do(func(arg *PtpPeroutRequest) { actualPeroutRequest = arg }),
 	)
-	expectedPeroutRequest := PTPPeroutRequest{
+	expectedPeroutRequest := &PtpPeroutRequest{
 		Index:        uint32(0),
 		Flags:        uint32(0x0),
-		StartOrPhase: PTPClockTime{Sec: 2},
-		Period:       PTPClockTime{Sec: 1},
-		On:           PTPClockTime{NSec: 500000000},
+		StartOrPhase: PtpClockTime{Sec: 2},
+		Period:       PtpClockTime{Sec: 1},
+		On:           PtpClockTime{Nsec: 500000000},
 	}
 
 	// Act
@@ -220,7 +220,8 @@ func TestGetPPSTimestampUnphased(t *testing.T) {
 
 func TestTimeToTimespec(t *testing.T) {
 	someTime := time.Unix(1075896000, 500000000)
-	result := timeToTimespec(someTime)
+	result, err := unix.TimeToTimespec(someTime)
+	require.NoError(t, err, "TimeToTimespec")
 	require.Equal(t, result, unix.Timespec{Sec: 1075896000, Nsec: 500000000})
 }
 
@@ -544,7 +545,7 @@ func TestPPSSink_getPPSEventTimestamp(t *testing.T) {
 	// Test cases
 	t.Run("successful read", func(t *testing.T) {
 		// Prepare
-		event := PTPExtTTS{Index: 1, T: PTPClockTime{Sec: 1}}
+		event := PtpExttsEvent{Index: 1, T: PtpClockTime{Sec: 1}}
 
 		mockDevice.EXPECT().Read(gomock.Any()).Return(1, nil).Do(func(buf []byte) {
 			var intBuffer bytes.Buffer
@@ -577,7 +578,7 @@ func TestPPSSink_getPPSEventTimestamp(t *testing.T) {
 
 	t.Run("unexpected channel", func(t *testing.T) {
 		// Prepare
-		event := PTPExtTTS{Index: 2, T: PTPClockTime{Sec: 1}}
+		event := PtpExttsEvent{Index: 2, T: PtpClockTime{Sec: 1}}
 
 		mockDevice.EXPECT().Read(gomock.Any()).Return(1, nil).Do(func(buf []byte) {
 			var intBuffer bytes.Buffer

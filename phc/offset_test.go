@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,11 +40,11 @@ func TestSysoffEstimateBasic(t *testing.T) {
 
 func TestSysoffBestSample(t *testing.T) {
 	extended := &PTPSysOffsetExtended{
-		NSamples: 3,
-		TS: [ptpMaxSamples][3]PTPClockTime{
-			{{Sec: 1667818190, NSec: 552297411}, {Sec: 1667818153, NSec: 552297462}, {Sec: 1667818190, NSec: 552297522}},
-			{{Sec: 1667818190, NSec: 552297533}, {Sec: 1667818153, NSec: 552297582}, {Sec: 1667818190, NSec: 552297622}},
-			{{Sec: 1667818190, NSec: 552297644}, {Sec: 1667818153, NSec: 552297661}, {Sec: 1667818190, NSec: 552297722}},
+		Samples: 3,
+		Ts: [unix.PTP_MAX_SAMPLES][3]PtpClockTime{
+			{{Sec: 1667818190, Nsec: 552297411}, {Sec: 1667818153, Nsec: 552297462}, {Sec: 1667818190, Nsec: 552297522}},
+			{{Sec: 1667818190, Nsec: 552297533}, {Sec: 1667818153, Nsec: 552297582}, {Sec: 1667818190, Nsec: 552297622}},
+			{{Sec: 1667818190, Nsec: 552297644}, {Sec: 1667818153, Nsec: 552297661}, {Sec: 1667818190, Nsec: 552297722}},
 		},
 	}
 	got := extended.BestSample()
@@ -57,10 +58,10 @@ func TestSysoffBestSample(t *testing.T) {
 }
 
 func TestSysoffFromExtendedTS(t *testing.T) {
-	extendedTS := [3]PTPClockTime{
-		{Sec: 1667818190, NSec: 552297411},
-		{Sec: 1667818153, NSec: 552297462},
-		{Sec: 1667818190, NSec: 552297522},
+	extendedTS := [3]PtpClockTime{
+		{Sec: 1667818190, Nsec: 552297411},
+		{Sec: 1667818153, Nsec: 552297462},
+		{Sec: 1667818190, Nsec: 552297522},
 	}
 	sysoff := sysoffFromExtendedTS(extendedTS)
 	want := SysoffResult{
@@ -74,9 +75,9 @@ func TestSysoffFromExtendedTS(t *testing.T) {
 
 func TestSysoffFromPrecise(t *testing.T) {
 	preciseTs := &PTPSysOffsetPrecise{
-		SysRealTime: PTPClockTime{Sec: 1667818190, NSec: 552297411},
-		Device:      PTPClockTime{Sec: 1667818153, NSec: 552297462},
-		SysMonoRaw:  PTPClockTime{Sec: 1667818190, NSec: 552297522},
+		Realtime: PtpClockTime{Sec: 1667818190, Nsec: 552297411},
+		Device:   PtpClockTime{Sec: 1667818153, Nsec: 552297462},
+		Monoraw:  PtpClockTime{Sec: 1667818190, Nsec: 552297522},
 	}
 	sysoff := SysoffFromPrecise(preciseTs)
 	want := SysoffResult{
@@ -90,14 +91,14 @@ func TestSysoffFromPrecise(t *testing.T) {
 
 func TestOffsetBetweenPreciseReadings(t *testing.T) {
 	preciseA := &PTPSysOffsetPrecise{
-		SysRealTime: PTPClockTime{Sec: 1667818190, NSec: 552297411},
-		Device:      PTPClockTime{Sec: 1667818153, NSec: 552297462},
-		SysMonoRaw:  PTPClockTime{Sec: 1667818190, NSec: 552297522},
+		Realtime: PtpClockTime{Sec: 1667818190, Nsec: 552297411},
+		Device:   PtpClockTime{Sec: 1667818153, Nsec: 552297462},
+		Monoraw:  PtpClockTime{Sec: 1667818190, Nsec: 552297522},
 	}
 	preciseB := &PTPSysOffsetPrecise{
-		SysRealTime: PTPClockTime{Sec: 1667818190, NSec: 552297666}, // 255ns later than A
-		Device:      PTPClockTime{Sec: 1667818153, NSec: 552297462},
-		SysMonoRaw:  PTPClockTime{Sec: 1667818190, NSec: 552297522},
+		Realtime: PtpClockTime{Sec: 1667818190, Nsec: 552297666}, // 255ns later than A
+		Device:   PtpClockTime{Sec: 1667818153, Nsec: 552297462},
+		Monoraw:  PtpClockTime{Sec: 1667818190, Nsec: 552297522},
 	}
 	offset := preciseB.Sub(preciseA)
 	require.Equal(t, time.Duration(-255), offset)
@@ -105,25 +106,25 @@ func TestOffsetBetweenPreciseReadings(t *testing.T) {
 
 func TestOffsetBetweenExtendedReadings(t *testing.T) {
 	extendedA := &PTPSysOffsetExtended{
-		NSamples: 6,
-		TS: [ptpMaxSamples][3]PTPClockTime{
-			{{Sec: 1667818190, NSec: 552297411}, {Sec: 1667818153, NSec: 552297462}, {Sec: 1667818190, NSec: 552297522}},
-			{{Sec: 1667818190, NSec: 552297533}, {Sec: 1667818153, NSec: 552297582}, {Sec: 1667818190, NSec: 552297602}},
-			{{Sec: 1667818190, NSec: 552297644}, {Sec: 1667818153, NSec: 552297661}, {Sec: 1667818190, NSec: 552297722}},
-			{{Sec: 1667818190, NSec: 552297755}, {Sec: 1667818153, NSec: 552297782}, {Sec: 1667818190, NSec: 552297822}},
-			{{Sec: 1667818190, NSec: 552297866}, {Sec: 1667818153, NSec: 552297861}, {Sec: 1667818190, NSec: 552297922}},
-			{{Sec: 1667818190, NSec: 552297966}, {Sec: 1667818153, NSec: 552297961}, {Sec: 1667818190, NSec: 552298022}},
+		Samples: 6,
+		Ts: [unix.PTP_MAX_SAMPLES][3]PtpClockTime{
+			{{Sec: 1667818190, Nsec: 552297411}, {Sec: 1667818153, Nsec: 552297462}, {Sec: 1667818190, Nsec: 552297522}},
+			{{Sec: 1667818190, Nsec: 552297533}, {Sec: 1667818153, Nsec: 552297582}, {Sec: 1667818190, Nsec: 552297602}},
+			{{Sec: 1667818190, Nsec: 552297644}, {Sec: 1667818153, Nsec: 552297661}, {Sec: 1667818190, Nsec: 552297722}},
+			{{Sec: 1667818190, Nsec: 552297755}, {Sec: 1667818153, Nsec: 552297782}, {Sec: 1667818190, Nsec: 552297822}},
+			{{Sec: 1667818190, Nsec: 552297866}, {Sec: 1667818153, Nsec: 552297861}, {Sec: 1667818190, Nsec: 552297922}},
+			{{Sec: 1667818190, Nsec: 552297966}, {Sec: 1667818153, Nsec: 552297961}, {Sec: 1667818190, Nsec: 552298022}},
 		},
 	}
 
 	extendedB := &PTPSysOffsetExtended{
-		NSamples: 5,
-		TS: [ptpMaxSamples][3]PTPClockTime{
-			{{Sec: 1667818191, NSec: 552298311}, {Sec: 1667818154, NSec: 552297452}, {Sec: 1667818191, NSec: 552298512}},
-			{{Sec: 1667818191, NSec: 552298033}, {Sec: 1667818154, NSec: 552297572}, {Sec: 1667818191, NSec: 552298712}},
-			{{Sec: 1667818191, NSec: 552299644}, {Sec: 1667818154, NSec: 552297691}, {Sec: 1667818191, NSec: 552308702}},
-			{{Sec: 1667818191, NSec: 552300755}, {Sec: 1667818154, NSec: 552297782}, {Sec: 1667818191, NSec: 552309812}},
-			{{Sec: 1667818191, NSec: 552301866}, {Sec: 1667818154, NSec: 552297861}, {Sec: 1667818191, NSec: 552328912}},
+		Samples: 5,
+		Ts: [unix.PTP_MAX_SAMPLES][3]PtpClockTime{
+			{{Sec: 1667818191, Nsec: 552298311}, {Sec: 1667818154, Nsec: 552297452}, {Sec: 1667818191, Nsec: 552298512}},
+			{{Sec: 1667818191, Nsec: 552298033}, {Sec: 1667818154, Nsec: 552297572}, {Sec: 1667818191, Nsec: 552298712}},
+			{{Sec: 1667818191, Nsec: 552299644}, {Sec: 1667818154, Nsec: 552297691}, {Sec: 1667818191, Nsec: 552308702}},
+			{{Sec: 1667818191, Nsec: 552300755}, {Sec: 1667818154, Nsec: 552297782}, {Sec: 1667818191, Nsec: 552309812}},
+			{{Sec: 1667818191, Nsec: 552301866}, {Sec: 1667818154, Nsec: 552297861}, {Sec: 1667818191, Nsec: 552328912}},
 		},
 	}
 	offset := extendedB.Sub(extendedA)
