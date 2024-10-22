@@ -42,7 +42,8 @@ func announcePkt(seq int) *ptp.Announce {
 			LogMessageInterval: 0x7f,
 		},
 		AnnounceBody: ptp.AnnounceBody{
-			OriginTimestamp: ptp.NewTimestamp(time.Now()),
+			OriginTimestamp:     ptp.NewTimestamp(time.Now()),
+			GrandmasterIdentity: 42,
 		},
 	}
 }
