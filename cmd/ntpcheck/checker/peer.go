@@ -190,7 +190,7 @@ var chronyToPeerSelection = map[chrony.SourceStateType]uint8{
 }
 
 // NewPeerFromChrony constructs Peer from three chrony packets
-func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.ReplyNTPData, n *chrony.ReplyNTPSourceName) (*Peer, error) {
+func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.NTPData, n *chrony.ReplyNTPSourceName) (*Peer, error) {
 	if s == nil {
 		return nil, fmt.Errorf("no ReplySourceData to create Peer")
 	}

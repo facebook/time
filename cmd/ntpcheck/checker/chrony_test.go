@@ -92,28 +92,32 @@ var (
 		},
 	}
 
-	replyNTPData0 = &chrony.ReplyNTPData{
-		NTPData: chrony.NTPData{
-			RefID:          123456,
-			RefTime:        refTime,
-			Leap:           0,
-			Poll:           10,
-			Offset:         0.03,
-			Stratum:        2,
-			PeerDispersion: 0.01,
-			LocalAddr:      net.ParseIP("192.168.0.1"),
+	replyNTPData0 = &chrony.ReplyNTPData2{
+		NTPData2: chrony.NTPData2{
+			NTPData: chrony.NTPData{
+				RefID:          123456,
+				RefTime:        refTime,
+				Leap:           0,
+				Poll:           10,
+				Offset:         0.03,
+				Stratum:        2,
+				PeerDispersion: 0.01,
+				LocalAddr:      net.ParseIP("192.168.0.1"),
+			},
 		},
 	}
-	replyNTPData1 = &chrony.ReplyNTPData{
-		NTPData: chrony.NTPData{
-			RefID:          654321,
-			RefTime:        refTime,
-			Leap:           0,
-			Poll:           11,
-			Offset:         0.02,
-			Stratum:        2,
-			PeerDispersion: 0.02,
-			LocalAddr:      net.ParseIP("192.168.0.1"),
+	replyNTPData1 = &chrony.ReplyNTPData2{
+		NTPData2: chrony.NTPData2{
+			NTPData: chrony.NTPData{
+				RefID:          654321,
+				RefTime:        refTime,
+				Leap:           0,
+				Poll:           11,
+				Offset:         0.02,
+				Stratum:        2,
+				PeerDispersion: 0.02,
+				LocalAddr:      net.ParseIP("192.168.0.1"),
+			},
 		},
 	}
 	replyNTPSourceName0 = &chrony.ReplyNTPSourceName{

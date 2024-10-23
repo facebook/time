@@ -93,6 +93,7 @@ const (
 	RpySelectData    ReplyType = 23
 	RpyServerStats3  ReplyType = 24
 	RpyServerStats4  ReplyType = 25
+	RpyNTPData2      ReplyType = 26
 )
 
 // source modes
@@ -625,6 +626,89 @@ type ReplyNTPData struct {
 	NTPData
 }
 
+type replyNTPData2Content struct {
+	RemoteAddr      ipAddr
+	LocalAddr       ipAddr
+	RemotePort      uint16
+	Leap            uint8
+	Version         uint8
+	Mode            uint8
+	Stratum         uint8
+	Poll            int8
+	Precision       int8
+	RootDelay       chronyFloat
+	RootDispersion  chronyFloat
+	RefID           uint32
+	RefTime         timeSpec
+	Offset          chronyFloat
+	PeerDelay       chronyFloat
+	PeerDispersion  chronyFloat
+	ResponseTime    chronyFloat
+	JitterAsymmetry chronyFloat
+	Flags           uint16
+	TXTssChar       uint8
+	RXTssChar       uint8
+	TotalTXCount    uint32
+	TotalRXCount    uint32
+	TotalValidCount uint32
+	TotalKernelTXts uint32
+	TotalKernelRXts uint32
+	TotalHWTXts     uint32
+	TotalHWRXts     uint32
+	Reserved        [4]int32
+}
+
+// NTPData2 contains parsed version of a new 'ntpdata' reply
+type NTPData2 struct {
+	NTPData
+
+	TotalKernelTXts uint32
+	TotalKernelRXts uint32
+	TotalHWTXts     uint32
+	TotalHWRXts     uint32
+}
+
+func newNTPData2(r *replyNTPData2Content) *NTPData2 {
+	return &NTPData2{
+		NTPData: NTPData{
+			RemoteAddr:      r.RemoteAddr.ToNetIP(),
+			LocalAddr:       r.LocalAddr.ToNetIP(),
+			RemotePort:      r.RemotePort,
+			Leap:            r.Leap,
+			Version:         r.Version,
+			Mode:            r.Mode,
+			Stratum:         r.Stratum,
+			Poll:            r.Poll,
+			Precision:       r.Precision,
+			RootDelay:       r.RootDelay.ToFloat(),
+			RootDispersion:  r.RootDispersion.ToFloat(),
+			RefID:           r.RefID,
+			RefTime:         r.RefTime.ToTime(),
+			Offset:          r.Offset.ToFloat(),
+			PeerDelay:       r.PeerDelay.ToFloat(),
+			PeerDispersion:  r.PeerDispersion.ToFloat(),
+			ResponseTime:    r.ResponseTime.ToFloat(),
+			JitterAsymmetry: r.JitterAsymmetry.ToFloat(),
+			Flags:           r.Flags,
+			TXTssChar:       r.TXTssChar,
+			RXTssChar:       r.RXTssChar,
+			TotalTXCount:    r.TotalTXCount,
+			TotalRXCount:    r.TotalRXCount,
+			TotalValidCount: r.TotalValidCount,
+		},
+		TotalKernelTXts: r.TotalKernelTXts,
+		TotalKernelRXts: r.TotalKernelRXts,
+		TotalHWTXts:     r.TotalHWTXts,
+		TotalHWRXts:     r.TotalHWRXts,
+	}
+}
+
+// ReplyNTPData2 is a what end user will get in 'ntp data' response
+type ReplyNTPData2 struct {
+	ReplyHead
+	NTPData2
+}
+
 type replyNTPSourceNameContent struct {
 	Name [256]uint8
 }
@@ -1021,6 +1105,16 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		return &ReplyNTPData{
 			ReplyHead: *head,
 			NTPData:   *newNTPData(data),
+		}, nil
+	case RpyNTPData2:
+		data := new(replyNTPData2Content)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		Logger.Printf("response data: %+v", data)
+		return &ReplyNTPData2{
+			ReplyHead: *head,
+			NTPData2:  *newNTPData2(data),
 		}, nil
 	case RpyNTPSourceName:
 		data := new(replyNTPSourceNameContent)

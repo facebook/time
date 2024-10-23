@@ -123,16 +123,22 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 			return nil, fmt.Errorf("Got wrong 'sourcedata' response %+v", packet)
 		}
 		// get ntpdata when using a unix socket
-		var ntpData *chrony.ReplyNTPData
+		var ntpData *chrony.NTPData
 		if sourceData.Mode != chrony.SourceModeRef && n.Unix() {
 			ntpDataReq := chrony.NewNTPDataPacket(sourceData.IPAddr)
 			packet, err = n.Client.Communicate(ntpDataReq)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get 'ntpdata' response for source #%d: %w", i, err)
 			}
-			ntpData, ok = packet.(*chrony.ReplyNTPData)
-			if !ok {
-				return nil, fmt.Errorf("Got wrong 'ntpdata' response %+v", packet)
+			rpyNTPData, ok := packet.(*chrony.ReplyNTPData)
+			if ok {
+				ntpData = &rpyNTPData.NTPData
+			} else {
+				rpyNTPData2, ok := packet.(*chrony.ReplyNTPData2)
+				if !ok {
+					return nil, fmt.Errorf("Got wrong 'ntpdata' response %+v", packet)
+				}
+				ntpData = &rpyNTPData2.NTPData
 			}
 		}
 		// get peer sourcename using a unix socket
