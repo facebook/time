@@ -106,7 +106,7 @@ func TestNewPeerFromChrony(t *testing.T) {
 	sourceData.State = chrony.SourceStateCandidate
 	sourceData.Flags = chrony.NTPFlagsTests
 
-	ntpData := &chrony.ReplyNTPData{}
+	ntpData := &chrony.NTPData{}
 	ntpData.Poll = 10
 	ntpData.RefID = 123456
 	ntpData.RefTime = time.Unix(1587738257, 0)
@@ -114,7 +114,7 @@ func TestNewPeerFromChrony(t *testing.T) {
 	tests := []struct {
 		name    string
 		s       *chrony.ReplySourceData
-		p       *chrony.ReplyNTPData
+		p       *chrony.NTPData
 		n       *chrony.ReplyNTPSourceName
 		want    *Peer
 		wantErr bool
@@ -128,7 +128,7 @@ func TestNewPeerFromChrony(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "fallback, no ReplyNTPData",
+			name: "fallback, no NTPData",
 			s:    sourceData,
 			p:    nil,
 			want: &Peer{
