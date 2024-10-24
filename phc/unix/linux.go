@@ -270,25 +270,6 @@ const (
 	PTP_PF_PHYSYNC        //nolint:revive
 )
 
-// https://go-review.googlesource.com/c/sys/+/621498
-
-// TimeToPtpClockTime returns t as PtpClockTime
-func TimeToPtpClockTime(t time.Time) PtpClockTime {
-	sec := t.Unix()
-	nsec := uint32(t.Nanosecond())
-	return PtpClockTime{Sec: sec, Nsec: nsec}
-}
-
-// Time returns PTPClockTime as time.Time
-func (t *PtpClockTime) Time() time.Time {
-	return time.Unix(t.Sec, int64(t.Nsec))
-}
-
-// Unix returns the time stored in t as seconds plus nanoseconds.
-func (t *PtpClockTime) Unix() (sec int64, nsec int64) {
-	return t.Sec, int64(t.Nsec)
-}
-
 // bridging to upstream
 
 type Cmsghdr = unix.Cmsghdr

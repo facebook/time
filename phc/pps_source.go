@@ -292,7 +292,8 @@ func (ppsSink *PPSSink) getPPSEventTimestamp() (time.Time, error) {
 		return time.Time{}, fmt.Errorf("extts on unexpected pin index %d, expected %d", event.Index, ppsSink.InputPin)
 	}
 
-	eventTime := event.T.Time()
+	t := event.T
+	eventTime := time.Unix(t.Sec, int64(t.Nsec))
 
 	return eventTime, nil
 }
