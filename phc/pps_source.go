@@ -68,6 +68,7 @@ const (
 // ServoController abstracts away servo
 type ServoController interface {
 	Sample(offset int64, localTs uint64) (float64, servo.State)
+	Unlock()
 }
 
 // Timestamper represents a device that can return a Timestamp
@@ -232,10 +233,12 @@ func PPSClockSync(pi ServoController, ppsSource Timestamper, dstEventTimestamp t
 	switch servoState {
 	case servo.StateJump:
 		if err := dstDevice.Step(-phcOffset); err != nil {
+			pi.Unlock()
 			return fmt.Errorf("failed to step clock by %v: %w", -phcOffset, err)
 		}
 	case servo.StateLocked:
 		if err := dstDevice.AdjFreq(-freqAdj); err != nil {
+			pi.Unlock()
 			return fmt.Errorf("failed to adjust freq to %v: %w", -freqAdj, err)
 		}
 	case servo.StateInit:

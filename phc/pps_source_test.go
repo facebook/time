@@ -257,6 +257,7 @@ func TestPPSClockSyncServoLockedFailure(t *testing.T) {
 		servoMock.EXPECT().Sample(gomock.Any(), gomock.Any()).Return(0.1, servo.StateLocked),
 		mockDeviceController.EXPECT().File().Return(os.NewFile(0, "test")),
 		mockDeviceController.EXPECT().AdjFreq(-0.1).Return(fmt.Errorf("error")),
+		servoMock.EXPECT().Unlock(),
 	)
 
 	// Act
@@ -297,6 +298,7 @@ func TestPPSClockSyncServoJumpFailure(t *testing.T) {
 		mockDeviceController.EXPECT().File().Return(os.NewFile(0, "test")),
 		// TODO: Improve comparison as, due to issues with typing, gomock comparison is not precise
 		mockDeviceController.EXPECT().Step(gomock.Any()).Return(fmt.Errorf("error")),
+		servoMock.EXPECT().Unlock(),
 	)
 
 	// Act

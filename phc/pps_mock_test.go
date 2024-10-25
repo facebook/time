@@ -67,6 +67,18 @@ func (mr *MockServoControllerMockRecorder) Sample(offset, localTs interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sample", reflect.TypeOf((*MockServoController)(nil).Sample), offset, localTs)
 }
 
+// Unlock mocks base method.
+func (m *MockServoController) Unlock() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Unlock")
+}
+
+// Unlock indicates an expected call of Unlock.
+func (mr *MockServoControllerMockRecorder) Unlock() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unlock", reflect.TypeOf((*MockServoController)(nil).Unlock))
+}
+
 // MockTimestamper is a mock of Timestamper interface.
 type MockTimestamper struct {
 	ctrl     *gomock.Controller

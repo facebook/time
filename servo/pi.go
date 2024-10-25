@@ -384,6 +384,12 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 	}
 }
 
+// Unlock resets and unlocks the servo
+func (s *PiServo) Unlock() {
+	s.count = 0
+	s.filter.Reset()
+}
+
 // Reset - cleanup and restart filter
 func (f *PiServoFilter) Reset() {
 	f.offsetSamples = ring.New(f.cfg.ringSize)
