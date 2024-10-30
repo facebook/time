@@ -217,21 +217,34 @@ func NewPiServo(interval time.Duration, firstStepth time.Duration, stepth time.D
 	return pi, nil
 }
 
-// PPSClockSync adjusts the frequency of the destination device based on the PPS from the ppsSource
-func PPSClockSync(pi ServoController, ppsSource Timestamper, dstEventTimestamp time.Time, dstDevice DeviceController) error {
-	srcTimestamp, err := ppsSource.Timestamp() // seconds set, nanosseconds set to 0
+func validatePPSEvent(eventTimestamp time.Time, dstDevice DeviceController) error {
+	dstTs, err := dstDevice.Time()
 	if err != nil {
-		return fmt.Errorf("error getting timestamp from PPS source: %w", err)
+		return fmt.Errorf("error getting dst timestamp")
 	}
+	if dstTs.Sub(eventTimestamp).Abs().Seconds() > 1 {
+		return fmt.Errorf("stale (over 1s) event: PPS event was %+v before current time on dst %+v", dstTs.Sub(eventTimestamp), dstTs.UnixNano())
+	}
+	return nil
+}
 
-	phcOffset := dstEventTimestamp.Sub(*srcTimestamp)
-	//nolint:gosec
+// PPSClockSync adjusts the frequency of the destination device based on the PPS from the ppsSource
+func PPSClockSync(pi ServoController, srcTimestamp time.Time, dstEventTimestamp time.Time, dstDevice DeviceController) error {
+	phcOffset := dstEventTimestamp.Sub(srcTimestamp)
+
+	err := validatePPSEvent(dstEventTimestamp, dstDevice)
+	if err != nil {
+		return fmt.Errorf("error validating event: %w", err)
+	}
 	freqAdj, servoState := pi.Sample(int64(phcOffset), uint64(dstEventTimestamp.UnixNano())) // unix nano is never negative
 
 	log.Printf("%s offset %10d servo %s freq %+7.0f", dstDevice.File().Name(), int64(phcOffset), servoState.String(), freqAdj)
 
 	switch servoState {
 	case servo.StateJump:
+		if err := dstDevice.AdjFreq(-freqAdj); err != nil {
+			return fmt.Errorf("failed to adjust freq to %v: %w", -freqAdj, err)
+		}
 		if err := dstDevice.Step(-phcOffset); err != nil {
 			pi.Unlock()
 			return fmt.Errorf("failed to step clock by %v: %w", -phcOffset, err)

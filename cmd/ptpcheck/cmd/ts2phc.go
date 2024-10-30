@@ -17,6 +17,7 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -67,22 +68,41 @@ func ts2phcRun(srcDevicePath string, dstDeviceName string, interval time.Duratio
 	if err != nil {
 		return fmt.Errorf("error getting servo: %w", err)
 	}
-	ticker := time.NewTicker(interval)
 
-	for range ticker.C {
-		eventTime, err := phc.PollLatestPPSEvent(ppsSink)
-		if err != nil {
-			log.Errorf("Error polling PPS Sink: %v", err)
-			continue
-		} else if eventTime.IsZero() {
-			continue
-		}
-		log.Debugf("PPS event at %+v", eventTime.UnixNano())
-		if err := phc.PPSClockSync(pi, ppsSource, eventTime, dstDevice); err != nil {
-			log.Errorf("Error syncing PHC: %v", err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	timer := time.NewTimer(0)
+	lastTick := time.Now()
+
+	for {
+		select {
+		case <-timer.C: // "RUNS EVERY SECOND ISH"
+			timer.Reset(interval)
+			eventTime, err := phc.PollLatestPPSEvent(ppsSink)
+			if err != nil {
+				log.Errorf("Error polling PPS Sink: %v", err)
+				continue
+			}
+			if eventTime.IsZero() {
+				continue
+			}
+			log.Debugf("PPS event at %+v", eventTime.UnixNano())
+			srcTimestamp, err := ppsSource.Timestamp()
+			if err != nil {
+				log.Errorf("Error getting source timestamp: %v", err)
+				continue
+			}
+			log.Debugf("PPS Src Timestamp: %+v\n", srcTimestamp.UnixNano())
+			now := time.Now()
+			log.Debugf("Tick took %vms sys time to call sync\n", now.Sub(lastTick).Milliseconds())
+			lastTick = now
+			if err := phc.PPSClockSync(pi, *srcTimestamp, eventTime, dstDevice); err != nil {
+				log.Errorf("Error syncing PHC: %v", err)
+			}
+		case <-ctx.Done():
+			return nil
 		}
 	}
-	return nil
 }
 
 func getPPSSourceFromPath(srcDevicePath string, pinIndex uint) (*phc.PPSSource, error) {
