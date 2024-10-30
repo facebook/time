@@ -398,7 +398,7 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 		log.Warningf("no Best Master selected")
 		p.bestGM = netip.Addr{}
 		freqAdj := p.setMeanFreq()
-		log.Infof("offset Unknown s%d freq %+7.0f path delay Unknown", servo.StateHoldover, freqAdj)
+		log.Infof("offset Unknown s%d freq %+7.0f path delay Unknown", servo.StateHoldover, -freqAdj)
 		return
 	}
 	bestAddr := idsToClients[best.GrandmasterIdentity]
