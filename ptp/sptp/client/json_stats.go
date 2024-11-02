@@ -51,11 +51,12 @@ func (s JSONStats) Start(monitoringport int, interval time.Duration) {
 		}
 	}()
 
-	http.HandleFunc("/", s.handleRootRequest)
-	http.HandleFunc("/counters", s.handleCountersRequest)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.handleRootRequest)
+	mux.HandleFunc("/counters", s.handleCountersRequest)
 	addr := fmt.Sprintf(":%d", monitoringport)
 	log.Infof("Starting http json server on %s", addr)
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("Failed to start listener: %v", err)
 	}
 }
