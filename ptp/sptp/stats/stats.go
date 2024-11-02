@@ -112,7 +112,7 @@ func (c Counters) SysStats() map[string]int64 {
 // FetchStats returns populated Stats structure fetched from the url
 func FetchStats(url string) (Stats, error) {
 	c := http.Client{
-		Timeout: time.Second * 2,
+		Timeout: time.Second,
 	}
 
 	resp, err := c.Get(url)
@@ -137,7 +137,7 @@ func FetchCounters(url string) (Counters, error) {
 	counters := make(Counters)
 	url = fmt.Sprintf("%s/counters", url)
 	c := http.Client{
-		Timeout: time.Second * 2,
+		Timeout: time.Second,
 	}
 
 	resp, err := c.Get(url)
