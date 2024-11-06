@@ -17,6 +17,7 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/binary"
 	"errors"
@@ -117,12 +118,23 @@ func receiveNTPPacketWithRetries(connFd int, buf, oob []byte, tries int) (*ntp.P
 }
 
 // ntpDate prints data similar to 'ntptime' command output
-func ntpDate(remoteServerAddr string, remoteServerPort string, requests int) (err error) {
+func ntpDate(remoteServerAddr string, remoteServerPort string, requests int, ntpdateLocalAddr string) (err error) {
 	timeout := 5 * time.Second
 	singleAttemptTimeout := 100 * time.Millisecond
 	tries := int(timeout / singleAttemptTimeout)
 	addr := net.JoinHostPort(remoteServerAddr, remoteServerPort)
-	conn, err := net.DialTimeout("udp", addr, timeout)
+
+	dialer := &net.Dialer{
+		LocalAddr: &net.UDPAddr{
+			// nil IP is same as default
+			IP: net.ParseIP(ntpdateLocalAddr),
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	conn, err := dialer.DialContext(ctx, "udp", addr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to %s: %w", addr, err)
 	}
@@ -290,6 +302,7 @@ var ntpdateRequests int
 var sourceLeapSeconds string
 var destLeapSeconds string
 var offsetMonth int
+var ntpdateLocalAddr string
 
 func init() {
 	RootCmd.AddCommand(utilsCmd)
@@ -307,6 +320,7 @@ func init() {
 	ntpdateCmd.Flags().StringVarP(&remoteServerAddr, "server", "s", "", "Server to query")
 	ntpdateCmd.Flags().IntVarP(&remoteServerPort, "port", "p", 123, "Port of the remote server")
 	ntpdateCmd.Flags().IntVarP(&ntpdateRequests, "requests", "r", 3, "How many requests to send")
+	ntpdateCmd.Flags().StringVarP(&ntpdateLocalAddr, "local-addr", "l", "", "Source IP address")
 	// printleap
 	utilsCmd.AddCommand(printLeapCmd)
 	printLeapCmd.Flags().StringVarP(&sourceLeapSeconds, "srcfile", "s", "/usr/share/zoneinfo/right/UTC", "Source file of leap seconds")
@@ -364,7 +378,7 @@ var ntpdateCmd = &cobra.Command{
 			fmt.Println("server must be specified")
 			os.Exit(1)
 		}
-		if err := ntpDate(remoteServerAddr, strconv.Itoa(remoteServerPort), ntpdateRequests); err != nil {
+		if err := ntpDate(remoteServerAddr, strconv.Itoa(remoteServerPort), ntpdateRequests, ntpdateLocalAddr); err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
