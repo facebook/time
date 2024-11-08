@@ -34,6 +34,7 @@ var (
 	dstDeviceFlag string
 	intervalFlag  time.Duration
 	stepthFlag    time.Duration
+	offsetFlag    time.Duration
 )
 
 func init() {
@@ -41,6 +42,7 @@ func init() {
 	phc2phcCmd.Flags().StringVarP(&srcDeviceFlag, "source", "s", "/dev/ptp0", "Source PHC device")
 	phc2phcCmd.Flags().StringVarP(&dstDeviceFlag, "destination", "d", "/dev/ptp2", "Destination PHC device")
 	phc2phcCmd.Flags().DurationVarP(&intervalFlag, "interval", "i", time.Second, "Interval between syncs. Frequency")
+	phc2phcCmd.Flags().DurationVarP(&offsetFlag, "offset", "o", 0, "Specify the offset between the source and destination times")
 	phc2phcCmd.Flags().DurationVarP(&stepthFlag, "step", "f", 0, "First step threshold")
 }
 
@@ -112,6 +114,7 @@ func phc2phcRun(srcDevice string, dstDevice string, interval time.Duration, step
 			timeAndOffsetSrc = phc.SysoffFromPrecise(preciseSrc)
 			timeAndOffsetDst = phc.SysoffFromPrecise(preciseDst)
 		}
+		phcOffset += offsetFlag
 		freqAdj, state := pi.Sample(int64(phcOffset), uint64(timeAndOffsetDst.SysTime.UnixNano()))
 		log.Infof("offset %12d freq %+9.0f path delay %5d", phcOffset, freqAdj, timeAndOffsetSrc.Delay.Nanoseconds()+timeAndOffsetDst.Delay.Nanoseconds())
 		if state == servo.StateJump {
