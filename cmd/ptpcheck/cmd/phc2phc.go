@@ -78,9 +78,9 @@ func phc2phcRun(srcDevice string, dstDevice string, interval time.Duration, step
 	if err != nil {
 		log.Warningf("max PHC frequency error: %v", err)
 		maxFreq = phc.DefaultMaxClockFreqPPB
-	} else {
-		pi.SetMaxFreq(maxFreq)
 	}
+	pi.SetMaxFreq(maxFreq)
+
 	log.Debugf("max PHC frequency: %v", maxFreq)
 
 	for ; ; time.Sleep(interval) {
