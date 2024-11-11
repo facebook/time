@@ -182,7 +182,7 @@ func TestGetPPSTimestampMoreThanHalfSecondShouldRemoveNanosseconds(t *testing.T)
 	// Assert
 	expected := time.Unix(1075896000, 23312)
 	require.NoError(t, err)
-	require.EqualValues(t, expected, *timestamp)
+	require.EqualValues(t, expected, timestamp)
 }
 
 func TestGetPPSTimestampLessThanHalfSecondShouldRemoveNanosseconds(t *testing.T) {
@@ -198,7 +198,7 @@ func TestGetPPSTimestampLessThanHalfSecondShouldRemoveNanosseconds(t *testing.T)
 	// Assert
 	expected := time.Unix(1075896000, 23312)
 	require.NoError(t, err)
-	require.EqualValues(t, expected, *timestamp)
+	require.EqualValues(t, expected, timestamp)
 }
 
 func TestGetPPSTimestampUnphased(t *testing.T) {
@@ -214,7 +214,7 @@ func TestGetPPSTimestampUnphased(t *testing.T) {
 	// Assert
 	expected := time.Unix(1075896000, 0)
 	require.NoError(t, err)
-	require.EqualValues(t, expected, *timestamp)
+	require.EqualValues(t, expected, timestamp)
 }
 
 func TestTimeToTimespec(t *testing.T) {
@@ -446,90 +446,6 @@ func TestNewPiServoNoFirstStep(t *testing.T) {
 	require.Equal(t, -1.0, servo.MeanFreq())
 	require.Equal(t, "INIT", servo.GetState().String())
 	require.Equal(t, 2.0, servo.GetMaxFreq())
-}
-
-func TestPollLatestPPSEvent_SuccessfulPollWithEvent(t *testing.T) {
-	mockPPSPoller, finish := SetupMockPoller(t)
-	defer finish()
-
-	// Prepare
-	polledEventTime := time.Unix(1075896000, 500000000)
-	mockPPSPoller.EXPECT().pollPPSSink().Return(polledEventTime, nil)
-	mockPPSPoller.EXPECT().pollPPSSink().Return(time.Time{}, fmt.Errorf("error"))
-
-	// Act
-	resultEventTime, err := PollLatestPPSEvent(mockPPSPoller)
-
-	// Assert
-	require.Equal(t, polledEventTime, resultEventTime)
-	require.NoError(t, err)
-}
-
-func TestPollLatestPPSEvent_MaxAttempts(t *testing.T) {
-	mockPPSPoller, finish := SetupMockPoller(t)
-	defer finish()
-
-	// Prepare
-	polledEventTime := time.Unix(1075896000, 500000000)
-	mockPPSPoller.EXPECT().pollPPSSink().Return(time.Unix(1075895000, 500000000), nil).Times(19)
-	mockPPSPoller.EXPECT().pollPPSSink().Return(polledEventTime, nil)
-
-	// Act
-	resultEventTime, err := PollLatestPPSEvent(mockPPSPoller)
-
-	// Assert
-	require.Equal(t, polledEventTime, resultEventTime)
-	require.NoError(t, err)
-}
-
-func TestPollLatestPPSEvent_ErrorPolling(t *testing.T) {
-	mockPPSPoller, finish := SetupMockPoller(t)
-	defer finish()
-
-	// Prepare
-	mockPPSPoller.EXPECT().pollPPSSink().Return(time.Time{}, fmt.Errorf("poll error")).Times(20)
-
-	// Act
-	event, err := PollLatestPPSEvent(mockPPSPoller)
-
-	// Assert
-	require.Zero(t, event)
-	require.Error(t, err)
-}
-
-func TestPollLatestPPSEvent_MultiplePollsWithEvents(t *testing.T) {
-	mockPPSPoller, finish := SetupMockPoller(t)
-	defer finish()
-
-	// Prepare
-	lastPolledEventTime := time.Unix(1075896000, 500000000)
-	mockPPSPoller.EXPECT().pollPPSSink().Return(lastPolledEventTime.Add(-1*time.Second), nil)
-	mockPPSPoller.EXPECT().pollPPSSink().Return(lastPolledEventTime, nil)
-	mockPPSPoller.EXPECT().pollPPSSink().Return(time.Time{}, fmt.Errorf("error"))
-
-	// Act
-	resultEventTime, err := PollLatestPPSEvent(mockPPSPoller)
-
-	// Assert
-	require.Equal(t, lastPolledEventTime, resultEventTime)
-	require.NoError(t, err)
-}
-
-func TestPollLatestPPSEvent_MultiplePollsWithError(t *testing.T) {
-	mockPPSPoller, finish := SetupMockPoller(t)
-	defer finish()
-
-	// Prepare
-	lastPolledEventTime := time.Unix(1075896000, 500000000)
-	mockPPSPoller.EXPECT().pollPPSSink().Return(lastPolledEventTime, nil)
-	mockPPSPoller.EXPECT().pollPPSSink().Return(time.Time{}, fmt.Errorf("poll error"))
-
-	// Act
-	resultEventTime, err := PollLatestPPSEvent(mockPPSPoller)
-
-	// Assert
-	require.Equal(t, lastPolledEventTime, resultEventTime)
-	require.NoError(t, err)
 }
 
 func TestPPSSink_getPPSEventTimestamp(t *testing.T) {
