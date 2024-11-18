@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -45,4 +47,58 @@ func TestCollectionTimeout(t *testing.T) {
 	err := p.timestamps(timeout)
 	require.Greater(t, time.Since(start), timeout)
 	require.Equal(t, fmt.Errorf("timeout waiting"), err)
+}
+
+func TestT1IsZero(t *testing.T) {
+	ts := timestamps{}
+	ts.t1 = time.Date(0001, time.January, 1, 0, 0, 0, 0, time.UTC)
+	ts.t2 = time.Date(2024, time.November, 1, 9, 0, 0, 2, time.UTC)
+	ts.t3 = time.Date(2024, time.November, 1, 9, 0, 0, 0, time.UTC)
+	ts.t4 = time.Date(2024, time.November, 1, 9, 0, 0, 1, time.UTC)
+	server := "mars"
+	count := 1
+	totalRTT := time.Duration(500_000)
+
+	readStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	ptpingOutput(count, server, totalRTT, ts)
+
+	w.Close()
+	out, _ := io.ReadAll(r)
+	os.Stdout = readStdout
+
+	ptpingOutput(count, server, totalRTT, ts)
+	expectedOutput := fmt.Sprintf("mars: seq=1 net=NaN (->1ns + <-NaN)\trtt=500µs\n")
+	if string(out) != expectedOutput {
+		t.Errorf("Expected %s, got %s", expectedOutput, out)
+	}
+}
+
+func TestT2IsZero(t *testing.T) {
+	ts := timestamps{}
+	ts.t1 = time.Date(2024, time.November, 1, 9, 0, 0, 101, time.UTC)
+	ts.t2 = time.Date(0001, time.January, 1, 0, 0, 0, 0, time.UTC)
+	ts.t3 = time.Date(2024, time.November, 1, 9, 0, 0, 0, time.UTC)
+	ts.t4 = time.Date(2024, time.November, 1, 9, 0, 0, 1, time.UTC)
+	server := "jupiter"
+	count := 2
+	totalRTT := time.Duration(250_000)
+
+	readStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	ptpingOutput(count, server, totalRTT, ts)
+
+	w.Close()
+	out, _ := io.ReadAll(r)
+	os.Stdout = readStdout
+
+	ptpingOutput(count, server, totalRTT, ts)
+	expectedOutput := fmt.Sprintf("jupiter: seq=2 net=NaN (->1ns + <-NaN)\trtt=250µs\n")
+	if string(out) != expectedOutput {
+		t.Errorf("Expected %s, got %s", expectedOutput, out)
+	}
 }

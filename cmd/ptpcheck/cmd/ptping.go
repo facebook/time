@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"net"
 	"net/netip"
@@ -54,6 +55,7 @@ type timestamps struct {
 	t2 time.Time
 	t3 time.Time
 	t4 time.Time
+	ts time.Time // software timestamp SYNC message received
 }
 
 func (t *timestamps) reset() {
@@ -61,6 +63,7 @@ func (t *timestamps) reset() {
 	t.t2 = time.Time{}
 	t.t3 = time.Time{}
 	t.t4 = time.Time{}
+	t.ts = time.Time{}
 }
 
 type ptping struct {
@@ -128,6 +131,7 @@ func (p *ptping) runReader() error {
 		switch msgType {
 		case ptp.MessageSync, ptp.MessageDelayReq:
 			p.ts.t2 = rxts
+			p.ts.ts = time.Now()
 			if err = ptp.FromBytes(buf[:bbuf], sync); err != nil {
 				return fmt.Errorf("reading sync msg: %w", err)
 			}
@@ -141,6 +145,21 @@ func (p *ptping) runReader() error {
 		default:
 			log.Infof("got unsupported packet %v:", msgType)
 		}
+	}
+}
+
+func ptpingOutput(count int, server string, totalRTT time.Duration, ts timestamps) {
+	fw := ts.t4.Sub(ts.t3)
+	bk := ts.t2.Sub(ts.t1)
+	netRTT := fw + bk
+	// if we didn't get a valid T1 or T2, set the reverse latency to 0 (
+	if ts.t1.IsZero() || ts.t2.IsZero() {
+		bk = 0
+	}
+	if bk == 0 {
+		fmt.Printf("%s: seq=%d net=%f (->%s + <-%f)\trtt=%s\n", server, count, math.NaN(), fw, math.NaN(), totalRTT)
+	} else {
+		fmt.Printf("%s: seq=%d net=%s (->%s + <-%s)\trtt=%s\n", server, count, netRTT, fw, bk, totalRTT)
 	}
 }
 
@@ -164,7 +183,9 @@ func ptpingRun(iface string, dscp int, server string, count int, timeout time.Du
 
 	for c := 1; c <= count; c++ {
 		p.ts.reset()
+		start := time.Now()
 		_, p.ts.t3, err = p.client.SendEventMsg(client.ReqDelay(p.clockID, portID))
+
 		if err != nil {
 			log.Errorf("failed to send request: %s", err)
 			continue
@@ -174,13 +195,8 @@ func ptpingRun(iface string, dscp int, server string, count int, timeout time.Du
 			log.Errorf("failed to read sync response: %v", err)
 			continue
 		}
-		fw := p.ts.t4.Sub(p.ts.t3)
-		bk := p.ts.t2.Sub(p.ts.t1)
-		if p.ts.t1.IsZero() {
-			bk = 0
-		}
-
-		fmt.Printf("%s: seq=%d time=%s\t(->%s + <-%s)\n", server, c, fw+bk, fw, bk)
+		totalRTT := p.ts.ts.Sub(start)
+		ptpingOutput(c, server, totalRTT, p.ts)
 	}
 	return nil
 }
