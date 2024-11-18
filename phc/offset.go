@@ -45,9 +45,9 @@ type SysoffResult struct {
 
 // based on sysoff_estimate from ptp4l sysoff.c
 func sysoffFromExtendedTS(extendedTS [3]PtpClockTime) SysoffResult {
-	t1 := extendedTS[0].Time()
-	tp := extendedTS[1].Time()
-	t2 := extendedTS[2].Time()
+	t1 := time.Unix(extendedTS[0].Sec, int64(extendedTS[0].Nsec))
+	tp := time.Unix(extendedTS[1].Sec, int64(extendedTS[1].Nsec))
+	t2 := time.Unix(extendedTS[2].Sec, int64(extendedTS[2].Nsec))
 	interval := t2.Sub(t1)
 	timestamp := t1.Add(interval / 2)
 	offset := timestamp.Sub(tp)
@@ -60,13 +60,14 @@ func sysoffFromExtendedTS(extendedTS [3]PtpClockTime) SysoffResult {
 }
 
 // SysoffFromPrecise returns SysoffResult from *PTPSysOffsetPrecise . Code based on sysoff_precise from ptp4l sysoff.c
-func SysoffFromPrecise(precise *PTPSysOffsetPrecise) SysoffResult {
-	offset := precise.Realtime.Time().Sub(precise.Device.Time())
+func SysoffFromPrecise(pre *PTPSysOffsetPrecise) SysoffResult {
+	tp := time.Unix(pre.Device.Sec, int64(pre.Device.Nsec))
+	tr := time.Unix(pre.Realtime.Sec, int64(pre.Realtime.Nsec))
 	return SysoffResult{
-		SysTime: precise.Realtime.Time(),
-		PHCTime: precise.Device.Time(),
+		SysTime: tr,
+		PHCTime: tp,
 		Delay:   0, // They are measured at the same time
-		Offset:  offset,
+		Offset:  tr.Sub(tp),
 	}
 }
 

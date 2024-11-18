@@ -90,13 +90,15 @@ func Time(iface string, method TimeMethod) (time.Time, error) {
 			return time.Time{}, err
 		}
 		latest := extended.Ts[extended.Samples-1]
-		return latest[1].Time(), nil
+		tp := latest[1]
+		return time.Unix(tp.Sec, int64(tp.Nsec)), nil
 	case MethodIoctlSysOffsetPrecise:
 		precise, err := dev.ReadSysoffPrecise()
 		if err != nil {
 			return time.Time{}, err
 		}
-		return precise.Device.Time(), nil
+		tp := precise.Device
+		return time.Unix(tp.Sec, int64(tp.Nsec)), nil
 	default:
 		return time.Time{}, fmt.Errorf("unknown method to get PHC time %q", method)
 	}
