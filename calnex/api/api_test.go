@@ -56,11 +56,11 @@ func TestChannel(t *testing.T) {
 	for _, channelS := range wrongChannelNames {
 		c, err := ChannelFromString(channelS)
 		require.Nil(t, c)
-		require.ErrorIs(t, errBadChannel, err)
+		require.ErrorIs(t, ErrBadChannel, err)
 
 		c = new(Channel)
 		err = c.UnmarshalText([]byte(channelS))
-		require.ErrorIs(t, errBadChannel, err)
+		require.ErrorIs(t, ErrBadChannel, err)
 	}
 }
 

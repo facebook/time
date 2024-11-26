@@ -312,7 +312,7 @@ var channelFromInt = map[int]Channel{
 func ChannelFromInt(value int) (*Channel, error) {
 	c, ok := channelFromInt[value]
 	if !ok {
-		return nil, errBadChannel
+		return nil, ErrBadChannel
 	}
 	return &c, nil
 }
@@ -321,7 +321,7 @@ func ChannelFromInt(value int) (*Channel, error) {
 func ChannelFromString(value string) (*Channel, error) {
 	c := Channel(strings.ToUpper(value))
 	if _, ok := channelCalnexToInt[c]; !ok {
-		return nil, errBadChannel
+		return nil, ErrBadChannel
 	}
 	return &c, nil
 }
@@ -471,7 +471,8 @@ const (
 )
 
 var (
-	errBadChannel = errors.New("channel is not recognized")
+	// ErrBadChannel is returned when channel is not recognized
+	ErrBadChannel = errors.New("channel is not recognized")
 	errBadProbe   = errors.New("probe protocol is not recognized")
 	errAPI        = errors.New("invalid response from API")
 )
