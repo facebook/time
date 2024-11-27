@@ -70,7 +70,7 @@ func TestT1IsZero(t *testing.T) {
 	os.Stdout = readStdout
 
 	ptpingOutput(count, server, totalRTT, ts)
-	expectedOutput := fmt.Sprintf("mars: seq=1 net=NaN (->1ns + <-NaN)\trtt=500µs\n")
+	expectedOutput := "mars: seq=1 net=NaN (->1ns + <-NaN)\trtt=500µs\n"
 	if string(out) != expectedOutput {
 		t.Errorf("Expected %s, got %s", expectedOutput, out)
 	}
@@ -97,7 +97,7 @@ func TestT2IsZero(t *testing.T) {
 	os.Stdout = readStdout
 
 	ptpingOutput(count, server, totalRTT, ts)
-	expectedOutput := fmt.Sprintf("jupiter: seq=2 net=NaN (->1ns + <-NaN)\trtt=250µs\n")
+	expectedOutput := "jupiter: seq=2 net=NaN (->1ns + <-NaN)\trtt=250µs\n"
 	if string(out) != expectedOutput {
 		t.Errorf("Expected %s, got %s", expectedOutput, out)
 	}
