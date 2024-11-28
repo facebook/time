@@ -393,7 +393,7 @@ func (lt *PTP4lTester) handleMsg(msg *inPacket) error {
 					if v.DurationField == 0 {
 						return fmt.Errorf("%w for %v", ErrGrantDenied, tlvType)
 					}
-					log.Debugf("got unicast grant for Delay Response")
+					log.Debug("got unicast grant for Delay Response")
 					if err := lt.sendDelay(); err != nil {
 						return err
 					}
@@ -463,7 +463,7 @@ func (lt *PTP4lTester) runListener(ctx context.Context) {
 
 	lt.listenerRunning = true
 	<-ctx.Done()
-	log.Debugf("cancelled port receiver")
+	log.Debug("cancelled port receiver")
 }
 
 // runSingleTest performs one Tester run and will exit on completion.
@@ -487,7 +487,7 @@ func (lt *PTP4lTester) runSingleTest(ctx context.Context, subDuration time.Durat
 		for {
 			select {
 			case <-ctx.Done():
-				log.Debugf("cancelled main loop")
+				log.Debug("cancelled main loop")
 				return ctx.Err()
 			case msg := <-lt.inChan:
 				if err := lt.handleMsg(msg); err != nil {

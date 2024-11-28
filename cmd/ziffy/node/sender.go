@@ -297,17 +297,17 @@ func (s *Sender) monitorIcmp(conn net.PacketConn) {
 func (s *Sender) handleIcmpPacket(rawPacket []byte, l int, rAddr net.Addr) {
 	icmpType := rawPacket[0]
 	if ipv6.ICMPType(icmpType) != ipv6.ICMPTypeTimeExceeded {
-		log.Tracef("not ipv6 timeexceeded packet")
+		log.Trace("not ipv6 timeexceeded packet")
 		return
 	}
 	ptpOffset := Ipv6HeaderSize + UDPHeaderSize + ICMPHeaderSize
 	if ptpOffset > l {
-		log.Tracef("packet too short")
+		log.Trace("packet too short")
 		return
 	}
 	ptpPacket, err := ptp.DecodePacket(rawPacket[ptpOffset:l])
 	if err != nil {
-		log.Tracef("PTP not contained in ICMP")
+		log.Trace("PTP not contained in ICMP")
 		return
 	}
 

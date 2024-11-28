@@ -107,7 +107,7 @@ func debugPrint(routes []*PathInfo) {
 		}
 	}
 
-	log.Debugf("TESTED:")
+	log.Debug("TESTED:")
 	aux := make([]string, 0, len(tested))
 	for key := range tested {
 		aux = append(aux, getLookUpName(key))

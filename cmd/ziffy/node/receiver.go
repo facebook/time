@@ -107,7 +107,7 @@ func (r *Receiver) handlePacket(rawPacket gopacket.Packet) {
 		return
 	}
 	if ptpSync.Header.ControlField != ZiffyHexa {
-		log.Tracef("no ziffy packet")
+		log.Trace("no ziffy packet")
 		return
 	}
 

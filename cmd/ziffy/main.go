@@ -93,7 +93,7 @@ func main() {
 	}
 
 	if c.IcmpTimeout < 100*time.Millisecond {
-		log.Warnf("setting timeout < 100ms for ICMP replies may lead to inaccurate results")
+		log.Warn("setting timeout < 100ms for ICMP replies may lead to inaccurate results")
 	}
 
 	switch messageType {
@@ -124,7 +124,7 @@ func main() {
 
 	switch c.Mode {
 	case "receiver":
-		log.Infof("RECEIVER")
+		log.Info("RECEIVER")
 
 		r := node.Receiver{
 			Config: c,
@@ -133,10 +133,10 @@ func main() {
 			log.Errorf("receiver start failed: %v", err)
 		}
 	case "sender":
-		log.Infof("SENDER")
+		log.Info("SENDER")
 
 		if c.DestinationAddress == "" {
-			log.Fatalf("A target host is required in 'sender' mode; use -addr {hostname} to specify target")
+			log.Fatal("A target host is required in 'sender' mode; use -addr {hostname} to specify target")
 		}
 
 		s := node.Sender{
@@ -153,6 +153,6 @@ func main() {
 			node.CsvPrint(c, info, s.Config.CsvFile, ptp.NewCorrection(float64(nsCFThreshold)))
 		}
 	default:
-		log.Errorf("--mode must be sender or receiver")
+		log.Error("--mode must be sender or receiver")
 	}
 }

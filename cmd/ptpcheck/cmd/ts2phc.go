@@ -110,7 +110,7 @@ func getPPSSourceFromPath(srcDevicePath string, pinIndex uint) (*phc.PPSSource, 
 func phcDeviceFromName(dstDeviceName string) (*phc.Device, error) {
 	devicePath, err := phc.IfaceToPHCDevice(dstDeviceName)
 	if err != nil {
-		log.Infof("Provided device name is not an interface, assuming it is a PHC device path")
+		log.Info("Provided device name is not an interface, assuming it is a PHC device path")
 		devicePath = dstDeviceName
 	}
 	// need RW permissions to issue CLOCK_ADJTIME on the device

@@ -45,7 +45,7 @@ func clearDevice() error {
 		return err
 	}
 
-	log.Infof("Device data cleared. The device will now reboot.")
+	log.Info("Device data cleared. The device will now reboot.")
 
 	return nil
 }

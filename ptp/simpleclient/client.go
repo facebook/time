@@ -255,7 +255,7 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 		}()
 		select {
 		case <-ctx.Done():
-			log.Debugf("cancelled general port receiver")
+			log.Debug("cancelled general port receiver")
 			return ctx.Err()
 		case err = <-doneChan:
 			return err
@@ -281,7 +281,7 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 		}()
 		select {
 		case <-ctx.Done():
-			log.Debugf("cancelled event port receiver")
+			log.Debug("cancelled event port receiver")
 			return ctx.Err()
 		case err = <-doneChan:
 			return err
@@ -322,7 +322,7 @@ func (c *Client) handleGrantUnicast(tlv *ptp.GrantUnicastTransmissionTLV) error 
 		if tlv.DurationField == 0 {
 			return fmt.Errorf("server denied us grant for %s", msgType)
 		}
-		log.Infof("unicast handshake complete")
+		log.Info("unicast handshake complete")
 	default:
 		return fmt.Errorf("got unexpected grant for %s", msgType)
 	}
@@ -483,7 +483,7 @@ func (c *Client) runInternal(skipSetup bool) error {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Debugf("cancelled main loop")
+				log.Debug("cancelled main loop")
 				return ctx.Err()
 			case msg := <-c.inChan:
 				if err := c.handleMsg(msg); err != nil {
