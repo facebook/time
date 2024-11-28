@@ -39,9 +39,9 @@ func SdNotify() error {
 	if !supported && err != nil {
 		return err
 	} else if !supported {
-		log.Warningf("sd_notify not supported")
+		log.Warning("sd_notify not supported")
 	} else {
-		log.Infof("successfully sent sd_notify event")
+		log.Info("successfully sent sd_notify event")
 	}
 	return nil
 }

@@ -103,7 +103,7 @@ func receiveNTPPacketWithRetries(connFd int, buf, oob []byte, tries int) (*ntp.P
 	for try := 0; try < tries; try++ {
 		n, _, clientReceiveTime, err = timestamp.ReadPacketWithRXTimestampBuf(connFd, buf, oob)
 		if errors.Is(err, unix.EINTR) || errors.Is(err, unix.EAGAIN) {
-			log.Debugf("got timeout reading response packet, retrying")
+			log.Debug("got timeout reading response packet, retrying")
 			continue
 		}
 		if err == nil {
@@ -217,7 +217,7 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int, ntp
 				log.Errorf("Client TX timestamp %v not equal to Origin TX timestamp %v", clientTransmitTime, originTime)
 				return err
 			}
-			log.Debugf("skipped one packet from the receive queue")
+			log.Debug("skipped one packet from the receive queue")
 			skipped++
 			serverReceiveTime = ntp.Unix(response.RxTimeSec, response.RxTimeFrac)
 			serverTransmitTime = ntp.Unix(response.TxTimeSec, response.TxTimeFrac)
@@ -233,7 +233,7 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int, ntp
 
 		if i == requests-1 {
 			fmt.Printf("\nServer: %s, Stratum: %d, Requests %d\n", addr, response.Stratum, requests)
-			fmt.Printf("Last Request:\n")
+			fmt.Print("Last Request:")
 			fmt.Printf("Offset: %fs (%sus) | Delay: %fs (%sus)\n",
 				float64(offset)/float64(time.Second.Nanoseconds()),
 				stripZeroes(math.Round(float64(offset)/float64(time.Microsecond.Nanoseconds()))),

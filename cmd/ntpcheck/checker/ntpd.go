@@ -89,7 +89,7 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get 'read status' packet from NTP server: %w", err)
 	}
-	log.Debugf("Got 'read status' response:")
+	log.Debug("Got 'read status' response:")
 	log.Debugf("Version: %v", packet.GetVersion())
 	log.Debugf("Mode: %v", packet.GetMode())
 	log.Debugf("Response: %v", packet.IsResponse())
@@ -113,7 +113,7 @@ func (n *NTPCheck) Run() (*NTPCheckResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get 'read variables' packet from NTP server for associationID=0: %w", err)
 	}
-	log.Debugf("Got 'read variables' response:")
+	log.Debug("Got 'read variables' response:")
 	log.Debugf("Version: %v", infoPacket.GetVersion())
 	log.Debugf("Mode: %v", infoPacket.GetMode())
 	log.Debugf("Response: %v", infoPacket.IsResponse())
@@ -166,7 +166,7 @@ func (n *NTPCheck) ServerStats() (*ServerStats, error) {
 		return nil, fmt.Errorf("failed to get 'server variables' packet from NTP server: %w", err)
 	}
 
-	log.Debugf("Got system 'read variables' response:")
+	log.Debug("Got system 'read variables' response:")
 	log.Debugf("Version: %v", serverVars.GetVersion())
 	log.Debugf("Mode: %v", serverVars.GetMode())
 	log.Debugf("Response: %v", serverVars.IsResponse())

@@ -152,7 +152,7 @@ func (p *SPTP) init() error {
 	timestamp.TimeoutTXTS = p.cfg.TimeoutTXTS
 
 	if p.cfg.FreeRunning {
-		log.Warningf("operating in FreeRunning mode, will NOT adjust clock")
+		log.Warning("operating in FreeRunning mode, will NOT adjust clock")
 		p.clock = &FreeRunningClock{}
 	} else {
 		if p.cfg.Timestamping == timestamp.HW {
@@ -250,7 +250,7 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 		}()
 		select {
 		case <-ctx.Done():
-			log.Debugf("cancelled general port receiver")
+			log.Debug("cancelled general port receiver")
 			return ctx.Err()
 		case err := <-doneChan:
 			return err
@@ -296,7 +296,7 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 			}()
 			select {
 			case <-ctx.Done():
-				log.Debugf("cancelled event port receiver")
+				log.Debug("cancelled event port receiver")
 				return ctx.Err()
 			case err := <-doneChan:
 				return err
@@ -395,7 +395,7 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 	}
 	best := bmca(results, localPrioMap, p.cfg)
 	if best == nil {
-		log.Warningf("no Best Master selected")
+		log.Warning("no Best Master selected")
 		p.bestGM = netip.Addr{}
 		freqAdj := p.setMeanFreq()
 		log.Infof("offset Unknown s%d freq %+7.0f path delay Unknown", servo.StateHoldover, -freqAdj)
@@ -442,7 +442,7 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 			log.Errorf("failed to adjust freq to %v: %v", -freqAdj, err)
 		}
 		if err := p.clock.SetSync(); err != nil {
-			log.Errorf("failed to set clock sync state")
+			log.Error("failed to set clock sync state")
 		}
 		// make sure we don't step after we get into the locked state
 		p.pi.UnsetFirstUpdate()
@@ -488,7 +488,7 @@ func (p *SPTP) runInternal(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debugf("cancelled main loop")
+			log.Debug("cancelled main loop")
 			freqAdj := p.pi.MeanFreq()
 			log.Infof("Existing, setting freq to: %v", -freqAdj)
 			if err := p.clock.AdjFreqPPB(-1 * freqAdj); err != nil {
@@ -505,7 +505,7 @@ func (p *SPTP) runInternal(ctx context.Context) error {
 // Run makes things run, continuously
 func (p *SPTP) Run(ctx context.Context) error {
 	go func() {
-		log.Debugf("starting listener")
+		log.Debug("starting listener")
 		if err := p.RunListener(ctx); err != nil {
 			log.Fatal(err)
 		}

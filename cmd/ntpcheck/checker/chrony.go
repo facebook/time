@@ -86,7 +86,7 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get 'tracking' response: %w", err)
 	}
-	log.Debugf("Got 'tracking' response:")
+	log.Debug("Got 'tracking' response:")
 	log.Debugf("Status: %v", packet.GetStatus())
 	tracking, ok := packet.(*chrony.ReplyTracking)
 	if !ok {

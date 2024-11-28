@@ -45,7 +45,7 @@ func reboot() error {
 		return err
 	}
 
-	log.Infof("Calnex device will now reboot.")
+	log.Info("Calnex device will now reboot.")
 
 	return nil
 }

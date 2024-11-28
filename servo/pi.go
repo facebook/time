@@ -192,7 +192,7 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, State) {
 			freqEstInterval = 1000.0
 		}
 		if localDiff < freqEstInterval {
-			log.Warningf("servo Sample is called too often, not enough time passed since first sample")
+			log.Warning("servo Sample is called too often, not enough time passed since first sample")
 			break
 		}
 

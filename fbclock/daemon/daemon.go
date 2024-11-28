@@ -359,7 +359,7 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 		timeSinceIngress := phcTime.UnixNano() - it
 		log.Debugf("Time since ingress: %dns", timeSinceIngress)
 	} else {
-		log.Warningf("No data for time since ingress")
+		log.Warning("No data for time since ingress")
 	}
 	// read tzdata for leap seconds
 	leaps, err := leapSeconds()

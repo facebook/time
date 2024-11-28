@@ -102,7 +102,7 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 
 	// Run PHC-SYS offset periodically
 	if s.Config.TimestampType == timestamp.HWRX {
-		log.Infof("Starting periodic measurement between phc and sysclock")
+		log.Info("Starting periodic measurement between phc and sysclock")
 		go func() {
 			for ; ; time.Sleep(time.Second) {
 				offset, err := phcOffset(s.Config.Iface)

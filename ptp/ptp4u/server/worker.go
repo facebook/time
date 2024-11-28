@@ -159,7 +159,7 @@ func (s *sendWorker) Start() {
 					log.Errorf("Failed to generate the sync packet: %v", err)
 					continue
 				}
-				log.Debugf("Sending sync")
+				log.Debug("Sending sync")
 
 				err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
 				if err != nil {
@@ -233,7 +233,7 @@ func (s *sendWorker) Start() {
 					log.Errorf("Failed to generate the sync packet: %v", err)
 					continue
 				}
-				log.Debugf("Sending sync")
+				log.Debug("Sending sync")
 
 				err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
 				if err != nil {

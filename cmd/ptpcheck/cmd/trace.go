@@ -86,7 +86,7 @@ func runTrace(cfg *client.Config) error {
 	if err != nil && !(errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 		return err
 	}
-	log.Infof("done")
+	log.Info("done")
 	return nil
 }
 

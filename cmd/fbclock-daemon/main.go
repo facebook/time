@@ -76,7 +76,7 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 	if csvPath != "" && !csvLog {
-		log.Fatalf("'csvpath' flag requires 'csvlog' flag")
+		log.Fatal("'csvpath' flag requires 'csvlog' flag")
 	}
 	if cfgPath != "" {
 		log.Warningf("using config from %s, flag values are ignored", cfgPath)

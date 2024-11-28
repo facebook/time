@@ -117,7 +117,7 @@ func (s *Server) Start() error {
 			}
 
 			if shouldDrain {
-				log.Warningf("shifting traffic")
+				log.Warning("shifting traffic")
 				s.Drain()
 				s.Stats.SetDrain(1)
 			} else {
@@ -283,7 +283,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 				log.Errorf("Failed to read the ptp SyncDelayReq: %v", err)
 				continue
 			}
-			log.Debugf("Got delay request")
+			log.Debug("Got delay request")
 			worker = s.findWorker(dReq.Header.SourcePortIdentity, r)
 			if dReq.FlagField == ptp.FlagProfileSpecific1|ptp.FlagUnicast {
 				expire = time.Now().Add(subscriptionDuration)
@@ -450,7 +450,7 @@ func (s *Server) Undrain() {
 
 // handleSighup watches for SIGHUP and reloads the dynamic config
 func (s *Server) handleSighup() {
-	log.Infof("Engaging the SIGHUP monitoring")
+	log.Info("Engaging the SIGHUP monitoring")
 	sigchan := make(chan os.Signal, 10)
 	signal.Notify(sigchan, unix.SIGHUP)
 	for range sigchan {
@@ -470,7 +470,7 @@ func (s *Server) handleSighup() {
 
 // handleSigterm watches for SIGTERM and SIGINT and removes the pid file
 func (s *Server) handleSigterm() {
-	log.Infof("Engaging the SIGTERM/SIGINT monitoring")
+	log.Info("Engaging the SIGTERM/SIGINT monitoring")
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, unix.SIGTERM, unix.SIGINT)
 	<-sigchan

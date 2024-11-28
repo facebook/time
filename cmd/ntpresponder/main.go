@@ -87,7 +87,7 @@ func main() {
 	}
 
 	if s.Config.ShouldAnnounce {
-		log.Warningf("Will announce VIPs")
+		log.Warning("Will announce VIPs")
 	}
 
 	// Monitoring
