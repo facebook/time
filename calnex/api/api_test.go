@@ -231,7 +231,7 @@ func TestFetchChannelProtocol_PPS(t *testing.T) {
 }
 
 func TestFetchChannelTarget_NTP(t *testing.T) {
-	sampleResp := "measure/ch9/ptp_synce/ntp/server_ip=fd00:3116:301a::3e"
+	sampleResp := "measure/ch9/ptp_synce/ntp/server_ip_ipv6=fd00:3116:301a::3e"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
@@ -248,7 +248,7 @@ func TestFetchChannelTarget_NTP(t *testing.T) {
 }
 
 func TestFetchChannelTarget_PTP(t *testing.T) {
-	sampleResp := "measure/ch9/ptp_synce/ptp/master_ip=fd00:3116:301a::3e"
+	sampleResp := "measure/ch9/ptp_synce/ptp/master_ip_ipv6=fd00:3116:301a::3e"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
