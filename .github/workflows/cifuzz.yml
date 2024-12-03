@@ -3,6 +3,8 @@ on: [pull_request]
 permissions: {}
 jobs:
  Fuzzing:
+   env:
+     ACTIONS_STEP_DEBUG: true
    runs-on: ubuntu-latest
    permissions:
      security-events: write

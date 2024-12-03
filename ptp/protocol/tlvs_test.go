@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -83,12 +82,12 @@ func TestParseAnnounceWithPathTrace(t *testing.T) {
 	require.Equal(t, want, *packet)
 	b, err := Bytes(packet)
 	require.Nil(t, err)
-	assert.Equal(t, raw, b)
+	require.Equal(t, raw, b)
 
 	// test generic DecodePacket as well
 	pp, err := DecodePacket(b)
 	require.Nil(t, err)
-	assert.Equal(t, &want, pp)
+	require.Equal(t, &want, pp)
 }
 
 func TestParseAnnounceWithAlternateTimeOffsetIndicator(t *testing.T) {
@@ -142,10 +141,45 @@ func TestParseAnnounceWithAlternateTimeOffsetIndicator(t *testing.T) {
 	require.Equal(t, want, *packet)
 	b, err := Bytes(packet)
 	require.Nil(t, err)
-	assert.Equal(t, raw, b)
+	require.Equal(t, raw, b)
 
 	// test generic DecodePacket as well
 	pp, err := DecodePacket(raw)
 	require.Nil(t, err)
-	assert.Equal(t, &want, pp)
+	require.Equal(t, &want, pp)
+}
+
+func TestParseSyncDelayReqWithAlternateResponsePort(t *testing.T) {
+	raw := []byte{1, 18, 0, 49, 0, 0, 36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 184, 206, 246, 255, 254, 68, 148, 144, 0, 1, 138, 207, 0, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 66, 0, 1, 207, 0, 0}
+	packet := new(SyncDelayReq)
+	err := FromBytes(raw, packet)
+	require.Nil(t, err)
+
+	want := SyncDelayReq{
+		Header: Header{
+			SdoIDAndMsgType: NewSdoIDAndMsgType(MessageDelayReq, 0),
+			Version:         Version,
+			SequenceID:      35535,
+			MessageLength:   49,
+			FlagField:       FlagUnicast | FlagProfileSpecific1,
+			SourcePortIdentity: PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: 13316852727524136080,
+			},
+			LogMessageInterval: 0x7f,
+		},
+		TLVs: []TLV{&AlternateResponsePortTLV{
+			TLVHead: TLVHead{TLVType: TLVAlternateResponsePort, LengthField: uint16(1)},
+			Count:   uint8(207),
+		}},
+	}
+	require.Equal(t, want, *packet)
+	b, err := Bytes(packet)
+	require.Nil(t, err)
+	require.Equal(t, raw, b)
+
+	// test generic DecodePacket as well
+	pp, err := DecodePacket(raw)
+	require.Nil(t, err)
+	require.Equal(t, &want, pp)
 }

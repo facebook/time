@@ -89,6 +89,7 @@ type TLVType uint16
 
 // As per Table 52 tlvType values
 const (
+	TLVNone                                 TLVType = 0x0000
 	TLVManagement                           TLVType = 0x0001
 	TLVManagementErrorStatus                TLVType = 0x0002
 	TLVOrganizationExtension                TLVType = 0x0003
@@ -98,11 +99,13 @@ const (
 	TLVAcknowledgeCancelUnicastTransmission TLVType = 0x0007
 	TLVPathTrace                            TLVType = 0x0008
 	TLVAlternateTimeOffsetIndicator         TLVType = 0x0009
+	TLVAlternateResponsePort                TLVType = 0x0042
 	// Remaining 52 tlvType TLVs not implemented
 )
 
 // TLVTypeToString is a map from TLVType to string
 var TLVTypeToString = map[TLVType]string{
+	TLVNone:                                 "NONE",
 	TLVManagement:                           "MANAGEMENT",
 	TLVManagementErrorStatus:                "MANAGEMENT_ERROR_STATUS",
 	TLVOrganizationExtension:                "ORGANIZATION_EXTENSION",
@@ -112,6 +115,7 @@ var TLVTypeToString = map[TLVType]string{
 	TLVAcknowledgeCancelUnicastTransmission: "ACKNOWLEDGE_CANCEL_UNICAST_TRANSMISSION",
 	TLVPathTrace:                            "PATH_TRACE",
 	TLVAlternateTimeOffsetIndicator:         "ALTERNATE_TIME_OFFSET_INDICATOR",
+	TLVAlternateResponsePort:                "ALTERNATE_RESPONSE_PORT",
 }
 
 func (t TLVType) String() string {

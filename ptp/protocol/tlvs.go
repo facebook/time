@@ -91,6 +91,8 @@ func writeTLVs(tlvs []TLV, b []byte) (int, error) {
 	return pos, nil
 }
 
+// readTLVs reads TLVs from the bytes.
+// tlvs is passed to save on allocations and it's user's task to ensure it's empty
 func readTLVs(tlvs []TLV, maxLength int, b []byte) ([]TLV, error) {
 	pos := 0
 	var tlvType TLVType
@@ -102,6 +104,8 @@ func readTLVs(tlvs []TLV, maxLength int, b []byte) ([]TLV, error) {
 		tlvType = TLVType(binary.BigEndian.Uint16(b[pos:]))
 
 		switch tlvType {
+		case TLVNone:
+			continue
 		case TLVAcknowledgeCancelUnicastTransmission:
 			tlv := &AcknowledgeCancelUnicastTransmissionTLV{}
 			if err := tlv.UnmarshalBinary(b[pos:]); err != nil {
@@ -109,7 +113,6 @@ func readTLVs(tlvs []TLV, maxLength int, b []byte) ([]TLV, error) {
 			}
 			tlvs = append(tlvs, tlv)
 			pos += tlvHeadSize + int(tlv.LengthField)
-
 		case TLVGrantUnicastTransmission:
 			tlv := &GrantUnicastTransmissionTLV{}
 			if err := tlv.UnmarshalBinary(b[pos:]); err != nil {
@@ -117,7 +120,6 @@ func readTLVs(tlvs []TLV, maxLength int, b []byte) ([]TLV, error) {
 			}
 			tlvs = append(tlvs, tlv)
 			pos += tlvHeadSize + int(tlv.LengthField)
-
 		case TLVRequestUnicastTransmission:
 			tlv := &RequestUnicastTransmissionTLV{}
 			if err := tlv.UnmarshalBinary(b[pos:]); err != nil {
@@ -141,6 +143,13 @@ func readTLVs(tlvs []TLV, maxLength int, b []byte) ([]TLV, error) {
 			pos += tlvHeadSize + int(tlv.LengthField)
 		case TLVAlternateTimeOffsetIndicator:
 			tlv := &AlternateTimeOffsetIndicatorTLV{}
+			if err := tlv.UnmarshalBinary(b[pos:]); err != nil {
+				return tlvs, err
+			}
+			tlvs = append(tlvs, tlv)
+			pos += tlvHeadSize + int(tlv.LengthField)
+		case TLVAlternateResponsePort:
+			tlv := &AlternateResponsePortTLV{}
 			if err := tlv.UnmarshalBinary(b[pos:]); err != nil {
 				return tlvs, err
 			}
@@ -363,5 +372,36 @@ func (t *AlternateTimeOffsetIndicatorTLV) UnmarshalBinary(b []byte) error {
 	if err := t.DisplayName.UnmarshalBinary(b[tlvHeadSize+15:]); err != nil {
 		return fmt.Errorf("reading AlternateTimeOffsetIndicatorTLV DisplayName: %w", err)
 	}
+	return nil
+}
+
+// AlternateResponsePortTLV is a CSPTP optional TLV to switch response source port of the server
+// Count flag indicates the number of the port steps, not the port number itself.
+// Ex:
+// 0 means no switch (use default port). For example 1234
+// 1 means next port. For example 4567
+// 2 means next next port. For example 6789
+// etc
+type AlternateResponsePortTLV struct {
+	TLVHead
+	Count uint8
+}
+
+// MarshalBinaryTo marshals bytes to AlternateResponsePortTLV
+func (a *AlternateResponsePortTLV) MarshalBinaryTo(b []byte) (int, error) {
+	tlvHeadMarshalBinaryTo(&a.TLVHead, b)
+	b[tlvHeadSize] = a.Count
+	return tlvHeadSize + 1, nil
+}
+
+// UnmarshalBinary parses []byte and populates struct fields
+func (a *AlternateResponsePortTLV) UnmarshalBinary(b []byte) error {
+	if err := unmarshalTLVHeader(&a.TLVHead, b); err != nil {
+		return err
+	}
+	if err := checkTLVLength(&a.TLVHead, len(b), 1, true); err != nil {
+		return err
+	}
+	a.Count = b[4]
 	return nil
 }

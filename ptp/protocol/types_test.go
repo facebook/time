@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,6 +81,7 @@ func TestMessageTypeString(t *testing.T) {
 }
 
 func TestTLVTypeString(t *testing.T) {
+	require.Equal(t, "NONE", TLVNone.String())
 	require.Equal(t, "MANAGEMENT", TLVManagement.String())
 	require.Equal(t, "MANAGEMENT_ERROR_STATUS", TLVManagementErrorStatus.String())
 	require.Equal(t, "ORGANIZATION_EXTENSION", TLVOrganizationExtension.String())
@@ -91,6 +91,7 @@ func TestTLVTypeString(t *testing.T) {
 	require.Equal(t, "ACKNOWLEDGE_CANCEL_UNICAST_TRANSMISSION", TLVAcknowledgeCancelUnicastTransmission.String())
 	require.Equal(t, "PATH_TRACE", TLVPathTrace.String())
 	require.Equal(t, "ALTERNATE_TIME_OFFSET_INDICATOR", TLVAlternateTimeOffsetIndicator.String())
+	require.Equal(t, "ALTERNATE_RESPONSE_PORT", TLVAlternateResponsePort.String())
 }
 
 func TestTimeSourceString(t *testing.T) {
@@ -178,7 +179,7 @@ func TestTimeIntervalNanoseconds(t *testing.T) {
 			require.Equal(t, tt.wantStr, tt.in.String())
 			// then convert time.Time we just got back to Timestamp
 			gotTI := NewTimeInterval(got)
-			assert.Equal(t, tt.in, gotTI)
+			require.Equal(t, tt.in, gotTI)
 		})
 	}
 }
@@ -208,7 +209,7 @@ func TestPTPSeconds(t *testing.T) {
 			require.Equal(t, tt.wantStr, tt.in.String())
 			// then convert time.Time we just got back to PTPSeconds
 			gotTS := NewPTPSeconds(got)
-			assert.Equal(t, tt.in, gotTS)
+			require.Equal(t, tt.in, gotTS)
 		})
 	}
 }
@@ -244,7 +245,7 @@ func TestTimestamp(t *testing.T) {
 			require.Equal(t, tt.wantStr, tt.in.String())
 			// then convert time.Time we just got back to Timestamp
 			gotTS := NewTimestamp(got)
-			assert.Equal(t, tt.in, gotTS)
+			require.Equal(t, tt.in, gotTS)
 		})
 	}
 }
@@ -341,7 +342,7 @@ func TestLogInterval(t *testing.T) {
 			// then convert time.Duration we just got back to LogInterval
 			gotLI, err := NewLogInterval(gotDuration)
 			require.Nil(t, err)
-			assert.Equal(t, tt.in, gotLI)
+			require.Equal(t, tt.in, gotLI)
 		})
 	}
 }
@@ -353,11 +354,11 @@ func TestClockIdentity(t *testing.T) {
 	got, err := NewClockIdentity(mac)
 	require.Nil(t, err)
 	want := ClockIdentity(0xc42a1fffe6d7ca6)
-	assert.Equal(t, want, got)
+	require.Equal(t, want, got)
 	wantStr := "0c42a1.fffe.6d7ca6"
-	assert.Equal(t, wantStr, got.String())
+	require.Equal(t, wantStr, got.String())
 	back := got.MAC()
-	assert.Equal(t, mac, back)
+	require.Equal(t, mac, back)
 }
 
 func TestPTPText(t *testing.T) {
@@ -415,14 +416,14 @@ func TestPTPText(t *testing.T) {
 			var text PTPText
 			err := text.UnmarshalBinary(tt.in)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.Nil(t, err)
-				assert.Equal(t, tt.want, string(text))
+				require.Equal(t, tt.want, string(text))
 
 				gotBytes, err := text.MarshalBinary()
 				require.Nil(t, err)
-				assert.Equal(t, tt.in, gotBytes)
+				require.Equal(t, tt.in, gotBytes)
 			}
 		})
 	}
@@ -512,7 +513,7 @@ func TestPortAddress(t *testing.T) {
 			var addr PortAddress
 			err := addr.UnmarshalBinary(tt.in)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.Nil(t, err)
 				ip, err := addr.IP()
@@ -522,12 +523,12 @@ func TestPortAddress(t *testing.T) {
 				}
 				require.Nil(t, err)
 
-				assert.Equal(t, *tt.want, addr)
-				assert.True(t, tt.wantIP.Equal(ip), "expect parsed IP %v to be equal to %v", ip, tt.wantIP)
+				require.Equal(t, *tt.want, addr)
+				require.True(t, tt.wantIP.Equal(ip), "expect parsed IP %v to be equal to %v", ip, tt.wantIP)
 
 				gotBytes, err := addr.MarshalBinary()
 				require.Nil(t, err)
-				assert.Equal(t, tt.in, gotBytes)
+				require.Equal(t, tt.in, gotBytes)
 			}
 		})
 	}

@@ -246,6 +246,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 	buf := make([]byte, timestamp.PayloadSizeBytes)
 	oob := make([]byte, timestamp.ControlSizeBytes)
 	dReq := &ptp.SyncDelayReq{}
+	zerotlv := []ptp.TLV{}
 	// Initialize the new random. We will re-seed it every time in findWorker
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	var msgType ptp.MessageType
@@ -253,6 +254,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 	var sc *SubscriptionClient
 	var gclisa unix.Sockaddr
 	var expire time.Time
+	var workerOffset int64
 
 	for {
 		bbuf, eclisa, rxTS, err := timestamp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
@@ -279,12 +281,21 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 
 		switch msgType {
 		case ptp.MessageDelayReq:
+			dReq.TLVs = zerotlv
 			if err := ptp.FromBytes(buf[:bbuf], dReq); err != nil {
 				log.Errorf("Failed to read the ptp SyncDelayReq: %v", err)
 				continue
 			}
 			log.Debug("Got delay request")
-			worker = s.findWorker(dReq.Header.SourcePortIdentity, r)
+			// CSPTP AlternateResponsePortTLV POC
+			for _, tlv := range dReq.TLVs {
+				switch v := tlv.(type) {
+				case *ptp.AlternateResponsePortTLV:
+					workerOffset = int64(v.Count)
+				}
+			}
+
+			worker = s.findWorker(dReq.Header.SourcePortIdentity, r, workerOffset)
 			if dReq.FlagField == ptp.FlagProfileSpecific1|ptp.FlagUnicast {
 				expire = time.Now().Add(subscriptionDuration)
 				// SYNC DELAY_REQUEST and ANNOUNCE
@@ -363,7 +374,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 
 					switch signalingType {
 					case ptp.MessageAnnounce, ptp.MessageSync, ptp.MessageDelayResp:
-						worker = s.findWorker(signaling.SourcePortIdentity, r)
+						worker = s.findWorker(signaling.SourcePortIdentity, r, 0)
 						sc = worker.FindSubscription(signaling.SourcePortIdentity, signalingType)
 						if sc == nil || !sc.Running() {
 							ip := timestamp.SockaddrToIP(gclisa)
@@ -398,7 +409,7 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 					signalingType = v.MsgTypeAndFlags.MsgType()
 					s.Stats.IncRXSignalingCancel(signalingType)
 					log.Debugf("Got %s cancel request", signalingType)
-					worker = s.findWorker(signaling.SourcePortIdentity, r)
+					worker = s.findWorker(signaling.SourcePortIdentity, r, 0)
 					sc = worker.FindSubscription(signaling.SourcePortIdentity, signalingType)
 					if sc != nil {
 						sc.Stop()
@@ -413,9 +424,9 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 	}
 }
 
-func (s *Server) findWorker(clientID ptp.PortIdentity, r *rand.Rand) *sendWorker {
+func (s *Server) findWorker(clientID ptp.PortIdentity, r *rand.Rand, offset int64) *sendWorker {
 	// Seeding random with the same value will produce the same number
-	r.Seed(int64(clientID.ClockIdentity) + int64(clientID.PortNumber))
+	r.Seed(int64(clientID.ClockIdentity) + int64(clientID.PortNumber) + offset) //#nosec G115
 	return s.sw[r.Intn(s.Config.SendWorkers)]
 }
 
