@@ -51,7 +51,9 @@ func (up CalnexUpgrader) ShouldUpgrade(target string, api *calnexAPI.API, fw FW,
 	if err != nil {
 		return false, err
 	}
-	calnexVersion, err := version.NewVersion(strings.ToLower(cv.Firmware))
+	//remove major version 2.17.0 -> 17.0 as this is hadware revision related
+	//calnexVersion, err := version.NewVersion(strings.ToLower(cv.Firmware))
+	calnexVersion, err := version.NewVersion(strings.ToLower(strings.SplitN(cv.Firmware, ".", 2)[1]))
 	if err != nil {
 		return false, err
 	}
