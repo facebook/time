@@ -594,3 +594,22 @@ func TestPiServoFilterSample2(t *testing.T) {
 	freq = pi.MeanFreq()
 	require.InEpsilon(t, -23197.000, freq, 0.001)
 }
+
+func TestPiServoAltMode(t *testing.T) {
+	pi := NewPiServo(DefaultServoConfig(), DefaultPiServoCfg(), 0)
+	pi.SyncInterval(1)
+
+	pi.cfg.makePiSlow()
+	pi.resyncInterval()
+	require.InEpsilon(t, 0.03, pi.cfg.PiKiScale, 0.00001)
+	require.InEpsilon(t, 0.07, pi.cfg.PiKpScale, 0.00001)
+	require.InEpsilon(t, 0.03, pi.ki, 0.001)
+	require.InEpsilon(t, 0.07, pi.kp, 0.00001)
+
+	pi.cfg.makePiFast()
+	pi.resyncInterval()
+	require.InEpsilon(t, 0.3, pi.cfg.PiKiScale, 0.00001)
+	require.InEpsilon(t, 0.7, pi.cfg.PiKpScale, 0.00001)
+	require.InEpsilon(t, 0.3, pi.ki, 0.00001)
+	require.InEpsilon(t, 0.7, pi.kp, 0.00001)
+}

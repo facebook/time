@@ -25,8 +25,13 @@ import (
 )
 
 const (
+	// kp and ki scale for high offset range - more aggressive servo
 	kpScale = 0.7
 	kiScale = 0.3
+
+	// kp and ki scale for low offset range - less aggressive servo
+	kpScaleLow = 0.07
+	kiScaleLow = 0.03
 
 	maxKpNormMax = 1.0
 	maxKiNormMax = 2.0
@@ -98,6 +103,7 @@ type PiServo struct {
 	kp                 float64
 	ki                 float64
 	lastFreq           float64
+	syncInterval       float64
 	count              int
 	lastCorrectionTime time.Time
 	filter             *PiServoFilter
@@ -155,6 +161,8 @@ func (s *PiServo) IsSpike(offset int64) bool {
 		s.count = 0
 		s.drift = 0
 		s.filter.Reset() // it's safe because fState can only be filterNoSpike without filter
+		s.cfg.makePiFast()
+		s.resyncInterval()
 		log.Warning("servo was reset")
 		return true
 	}
@@ -253,17 +261,25 @@ func (s *PiServo) Sample(offset int64, localTs uint64) (float64, State) {
 	return ppb, state
 }
 
-// SyncInterval inform a clock servo about the master's sync interval in seconds
-func (s *PiServo) SyncInterval(interval float64) {
-	s.kp = s.cfg.PiKpScale * math.Pow(interval, s.cfg.PiKpExponent)
-	if s.kp > s.cfg.PiKpNormMax/interval {
-		s.kp = s.cfg.PiKpNormMax / interval
+func (s *PiServo) resyncInterval() {
+	if s.syncInterval == 0 {
+		return
+	}
+	s.kp = s.cfg.PiKpScale * math.Pow(s.syncInterval, s.cfg.PiKpExponent)
+	if s.kp > s.cfg.PiKpNormMax/s.syncInterval {
+		s.kp = s.cfg.PiKpNormMax / s.syncInterval
 	}
 
-	s.ki = s.cfg.PiKiScale * math.Pow(interval, s.cfg.PiKiExponent)
-	if s.ki > s.cfg.PiKiNormMax/interval {
-		s.ki = s.cfg.PiKiNormMax / interval
+	s.ki = s.cfg.PiKiScale * math.Pow(s.syncInterval, s.cfg.PiKiExponent)
+	if s.ki > s.cfg.PiKiNormMax/s.syncInterval {
+		s.ki = s.cfg.PiKiNormMax / s.syncInterval
 	}
+}
+
+// SyncInterval inform a clock servo about the master's sync interval in seconds
+func (s *PiServo) SyncInterval(interval float64) {
+	s.syncInterval = interval
+	s.resyncInterval()
 }
 
 // GetState returns current state of PiServo
@@ -387,6 +403,8 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 // Unlock resets and unlocks the servo
 func (s *PiServo) Unlock() {
 	s.count = 0
+	s.cfg.makePiFast()
+	s.resyncInterval()
 	s.filter.Reset()
 }
 
@@ -442,18 +460,28 @@ func NewPiServoFilter(s *PiServo, cfg *PiServoFilterCfg) *PiServoFilter {
 	return filter
 }
 
+func (cfg *PiServoCfg) makePiFast() {
+	cfg.PiKpScale = kpScale
+	cfg.PiKiScale = kiScale
+}
+
+func (cfg *PiServoCfg) makePiSlow() {
+	cfg.PiKpScale = kpScaleLow
+	cfg.PiKiScale = kiScaleLow
+}
+
 // DefaultPiServoCfg to create default pi servo config
 func DefaultPiServoCfg() *PiServoCfg {
-	return &PiServoCfg{
+	cfg := PiServoCfg{
 		PiKp:         0.0,
 		PiKi:         0.0,
-		PiKpScale:    kpScale,
 		PiKpExponent: 0.0,
 		PiKpNormMax:  maxKpNormMax,
-		PiKiScale:    kiScale,
 		PiKiExponent: 0.0,
 		PiKiNormMax:  maxKiNormMax,
 	}
+	cfg.makePiFast()
+	return &cfg
 }
 
 // DefaultPiServoFilterCfg to create a default pi servo filter config
