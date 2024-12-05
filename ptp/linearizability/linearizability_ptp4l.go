@@ -110,8 +110,8 @@ func reqDelay(clockID ptp.ClockIdentity, port uint16) *ptp.SyncDelayReq {
 		Header: ptp.Header{
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageDelayReq, 0),
 			Version:         ptp.Version,
-			SequenceID:      0, // will be populated on sending
-			MessageLength:   uint16(binary.Size(ptp.SyncDelayReq{})),
+			SequenceID:      0,                                                                       // will be populated on sending
+			MessageLength:   uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.SyncDelayReqBody{})), //#nosec G115
 			FlagField:       ptp.FlagUnicast,
 			SourcePortIdentity: ptp.PortIdentity{
 				PortNumber:    port,

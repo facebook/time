@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -83,12 +82,12 @@ func TestParseAnnounceWithPathTrace(t *testing.T) {
 	require.Equal(t, want, *packet)
 	b, err := Bytes(packet)
 	require.Nil(t, err)
-	assert.Equal(t, raw, b)
+	require.Equal(t, raw, b)
 
 	// test generic DecodePacket as well
 	pp, err := DecodePacket(b)
 	require.Nil(t, err)
-	assert.Equal(t, &want, pp)
+	require.Equal(t, &want, pp)
 }
 
 func TestParseAnnounceWithAlternateTimeOffsetIndicator(t *testing.T) {
@@ -142,10 +141,46 @@ func TestParseAnnounceWithAlternateTimeOffsetIndicator(t *testing.T) {
 	require.Equal(t, want, *packet)
 	b, err := Bytes(packet)
 	require.Nil(t, err)
-	assert.Equal(t, raw, b)
+	require.Equal(t, raw, b)
 
 	// test generic DecodePacket as well
 	pp, err := DecodePacket(raw)
 	require.Nil(t, err)
-	assert.Equal(t, &want, pp)
+	require.Equal(t, &want, pp)
+}
+
+func TestParseSyncDelayReqWithAlternateResponsePort(t *testing.T) {
+	raw := []byte{1, 18, 0, 50, 0, 0, 36, 0, 0, 0, 0, 0, 6, 32, 0, 2, 0, 0, 0, 0, 184, 206, 246, 255, 254, 68, 148, 144, 0, 1, 149, 17, 0, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 7, 0, 2, 16, 146, 0, 0}
+	packet := new(SyncDelayReq)
+	err := FromBytes(raw, packet)
+	require.Nil(t, err)
+
+	want := SyncDelayReq{
+		Header: Header{
+			SdoIDAndMsgType: NewSdoIDAndMsgType(MessageDelayReq, 0),
+			Version:         Version,
+			SequenceID:      38161,
+			MessageLength:   50,
+			FlagField:       FlagUnicast | FlagProfileSpecific1,
+			SourcePortIdentity: PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: 13316852727524136080,
+			},
+			LogMessageInterval: 0x7f,
+			CorrectionField:    102760450,
+		},
+		TLVs: []TLV{&AlternateResponsePortTLV{
+			TLVHead: TLVHead{TLVType: TLVAlternateResponsePort, LengthField: uint16(2)},
+			Offset:  uint16(4242),
+		}},
+	}
+	require.Equal(t, want, *packet)
+	b, err := Bytes(packet)
+	require.Nil(t, err)
+	require.Equal(t, raw, b)
+
+	// test generic DecodePacket as well
+	pp, err := DecodePacket(raw)
+	require.Nil(t, err)
+	require.Equal(t, &want, pp)
 }

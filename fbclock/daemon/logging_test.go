@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -70,7 +69,7 @@ func TestLogSample_CSVRecords(t *testing.T) {
 	// make sure we are in sync with header
 	require.Equal(t, len(header), len(got))
 
-	assert.Equal(t, want, got)
+	require.Equal(t, want, got)
 }
 
 func TestCSVLogger_Log(t *testing.T) {
@@ -91,5 +90,5 @@ func TestCSVLogger_Log(t *testing.T) {
 1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2,2.1,2.2,2.3,25.1
 `
 
-	assert.Equal(t, want, got)
+	require.Equal(t, want, got)
 }

@@ -19,7 +19,6 @@ package daemon
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,7 +52,7 @@ func TestConvolve(t *testing.T) {
 		-1.67567686e+08,
 	}
 	require.Equal(t, len(want1), len(got1))
-	assert.InEpsilonSlice(t, want1, got1, 1e+10)
+	require.InEpsilonSlice(t, want1, got1, 1e+10)
 
 	coeffs2 := []float64{1, 3, -3, 1}
 	got2, err := convolve(input, coeffs2)
@@ -67,25 +66,25 @@ func TestConvolve(t *testing.T) {
 		-3.29784203e+08,
 	}
 	require.Equal(t, len(want2), len(got2))
-	assert.InEpsilonSlice(t, want2, got2, 1e+10)
+	require.InEpsilonSlice(t, want2, got2, 1e+10)
 }
 
 func TestMean(t *testing.T) {
 	input := []float64{3, 5, 8, 8}
 	want := 6.0
-	assert.Equal(t, want, mean(input))
+	require.Equal(t, want, mean(input))
 	input = []float64{1, 4, 0, 3, 8}
 	want = 3.2
-	assert.Equal(t, want, mean(input))
+	require.Equal(t, want, mean(input))
 }
 
 func TestVariance(t *testing.T) {
 	input := []float64{8, 8, 8, 8}
 	want := 0.0
-	assert.Equal(t, want, variance(input))
+	require.Equal(t, want, variance(input))
 	input = []float64{1, 4, 0, 3, 8}
 	want = 9.7
-	assert.Equal(t, want, variance(input))
+	require.Equal(t, want, variance(input))
 }
 
 func TestPrepareExpression(t *testing.T) {
@@ -103,7 +102,7 @@ func TestPrepareExpression(t *testing.T) {
 	want := 250.1909601786838
 	got, err := expr.Evaluate(parameters)
 	require.Nil(t, err)
-	assert.Equal(t, want, got)
+	require.Equal(t, want, got)
 }
 
 func TestPrepareExpressionWrongVari(t *testing.T) {
