@@ -66,12 +66,12 @@ func TestFindWorker(t *testing.T) {
 	}
 
 	// Consistent across multiple calls
-	require.Equal(t, 0, s.findWorker(clipi1, r).id)
-	require.Equal(t, 0, s.findWorker(clipi1, r).id)
-	require.Equal(t, 0, s.findWorker(clipi1, r).id)
+	require.Equal(t, 0, s.findWorker(clipi1, r, 0).id)
+	require.Equal(t, 0, s.findWorker(clipi1, r, 0).id)
+	require.Equal(t, 0, s.findWorker(clipi1, r, 0).id)
 
-	require.Equal(t, 3, s.findWorker(clipi2, r).id)
-	require.Equal(t, 1, s.findWorker(clipi3, r).id)
+	require.Equal(t, 3, s.findWorker(clipi2, r, 0).id)
+	require.Equal(t, 1, s.findWorker(clipi3, r, 0).id)
 }
 
 func TestStartEventListener(t *testing.T) {
