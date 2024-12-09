@@ -291,12 +291,14 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 				if sc = worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayReq); sc == nil {
 					gclisa = timestamp.NewSockaddrWithPort(eclisa, ptp.PortGeneral)
 					// Create a new subscription
-					sc = NewSubscriptionClient(worker.queue, worker.signalingQueue, timestamp.NewSockaddrWithPort(eclisa, ptp.PortEvent), gclisa, ptp.MessageDelayReq, s.Config, subscriptionDuration, expire)
+					sc = NewSubscriptionClient(worker.queue, worker.signalingQueue, eclisa, gclisa, ptp.MessageDelayReq, s.Config, subscriptionDuration, expire)
 					worker.RegisterSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayReq, sc)
 					go sc.Start(s.ctx)
 				} else {
 					// bump the subscription
 					sc.SetExpire(expire)
+					// sptp is stateless, port can change
+					sc.eclisa = eclisa
 				}
 				sc.UpdateSyncDelayReq(rxTS, dReq.SequenceID)
 				sc.UpdateAnnounceDelayReq(dReq.CorrectionField, dReq.SequenceID)
