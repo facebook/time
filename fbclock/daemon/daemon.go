@@ -39,7 +39,7 @@ import (
 
 const (
 	utcOffsetOriginalS int32  = 10    // UTC-TAI offset was 10s before leap seconds started (1972)
-	leapDurationS      uint64 = 65000 // 18.06 hours
+	leapDurationS      uint64 = 62500 // 17.36 hours https://chrony-project.org/doc/4.6/chrony.conf.html
 	monPrefix          string = "linearizability."
 )
 

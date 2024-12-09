@@ -421,7 +421,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		ErrorBoundNS:         123.0,
 		HoldoverMultiplierNS: 64.5,
 		SmearingStartS:       1483228836,
-		SmearingEndS:         1483293836,
+		SmearingEndS:         1483291336,
 		UTCOffsetPreS:        36,
 		UTCOffsetPostS:       37,
 	}
@@ -464,7 +464,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		ErrorBoundNS:         157,
 		HoldoverMultiplierNS: 9362.84482758621,
 		SmearingStartS:       1483228836,
-		SmearingEndS:         1483293836,
+		SmearingEndS:         1483291336,
 		UTCOffsetPreS:        36,
 		UTCOffsetPostS:       37,
 	}
@@ -673,7 +673,7 @@ func TestLeapSecondSmearing(t *testing.T) {
 	got := leapSecondSmearing(leaps)
 	want := &clockSmearing{
 		smearingStartS: 1483228836, // Sun, 01 Jan 2017 00:00:36 TAI (or Sat, 31 Dec 2016 12:00:00 UTC)
-		smearingEndS:   1483293836, // Sun, 01 Jan 2017 18:03:56 TAI (or Sun, 01 Jan 2017 18:03:19 UTC)
+		smearingEndS:   1483291336, // Sun, 01 Jan 2017 17:22:53 TAI (or Sun, 01 Jan 2017 17:22:16 UTC)
 		utcOffsetPreS:  35,
 		utcOffsetPostS: 36,
 	}
