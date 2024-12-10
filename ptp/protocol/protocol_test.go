@@ -542,6 +542,20 @@ func FuzzDecodePacket(f *testing.F) {
 						return
 					}
 				}
+			case MessageSync, MessageDelayReq:
+				m := packet.(*SyncDelayReq)
+				// ignore Sync/DelayReq with GrantUnicastTransmissionTLV, TLVPathTrace or TLVAlternateTimeOffsetIndicator TLVs
+				for _, tlv := range m.TLVs {
+					if tlv.Type() == TLVGrantUnicastTransmission {
+						return
+					}
+					if tlv.Type() == TLVAlternateTimeOffsetIndicator {
+						return
+					}
+					if tlv.Type() == TLVPathTrace {
+						return
+					}
+				}
 			}
 			bb, err := Bytes(packet)
 			require.NoError(t, err)

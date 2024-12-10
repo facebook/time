@@ -201,7 +201,7 @@ func (sc *SubscriptionClient) initSync() {
 		Header: ptp.Header{
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageSync, 0),
 			Version:         ptp.Version,
-			MessageLength:   uint16(binary.Size(ptp.SyncDelayReq{})),
+			MessageLength:   uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.SyncDelayReqBody{})), //#nosec G115
 			DomainNumber:    uint8(sc.serverConfig.DomainNumber),
 			FlagField:       ptp.FlagUnicast | ptp.FlagTwoStep,
 			SequenceID:      0,
