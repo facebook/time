@@ -37,8 +37,8 @@ func ReqDelay(clockID ptp.ClockIdentity, portID uint16) *ptp.SyncDelayReq {
 		Header: ptp.Header{
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageDelayReq, 0),
 			Version:         ptp.Version,
-			SequenceID:      0, // will be populated on sending
-			MessageLength:   uint16(binary.Size(ptp.SyncDelayReq{})),
+			SequenceID:      0,                                                                       // will be populated on sending
+			MessageLength:   uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.SyncDelayReqBody{})), //#nosec G115
 			FlagField:       ptp.FlagUnicast | ptp.FlagProfileSpecific1,
 			SourcePortIdentity: ptp.PortIdentity{
 				PortNumber:    portID,
@@ -163,7 +163,7 @@ func NewClient(target netip.Addr, targetPort int, clockID ptp.ClockIdentity, eve
 		sequenceIDMask:  sequenceIDMask,
 		sequenceIDValue: sequenceIDMaskedValue,
 		delayRequest:    ReqDelay(clockID, 1),
-		delayReqBytes:   make([]byte, binary.Size(ptp.Header{})+binary.Size(ptp.SyncDelayReq{})),
+		delayReqBytes:   make([]byte, binary.Size(ptp.Header{})+binary.Size(ptp.SyncDelayReqBody{})+ptp.TrailingBytes),
 		eventConn:       eventConn,
 		eventAddr:       eventAddr,
 		inChan:          make(chan bool, 100),

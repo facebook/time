@@ -102,7 +102,7 @@ func announcePkt(seq int) *ptp.Announce {
 }
 
 func syncPkt(seq int) *ptp.SyncDelayReq {
-	l := binary.Size(ptp.SyncDelayReq{})
+	l := binary.Size(ptp.Header{}) + binary.Size(ptp.SyncDelayReqBody{})
 	return &ptp.SyncDelayReq{
 		Header: ptp.Header{
 			SdoIDAndMsgType:    ptp.NewSdoIDAndMsgType(ptp.MessageSync, 0),

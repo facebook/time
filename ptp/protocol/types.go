@@ -98,6 +98,7 @@ const (
 	TLVAcknowledgeCancelUnicastTransmission TLVType = 0x0007
 	TLVPathTrace                            TLVType = 0x0008
 	TLVAlternateTimeOffsetIndicator         TLVType = 0x0009
+	TLVAlternateResponsePort                TLVType = 0x2007
 	// Remaining 52 tlvType TLVs not implemented
 )
 
@@ -112,6 +113,7 @@ var TLVTypeToString = map[TLVType]string{
 	TLVAcknowledgeCancelUnicastTransmission: "ACKNOWLEDGE_CANCEL_UNICAST_TRANSMISSION",
 	TLVPathTrace:                            "PATH_TRACE",
 	TLVAlternateTimeOffsetIndicator:         "ALTERNATE_TIME_OFFSET_INDICATOR",
+	TLVAlternateResponsePort:                "ALTERNATE_RESPONSE_PORT",
 }
 
 func (t TLVType) String() string {
