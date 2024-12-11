@@ -241,6 +241,15 @@ func readPacketBuf(connFd int, buf []byte) (int, unix.Sockaddr, error) {
 	return n, saddr, err
 }
 
+func updateSockaddrWithPort(sa unix.Sockaddr, port int) {
+	switch sa := sa.(type) {
+	case *unix.SockaddrInet4:
+		sa.Port = port
+	case *unix.SockaddrInet6:
+		sa.Port = port
+	}
+}
+
 // handleEventMessage is a handler which gets called every time Event Message arrives
 func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 	buf := make([]byte, timestamp.PayloadSizeBytes)
@@ -300,7 +309,12 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 				expire = time.Now().Add(subscriptionDuration)
 				// SYNC DELAY_REQUEST and ANNOUNCE
 				if sc = worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayReq); sc == nil {
-					gclisa = timestamp.NewSockaddrWithPort(eclisa, ptp.PortGeneral)
+					// if the port number is > 10, it's a ptping request which expects announce to come to the same ephemeral port
+					if dReq.SourcePortIdentity.PortNumber > 10 {
+						gclisa = eclisa
+					} else {
+						gclisa = timestamp.NewSockaddrWithPort(eclisa, ptp.PortGeneral)
+					}
 					// Create a new subscription
 					sc = NewSubscriptionClient(worker.queue, worker.signalingQueue, eclisa, gclisa, ptp.MessageDelayReq, s.Config, subscriptionDuration, expire)
 					worker.RegisterSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayReq, sc)
@@ -310,6 +324,12 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 					sc.SetExpire(expire)
 					// sptp is stateless, port can change
 					sc.eclisa = eclisa
+					// if the port number is > 10, it's a ptping request which expects announce to come to the same ephemeral port
+					if dReq.SourcePortIdentity.PortNumber > 10 {
+						sc.gclisa = eclisa
+					} else {
+						updateSockaddrWithPort(sc.gclisa, ptp.PortGeneral)
+					}
 				}
 				sc.UpdateSyncDelayReq(rxTS, dReq.SequenceID)
 				sc.UpdateAnnounceDelayReq(dReq.CorrectionField, dReq.SequenceID)
