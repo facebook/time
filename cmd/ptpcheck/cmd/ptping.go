@@ -178,8 +178,9 @@ func ptpingRun(iface string, dscp int, server string, count int, timeout time.Du
 	if err = p.init(); err != nil {
 		return err
 	}
-	// We want to avoid first 10 which may be used by other tools
-	portID := uint16(rand.Intn(10+65535) - 10)
+	// We want to avoid first 10 which may be used by other tools.
+	// Intn(65524) will generate a random number between 0 and 65524
+	portID := uint16(rand.Intn(65524) + 11)
 
 	for c := 1; c <= count; c++ {
 		p.ts.reset()
