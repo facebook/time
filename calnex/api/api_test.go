@@ -835,3 +835,24 @@ func TestPowerSupplyStatusSentinel(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expected, g)
 }
+
+func TestFetchUptime(t *testing.T) {
+	sampleResp := "{\"uptime\": 42}"
+	expected := &Uptime{
+		Uptime: 42,
+	}
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI.Client = ts.Client()
+
+	f, err := calnexAPI.FetchUptime()
+	require.NoError(t, err)
+	require.Equal(t, expected, f)
+}

@@ -82,6 +82,11 @@ type Version struct {
 	Firmware string
 }
 
+// Uptime is a struct representing Calnex uptime JSON response
+type Uptime struct {
+	Uptime int64
+}
+
 // GNSS is a struct representing Calnex GNSS JSON response
 type GNSS struct {
 	AntennaStatus         string
@@ -461,6 +466,7 @@ const (
 	rebootURL      = "https://%s/api/reboot?action=reboot"
 
 	versionURL     = "https://%s/api/version"
+	uptimeURL      = "https://%s/api/uptime"
 	firmwareURL    = "https://%s/api/updatefirmware"
 	certificateURL = "https://%s/api/installcertificate"
 	licenseURL     = "https://%s/api/option/load"
@@ -907,4 +913,25 @@ func (a *API) PowerSupplyStatus() (*PowerSupplyStatus, error) {
 	}
 
 	return p, nil
+}
+
+// FetchUptime returns uptime of the device
+func (a *API) FetchUptime() (*Uptime, error) {
+	url := fmt.Sprintf(uptimeURL, a.source)
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(http.StatusText(resp.StatusCode))
+	}
+
+	u := &Uptime{}
+	if err = json.NewDecoder(resp.Body).Decode(u); err != nil {
+		return nil, err
+	}
+
+	return u, nil
 }
