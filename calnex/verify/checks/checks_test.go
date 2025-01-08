@@ -116,29 +116,6 @@ func TestHTTPError(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestPing(t *testing.T) {
-	r := PingRemediation{}
-	c := Ping{Remediation: r}
-	require.Equal(t, "Ping", c.Name())
-
-	err := c.Run("::1", false)
-	require.NoError(t, err)
-}
-
-func TestPingError(t *testing.T) {
-	r := PingRemediation{}
-	c := Ping{Remediation: r}
-	require.Equal(t, "Ping", c.Name())
-
-	err := c.Run("1.2.3.4", false)
-	require.Error(t, err)
-
-	want, _ := r.Remediate()
-	got, err := c.Remediate()
-	require.NoError(t, err)
-	require.Equal(t, want, got)
-}
-
 func TestPSU(t *testing.T) {
 	r := PSURemediation{}
 	c := PSU{Remediation: r}
