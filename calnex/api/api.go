@@ -401,8 +401,8 @@ var probeToCalnexName = map[Probe]string{
 
 // probeToServerType is a map of probe to Calnex server name
 var probeToServerType = map[Probe]string{
-	ProbePTP: "master_ip",
-	ProbeNTP: "server_ip",
+	ProbePTP: "master_ip_ipv6",
+	ProbeNTP: "server_ip_ipv6",
 	ProbePPS: "server_ip",
 }
 
