@@ -82,7 +82,6 @@ func (c *config) measureConfig(target string, s *ini.Section, mc map[api.Channel
 			c.set(target, s, fmt.Sprintf("%s\\ptp_synce\\physical_packet_channel", ch.CalnexAPI()), api.CHANNEL1)
 
 			// Set target we measure
-			c.set(target, s, fmt.Sprintf("%s\\ptp_synce\\ntp\\server_ip", ch.CalnexAPI()), m.Target)
 			c.set(target, s, fmt.Sprintf("%s\\ptp_synce\\ntp\\server_ip_ipv6", ch.CalnexAPI()), m.Target)
 
 			// show raw metrics
@@ -102,7 +101,6 @@ func (c *config) measureConfig(target string, s *ini.Section, mc map[api.Channel
 			c.set(target, s, fmt.Sprintf("%s\\ptp_synce\\ptp\\version", ch.CalnexAPI()), api.SPTP)
 
 			// Set target we measure
-			c.set(target, s, fmt.Sprintf("%s\\ptp_synce\\ptp\\master_ip", ch.CalnexAPI()), m.Target)
 			c.set(target, s, fmt.Sprintf("%s\\ptp_synce\\ptp\\master_ip_ipv6", ch.CalnexAPI()), m.Target)
 
 			// use ipv6
