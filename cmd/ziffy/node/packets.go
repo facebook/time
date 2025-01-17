@@ -66,7 +66,7 @@ func formSyncPacket(msgType ptp.MessageType, hop int, routeIndex int) *ptp.SyncD
 		Header: ptp.Header{
 			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(msgType, 0),
 			Version:         ptp.Version,
-			MessageLength:   uint16(binary.Size(ptp.SyncDelayReq{})),
+			MessageLength:   uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.SyncDelayReqBody{})), //#nosec G115
 			FlagField:       ptp.FlagUnicast,
 			SequenceID:      uint16(hop),
 			SourcePortIdentity: ptp.PortIdentity{
