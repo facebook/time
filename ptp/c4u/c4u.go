@@ -171,13 +171,13 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 
 			pid, err := server.ReadPidFile(config.Pid)
 			if err != nil {
-				log.Errorf("Failed to read ptp4u pid: %v", err)
+				log.Warningf("Failed to read ptp4u pid: %v", err)
 				return nil
 			}
 
 			err = unix.Kill(pid, unix.SIGHUP)
 			if err != nil {
-				log.Errorf("Failed to send SIGHUP to ptp4u %d: %v", pid, err)
+				log.Warningf("Failed to send SIGHUP to ptp4u %d: %v", pid, err)
 				return nil
 			}
 			log.Infof("SIGHUP is sent to ptp4u pid: %d", pid)
