@@ -246,8 +246,8 @@ func (s *Server) fillStaticHeaders(response *ntp.Packet) {
 	response.Precision = -32
 	// Root delay. We pretend to be stratum 1
 	response.RootDelay = 0
-	// Root dispersion, big-endian 0.000152
-	response.RootDispersion = 10
+	// Root dispersion, big-endian 0.000015
+	response.RootDispersion = 1
 	// Reference ID ATOM. Only for stratum 1
 	response.ReferenceID = binary.BigEndian.Uint32([]byte(fmt.Sprintf("%-4s", s.Config.RefID)))
 }

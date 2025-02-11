@@ -82,7 +82,7 @@ func TestFillStaticHeadersRootDispersion(t *testing.T) {
 	response := &ntp.Packet{}
 
 	s.fillStaticHeaders(response)
-	require.Equal(t, uint32(10), response.RootDispersion, "Root dispersion should be 0.000152")
+	require.Equal(t, uint32(1), response.RootDispersion, "Root dispersion should be 0.000015")
 }
 
 func TestGenerateResponsePoll(t *testing.T) {
