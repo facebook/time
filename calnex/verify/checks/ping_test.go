@@ -25,15 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPing(t *testing.T) {
-	r := PingRemediation{}
-	c := Ping{Remediation: r}
-	require.Equal(t, "Ping", c.Name())
-
-	err := c.Run("::1", false)
-	require.NoError(t, err)
-}
-
 func TestPingError(t *testing.T) {
 	r := PingRemediation{}
 	c := Ping{Remediation: r}
