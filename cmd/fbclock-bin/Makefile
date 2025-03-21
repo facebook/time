@@ -2,7 +2,7 @@ CC=gcc
 CFLAGS=-Wall -g -lrt -msse4.2 -std=gnu11
 
 fbclock-bin:
-	$(CC) $(CFLAGS) -o fbclock-bin -I ../../../ fbclock-bin.c ../../fbclock/fbclock.c
+	$(CC) $(CFLAGS) -o fbclock-bin fbclock-bin.c ../../fbclock/fbclock.c
 
 .PHONY: clean
 

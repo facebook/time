@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "time/fbclock/fbclock.h"
+#include "../../fbclock/fbclock.h"
 
 #include <stdio.h> // for printf and perror
 #include <stdlib.h> // for EXIT_* constants
