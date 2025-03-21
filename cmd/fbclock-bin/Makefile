@@ -1,5 +1,10 @@
 CC=gcc
-CFLAGS=-Wall -g -lrt -std=gnu11
+CFLAGS+=-g -lrt
+
+arch := $(shell arch)
+ifeq ($(arch),x86_64)
+	CFLAGS += -msse4.2
+endif
 
 fbclock-bin:
 	$(CC) $(CFLAGS) -o fbclock-bin fbclock-bin.c ../../fbclock/fbclock.c
