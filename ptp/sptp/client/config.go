@@ -96,6 +96,22 @@ func (c *MeasurementConfig) Validate() error {
 	return nil
 }
 
+// AsymmetryConfig describes configuration for asymmetry correction
+type AsymmetryConfig struct {
+	AsymmetryCorrectionEnabled bool          `yaml:"correction_enabled"`        // Enable asymmetry correction
+	AsymmetryThreshold         time.Duration `yaml:"threshold"`                 // threshold after which we consider a GM to be using an Asymmetric path
+	MaxConsecutiveAsymmetry    uint16        `yaml:"max_consecutive_asymmetry"` // number of consecutive bad measurements after which we consider the GM to be using an Asymmetric path
+	MaxPortChanges             uint16        `yaml:"max_port_changes"`          // number of port changes after which we will consider the best GM to be using an Asymmetric path
+}
+
+// Validate MeasurementConfig is sane
+func (c *AsymmetryConfig) Validate() error {
+	if c.AsymmetryThreshold < 0 {
+		return fmt.Errorf("threshold must be 0 or positive")
+	}
+	return nil
+}
+
 // Config specifies SPTP run options
 type Config struct {
 	Iface                    string
@@ -109,6 +125,7 @@ type Config struct {
 	MaxClockClass            ptp.ClockClass
 	MaxClockAccuracy         ptp.ClockAccuracy
 	Measurement              MeasurementConfig
+	Asymmetry                AsymmetryConfig
 	MetricsAggregationWindow time.Duration
 	AttemptsTXTS             int
 	TimeoutTXTS              time.Duration
