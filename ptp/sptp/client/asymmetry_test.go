@@ -357,3 +357,88 @@ func TestCorrectNonSelectedGMsAsymmetry(t *testing.T) {
 		})
 	}
 }
+
+func TestSimpleSelectedGMAsymmetric(t *testing.T) {
+	bestAddr := netip.MustParseAddr("192.0.2.1")
+	tests := []struct {
+		name     string
+		results  map[netip.Addr]*RunResult
+		config   AsymmetryConfig
+		expected bool
+	}{
+		{
+			name: "Selected GM is asymmetric if all others are",
+			results: map[netip.Addr]*RunResult{
+				bestAddr: {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 15 * time.Millisecond}},
+				netip.MustParseAddr("192.0.2.2"): {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 20 * time.Millisecond}},
+				netip.MustParseAddr("192.0.2.3"): {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 11 * time.Millisecond}},
+			},
+			config:   AsymmetryConfig{AsymmetryThreshold: 10 * time.Millisecond},
+			expected: true,
+		},
+		{
+			name: "If at least one other GM is not asymmetric, selected GM is not asymmetric",
+			results: map[netip.Addr]*RunResult{
+				bestAddr: {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 5 * time.Millisecond}},
+				netip.MustParseAddr("192.0.2.2"): {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 20 * time.Millisecond}},
+				netip.MustParseAddr("192.0.2.3"): {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 9 * time.Millisecond}},
+			},
+			config:   AsymmetryConfig{AsymmetryThreshold: 10 * time.Millisecond},
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := simpleSelectedGMAsymmetric(tt.results, bestAddr, tt.config)
+			require.Equal(t, tt.expected, actual)
+		})
+	}
+}
