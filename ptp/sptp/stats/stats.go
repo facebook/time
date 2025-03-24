@@ -52,6 +52,7 @@ type Stat struct {
 	CorrectionFieldTX int64            `json:"cf_tx"`
 	C2SDelay          int64            `json:"client_server_delay"`
 	S2CDelay          int64            `json:"server_client_delay"`
+	PortChangeCount   uint64           `json:"port_change_count"`
 }
 
 // Stats is a list of Stat

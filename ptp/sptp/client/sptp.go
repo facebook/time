@@ -431,6 +431,10 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 	}
 	p.stats.SetServoState(int(state))
 	log.Infof("offset %10d servo %s freq %+7.0f path delay %10d (%6d:%6d)", bmOffset, state.String(), -freqAdj, bmDelay, bm.C2SDelay, bm.S2CDelay)
+	if p.cfg.Asymmetry.AsymmetryCorrectionEnabled {
+		portChangeCount := correctAsymmetry(p.clients, results, bestAddr, p.cfg.Asymmetry)
+		p.stats.SetportChangeCount(portChangeCount)
+	}
 	switch state {
 	case servo.StateJump:
 		log.Infof("stepping clock by %v", -bm.Offset)
@@ -470,7 +474,7 @@ func (p *SPTP) runInternal(ctx context.Context) error {
 				continue
 			}
 			eg.Go(func() error {
-				res := c.RunOnce(ictx, p.cfg.ExchangeTimeout)
+				res := c.RunOnce(ictx, p.cfg)
 				lock.Lock()
 				defer lock.Unlock()
 				results[addr] = res
