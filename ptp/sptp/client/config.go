@@ -102,6 +102,7 @@ type AsymmetryConfig struct {
 	AsymmetryThreshold         time.Duration `yaml:"threshold"`                 // threshold after which we consider a GM to be using an Asymmetric path
 	MaxConsecutiveAsymmetry    uint16        `yaml:"max_consecutive_asymmetry"` // number of consecutive bad measurements after which we consider the GM to be using an Asymmetric path
 	MaxPortChanges             uint16        `yaml:"max_port_changes"`          // number of port changes after which we will consider the best GM to be using an Asymmetric path
+	Simple                     bool          `yaml:"simple"`                    // use simple asymmetry correction, which only changes port of the currently selected GM when the majority of clients are asymmetric
 }
 
 // Validate MeasurementConfig is sane

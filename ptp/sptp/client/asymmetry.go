@@ -25,6 +25,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Returns number of port changes requested (which equals the number of GMS assumed to be asymmetric)
+func correctAsymmetrySimple(clients map[netip.Addr]*Client, results map[netip.Addr]*RunResult, bestAddr netip.Addr, config AsymmetryConfig) int {
+	if simpleSelectedGMAsymmetric(results, bestAddr, config) {
+		correctSelectedGMAsymmetry(clients, bestAddr)
+		return 1
+	}
+
+	return 0
+}
+
 // correctAsymmetry adjusts client AlternateResponsePortTLV Offset to correct path asymmetry based on the asymmetry configs provided.
 // Returns number of port changes requested (which equals the number of GMS assumed to be asymmetric)
 func correctAsymmetry(clients map[netip.Addr]*Client, results map[netip.Addr]*RunResult, bestAddr netip.Addr, config AsymmetryConfig) int {
@@ -63,6 +73,20 @@ func correctNonSelectedGMsAsymmetry(clients map[netip.Addr]*Client, results map[
 			client.asymmetryCounter = max(client.asymmetryCounter-1, 0)
 		}
 	}
+}
+
+// simpleSelectedGMAsymmetric checks if currently selected GM is asymmetric based on how many non-selected GMs are asymmetric
+func simpleSelectedGMAsymmetric(results map[netip.Addr]*RunResult, bestAddr netip.Addr, config AsymmetryConfig) bool {
+	var count int
+	for addr, result := range results {
+		if addr == bestAddr {
+			continue
+		}
+		if isAsymmetric(result, config.AsymmetryThreshold) {
+			count++
+		}
+	}
+	return count == len(results)-1
 }
 
 // selectedGMAsymmetric verifies if we have attempted enough ports on any client to the point where we assume the currently selected GM is using a bad path
