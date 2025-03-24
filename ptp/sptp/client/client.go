@@ -106,6 +106,12 @@ type Client struct {
 
 	// where we store our metrics
 	stats StatsServer
+
+	// Whether the client is assumed to be using an asymmetric path
+	asymmetric bool
+
+	// Running counter of consecutive asymmetric results received
+	asymmetryCounter uint16
 }
 
 func (c *Client) incrementSequence() {
@@ -230,8 +236,8 @@ func (c *Client) handleDelayReq(clockID ptp.ClockIdentity, ts time.Time) error {
 }
 
 // RunOnce produces one client-server exchange
-func (c *Client) RunOnce(ctx context.Context, timeout time.Duration) *RunResult {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+func (c *Client) RunOnce(ctx context.Context, config *Config) *RunResult {
+	ctx, cancel := context.WithTimeout(ctx, config.ExchangeTimeout)
 	defer cancel()
 	errchan := make(chan error)
 

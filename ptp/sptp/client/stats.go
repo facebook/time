@@ -42,6 +42,7 @@ type StatsServer interface {
 	IncUnsupported()
 	SetGMStats(stat *gmstats.Stat)
 	CollectSysStats()
+	SetportChangeCount(AsymmetricTotal int)
 }
 
 // Stats is an implementation of
@@ -59,16 +60,17 @@ type Stats struct {
 
 // clientStats is just a grouping, don't use directly
 type clientStats struct {
-	gmsTotal     int64
-	gmsAvailable int64
-	tickDuration int64
-	filtered     int64
-	rxSync       int64
-	rxAnnounce   int64
-	rxDelayReq   int64
-	txDelayReq   int64
-	unsupported  int64
-	servoState   int64
+	gmsTotal        int64
+	gmsAvailable    int64
+	tickDuration    int64
+	filtered        int64
+	rxSync          int64
+	rxAnnounce      int64
+	rxDelayReq      int64
+	txDelayReq      int64
+	unsupported     int64
+	servoState      int64
+	portChangeCount int64
 }
 
 // sysStats is just a grouping, don't use directly
@@ -142,6 +144,11 @@ func (s *Stats) IncUnsupported() {
 	atomic.AddInt64(&s.unsupported, 1)
 }
 
+// SetportChangeCount sets number of asymmetric GMs
+func (s *Stats) SetportChangeCount(count int) {
+	s.portChangeCount = int64(count)
+}
+
 // GetCounters returns an map of counters
 func (s *Stats) GetCounters() map[string]int64 {
 	s.Lock()
@@ -159,6 +166,7 @@ func (s *Stats) GetCounters() map[string]int64 {
 		"ptp.sptp.portstats.tx.delay_req":   s.txDelayReq,
 		"ptp.sptp.portstats.rx.unsupported": s.unsupported,
 		"ptp.sptp.servo.state":              s.servoState,
+		"ptp.sptp.port_change_count":        s.portChangeCount,
 		// sysStats
 		"ptp.sptp.runtime.gc.pause_ns.sum.60":    s.gcPauseNs,
 		"ptp.sptp.runtime.mem.gc.pause_total_ns": s.gcPauseTotalNs,
