@@ -21,7 +21,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/facebook/time/cmd/ptpcheck/metrics"
 	"github.com/facebook/time/phc"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -35,6 +37,7 @@ var (
 	maxFreqTS2PHCFlag       float64
 	firstStepTS2PHCFlag     time.Duration
 	stepThresholdTS2PHCFlag time.Duration
+	monitoringPort          uint
 )
 
 func init() {
@@ -47,6 +50,7 @@ func init() {
 	ts2phcCmd.Flags().UintVarP(&dstPinTS2PHCFlag, "in-pin", "o", phc.DefaultTs2PhcSinkIndex, "input pin number of the PPS signal on destination device. (default 0)")
 	ts2phcCmd.Flags().Float64VarP(&maxFreqTS2PHCFlag, "max_frequency", "m", 0, "maximum frequency in parts per billion (PPB) that the servo will correct by changing the clock frequency instead of stepping the clock. If unset, uses the maximum frequency reported by the PHC device.")
 	ts2phcCmd.Flags().DurationVarP(&stepThresholdTS2PHCFlag, "step_threshold", "t", 0, "The maximum offset that the servo will correct by changing the clock frequency instead of stepping the clock. When set to 0, the servo will never step the clock except on start.")
+	ts2phcCmd.Flags().UintVarP(&monitoringPort, "monitoring_port", "p", 9120, "port to expose the prometheus metrics endpoint. Metrics are exposed on /metrics endpoint.")
 }
 
 func ts2phcRun(srcDevicePath string, dstDeviceName string, interval time.Duration, firstStepth time.Duration, stepth time.Duration, srcPinIndex uint) error {
@@ -72,12 +76,12 @@ func ts2phcRun(srcDevicePath string, dstDeviceName string, interval time.Duratio
 	lastTick := time.Now()
 	log.Debug("Starting sync loop")
 	for {
-		eventTime, err := ppsSink.PollPPSSink()
+		ppsEventTime, err := ppsSink.PollPPSSink()
 		if err != nil {
 			log.Errorf("Error polling PPS Sink: %v", err)
 			continue
 		}
-		log.Debugf("PPS event at %+v", eventTime.UnixNano())
+		log.Debugf("PPS event at %+v", ppsEventTime.UnixNano())
 		srcTimestamp, err := ppsSource.Timestamp()
 		if err != nil {
 			log.Errorf("Error getting source timestamp: %v", err)
@@ -87,9 +91,13 @@ func ts2phcRun(srcDevicePath string, dstDeviceName string, interval time.Duratio
 		now := time.Now()
 		log.Debugf("Tick took %vms sys time to call sync", now.Sub(lastTick).Milliseconds())
 		lastTick = now
-		if err := phc.PPSClockSync(pi, srcTimestamp, eventTime, dstDevice); err != nil {
+		if err = phc.PPSClockSync(pi, srcTimestamp, ppsEventTime, dstDevice); err != nil {
 			log.Errorf("Error syncing PHC: %v", err)
 		}
+		go func() {
+			offset := ppsEventTime.Sub(srcTimestamp)
+			metrics.ObserveOffset(float64(offset))
+		}()
 	}
 }
 
@@ -127,6 +135,9 @@ var ts2phcCmd = &cobra.Command{
 	Short: "Sync PHC with external timestamps",
 	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
+		go func() {
+			log.Fatalf("Metrics server error: %v", metrics.RunMetricsServer(monitoringPort))
+		}()
 		if err := ts2phcRun(srcDeviceTS2PHCFlag, dstDeviceTS2PHCFlag, intervalTS2PHCFlag, firstStepTS2PHCFlag, stepThresholdTS2PHCFlag, srcPinTS2PHCFlag); err != nil {
 			log.Fatal(err)
 		}
