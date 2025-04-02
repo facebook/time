@@ -78,6 +78,20 @@ func (mr *MockServoMockRecorder) IsSpike(offset interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSpike", reflect.TypeOf((*MockServo)(nil).IsSpike), offset)
 }
 
+// IsStable mocks base method.
+func (m *MockServo) IsStable(offset int64) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsStable", offset)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsStable indicates an expected call of IsStable.
+func (mr *MockServoMockRecorder) IsStable(offset interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsStable", reflect.TypeOf((*MockServo)(nil).IsStable), offset)
+}
+
 // MeanFreq mocks base method.
 func (m *MockServo) MeanFreq() float64 {
 	m.ctrl.T.Helper()

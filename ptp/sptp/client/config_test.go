@@ -49,6 +49,7 @@ func TestReadConfigDefaults(t *testing.T) {
 			PathDelayDiscardMultiplier: 1000,
 		},
 		ListenAddress: "::",
+		Asymmetry:     AsymmetryConfig{MaxConsecutiveAsymmetry: 10},
 	}
 	require.Equal(t, want, cfg)
 }
@@ -79,6 +80,13 @@ measurement:
   path_delay_discard_filter_enabled: true
   path_delay_discard_below: 2us
   path_delay_discard_multiplier: 3
+asymmetry:
+  max_consecutive_asymmetry: 10
+  correction_enabled: true
+  threshold: 1us
+  max_consecutive_asymmetry: 10
+  max_port_changes: 30
+  simple: true
 `))
 	require.NoError(t, err)
 	cfg, err := ReadConfig(f.Name())
@@ -103,6 +111,13 @@ measurement:
 		MaxClockClass:            7,
 		MaxClockAccuracy:         37,
 		ListenAddress:            "::",
+		Asymmetry: AsymmetryConfig{
+			AsymmetryCorrectionEnabled: true,
+			AsymmetryThreshold:         time.Duration(1 * time.Microsecond),
+			MaxConsecutiveAsymmetry:    10,
+			MaxPortChanges:             30,
+			Simple:                     true,
+		},
 	}
 	require.Equal(t, want, cfg)
 	mask, value := cfg.GenerateMaskAndValue()
@@ -663,6 +678,13 @@ measurement:
   path_delay_discard_filter_enabled: true
   path_delay_discard_below: 2us
   path_delay_discard_multiplier: 3
+asymmetry:
+  max_consecutive_asymmetry: 10
+  correction_enabled: true
+  threshold: 1us
+  max_consecutive_asymmetry: 10
+  max_port_changes: 30
+  simple: true
 `))
 	require.NoError(t, err)
 	cfg, err := PrepareConfig(f.Name(), nil, "eth1", 3456, 2*time.Second, 42)
@@ -693,6 +715,13 @@ measurement:
 			PathDelayDiscardMultiplier:    3,
 		},
 		ListenAddress: "192.168.0.1",
+		Asymmetry: AsymmetryConfig{
+			AsymmetryCorrectionEnabled: true,
+			AsymmetryThreshold:         time.Duration(1 * time.Microsecond),
+			MaxConsecutiveAsymmetry:    10,
+			MaxPortChanges:             30,
+			Simple:                     true,
+		},
 	}
 	require.Equal(t, want, cfg)
 }
@@ -724,6 +753,7 @@ func TestPrepareConfigDefaults(t *testing.T) {
 			PathDelayDiscardMultiplier:    1000,
 		},
 		ListenAddress: "::",
+		Asymmetry:     AsymmetryConfig{MaxConsecutiveAsymmetry: 10},
 	}
 	require.Equal(t, want, cfg)
 }

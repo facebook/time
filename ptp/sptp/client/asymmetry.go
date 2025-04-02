@@ -27,7 +27,7 @@ import (
 
 // Returns number of port changes requested (which equals the number of GMS assumed to be asymmetric)
 func correctAsymmetrySimple(clients map[netip.Addr]*Client, results map[netip.Addr]*RunResult, bestAddr netip.Addr, config AsymmetryConfig) int {
-	if simpleSelectedGMAsymmetric(results, bestAddr, config) {
+	if simpleSelectedGMAsymmetric(clients, results, bestAddr, config) {
 		correctSelectedGMAsymmetry(clients, bestAddr)
 		return 1
 	}
@@ -69,24 +69,36 @@ func correctNonSelectedGMsAsymmetry(clients map[netip.Addr]*Client, results map[
 			}
 			client.asymmetryCounter++
 		} else {
-			log.Debugf("GM %v not asymmetric, lowering grace", result.Server)
 			client.asymmetryCounter = max(client.asymmetryCounter-1, 0)
 		}
 	}
 }
 
 // simpleSelectedGMAsymmetric checks if currently selected GM is asymmetric based on how many non-selected GMs are asymmetric
-func simpleSelectedGMAsymmetric(results map[netip.Addr]*RunResult, bestAddr netip.Addr, config AsymmetryConfig) bool {
-	var count int
+func simpleSelectedGMAsymmetric(clients map[netip.Addr]*Client, results map[netip.Addr]*RunResult, selectedAddr netip.Addr, config AsymmetryConfig) bool {
+	var asymmetricResultCount int
+	selectedGM := clients[selectedAddr]
 	for addr, result := range results {
-		if addr == bestAddr {
+		if addr == selectedAddr {
 			continue
 		}
 		if isAsymmetric(result, config.AsymmetryThreshold) {
-			count++
+			asymmetricResultCount++
 		}
 	}
-	return count == len(results)-1
+	selectedGMAsymmetric := asymmetricResultCount == len(results)-1
+	withinGracePeriod := selectedGM.asymmetryCounter <= config.MaxConsecutiveAsymmetry
+	if selectedGMAsymmetric {
+		if !withinGracePeriod {
+			log.Debugf("Selected GM %v asymmetric - offset will be increased", selectedAddr)
+			return true
+		}
+		log.Debugf("Selected GM %v asymmetric - grace %d/%d", selectedAddr, selectedGM.asymmetryCounter, config.MaxConsecutiveAsymmetry)
+		selectedGM.asymmetryCounter++
+		return false
+	}
+	selectedGM.asymmetryCounter = max(selectedGM.asymmetryCounter-1, 0)
+	return false
 }
 
 // selectedGMAsymmetric verifies if we have attempted enough ports on any client to the point where we assume the currently selected GM is using a bad path
@@ -129,8 +141,8 @@ func correctSelectedGMAsymmetry(clients map[netip.Addr]*Client, bestAddr netip.A
 				alternateResponsePortTlv.Offset = 0
 			}
 			client.asymmetric = false
-			client.asymmetryCounter = 0
 		}
+		client.asymmetryCounter = 0
 	}
 }
 
