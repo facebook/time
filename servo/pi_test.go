@@ -613,3 +613,38 @@ func TestPiServoAltMode(t *testing.T) {
 	require.InEpsilon(t, 0.3, pi.ki, 0.00001)
 	require.InEpsilon(t, 0.7, pi.kp, 0.00001)
 }
+
+func TestPiServoIsStable(t *testing.T) {
+	tests := []struct {
+		name           string
+		lastOffset     int64
+		currentOffset  int64
+		filterEnabled  bool
+		expectedStable bool
+	}{
+		{"is stable if current and last offset in range", 100, -100, true, true},
+		{"not stable if current and last offset outside range", -101, 101, true, false},
+		{"not stable if current in range, last outside range", -101, 100, true, false},
+		{"not stable if current outside range, last in range", 100, -101, true, false},
+		{"offset in range, no filter, stable", 0, 100, false, true},
+		{"offset outside range, no filter, unstable", 0, 101, false, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Prepare
+			pi := NewPiServo(DefaultServoConfig(), DefaultPiServoCfg(), -111288.406372)
+			pi.SyncInterval(1)
+			piFilterCfg := DefaultPiServoFilterCfg()
+			piFilterCfg.ringSize = 30
+			piFilterCfg.maxSkipCount = 15
+			var f *PiServoFilter
+			if tt.filterEnabled {
+				f = NewPiServoFilter(pi, piFilterCfg)
+				f.lastOffset = tt.lastOffset
+			} else {
+				pi.filter = nil
+			}
+			require.Equal(t, tt.expectedStable, pi.IsStable(tt.currentOffset))
+		})
+	}
+}

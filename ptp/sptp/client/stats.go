@@ -42,7 +42,7 @@ type StatsServer interface {
 	IncUnsupported()
 	SetGMStats(stat *gmstats.Stat)
 	CollectSysStats()
-	SetportChangeCount(AsymmetricTotal int)
+	IncPortChangeCount(AsymmetricTotal int)
 }
 
 // Stats is an implementation of
@@ -144,9 +144,9 @@ func (s *Stats) IncUnsupported() {
 	atomic.AddInt64(&s.unsupported, 1)
 }
 
-// SetportChangeCount sets number of asymmetric GMs
-func (s *Stats) SetportChangeCount(count int) {
-	s.portChangeCount = int64(count)
+// IncPortChangeCount increases number port changes performed
+func (s *Stats) IncPortChangeCount(count int) {
+	atomic.AddInt64(&s.portChangeCount, int64(count))
 }
 
 // GetCounters returns an map of counters

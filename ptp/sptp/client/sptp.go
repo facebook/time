@@ -44,6 +44,7 @@ type Servo interface {
 	IsSpike(offset int64) bool
 	GetState() servo.State
 	UnsetFirstUpdate()
+	IsStable(offset int64) bool
 }
 
 // SPTP is a Simple Unicast PTP client
@@ -412,6 +413,7 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 	bmDelay := bm.Delay.Nanoseconds()
 	log.Debugf("best master %q (%s)", bestAddr, bm.Announce.GrandmasterIdentity)
 	isSpike := p.pi.IsSpike(bmOffset)
+
 	var state servo.State
 	var freqAdj float64
 	if isSpike {
@@ -432,14 +434,15 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 	p.stats.SetServoState(int(state))
 	log.Infof("offset %10d servo %s freq %+7.0f path delay %10d (%6d:%6d)", bmOffset, state.String(), -freqAdj, bmDelay, bm.C2SDelay, bm.S2CDelay)
 	if p.cfg.Asymmetry.AsymmetryCorrectionEnabled {
-		// If simple
-		var portChangeCount int
-		if p.cfg.Asymmetry.Simple {
-			portChangeCount = correctAsymmetrySimple(p.clients, results, bestAddr, p.cfg.Asymmetry)
-		} else {
-			portChangeCount = correctAsymmetry(p.clients, results, bestAddr, p.cfg.Asymmetry)
+		if !isSpike && p.pi.IsStable(bmOffset) {
+			var portChangeCount int
+			if p.cfg.Asymmetry.Simple {
+				portChangeCount = correctAsymmetrySimple(p.clients, results, bestAddr, p.cfg.Asymmetry)
+			} else {
+				portChangeCount = correctAsymmetry(p.clients, results, bestAddr, p.cfg.Asymmetry)
+			}
+			p.stats.IncPortChangeCount(portChangeCount)
 		}
-		p.stats.SetportChangeCount(portChangeCount)
 	}
 	switch state {
 	case servo.StateJump:

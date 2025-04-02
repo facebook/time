@@ -105,7 +105,7 @@ type AsymmetryConfig struct {
 	Simple                     bool          `yaml:"simple"`                    // use simple asymmetry correction, which only changes port of the currently selected GM when the majority of clients are asymmetric
 }
 
-// Validate MeasurementConfig is sane
+// Validate AsymmetryConfig is sane
 func (c *AsymmetryConfig) Validate() error {
 	if c.AsymmetryThreshold < 0 {
 		return fmt.Errorf("threshold must be 0 or positive")
@@ -153,6 +153,9 @@ func DefaultConfig() *Config {
 			PathDelayDiscardMultiplier: 1000,
 		},
 		ListenAddress: "::",
+		Asymmetry: AsymmetryConfig{
+			MaxConsecutiveAsymmetry: 10,
+		},
 	}
 }
 
@@ -196,6 +199,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.Measurement.Validate(); err != nil {
 		return fmt.Errorf("invalid measurement config: %w", err)
+	}
+	if err := c.Asymmetry.Validate(); err != nil {
+		return fmt.Errorf("invalid asymmetry config: %w", err)
 	}
 	if err := c.Backoff.Validate(); err != nil {
 		return fmt.Errorf("invalid backoff config: %w", err)

@@ -362,12 +362,16 @@ func TestSimpleSelectedGMAsymmetric(t *testing.T) {
 	bestAddr := netip.MustParseAddr("192.0.2.1")
 	tests := []struct {
 		name     string
+		clients  map[netip.Addr]*Client
 		results  map[netip.Addr]*RunResult
 		config   AsymmetryConfig
 		expected bool
 	}{
 		{
-			name: "Selected GM is asymmetric if all others are",
+			name: "Selected GM is not asymmetric before max consecutive asymmetry",
+			clients: map[netip.Addr]*Client{
+				bestAddr: {asymmetryCounter: 0},
+			},
 			results: map[netip.Addr]*RunResult{
 				bestAddr: {Measurement: &MeasurementResult{
 					Announce: ptp.Announce{
@@ -397,11 +401,51 @@ func TestSimpleSelectedGMAsymmetric(t *testing.T) {
 					},
 					Offset: 11 * time.Millisecond}},
 			},
-			config:   AsymmetryConfig{AsymmetryThreshold: 10 * time.Millisecond},
+			config:   AsymmetryConfig{AsymmetryThreshold: 10 * time.Millisecond, MaxConsecutiveAsymmetry: 2},
+			expected: false,
+		},
+		{
+			name: "Selected GM is asymmetric if all others are",
+			clients: map[netip.Addr]*Client{
+				bestAddr: {asymmetryCounter: 3},
+			},
+			results: map[netip.Addr]*RunResult{
+				bestAddr: {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 15 * time.Millisecond}},
+				netip.MustParseAddr("192.0.2.2"): {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 20 * time.Millisecond}},
+				netip.MustParseAddr("192.0.2.3"): {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 11 * time.Millisecond}},
+			},
+			config:   AsymmetryConfig{AsymmetryThreshold: 10 * time.Millisecond, MaxConsecutiveAsymmetry: 2},
 			expected: true,
 		},
 		{
 			name: "If at least one other GM is not asymmetric, selected GM is not asymmetric",
+			clients: map[netip.Addr]*Client{
+				bestAddr: {asymmetryCounter: 3},
+			},
 			results: map[netip.Addr]*RunResult{
 				bestAddr: {Measurement: &MeasurementResult{
 					Announce: ptp.Announce{
@@ -431,13 +475,13 @@ func TestSimpleSelectedGMAsymmetric(t *testing.T) {
 					},
 					Offset: 9 * time.Millisecond}},
 			},
-			config:   AsymmetryConfig{AsymmetryThreshold: 10 * time.Millisecond},
+			config:   AsymmetryConfig{AsymmetryThreshold: 10 * time.Millisecond, MaxConsecutiveAsymmetry: 2},
 			expected: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := simpleSelectedGMAsymmetric(tt.results, bestAddr, tt.config)
+			actual := simpleSelectedGMAsymmetric(tt.clients, tt.results, bestAddr, tt.config)
 			require.Equal(t, tt.expected, actual)
 		})
 	}

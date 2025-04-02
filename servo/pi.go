@@ -37,6 +37,8 @@ const (
 	maxKiNormMax = 2.0
 
 	freqEstMargin = 0.001
+
+	defaultOffsetRange = 100
 )
 
 type filterState uint8
@@ -142,6 +144,14 @@ func (s *PiServo) UnsetFirstUpdate() {
 // GetMaxFreq gets current configured max frequency
 func (s *PiServo) GetMaxFreq() float64 {
 	return s.maxFreq
+}
+
+// IsStable is used to check if the offset measurement is stable or not
+func (s *PiServo) IsStable(offset int64) bool {
+	if s.filter != nil {
+		return s.filter.IsStable(offset)
+	}
+	return inRange(offset, -defaultOffsetRange, defaultOffsetRange)
 }
 
 // IsSpike function to check if offset is considered as spike
@@ -294,6 +304,11 @@ func (s *PiServo) GetState() State {
 	}
 }
 
+// IsStable is used to check if the offset measurement is stable or not
+func (f *PiServoFilter) IsStable(offset int64) bool {
+	return inRange(f.lastOffset, -f.cfg.offsetRange, f.cfg.offsetRange) && inRange(offset, -f.cfg.offsetRange, f.cfg.offsetRange)
+}
+
 // isSpike is used to check whether supplied offset is spike or not
 func (f *PiServoFilter) isSpike(offset int64, lastCorrection time.Time) filterState {
 	if f.skippedCount >= f.cfg.maxSkipCount {
@@ -363,7 +378,7 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 	 * previous holdover, we may apply bad frequency which will cause PHC going off pretty fast.
 	 * Let's calculate mean frequency only when we are sure that PHC is running more or less stable.
 	 */
-	if inRange(f.lastOffset, -f.cfg.offsetRange, f.cfg.offsetRange) && inRange(s.offset, -f.cfg.offsetRange, f.cfg.offsetRange) {
+	if f.IsStable(s.offset) {
 		var freqSigmaSq float64
 		if f.freqSamples.Value != nil {
 			// this means that ring buffer is fully filled
@@ -491,7 +506,7 @@ func DefaultPiServoFilterCfg() *PiServoFilterCfg {
 		maxFreqChange:     40,
 		maxSkipCount:      15,
 		maxOffsetInit:     500000,
-		offsetRange:       100, // the range of the offset values that are considered "normal"
+		offsetRange:       defaultOffsetRange, // the range of the offset values that are considered "normal"
 		offsetStdevFactor: 3.0,
 		freqStdevFactor:   3.0,
 		ringSize:          30,
