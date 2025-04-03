@@ -12,49 +12,52 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Handler is a handler for a metrics endpoint
+type Handler struct {
+	minOffset, maxOffset float64
+	offsets              *list.List
+	offsetsLock          sync.Mutex
+}
+
 // maxSamples is the maximum samples considered for calculating min/max offset
 const maxSamples = 60
 
-var (
-	minOffset, maxOffset = 0.0, 0.0
-	offsets              list.List
-	offsetsLock          sync.Mutex
-)
-
 // RunMetricsServer starts a metrics server on the given port
-func RunMetricsServer(monitoringPort uint) error {
+func RunMetricsServer(monitoringPort uint, handler *Handler) error {
 	log.Infof("Starting HTTP JSON metrics server - query at localhost:%d/metrics", monitoringPort)
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", monitoringPort),
 		ReadTimeout:  time.Second,
 		WriteTimeout: time.Second,
 	}
-	http.Handle("/metrics", &metricsHandler{})
+	http.Handle("/metrics", handler)
+	handler.offsets = list.New()
 	return server.ListenAndServe()
 }
 
 // ObserveOffset sets the value of the ts2phc offset metrics
-func ObserveOffset(offset float64) {
-	offsetsLock.Lock()
+func (h *Handler) ObserveOffset(offset float64) {
+	h.offsetsLock.Lock()
 	tmpMinOffset, tmpMaxOffset := math.Inf(1), math.Inf(-1)
-	if offsets.Len() >= maxSamples {
-		offsets.Remove(offsets.Back())
+	if h.offsets.Len() >= maxSamples {
+		for h.offsets.Len() >= maxSamples {
+			h.offsets.Remove(h.offsets.Back())
+		}
 	}
-	offsets.PushFront(offset)
-	for elem := offsets.Front(); elem != nil; elem = elem.Next() {
+	h.offsets.PushFront(offset)
+	for elem := h.offsets.Front(); elem != nil; elem = elem.Next() {
 		//nolint:unconvert
 		tmpMinOffset = min(tmpMinOffset, elem.Value.(float64))
 		//nolint:unconvert
 		tmpMaxOffset = max(tmpMaxOffset, elem.Value.(float64))
 	}
-	minOffset, maxOffset = tmpMinOffset, tmpMaxOffset
-	offsetsLock.Unlock()
+	h.minOffset = tmpMinOffset
+	h.maxOffset = tmpMaxOffset
+	h.offsetsLock.Unlock()
 }
 
-type metricsHandler struct{}
-
-func (h *metricsHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
-	js, err := json.Marshal(getMetrics())
+func (h *Handler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	js, err := json.Marshal(h.getMetrics())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -65,9 +68,9 @@ func (h *metricsHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-func getMetrics() map[string]float64 {
+func (h *Handler) getMetrics() map[string]float64 {
 	return map[string]float64{
-		"min_offset": minOffset,
-		"max_offset": maxOffset,
+		"min_offset": h.minOffset,
+		"max_offset": h.maxOffset,
 	}
 }

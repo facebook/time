@@ -53,7 +53,7 @@ func init() {
 	ts2phcCmd.Flags().UintVarP(&monitoringPort, "monitoring_port", "p", 9120, "port to expose the prometheus metrics endpoint. Metrics are exposed on /metrics endpoint.")
 }
 
-func ts2phcRun(srcDevicePath string, dstDeviceName string, interval time.Duration, firstStepth time.Duration, stepth time.Duration, srcPinIndex uint) error {
+func ts2phcRun(srcDevicePath string, dstDeviceName string, interval time.Duration, firstStepth time.Duration, stepth time.Duration, srcPinIndex uint, metricsHandler *metrics.Handler) error {
 	ppsSource, err := getPPSSourceFromPath(srcDevicePath, srcPinIndex)
 	if err != nil {
 		return fmt.Errorf("error opening source phc device: %w", err)
@@ -96,7 +96,7 @@ func ts2phcRun(srcDevicePath string, dstDeviceName string, interval time.Duratio
 		}
 		go func() {
 			offset := ppsEventTime.Sub(srcTimestamp)
-			metrics.ObserveOffset(float64(offset))
+			metricsHandler.ObserveOffset(float64(offset))
 		}()
 	}
 }
@@ -134,11 +134,12 @@ var ts2phcCmd = &cobra.Command{
 	Use:   "ts2phc",
 	Short: "Sync PHC with external timestamps",
 	Run: func(_ *cobra.Command, _ []string) {
+		var metricsHandler = &metrics.Handler{}
 		ConfigureVerbosity()
 		go func() {
-			log.Fatalf("Metrics server error: %v", metrics.RunMetricsServer(monitoringPort))
+			log.Fatalf("Metrics server error: %v", metrics.RunMetricsServer(monitoringPort, metricsHandler))
 		}()
-		if err := ts2phcRun(srcDeviceTS2PHCFlag, dstDeviceTS2PHCFlag, intervalTS2PHCFlag, firstStepTS2PHCFlag, stepThresholdTS2PHCFlag, srcPinTS2PHCFlag); err != nil {
+		if err := ts2phcRun(srcDeviceTS2PHCFlag, dstDeviceTS2PHCFlag, intervalTS2PHCFlag, firstStepTS2PHCFlag, stepThresholdTS2PHCFlag, srcPinTS2PHCFlag, metricsHandler); err != nil {
 			log.Fatal(err)
 		}
 	},
