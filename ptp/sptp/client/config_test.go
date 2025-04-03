@@ -113,7 +113,7 @@ asymmetry:
 		ListenAddress:            "::",
 		Asymmetry: AsymmetryConfig{
 			AsymmetryCorrectionEnabled: true,
-			AsymmetryThreshold:         time.Duration(1 * time.Microsecond),
+			AsymmetryThreshold:         1 * time.Microsecond,
 			MaxConsecutiveAsymmetry:    10,
 			MaxPortChanges:             30,
 			Simple:                     true,
@@ -717,7 +717,7 @@ asymmetry:
 		ListenAddress: "192.168.0.1",
 		Asymmetry: AsymmetryConfig{
 			AsymmetryCorrectionEnabled: true,
-			AsymmetryThreshold:         time.Duration(1 * time.Microsecond),
+			AsymmetryThreshold:         1 * time.Microsecond,
 			MaxConsecutiveAsymmetry:    10,
 			MaxPortChanges:             30,
 			Simple:                     true,
