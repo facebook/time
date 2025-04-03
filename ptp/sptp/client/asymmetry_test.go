@@ -84,6 +84,20 @@ func TestIsAsymmetric(t *testing.T) {
 			asymmetryThreshold: 100 * time.Nanosecond,
 			expected:           false,
 		},
+		{
+			name: "result with nil measurement",
+			result: &RunResult{
+				Measurement: nil,
+			},
+			asymmetryThreshold: 100 * time.Nanosecond,
+			expected:           false,
+		},
+		{
+			name:               "nil result",
+			result:             nil,
+			asymmetryThreshold: 100 * time.Nanosecond,
+			expected:           false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -195,6 +209,22 @@ func TestSelectedGMAsymmetric(t *testing.T) {
 			},
 			config:   AsymmetryConfig{MaxPortChanges: 11},
 			expected: false,
+		},
+		{
+			name: "Nil client is not counted",
+			clients: map[netip.Addr]*Client{
+				netip.MustParseAddr("192.0.2.1"): nil,
+				netip.MustParseAddr("192.0.2.2"): {
+					asymmetric: true,
+					delayRequest: &ptp.SyncDelayReq{
+						TLVs: []ptp.TLV{
+							&ptp.AlternateResponsePortTLV{Offset: 20},
+						},
+					},
+				},
+			},
+			config:   AsymmetryConfig{MaxPortChanges: 11},
+			expected: true,
 		},
 	}
 	for _, tt := range tests {
@@ -346,6 +376,24 @@ func TestCorrectNonSelectedGMsAsymmetry(t *testing.T) {
 			},
 			expectedOffset: 0, // Offset should not increase
 		},
+		{
+			name: "Clients with nil results are ignored",
+			clients: map[netip.Addr]*Client{
+				clientIP: {
+					asymmetric:       false,
+					asymmetryCounter: 10,
+					delayRequest: &ptp.SyncDelayReq{
+						TLVs: []ptp.TLV{
+							&ptp.AlternateResponsePortTLV{Offset: 0},
+						},
+					},
+				},
+			},
+			results: map[netip.Addr]*RunResult{
+				clientIP: nil,
+			},
+			expectedOffset: 0, // Offset should not increase
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -476,6 +524,75 @@ func TestSimpleSelectedGMAsymmetric(t *testing.T) {
 					Offset: 9 * time.Millisecond}},
 			},
 			config:   AsymmetryConfig{AsymmetryThreshold: 10 * time.Millisecond, MaxConsecutiveAsymmetry: 2},
+			expected: false,
+		},
+		{
+			name: "Nil results are counted as asymmetric",
+			clients: map[netip.Addr]*Client{
+				bestAddr: {asymmetryCounter: 3},
+			},
+			results: map[netip.Addr]*RunResult{
+				bestAddr: {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 5 * time.Millisecond}},
+				netip.MustParseAddr("192.0.2.2"): {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 20 * time.Millisecond}},
+				netip.MustParseAddr("192.0.2.3"): nil,
+			},
+			config:   AsymmetryConfig{AsymmetryThreshold: 10 * time.Millisecond},
+			expected: true,
+		},
+		{
+			name:    "If client[bestAddr] is nil, return false",
+			clients: nil,
+			results: map[netip.Addr]*RunResult{
+				bestAddr: {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 5 * time.Millisecond}},
+				netip.MustParseAddr("192.0.2.2"): nil,
+				netip.MustParseAddr("192.0.2.3"): nil,
+			},
+			config:   AsymmetryConfig{AsymmetryThreshold: 10 * time.Millisecond},
+			expected: false,
+		},
+		{
+			name: "If all results are nil, selected GM is considered symmetric",
+			clients: map[netip.Addr]*Client{
+				bestAddr: {asymmetryCounter: 3},
+			},
+			results: map[netip.Addr]*RunResult{
+				bestAddr: {Measurement: &MeasurementResult{
+					Announce: ptp.Announce{
+						AnnounceBody: ptp.AnnounceBody{
+							GrandmasterClockQuality: ptp.ClockQuality{
+								ClockClass: ptp.ClockClass6,
+							},
+						},
+					},
+					Offset: 5 * time.Millisecond}},
+				netip.MustParseAddr("192.0.2.2"): nil,
+				netip.MustParseAddr("192.0.2.3"): nil,
+			},
+			config:   AsymmetryConfig{AsymmetryThreshold: 10 * time.Millisecond},
 			expected: false,
 		},
 	}
