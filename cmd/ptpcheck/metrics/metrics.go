@@ -42,7 +42,9 @@ func ObserveOffset(offset float64) {
 	}
 	offsets.PushFront(offset)
 	for elem := offsets.Front(); elem != nil; elem = elem.Next() {
+		//nolint:unconvert
 		tmpMinOffset = min(tmpMinOffset, elem.Value.(float64))
+		//nolint:unconvert
 		tmpMaxOffset = max(tmpMaxOffset, elem.Value.(float64))
 	}
 	minOffset, maxOffset = tmpMinOffset, tmpMaxOffset
