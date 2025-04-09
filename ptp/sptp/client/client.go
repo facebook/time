@@ -111,7 +111,7 @@ type Client struct {
 	asymmetric bool
 
 	// Running counter of consecutive asymmetric results received
-	asymmetryCounter uint16
+	asymmetryCounter int
 }
 
 func (c *Client) incrementSequence() {
