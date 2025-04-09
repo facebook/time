@@ -28,7 +28,7 @@ import (
 // Returns number of port changes requested (which equals the number of GMS assumed to be asymmetric)
 func correctAsymmetrySimple(clients map[netip.Addr]*Client, results map[netip.Addr]*RunResult, bestAddr netip.Addr, config AsymmetryConfig) int {
 	if simpleSelectedGMAsymmetric(clients, results, bestAddr, config) {
-		correctSelectedGMAsymmetry(clients, bestAddr)
+		simpleCorrectSelectedGMAsymmetry(clients, bestAddr)
 		return 1
 	}
 
@@ -60,7 +60,7 @@ func correctNonSelectedGMsAsymmetry(clients map[netip.Addr]*Client, results map[
 		}
 		if isAsymmetric(result, config.AsymmetryThreshold) {
 			client.asymmetric = true
-			if client.asymmetryCounter > config.MaxConsecutiveAsymmetry {
+			if client.asymmetryCounter > int(config.MaxConsecutiveAsymmetry) {
 				alternateResponsePortTlv := getAlternateResponsePortTLV(client)
 				if alternateResponsePortTlv != nil {
 					alternateResponsePortTlv.Offset++
@@ -72,7 +72,8 @@ func correctNonSelectedGMsAsymmetry(clients map[netip.Addr]*Client, results map[
 			}
 			client.asymmetryCounter++
 		} else {
-			client.asymmetryCounter = max(client.asymmetryCounter-1, 0)
+			// Result not asymmetric, reset counter
+			client.asymmetryCounter = 0
 		}
 	}
 }
@@ -85,28 +86,36 @@ func simpleSelectedGMAsymmetric(clients map[netip.Addr]*Client, results map[neti
 		log.Errorf("Unable to find selected GM %v on client list", selectedAddr)
 		return false
 	}
+	// For each non-selected GM, check if asymmetric
 	for addr, result := range results {
+		_, ok := clients[addr]
+		if !ok {
+			// result from unknown client, can be caused by malformed packets
+			continue
+		}
+		if addr == selectedAddr {
+			continue
+		}
+		// At every pass we reset asymmetryCounter for non selected GMs, in case selected GM has changed
+		clients[addr].asymmetryCounter = 0
 		if result == nil {
 			log.Debugf("No result for GM %v - assuming asymmetric", addr)
 			asymmetricResultCount++
 			nilResultCount++
 			continue
 		}
-		if addr == selectedAddr {
-			continue
-		}
 		if isAsymmetric(result, config.AsymmetryThreshold) {
 			asymmetricResultCount++
 		}
 	}
-
+	// Avoid switching offset if we have only one good GM (the selected one)
 	if nilResultCount == len(results)-1 {
 		log.Debugf("All non-selected GMs failed to respond - offset will not be increased")
-		return false // Avoid switching offset if we have only one good GM (the selected one)
+		return false
 	}
-
+	// Checks if selected GM has been asymmetric for over MaxConsecutiveAsymmetry times
 	selectedGMAsymmetric := asymmetricResultCount == len(results)-1
-	withinGracePeriod := selectedGM.asymmetryCounter <= config.MaxConsecutiveAsymmetry
+	withinGracePeriod := selectedGM.asymmetryCounter <= int(config.MaxConsecutiveAsymmetry)
 	if selectedGMAsymmetric {
 		if !withinGracePeriod {
 			log.Debugf("Selected GM %v asymmetric - offset will be increased", selectedAddr)
@@ -149,19 +158,29 @@ func countAsymmetric(clients map[netip.Addr]*Client) int {
 	return count
 }
 
+// simpleCorrectSelectedGMAsymmetry requests a port change for the current selected GM
+func simpleCorrectSelectedGMAsymmetry(clients map[netip.Addr]*Client, bestAddr netip.Addr) {
+	selectedGM := clients[bestAddr]
+	selectedGM.asymmetryCounter = 0
+	alternateResponsePortTlv := getAlternateResponsePortTLV(selectedGM)
+	if alternateResponsePortTlv != nil {
+		alternateResponsePortTlv.Offset++
+	}
+	log.Infof("Selected GM %s asymmetric - new port offset: %d", bestAddr, alternateResponsePortTlv.Offset)
+}
+
 // correctSelectedGMAsymmetry requests a port change for the current selected GM and resets asymmetry status for all other clients.
 // It performs no checks, and assumes the selected GM is asymmetric.
 func correctSelectedGMAsymmetry(clients map[netip.Addr]*Client, bestAddr netip.Addr) {
 	for addr, client := range clients {
+		alternateResponsePortTlv := getAlternateResponsePortTLV(client)
 		if addr == bestAddr {
-			alternateResponsePortTlv := getAlternateResponsePortTLV(client)
 			if alternateResponsePortTlv != nil {
 				alternateResponsePortTlv.Offset++
 			}
 			client.asymmetric = true
 			log.Infof("Selected GM %s asymmetric - new port offset: %d", bestAddr, alternateResponsePortTlv.Offset)
 		} else {
-			alternateResponsePortTlv := getAlternateResponsePortTLV(client)
 			if alternateResponsePortTlv != nil {
 				alternateResponsePortTlv.Offset = 0
 			}
@@ -187,6 +206,9 @@ func getAlternateResponsePortTLV(client *Client) *ptp.AlternateResponsePortTLV {
 func isAsymmetric(result *RunResult, asymmetryThreshold time.Duration) bool {
 	// TODO: Threshold calculation could consider best GM as reference, in case all GMs fluctuate together (100ns fluctuation seen on tests)
 	if result == nil || result.Measurement == nil {
+		return false
+	}
+	if result.Measurement.BadDelay {
 		return false
 	}
 	return result.Measurement.Announce.AnnounceBody.GrandmasterClockQuality.ClockClass == ptp.ClockClass6 && math.Abs(float64(result.Measurement.Offset)) > float64(asymmetryThreshold)
