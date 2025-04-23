@@ -295,6 +295,47 @@ func TestLinearizabilityTestRunSingleTest(t *testing.T) {
 	require.Equal(t, want, lt.result)
 }
 
+func TestLinearizabilityTestRunSingleTestSPTP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	lt := newTestTester()
+	lt.listenerRunning = true
+	lt.sptp = true
+	txTime := time.Unix(0, 1653574589806120900)
+	rxTime := time.Unix(0, 1653574589806121900)
+	genConn := NewMockUDPConn(ctrl)
+	lt.gConn = genConn
+	eventConn := NewMockUDPConnWithTS(ctrl)
+	// handle whatever client is sending over eventConn
+	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ net.Addr) (int, time.Time, error) {
+		delayReq := &ptp.SyncDelayReq{}
+		err := ptp.FromBytes(b, delayReq)
+		require.Nil(t, err, "reading delayReq msg")
+
+		delayResp := delayRespPkt(0, rxTime)
+		delayRespBytes, err := ptp.Bytes(delayResp)
+		require.Nil(t, err)
+		lt.inChan <- &inPacket{
+			data: delayRespBytes,
+			ts:   time.Now(),
+		}
+		return 10, txTime, nil
+	})
+	lt.eConn = eventConn
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err := lt.runSingleTest(ctx, 0)
+	require.NoError(t, err)
+	want := &PTP4lTestResult{
+		Server:      lt.cfg.Server,
+		Error:       nil,
+		TXTimestamp: txTime,
+		RXTimestamp: rxTime,
+	}
+	require.Equal(t, want, lt.result)
+}
+
 func TestLinearizabilityTestRunSingleTestError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -566,4 +607,78 @@ func TestProcessMonitoringResults(t *testing.T) {
 	require.Equal(t, int64(3), c["ptp.linearizability.failed_tests"])
 	require.Equal(t, int64(2), c["ptp.linearizability.passed_tests"])
 	require.Equal(t, int64(5), c["ptp.linearizability.total_tests"])
+}
+
+func TestProcessTimestamp(t *testing.T) {
+	server := "test_server"
+	cfg := &PTP4lTestConfig{
+		Server: server,
+	}
+	// Create a PTP4lTester instance
+	tester := &PTP4lTester{
+		cfg:    cfg,
+		sendTS: make(map[uint16]time.Time),
+	}
+	// Define test cases
+	now := time.Now()
+	oneSecAgo := now.Add(-time.Second)
+	tests := []struct {
+		name           string
+		sequenceID     uint16
+		rxTimestamp    time.Time
+		setupSendTS    func()
+		expectedError  error
+		expectedResult PTP4lTestResult
+		expectedState  state
+	}{
+		{
+			name:        "Valid sequence ID",
+			sequenceID:  1,
+			rxTimestamp: now,
+			setupSendTS: func() {
+				tester.sendTS = map[uint16]time.Time{1: oneSecAgo}
+			},
+			expectedError: nil,
+			expectedState: stateDone,
+			expectedResult: PTP4lTestResult{
+				Server:      "test_server",
+				RXTimestamp: now,
+				TXTimestamp: oneSecAgo,
+			},
+		},
+		{
+			name:        "Invalid sequence ID",
+			sequenceID:  2,
+			rxTimestamp: now,
+			setupSendTS: func() {
+				tester.sendTS = map[uint16]time.Time{1: oneSecAgo}
+			},
+			expectedError: fmt.Errorf("unexpected sequence 2, expected one of [1]"),
+			expectedState: tester.state, // state should remain unchanged
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup the sendTS map
+			tt.setupSendTS()
+			tester.state = stateInit
+			// Call processTimestamp
+			err := tester.processTimestamp(tt.sequenceID, tt.rxTimestamp)
+			// Check the error
+			if tt.expectedError != nil {
+				require.Error(t, err)
+				require.EqualError(t, err, tt.expectedError.Error())
+			} else {
+				require.NoError(t, err)
+			}
+			// Check the state
+			require.Equal(t, tt.expectedState, tester.state)
+			// Check the result if no error
+			if err == nil {
+				// assert state and result
+				require.Equal(t, tt.expectedState, tester.state)
+				require.Equal(t, tt.expectedResult, *tester.result)
+			}
+		})
+	}
 }
