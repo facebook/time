@@ -47,6 +47,15 @@ type config struct {
 	changed bool
 }
 
+// chGet return a value from a section on channel provided
+func (c *config) chGet(s *ini.Section, ch api.Channel, key string) string {
+	name := fmt.Sprintf("%s\\%s", ch.CalnexAPI(), key)
+	if s.HasKey(name) {
+		return s.Key(name).Value()
+	}
+	return ""
+}
+
 // chSet modifies a config on several channels
 func (c *config) chSet(target string, s *ini.Section, start, end api.Channel, keyf, value string) {
 	for i := start.Calnex(); i <= end.Calnex(); i++ {
@@ -168,15 +177,19 @@ func (c *config) baseConfig(target string, measure *ini.Section, gnss *ini.Secti
 	// ch8 is a ref channel. Always ON
 	c.set(target, measure, "ch8\\used", api.YES)
 
+	maxChannel := api.ChannelONE
+	if c.chGet(measure, api.ChannelTWO, "installed") == "1" {
+		maxChannel = api.ChannelTWO
+	}
 	// disable synce
-	c.chSet(target, measure, api.ChannelONE, api.ChannelTWO, "%s\\synce_enabled", api.OFF)
+	c.chSet(target, measure, api.ChannelONE, maxChannel, "%s\\synce_enabled", api.OFF)
 
 	// ptp dscp
-	c.chSet(target, measure, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ptp\\dscp", "0")
+	c.chSet(target, measure, api.ChannelONE, maxChannel, "%s\\ptp_synce\\ptp\\dscp", "0")
 
 	// DHCP
-	c.chSet(target, measure, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v6", api.DHCP)
-	c.chSet(target, measure, api.ChannelONE, api.ChannelTWO, "%s\\ptp_synce\\ethernet\\dhcp_v4", api.DISABLED)
+	c.chSet(target, measure, api.ChannelONE, maxChannel, "%s\\ptp_synce\\ethernet\\dhcp_v6", api.DHCP)
+	c.chSet(target, measure, api.ChannelONE, maxChannel, "%s\\ptp_synce\\ethernet\\dhcp_v4", api.DISABLED)
 
 	// enable QSFP FEC for 100G links (first channel only)
 	c.chSet(target, measure, api.ChannelONE, api.ChannelONE, "%s\\ptp_synce\\ethernet\\qsfp_fec", api.RSFEC)
@@ -187,7 +200,7 @@ func (c *config) baseConfig(target string, measure *ini.Section, gnss *ini.Secti
 	c.set(target, measure, fmt.Sprintf("%s\\used", api.ChannelTWO.CalnexAPI()), api.NO)
 
 	// Disable packet measurement on the two physical channel measurements
-	c.chSet(target, measure, api.ChannelONE, api.ChannelTWO, "%s\\protocol_enabled", api.OFF)
+	c.chSet(target, measure, api.ChannelONE, maxChannel, "%s\\protocol_enabled", api.OFF)
 
 	// Enable virtual channel measurements for channel 1
 	c.set(target, measure, fmt.Sprintf("%s\\virtual_channels_enabled", api.ChannelONE.CalnexAPI()), api.ON)

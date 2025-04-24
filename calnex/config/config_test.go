@@ -88,6 +88,56 @@ ch6\used=Yes
 ch8\used=Yes
 device_name=leoleovich.com
 ch6\synce_enabled=Off
+ch6\ptp_synce\ptp\dscp=0
+ch6\ptp_synce\ethernet\dhcp_v6=DHCP
+ch6\ptp_synce\ethernet\dhcp_v4=Disabled
+ch6\ptp_synce\ethernet\qsfp_fec=RS-FEC
+ch7\used=No
+ch6\protocol_enabled=Off
+ch6\virtual_channels_enabled=On
+`
+
+	c := config{}
+
+	f, err := ini.Load([]byte(testConfig))
+	require.NoError(t, err)
+
+	s := f.Section("measure")
+	g := f.Section("gnss")
+
+	c.baseConfig("leoleovich.com", s, g, 42)
+	require.True(t, c.changed)
+
+	buf, err := api.ToBuffer(f)
+	require.NoError(t, err)
+	require.Equal(t, expectedConfig, buf.String())
+}
+
+func TestBaseConfigCh2(t *testing.T) {
+	testConfig := `[gnss]
+antenna_delay=42 ns
+[measure]
+continuous=Off
+reference=Auto
+meas_time=10 minutes
+tie_mode=TIE
+ch6\used=Yes
+ch7\installed=1
+ch8\used=No
+`
+
+	expectedConfig := `[gnss]
+antenna_delay=42 ns
+[measure]
+continuous=On
+reference=Internal
+meas_time=1 days 1 hours
+tie_mode=TIE + 1 PPS Alignment
+ch6\used=Yes
+ch7\installed=1
+ch8\used=Yes
+device_name=leoleovich.com
+ch6\synce_enabled=Off
 ch7\synce_enabled=Off
 ch6\ptp_synce\ptp\dscp=0
 ch7\ptp_synce\ptp\dscp=0
@@ -467,7 +517,6 @@ ch38\used=No
 ch39\used=No
 ch40\used=No
 ch6\protocol_enabled=Off
-ch7\protocol_enabled=Off
 ch6\virtual_channels_enabled=On
 ch9\protocol_enabled=On
 ch9\ptp_synce\mode\probe_type=NTP
@@ -543,10 +592,6 @@ ch6\ptp_synce\ptp\dscp=0
 ch6\ptp_synce\ethernet\dhcp_v4=Disabled
 ch6\ptp_synce\ethernet\dhcp_v6=DHCP
 ch6\ptp_synce\ethernet\qsfp_fec=RS-FEC
-ch7\synce_enabled=Off
-ch7\ptp_synce\ptp\dscp=0
-ch7\ptp_synce\ethernet\dhcp_v4=Disabled
-ch7\ptp_synce\ethernet\dhcp_v6=DHCP
 ch9\ptp_synce\ntp\server_ip_ipv6=fd00:3226:301b::3f
 ch9\ptp_synce\physical_packet_channel=Channel 1
 ch9\ptp_synce\ntp\normalize_delays=Off
@@ -659,17 +704,12 @@ meas_time=1 days 1 hours
 tie_mode=TIE + 1 PPS Alignment
 ch8\used=Yes
 ch6\synce_enabled=Off
-ch7\synce_enabled=Off
 ch6\ptp_synce\ptp\dscp=0
-ch7\ptp_synce\ptp\dscp=0
 ch6\ptp_synce\ethernet\dhcp_v6=DHCP
-ch7\ptp_synce\ethernet\dhcp_v6=DHCP
 ch6\ptp_synce\ethernet\dhcp_v4=Disabled
-ch7\ptp_synce\ethernet\dhcp_v4=Disabled
 ch6\ptp_synce\ethernet\qsfp_fec=RS-FEC
 ch7\used=No
 ch6\protocol_enabled=Off
-ch7\protocol_enabled=Off
 ch6\virtual_channels_enabled=On
 ch0\server_ip=fd00:3226:301b::1f
 ch0\trig_level=500 mV
@@ -900,6 +940,7 @@ ch39\used=No
 ch40\used=No
 ch6\protocol_enabled=Yes
 ch6\ptp_synce\mode\probe_type=Disabled
+ch7\installed=1
 ch7\protocol_enabled=Off
 ch7\ptp_synce\mode\probe_type=Disabled
 ch9\protocol_enabled=Off
@@ -1039,6 +1080,7 @@ ch39\used=No
 ch40\used=No
 ch6\protocol_enabled=Off
 ch6\ptp_synce\mode\probe_type=Disabled
+ch7\installed=1
 ch7\protocol_enabled=Off
 ch7\ptp_synce\mode\probe_type=Disabled
 ch9\protocol_enabled=On
