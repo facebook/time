@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"math/rand"
 	"net"
 	"os"
 	"testing"
@@ -32,7 +31,6 @@ import (
 )
 
 func TestFindWorker(t *testing.T) {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	c := &Config{
 		clockIdentity: ptp.ClockIdentity(1234),
 		StaticConfig: StaticConfig{
@@ -66,12 +64,12 @@ func TestFindWorker(t *testing.T) {
 	}
 
 	// Consistent across multiple calls
-	require.Equal(t, 0, s.findWorker(clipi1, r, 0).id)
-	require.Equal(t, 0, s.findWorker(clipi1, r, 0).id)
-	require.Equal(t, 0, s.findWorker(clipi1, r, 0).id)
+	require.Equal(t, 3, s.findWorker(clipi1, 0).id)
+	require.Equal(t, 3, s.findWorker(clipi1, 0).id)
+	require.Equal(t, 3, s.findWorker(clipi1, 0).id)
 
-	require.Equal(t, 3, s.findWorker(clipi2, r, 0).id)
-	require.Equal(t, 1, s.findWorker(clipi3, r, 0).id)
+	require.Equal(t, 7, s.findWorker(clipi2, 0).id)
+	require.Equal(t, 6, s.findWorker(clipi3, 0).id)
 }
 
 func TestStartEventListener(t *testing.T) {
