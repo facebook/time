@@ -738,14 +738,7 @@ func (a *API) PushVersion(path string) (*Result, error) {
 	defer fw.Close()
 
 	url := fmt.Sprintf(firmwareURL, a.source)
-	buf := &bytes.Buffer{}
-	_, err = buf.ReadFrom(fw)
-
-	if err != nil {
-		return nil, err
-	}
-
-	r, err := a.post(url, buf)
+	r, err := a.postFile(url, fw)
 	return r, err
 }
 
@@ -788,6 +781,42 @@ func (a *API) PushSettings(f *ini.File) error {
 
 	_, err = a.post(url, buf)
 	return err
+}
+
+func (a *API) postFile(url string, content *os.File) (*Result, error) {
+	req, err := http.NewRequest(http.MethodPost, url, content)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := content.Stat()
+	if err != nil {
+		return nil, err
+	}
+	req.ContentLength = fi.Size()
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = io.NopCloser(content)
+	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(content), nil }
+
+	resp, err := a.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	r := &Result{}
+	if err = json.NewDecoder(resp.Body).Decode(r); err != nil {
+		return nil, fmt.Errorf("failed to decode response, body: %v, err: %w", resp.Body, err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return r, errors.New(http.StatusText(resp.StatusCode))
+	}
+
+	if !r.Result {
+		return nil, errors.New(r.Message)
+	}
+
+	return r, nil
 }
 
 func (a *API) post(url string, content *bytes.Buffer) (*Result, error) {
