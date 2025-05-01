@@ -6,6 +6,7 @@ toolchain go1.23.7
 
 require (
 	github.com/Knetic/govaluate v3.0.0+incompatible
+	github.com/cespare/xxhash v1.1.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/davecgh/go-spew v1.1.1
 	github.com/eclesh/welford v0.0.0-20150116075914-eec62615b1f0
