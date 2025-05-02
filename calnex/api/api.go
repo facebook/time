@@ -803,9 +803,17 @@ func (a *API) postFile(url string, content *os.File) (*Result, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to upload firmware: %s", resp.Status)
+	}
+
 	r := &Result{}
 	if err = json.NewDecoder(resp.Body).Decode(r); err != nil {
-		return nil, fmt.Errorf("failed to decode response, body: %v, err: %w", resp.Body, err)
+		s, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response: %w", err)
+		}
+		return nil, fmt.Errorf("failed to decode response, body: %s, err: %w", string(s), err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
