@@ -166,7 +166,6 @@ func TestGetCounters(t *testing.T) {
 	m := stats.GetCounters()
 	require.Contains(t, m, "ptp.sptp.gms.total")
 	require.Contains(t, m, "ptp.sptp.gms.available_pct")
-	require.Contains(t, m, "ptp.sptp.tick_duration_ns")
 	require.Contains(t, m, "ptp.sptp.filtered")
 	require.Contains(t, m, "ptp.sptp.portstats.rx.sync")
 	require.Contains(t, m, "ptp.sptp.portstats.rx.announce")

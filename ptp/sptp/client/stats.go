@@ -158,7 +158,6 @@ func (s *Stats) GetCounters() map[string]int64 {
 		// clientStats
 		"ptp.sptp.gms.total":                s.gmsTotal,
 		"ptp.sptp.gms.available_pct":        s.gmsAvailable,
-		"ptp.sptp.tick_duration_ns":         s.tickDuration,
 		"ptp.sptp.filtered":                 s.filtered,
 		"ptp.sptp.portstats.rx.sync":        s.rxSync,
 		"ptp.sptp.portstats.rx.announce":    s.rxAnnounce,
