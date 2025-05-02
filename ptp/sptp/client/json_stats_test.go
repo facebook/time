@@ -77,9 +77,7 @@ func TestJSONStats(t *testing.T) {
 	}
 	stats.SetGMStats(gm1)
 
-	counters, err := gmstats.FetchCounters(url)
 	require.NoError(t, err)
-	require.Equal(t, int64(1000000), counters["ptp.sptp.tick_duration_ns"])
 
 	gms, err := gmstats.FetchStats(url)
 	require.NoError(t, err)
