@@ -26,7 +26,7 @@ import (
 	time "time"
 
 	servo "github.com/facebook/time/servo"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockServoController is a mock of ServoController interface.

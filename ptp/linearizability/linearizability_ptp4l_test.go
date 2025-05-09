@@ -28,8 +28,8 @@ import (
 	"github.com/facebook/time/fbclock/stats"
 	ptp "github.com/facebook/time/ptp/protocol"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 func grantUnicastPkt(seq int, clockID ptp.ClockIdentity, duration time.Duration, what ptp.MessageType) *ptp.Signaling {

@@ -24,7 +24,7 @@ import (
 	reflect "reflect"
 
 	servo "github.com/facebook/time/servo"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockServo is a mock of Servo interface.

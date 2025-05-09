@@ -25,7 +25,7 @@ import (
 	time "time"
 
 	stats "github.com/facebook/time/ptp/sptp/stats"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockStatsServer is a mock of StatsServer interface.
