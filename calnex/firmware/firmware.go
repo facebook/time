@@ -58,7 +58,7 @@ func (up CalnexUpgrader) ShouldUpgrade(target string, api *calnexAPI.API, fw FW,
 	}
 
 	if calnexVersion.LessThan(fw.Version()) || force {
-		log.Warningf("%s: is running %s, latest is %s. Needs an update", target, calnexVersion, fw.Version())
+		log.Debugf("%s: is running %s, latest is %s. Needs an update", target, calnexVersion, fw.Version())
 		return true, nil
 	}
 
