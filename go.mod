@@ -12,7 +12,6 @@ require (
 	github.com/eclesh/welford v0.0.0-20150116075914-eec62615b1f0
 	github.com/fatih/color v1.13.0
 	github.com/go-ini/ini v1.66.4
-	github.com/golang/mock v1.6.0
 	github.com/google/gopacket v1.1.19
 	github.com/hashicorp/go-version v1.5.0
 	github.com/jsimonetti/rtnetlink v1.2.0
@@ -23,6 +22,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.8.4
 	go.bug.st/serial v1.5.0
+	go.uber.org/mock v0.4.0
 	golang.org/x/exp v0.0.0-20220518171630-0b5c67f07fdf
 	golang.org/x/net v0.38.0
 	golang.org/x/sync v0.5.0
