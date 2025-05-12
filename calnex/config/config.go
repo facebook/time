@@ -67,7 +67,14 @@ func (c *config) chSet(target string, s *ini.Section, start, end api.Channel, ke
 
 // set modifies a single config value
 func (c *config) set(target string, s *ini.Section, name, value string) {
+	if !s.HasKey(name) {
+		// if the settings file does not have a setting the unit does not support it
+		// and we should not set it
+		log.Debugf("%s: key %s does not exist, skipping [there is likely a license missing causing this]", target, name)
+		return
+	}
 	k := s.Key(name)
+
 	if k.Value() != value {
 		k.SetValue(value)
 		log.Debugf("%s: setting %s to %s", target, name, value)
