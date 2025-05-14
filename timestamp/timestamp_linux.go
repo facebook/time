@@ -24,7 +24,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
+	"golang.org/x/sys/unix"
 )
 
 // unix.Cmsghdr size differs depending on platform
@@ -73,6 +73,15 @@ func scmDataToTime(data []byte) (ts time.Time, err error) {
 	}
 
 	return ts, nil
+}
+
+// scmDataToSeqID parses SocketControlMessage Data field to get the SequenceID
+func scmDataToSeqID(data []byte) (seqID uint32, err error) {
+	se := (*unix.SockExtendedErr)(unsafe.Pointer(&data[0]))
+	if unix.Errno(se.Errno) != unix.ENOMSG {
+		return 0, fmt.Errorf("Expected ENOMSG but got %w", unix.Errno(se.Errno))
+	}
+	return se.Data, nil
 }
 
 // byteToTime converts bytes into a timestamp
@@ -166,7 +175,10 @@ func EnableHWTimestamps(connFd int, iface string) error {
 	flags := unix.SOF_TIMESTAMPING_TX_HARDWARE |
 		unix.SOF_TIMESTAMPING_RX_HARDWARE |
 		unix.SOF_TIMESTAMPING_RAW_HARDWARE |
-		unix.SOF_TIMESTAMPING_OPT_TSONLY // Makes the kernel return the timestamp as a cmsg alongside an empty packet, as opposed to alongside the original packet.
+		// Makes the kernel return the timestamp as a cmsg with a unique ID in second cmsg to identify the SYNC packet that the timestamp is associated with
+		unix.SOF_TIMESTAMPING_OPT_ID |
+		// Makes the kernel return the timestamp as a cmsg alongside an empty packet, as opposed to alongside the original packet
+		unix.SOF_TIMESTAMPING_OPT_TSONLY
 	// Allow reading of HW timestamps via socket
 	if err := unix.SetsockoptInt(connFd, unix.SOL_SOCKET, timestamping, flags); err != nil {
 		return err
@@ -195,13 +207,27 @@ func EnableHWTimestampsRx(connFd int, iface string) error {
 	return unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1)
 }
 
+// SeqIDSocketControlMessage encodes the SequenceID into a socket control message
+// and specifies SCM_TS_OPT_ID as the Control Message Header type
+func SeqIDSocketControlMessage(seqID uint32, soob []byte) {
+	h := (*unix.Cmsghdr)(unsafe.Pointer(&soob[0]))
+	h.Level = unix.SOL_SOCKET
+	h.Type = unix.SCM_TS_OPT_ID
+	h.SetLen(unix.CmsgLen(SizeofSeqID))
+	data := soob[unix.CmsgLen(0):unix.CmsgLen(SizeofSeqID)]
+	binary.NativeEndian.PutUint32(data, seqID)
+}
+
 func waitForHWTS(connFd int) error {
 	// Wait until TX timestamp is ready
 	fds := []unix.PollFd{{Fd: int32(connFd), Events: unix.POLLERR, Revents: 0}}
 	for {
-		_, err := unix.Poll(fds, int(TimeoutTXTS.Milliseconds()))
+		n, err := unix.Poll(fds, int(TimeoutTXTS.Milliseconds()))
 		if !errors.Is(err, syscall.EINTR) {
 			return err
+		}
+		if n == 0 {
+			return syscall.ETIMEDOUT
 		}
 	}
 }
@@ -221,13 +247,66 @@ func recvoob(connFd int, oob []byte) (oobn int, err error) {
 	return int(msg.Controllen), nil
 }
 
+// socketControlMessageTimestamp is a very optimised version of ParseSocketControlMessage
+// https://github.com/golang/go/blob/2ebe77a2fda1ee9ff6fd9a3e08933ad1ebaea039/src/syscall/sockcmsg_unix.go#L40
+// which only parses the timestamp message type
+func socketControlMessageTimestamp(b []byte, boob int) (time.Time, error) {
+	mlen := 0
+	for i := 0; i < boob; i += unix.CmsgSpace(mlen - unix.SizeofCmsghdr) {
+		h := (*unix.Cmsghdr)(unsafe.Pointer(&b[i]))
+		mlen = int(h.Len) //#nosec G115
+		if mlen == 0 {
+			break
+		}
+		// depending on the kernel version, when we ask for SO_TIMESTAMPING_NEW we still might get messages with type SO_TIMESTAMPING
+		if h.Level == unix.SOL_SOCKET && int(h.Type) == unix.SO_TIMESTAMPING_NEW || int(h.Type) == unix.SO_TIMESTAMPING {
+			return scmDataToTime(b[i+socketControlMessageHeaderOffset : i+mlen])
+		}
+	}
+	return time.Time{}, errNoTimestamp
+}
+
+// socketControlMessageSeqIDTimestamp parses SocketControlMessage Data field into time.Time and returns it
+func socketControlMessageSeqIDTimestamp(b []byte, tboob int, seqID uint32) (time.Time, error) {
+	mlen := 0
+	tstamp := time.Time{}
+	cseq := uint32(0)
+	var err error
+	for i := 0; i < tboob; i += unix.CmsgSpace(mlen - unix.SizeofCmsghdr) {
+		h := (*unix.Cmsghdr)(unsafe.Pointer(&b[i]))
+		mlen = int(h.Len) //#nosec G115
+		if mlen == 0 {
+			break
+		}
+		if h.Level == unix.SOL_SOCKET && int(h.Type) == unix.SO_TIMESTAMPING_NEW {
+			tstamp, err = scmDataToTime(b[i+socketControlMessageHeaderOffset : i+mlen])
+			if err != nil {
+				return time.Time{}, errNoTimestamp
+			}
+		}
+		if h.Level == unix.SOL_IPV6 && int(h.Type) == unix.IPV6_RECVERR ||
+			h.Level == unix.SOL_IP && int(h.Type) == unix.IP_RECVERR {
+			cseq, err = scmDataToSeqID(b[i+socketControlMessageHeaderOffset : i+mlen])
+			if err != nil {
+				return time.Time{}, errNoTimestamp
+			}
+		}
+	}
+	if tstamp.IsZero() || cseq == 0 {
+		return time.Time{}, errNoTimestamp
+	}
+	if cseq == seqID {
+		return tstamp, nil
+	}
+	return time.Time{}, errNoTimestamp
+}
+
 // ReadTXtimestampBuf returns HW TX timestamp, needs to be provided 2 buffers which all can be re-used after ReadTXtimestampBuf finishes.
 func ReadTXtimestampBuf(connFd int, oob, toob []byte) (time.Time, int, error) {
 	// Accessing hw timestamp
 	var boob int
 
 	txfound := false
-
 	// Sometimes we end up with more than 1 TX TS in the buffer.
 	// We need to empty it and completely otherwise we end up with a shifted queue read:
 	// Sync is out -> read TS from the previous Sync
@@ -260,8 +339,31 @@ func ReadTXtimestampBuf(connFd int, oob, toob []byte) (time.Time, int, error) {
 		timeout := time.Since(timeStart)
 		return time.Time{}, attempts, fmt.Errorf("no TX timestamp found after %d tries (%d ms)", AttemptsTXTS, timeout.Milliseconds())
 	}
-	timestamp, err := socketControlMessageTimestamp(oob[:boob])
+	timestamp, err := socketControlMessageTimestamp(oob, boob)
 	return timestamp, attempts, err
+}
+
+// ReadTimeStampSeqIDBuf reads the TX timestamp from MSG_ERRQUEUE by reading socket control messages
+// The sequence ID is used to identify the SYNC packet that the timestamp is associated with
+func ReadTimeStampSeqIDBuf(connFd int, toob []byte, seqID uint32) (time.Time, int, error) {
+	timeStart := time.Now()
+	attempts := 0
+	for ; attempts < AttemptsTXTS; attempts++ {
+		e1 := waitForHWTS(connFd)
+		if errors.Is(e1, unix.EINVAL) {
+			continue
+		}
+		tboob, err := recvoob(connFd, toob)
+		if err != nil {
+			continue
+		}
+
+		if timestamp, err := socketControlMessageSeqIDTimestamp(toob, tboob, seqID); err == nil {
+			return timestamp, attempts, nil
+		}
+	}
+	timeout := time.Since(timeStart)
+	return time.Time{}, attempts, fmt.Errorf("no TX timestamp found after %d tries (%d ms)", AttemptsTXTS, timeout.Milliseconds())
 }
 
 // ReadTXtimestamp returns HW TX timestamp
@@ -272,25 +374,6 @@ func ReadTXtimestamp(connFd int) (time.Time, int, error) {
 	toob := make([]byte, ControlSizeBytes)
 
 	return ReadTXtimestampBuf(connFd, oob, toob)
-}
-
-// socketControlMessageTimestamp is a very optimised version of ParseSocketControlMessage
-// https://github.com/golang/go/blob/2ebe77a2fda1ee9ff6fd9a3e08933ad1ebaea039/src/syscall/sockcmsg_unix.go#L40
-// which only parses the timestamp message type.
-func socketControlMessageTimestamp(b []byte) (time.Time, error) {
-	mlen := 0
-	for i := 0; i < len(b); i += mlen {
-		h := (*unix.Cmsghdr)(unsafe.Pointer(&b[i]))
-		mlen = int(h.Len)
-		if mlen == 0 {
-			break
-		}
-		// depending on the kernel version, when we ask for SO_TIMESTAMPING_NEW we still might get messages with type SO_TIMESTAMPING
-		if h.Level == unix.SOL_SOCKET && int(h.Type) == unix.SO_TIMESTAMPING_NEW || int(h.Type) == unix.SO_TIMESTAMPING {
-			return scmDataToTime(b[i+socketControlMessageHeaderOffset : i+mlen])
-		}
-	}
-	return time.Time{}, errNoTimestamp
 }
 
 // EnableTimestamps enables timestamps on the socket based on requested type

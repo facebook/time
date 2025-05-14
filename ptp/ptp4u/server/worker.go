@@ -20,6 +20,7 @@ Package server implements simple Unicast PTP UDP server.
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -139,6 +140,9 @@ func (s *sendWorker) Start() {
 
 	// TMP buffers
 	toob := make([]byte, timestamp.ControlSizeBytes)
+	soob := make([]byte, unix.CmsgSpace(timestamp.SizeofSeqID))
+
+	olderKernel := false // kernels prior to 6.13 do not support SCM_TS_OPT_ID
 
 	var (
 		n        int
@@ -159,23 +163,45 @@ func (s *sendWorker) Start() {
 					log.Errorf("Failed to generate the sync packet: %v", err)
 					continue
 				}
-				log.Debug("Sending sync")
-
-				err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
-				if err != nil {
-					log.Errorf("Failed to send the sync packet: %v", err)
-					continue
-				}
-				s.stats.IncTX(c.subscriptionType)
-
-				txTS, attempts, err = timestamp.ReadTXtimestampBuf(eFd, oob, toob)
-				s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
-				if err != nil {
-					log.Warningf("Failed to read TX timestamp: %v", err)
-					continue
-				}
-				if s.config.TimestampType != timestamp.HW {
-					txTS = txTS.Add(s.config.UTCOffset)
+				if olderKernel {
+					log.Debug("Sending sync")
+					err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
+					if err != nil {
+						log.Errorf("Failed to send the sync packet: %v", err)
+						continue
+					}
+					s.stats.IncTX(c.subscriptionType)
+					txTS, attempts, err = timestamp.ReadTXtimestampBuf(eFd, oob, toob)
+					s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
+					if err != nil {
+						log.Warningf("Failed to read TX timestamp: %v", err)
+						continue
+					}
+					if s.config.TimestampType != timestamp.HW {
+						txTS = txTS.Add(s.config.UTCOffset)
+					}
+				} else {
+					seqID := uint32(c.Sync().Header.SequenceID)
+					log.Debug("Sending sync (SCM_TS_OPT_ID set)")
+					timestamp.SeqIDSocketControlMessage(seqID, soob)
+					err = unix.Sendmsg(eFd, buf[:n], soob, c.eclisa, 0)
+					if errors.Is(err, unix.EINVAL) {
+						// EINVAL means the kernel does not support SCM_TS_OPT_ID
+						// fallback to previous approach
+						olderKernel = true
+						log.Warningf("Failed to set SCM_TS_OPT_ID in Socket Control Message: %v", err)
+						continue
+					} else if err != nil {
+						log.Errorf("Failed to send sync packet: %v", err)
+						continue
+					}
+					s.stats.IncTX(c.subscriptionType)
+					txTS, attempts, err = timestamp.ReadTimeStampSeqIDBuf(eFd, toob, seqID)
+					s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
+					if err != nil {
+						log.Warningf("Failed to read TX timestamp: %v", err)
+						continue
+					}
 				}
 
 				// send followup
@@ -233,25 +259,47 @@ func (s *sendWorker) Start() {
 					log.Errorf("Failed to generate the sync packet: %v", err)
 					continue
 				}
-				log.Debug("Sending sync")
 
-				err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
-				if err != nil {
-					log.Errorf("Failed to send the sync packet: %v", err)
-					continue
+				if olderKernel {
+					log.Debug("Sending sync")
+					err = unix.Sendto(eFd, buf[:n], 0, c.eclisa)
+					if err != nil {
+						log.Errorf("Failed to send the sync packet: %v", err)
+						continue
+					}
+					s.stats.IncTX(ptp.MessageSync)
+					txTS, attempts, err = timestamp.ReadTXtimestampBuf(eFd, oob, toob)
+					s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
+					if err != nil {
+						log.Warningf("Failed to read TX timestamp: %v", err)
+						continue
+					}
+					if s.config.TimestampType != timestamp.HW {
+						txTS = txTS.Add(s.config.UTCOffset)
+					}
+				} else {
+					seqID := uint32(c.Sync().Header.SequenceID)
+					log.Debug("Sending sync (SCM_TS_OPT_ID set)")
+					timestamp.SeqIDSocketControlMessage(seqID, soob)
+					err = unix.Sendmsg(eFd, buf[:n], soob, c.eclisa, 0)
+					if errors.Is(err, unix.EINVAL) {
+						// EINVAL means the kernel does not support SCM_TS_OPT_ID
+						// fallback to previous approach
+						olderKernel = true
+						log.Warningf("Failed to set SCM_TS_OPT_ID in Socket Control Message: %v", err)
+						continue
+					} else if err != nil {
+						log.Errorf("Failed to send sync packet: %v", err)
+						continue
+					}
+					s.stats.IncTX(c.subscriptionType)
+					txTS, attempts, err = timestamp.ReadTimeStampSeqIDBuf(eFd, toob, seqID)
+					s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
+					if err != nil {
+						log.Warningf("Failed to read TX timestamp: %v", err)
+						continue
+					}
 				}
-				s.stats.IncTX(ptp.MessageSync)
-
-				txTS, attempts, err = timestamp.ReadTXtimestampBuf(eFd, oob, toob)
-				s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
-				if err != nil {
-					log.Warningf("Failed to read TX timestamp: %v", err)
-					continue
-				}
-				if s.config.TimestampType != timestamp.HW {
-					txTS = txTS.Add(s.config.UTCOffset)
-				}
-
 				// send announce
 				c.UpdateAnnounceFollowUp(txTS)
 				n, err = ptp.BytesTo(c.Announce(), buf)

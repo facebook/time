@@ -24,7 +24,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -36,7 +36,8 @@ const (
 	PayloadSizeBytes = 128
 	// look only for X sequential TS
 	defaultTXTS = 100
-	// Socket Control Message Header Offset on Linux
+	// SizeofSeqID is the size of the sequence ID field in bytes
+	SizeofSeqID = 0x4 // 4 bytes
 )
 
 // Timestamp is a type of timestamp
@@ -152,7 +153,7 @@ func ReadPacketWithRXTimestampBuf(connFd int, buf, oob []byte) (int, unix.Sockad
 		return 0, nil, time.Time{}, fmt.Errorf("failed to read timestamp: %w", err)
 	}
 
-	timestamp, err := socketControlMessageTimestamp(oob[:boob])
+	timestamp, err := socketControlMessageTimestamp(oob, boob)
 	return bbuf, saddr, timestamp, err
 }
 

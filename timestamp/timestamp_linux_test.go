@@ -240,20 +240,38 @@ func TestSocketControlMessageTimestamp(t *testing.T) {
 	}
 
 	var b []byte
+	var toob int
 
 	// unix.Cmsghdr used in socketControlMessageTimestamp differs depending on platform
 	switch runtime.GOARCH {
 	case "amd64":
-		b = []byte{60, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 25, 0, 0, 0, 42, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 65, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 230, 180, 10, 97, 0, 0, 0, 0, 239, 83, 199, 39, 0, 0, 0, 0}
-	case "386":
-		b = []byte{56, 0, 0, 0, 41, 0, 0, 0, 25, 0, 0, 0, 42, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 1, 0, 0, 0, 65, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 230, 180, 10, 97, 0, 0, 0, 0, 239, 83, 199, 39, 0, 0, 0, 0}
+		b = []byte{
+			0x40, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			0x1, 0x0, 0x0, 0x0, 0x41, 0x0, 0x0, 0x0,
+			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			0x79, 0xab, 0x24, 0x68, 0x0, 0x0, 0x0,
+			0x0, 0xfc, 0xab, 0xf9, 0x8, 0x0, 0x0,
+			0x0, 0x0, 0x3c, 0x0, 0x0, 0x0, 0x0, 0x0,
+			0x0, 0x0, 0x29, 0x0, 0x0, 0x0, 0x19, 0x0,
+			0x0, 0x0, 0x2a, 0x0, 0x0, 0x0, 0x4, 0x0,
+			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0,
+			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			0x0, 0x0,
+		}
+		toob = len(b)
 	default:
-		t.Skip("This test supports amd64/386 platforms only")
+		t.Skip("This test checks amd64 platform only")
 	}
 
-	ts, err := socketControlMessageTimestamp(b)
+	ts, err := socketControlMessageTimestamp(b, toob)
 	require.NoError(t, err)
-	require.Equal(t, int64(1628091622667374575), ts.UnixNano())
+	require.Equal(t, int64(1747233657150580220), ts.UnixNano())
 }
 
 func TestSocketControlMessageTimestampFail(t *testing.T) {
@@ -261,7 +279,7 @@ func TestSocketControlMessageTimestampFail(t *testing.T) {
 		t.Skip("This test supports SO_TIMESTAMPING_NEW only. No sample of SO_TIMESTAMPING")
 	}
 
-	_, err := socketControlMessageTimestamp(make([]byte, 16))
+	_, err := socketControlMessageTimestamp(make([]byte, 16), 16)
 	require.ErrorIs(t, errNoTimestamp, err)
 }
 
