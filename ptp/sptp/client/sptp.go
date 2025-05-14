@@ -352,6 +352,7 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 	}()
 
 	isBadTick := false
+	isStalled := false
 	now := time.Now()
 	var tickDuration time.Duration
 	if !p.lastTick.IsZero() {
@@ -359,7 +360,10 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 		log.Debugf("tick took %vms sys time", tickDuration.Milliseconds())
 		// +-10% of interval
 		p.stats.SetTickDuration(tickDuration)
-		if 100*tickDuration > 110*p.cfg.Interval || 100*tickDuration < 90*p.cfg.Interval {
+		if tickDuration.Seconds() > 60 {
+			log.Warningf("tick took %vs, the app seems to be stalled", tickDuration.Seconds())
+			isStalled = true
+		} else if 100*tickDuration > 110*p.cfg.Interval || 100*tickDuration < 90*p.cfg.Interval {
 			log.Warningf("tick took %vms, which is outside of expected +-10%% from the interval %vms", tickDuration.Milliseconds(), p.cfg.Interval.Milliseconds())
 			isBadTick = true
 		}
@@ -416,7 +420,15 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) {
 
 	var state servo.State
 	var freqAdj float64
-	if isSpike {
+	if isStalled {
+		freqAdj = p.setMeanFreq()
+		// if calculated offset is far away from the range - step it after stall
+		if isSpike {
+			state = servo.StateJump
+		} else {
+			state = servo.StateHoldover
+		}
+	} else if isSpike {
 		p.stats.IncFiltered()
 		freqAdj = p.setMeanFreq()
 		if p.pi.GetState() == servo.StateLocked {
