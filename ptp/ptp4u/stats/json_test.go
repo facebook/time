@@ -199,6 +199,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	stats.SetUTCOffsetSec(1)
 	stats.SetDrain(1)
 	stats.IncReload()
+	stats.IncTXTSMissing()
 
 	stats.Snapshot()
 
@@ -212,6 +213,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	expectedStats.clockclass = 1
 	expectedStats.drain = 1
 	expectedStats.reload = 1
+	expectedStats.txtsMissing = 1
 
 	require.Equal(t, expectedStats.subscriptions.m, stats.report.subscriptions.m)
 	require.Equal(t, expectedStats.tx.m, stats.report.tx.m)
@@ -221,6 +223,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	require.Equal(t, expectedStats.clockclass, stats.report.clockclass)
 	require.Equal(t, expectedStats.drain, stats.report.drain)
 	require.Equal(t, expectedStats.reload, stats.report.reload)
+	require.Equal(t, expectedStats.txtsMissing, stats.report.txtsMissing)
 }
 
 func TestJSONExport(t *testing.T) {
@@ -243,6 +246,7 @@ func TestJSONExport(t *testing.T) {
 	stats.SetClockClass(1)
 	stats.SetDrain(1)
 	stats.IncReload()
+	stats.IncTXTSMissing()
 
 	stats.Snapshot()
 
@@ -267,6 +271,7 @@ func TestJSONExport(t *testing.T) {
 	expectedMap["clockclass"] = 1
 	expectedMap["drain"] = 1
 	expectedMap["reload"] = 1
+	expectedMap["txts.missing"] = 1
 
 	require.Equal(t, expectedMap, data)
 }

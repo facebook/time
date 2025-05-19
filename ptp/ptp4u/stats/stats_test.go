@@ -77,6 +77,7 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	c.clockclass = 1
 	c.drain = 1
 	c.reload = 1
+	c.txtsMissing = 5
 
 	require.Equal(t, int64(1), c.subscriptions.load(1))
 	require.Equal(t, int64(1), c.rx.load(1))
@@ -91,6 +92,7 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	require.Equal(t, int64(1), c.clockclass)
 	require.Equal(t, int64(1), c.drain)
 	require.Equal(t, int64(1), c.reload)
+	require.Equal(t, int64(5), c.txtsMissing)
 
 	c.reset()
 
@@ -107,6 +109,7 @@ func TestSyncMapInt64Counters(t *testing.T) {
 	require.Equal(t, int64(0), c.clockclass)
 	require.Equal(t, int64(0), c.drain)
 	require.Equal(t, int64(0), c.reload)
+	require.Equal(t, int64(0), c.txtsMissing)
 }
 
 func TestCountersToMap(t *testing.T) {
@@ -122,6 +125,7 @@ func TestCountersToMap(t *testing.T) {
 	c.clockclass = 6
 	c.drain = 1
 	c.reload = 2
+	c.txtsMissing = 5
 
 	result := c.toMap()
 
@@ -135,6 +139,7 @@ func TestCountersToMap(t *testing.T) {
 	expectedMap["clockclass"] = 6
 	expectedMap["drain"] = 1
 	expectedMap["reload"] = 2
+	expectedMap["txts.missing"] = 5
 
 	require.Equal(t, expectedMap, result)
 }

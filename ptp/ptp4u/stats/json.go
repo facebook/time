@@ -72,6 +72,7 @@ func (s *JSONStats) Snapshot() {
 	s.report.clockclass = s.clockclass
 	s.report.drain = s.drain
 	s.report.reload = s.reload
+	s.report.txtsMissing = s.txtsMissing
 }
 
 // handleRequest is a handler used for all http monitoring requests
@@ -189,6 +190,11 @@ func (s *JSONStats) SetMaxTXTSAttempts(workerid int, attempts int64) {
 	if attempts > s.txtsattempts.load(workerid) {
 		s.txtsattempts.store(workerid, attempts)
 	}
+}
+
+// IncTXTSMissing atomically increments the counter when all retries to get latest TX timestamp exceeded
+func (s *JSONStats) IncTXTSMissing() {
+	atomic.StoreInt64(&s.txtsMissing, 1)
 }
 
 // SetUTCOffsetSec atomically sets the utcoffset

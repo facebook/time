@@ -98,6 +98,9 @@ type Stats interface {
 	// SetMaxTXTSAttempts atomically sets number of retries for get latest TX timestamp
 	SetMaxTXTSAttempts(workerid int, retries int64)
 
+	// IncTXTSMissing atomically increments the counter when all retries to get latest TX timestamp exceeded
+	IncTXTSMissing()
+
 	// SetUTCOffsetSec atomically sets the utcoffset
 	SetUTCOffsetSec(utcoffsetSec int64)
 
@@ -194,6 +197,7 @@ type counters struct {
 	clockclass        int64
 	drain             int64
 	reload            int64
+	txtsMissing       int64
 }
 
 func (c *counters) init() {
@@ -225,6 +229,7 @@ func (c *counters) reset() {
 	c.clockclass = 0
 	c.drain = 0
 	c.reload = 0
+	c.txtsMissing = 0
 }
 
 // toMap converts counters to a map
@@ -293,6 +298,7 @@ func (c *counters) toMap() (export map[string]int64) {
 	res["clockclass"] = c.clockclass
 	res["drain"] = c.drain
 	res["reload"] = c.reload
+	res["txts.missing"] = c.txtsMissing
 
 	return res
 }

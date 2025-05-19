@@ -175,6 +175,7 @@ func (s *sendWorker) Start() {
 					s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
 					if err != nil {
 						log.Warningf("Failed to read TX timestamp: %v", err)
+						s.stats.IncTXTSMissing()
 						continue
 					}
 					if s.config.TimestampType != timestamp.HW {
@@ -200,6 +201,7 @@ func (s *sendWorker) Start() {
 					s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
 					if err != nil {
 						log.Warningf("Failed to read TX timestamp: %v", err)
+						s.stats.IncTXTSMissing()
 						continue
 					}
 				}
@@ -272,6 +274,7 @@ func (s *sendWorker) Start() {
 					s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
 					if err != nil {
 						log.Warningf("Failed to read TX timestamp: %v", err)
+						s.stats.IncTXTSMissing()
 						continue
 					}
 					if s.config.TimestampType != timestamp.HW {
@@ -296,7 +299,8 @@ func (s *sendWorker) Start() {
 					txTS, attempts, err = timestamp.ReadTimeStampSeqIDBuf(eFd, toob, seqID)
 					s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
 					if err != nil {
-						log.Debugf("Failed to read TX timestamp: %v", err)
+						log.Warningf("Failed to read TX timestamp: %v", err)
+						s.stats.IncTXTSMissing()
 						continue
 					}
 				}
