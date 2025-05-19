@@ -292,11 +292,11 @@ func (s *sendWorker) Start() {
 						log.Errorf("Failed to send sync packet: %v", err)
 						continue
 					}
-					s.stats.IncTX(c.subscriptionType)
+					s.stats.IncTX(ptp.MessageSync)
 					txTS, attempts, err = timestamp.ReadTimeStampSeqIDBuf(eFd, toob, seqID)
 					s.stats.SetMaxTXTSAttempts(s.id, int64(attempts))
 					if err != nil {
-						log.Warningf("Failed to read TX timestamp: %v", err)
+						log.Debugf("Failed to read TX timestamp: %v", err)
 						continue
 					}
 				}
