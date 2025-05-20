@@ -237,7 +237,6 @@ func (s *sendWorker) Start() {
 					continue
 				}
 				s.stats.IncTX(c.subscriptionType)
-
 			case ptp.MessageDelayResp:
 				// send delay response
 				n, err = ptp.BytesTo(c.DelayResp(), buf)
@@ -253,7 +252,6 @@ func (s *sendWorker) Start() {
 					continue
 				}
 				s.stats.IncTX(c.subscriptionType)
-
 			case ptp.MessageDelayReq:
 				// send sync
 				n, err = ptp.BytesTo(c.Sync(), buf)

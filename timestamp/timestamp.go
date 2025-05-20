@@ -113,10 +113,10 @@ func (t *Timestamp) Type() string {
 	return "timestamp"
 }
 
-// AttemptsTXTS is configured amount of attempts to read TX timestamp
+// AttemptsTXTS is the configured amount of attempts to read TX timestamp
 var AttemptsTXTS = defaultTXTS
 
-// TimeoutTXTS is configured timeout to read TX timestamp
+// TimeoutTXTS is the configured timeout to read TX timestamp
 var TimeoutTXTS = time.Millisecond
 
 // ConnFd returns file descriptor of a connection

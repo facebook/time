@@ -292,7 +292,7 @@ func socketControlMessageSeqIDTimestamp(b []byte, tboob int, seqID uint32) (time
 			}
 		}
 	}
-	if tstamp.IsZero() || cseq == 0 {
+	if tstamp.IsZero() {
 		return time.Time{}, errNoTimestamp
 	}
 	if cseq == seqID {
