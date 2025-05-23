@@ -81,10 +81,11 @@ func TestSysoffFromPrecise(t *testing.T) {
 	}
 	sysoff := SysoffFromPrecise(preciseTs)
 	want := SysoffResult{
-		SysTime: time.Unix(1667818190, 552297411),
-		PHCTime: time.Unix(1667818153, 552297462),
-		Delay:   0,
-		Offset:  36999999949,
+		SysTime:    time.Unix(1667818190, 552297522),
+		PHCTime:    time.Unix(1667818153, 552297462),
+		SysClockID: unix.CLOCK_MONOTONIC_RAW,
+		Delay:      0,
+		Offset:     37000000060,
 	}
 	require.Equal(t, want, sysoff)
 }
@@ -98,7 +99,7 @@ func TestOffsetBetweenPreciseReadings(t *testing.T) {
 	preciseB := &PTPSysOffsetPrecise{
 		Realtime: PtpClockTime{Sec: 1667818190, Nsec: 552297666}, // 255ns later than A
 		Device:   PtpClockTime{Sec: 1667818153, Nsec: 552297462},
-		Monoraw:  PtpClockTime{Sec: 1667818190, Nsec: 552297522},
+		Monoraw:  PtpClockTime{Sec: 1667818190, Nsec: 552297777}, // 255ns later than A
 	}
 	offset := preciseB.Sub(preciseA)
 	require.Equal(t, time.Duration(-255), offset)
@@ -127,6 +128,7 @@ func TestOffsetBetweenExtendedReadings(t *testing.T) {
 			{{Sec: 1667818191, Nsec: 552301866}, {Sec: 1667818154, Nsec: 552297861}, {Sec: 1667818191, Nsec: 552328912}},
 		},
 	}
-	offset := extendedB.Sub(extendedA)
+	offset, err := extendedB.Sub(extendedA)
+	require.NoError(t, err)
 	require.Equal(t, time.Duration(-815), offset)
 }

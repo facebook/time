@@ -71,7 +71,10 @@ func phcdiffRun(deviceA, deviceB string, isJSON bool) error {
 		}
 		timeAndOffsetA = extendedA.BestSample()
 		timeAndOffsetB = extendedB.BestSample()
-		phcOffset = extendedB.Sub(extendedA)
+		phcOffset, err = extendedB.Sub(extendedA)
+		if err != nil {
+			return err
+		}
 	} else {
 		preciseB, err := bdev.ReadSysoffPrecise()
 		if err != nil {

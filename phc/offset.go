@@ -37,10 +37,11 @@ type PTPSysOffsetPrecise unix.PtpSysOffsetPrecise
 
 // SysoffResult is a result of PHC time measurement with related data
 type SysoffResult struct {
-	Offset  time.Duration
-	Delay   time.Duration
-	SysTime time.Time
-	PHCTime time.Time
+	Offset     time.Duration
+	Delay      time.Duration
+	SysTime    time.Time
+	SysClockID int
+	PHCTime    time.Time
 }
 
 // based on sysoff_estimate from ptp4l sysoff.c
@@ -62,12 +63,13 @@ func sysoffFromExtendedTS(extendedTS [3]PtpClockTime) SysoffResult {
 // SysoffFromPrecise returns SysoffResult from *PTPSysOffsetPrecise . Code based on sysoff_precise from ptp4l sysoff.c
 func SysoffFromPrecise(pre *PTPSysOffsetPrecise) SysoffResult {
 	tp := time.Unix(pre.Device.Sec, int64(pre.Device.Nsec))
-	tr := time.Unix(pre.Realtime.Sec, int64(pre.Realtime.Nsec))
+	tr := time.Unix(pre.Monoraw.Sec, int64(pre.Monoraw.Nsec))
 	return SysoffResult{
-		SysTime: tr,
-		PHCTime: tp,
-		Delay:   0, // They are measured at the same time
-		Offset:  tr.Sub(tp),
+		SysTime:    tr,
+		SysClockID: unix.CLOCK_MONOTONIC_RAW,
+		PHCTime:    tp,
+		Delay:      0, // They are measured at the same time
+		Offset:     tr.Sub(tp),
 	}
 }
 
@@ -89,6 +91,7 @@ func SysoffEstimateBasic(ts1, rt, ts2 time.Time) SysoffResult {
 // the logic is loosely based on sysoff_estimate from ptp4l sysoff.c
 func (extended *PTPSysOffsetExtended) BestSample() SysoffResult {
 	best := sysoffFromExtendedTS(extended.Ts[0])
+	best.SysClockID = int(extended.ClockID)
 	for i := 1; i < int(extended.Samples); i++ {
 		sysoff := sysoffFromExtendedTS(extended.Ts[i])
 		if sysoff.Delay < best.Delay {
@@ -152,7 +155,7 @@ func abs(value time.Duration) time.Duration {
 }
 
 // Sub returns the estimated difference between two PHC SYS_OFFSET_EXTENDED readings
-func (extended *PTPSysOffsetExtended) Sub(a *PTPSysOffsetExtended) time.Duration {
+func (extended *PTPSysOffsetExtended) Sub(a *PTPSysOffsetExtended) (time.Duration, error) {
 	return offsetBetweenExtendedReadings(a, extended)
 }
 
@@ -162,7 +165,11 @@ func (precise *PTPSysOffsetPrecise) Sub(a *PTPSysOffsetPrecise) time.Duration {
 }
 
 // offsetBetweenExtendedReadings returns estimated difference between two PHC SYS_OFFSET_EXTENDED readings
-func offsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) time.Duration {
+func offsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) (time.Duration, error) {
+	// SYS_OFFSET_EXTENDED can provide different system clock, we can compare samples with same system clock id
+	if extendedA.ClockID != extendedB.ClockID {
+		return 0, fmt.Errorf("different system clock ids")
+	}
 	// we expect both probes to have same number of measures
 	numProbes := int(extendedA.Samples)
 	if int(extendedB.Samples) < numProbes {
@@ -187,7 +194,7 @@ func offsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) t
 			shortest = phcOffset
 		}
 	}
-	return shortest
+	return shortest, nil
 }
 
 // offsetBetweenPreciseReadings returns estimated difference between two PHC SYS_OFFSET_PRECISE readings
@@ -221,5 +228,5 @@ func OffsetBetweenDevices(deviceA, deviceB *os.File) (time.Duration, error) {
 	if err != nil {
 		return 0, err
 	}
-	return extendedB.Sub(extendedA), nil
+	return extendedB.Sub(extendedA)
 }

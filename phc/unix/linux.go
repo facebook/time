@@ -170,7 +170,8 @@ type (
 	}
 	PtpSysOffsetExtended struct {
 		Samples uint32
-		Rsv     [3]uint32
+		ClockID uint32
+		Rsv     [2]uint32
 		Ts      [25][3]PtpClockTime
 	}
 	PtpSysOffsetPrecise struct {
@@ -230,7 +231,14 @@ func IoctlPtpSysOffsetPrecise(fd int) (*PtpSysOffsetPrecise, error) {
 // clock offset compared to the system clock. The samples parameter
 // specifies the desired number of measurements.
 func IoctlPtpSysOffsetExtended(fd int, samples uint) (*PtpSysOffsetExtended, error) {
-	value := PtpSysOffsetExtended{Samples: uint32(samples)}
+	return IoctlPtpSysOffsetExtendedClock(fd, unix.CLOCK_MONOTONIC_RAW, samples)
+}
+
+// IoctlPtpSysOffsetExtendedClock returns an extended description of the
+// clock offset compared to the system clock. The samples parameter
+// specifies the desired number of measurements.
+func IoctlPtpSysOffsetExtendedClock(fd int, clockid uint32, samples uint) (*PtpSysOffsetExtended, error) {
+	value := PtpSysOffsetExtended{Samples: uint32(samples), ClockID: clockid, Rsv: [2]uint32{0, 0}}
 	err := ioctlPtr(fd, PTP_SYS_OFFSET_EXTENDED2, unsafe.Pointer(&value))
 	return &value, err
 }
@@ -332,6 +340,8 @@ const (
 	SYS_IOCTL                     = unix.SYS_IOCTL                     //nolint:revive
 	SYS_RECVMSG                   = unix.SYS_RECVMSG                   //nolint:revive
 	TIME_OK                       = unix.TIME_OK                       //nolint:revive
+	CLOCK_REALTIME				  = unix.CLOCK_REALTIME				   //nolint:revive
+	CLOCK_MONOTONIC_RAW			  = unix.CLOCK_MONOTONIC_RAW		   //nolint:revive
 )
 
 var (

@@ -101,7 +101,11 @@ func phc2phcRun(srcDevice string, dstDevice string, interval time.Duration, step
 				continue
 			}
 
-			phcOffset = extendedDst.Sub(extendedSrc)
+			phcOffset, err = extendedDst.Sub(extendedSrc)
+			if err != nil {
+				log.Errorf("failed to calculate offset between %v and %v: %v", srcDevice, dstDevice, err)
+				continue
+			}
 			timeAndOffsetSrc = extendedSrc.BestSample()
 			timeAndOffsetDst = extendedDst.BestSample()
 		} else {

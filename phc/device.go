@@ -25,6 +25,9 @@ import (
 	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 )
 
+// isClockMonoRawSupported is a global variable to keep information whether clockid is supported in PTPSysOffsetExtended
+var isClockMonoRawSupported = true
+
 // Device represents a PHC device
 type Device os.File
 
@@ -68,6 +71,14 @@ func (dev *Device) ReadSysoffPrecise() (*PTPSysOffsetPrecise, error) {
 }
 
 func (dev *Device) readSysoffExtended(samples uint) (*PTPSysOffsetExtended, error) {
+	if isClockMonoRawSupported {
+		value, err := unix.IoctlPtpSysOffsetExtendedClock(int(dev.Fd()), unix.CLOCK_MONOTONIC_RAW, samples)
+		if err == nil {
+			our := PTPSysOffsetExtended(*value)
+			return &our, nil
+		}
+		isClockMonoRawSupported = false
+	}
 	value, err := unix.IoctlPtpSysOffsetExtended(int(dev.Fd()), samples)
 	if err != nil {
 		return nil, err
