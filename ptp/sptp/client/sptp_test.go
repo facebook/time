@@ -437,6 +437,66 @@ func TestRunFiltered(t *testing.T) {
 	require.Nil(t, nil, results[netip.MustParseAddr("192.168.0.10")])
 }
 
+func TestRunStalled(t *testing.T) {
+	ts, err := time.Parse(time.RFC3339, "2021-05-21T13:32:05+01:00")
+	require.Nil(t, err)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClock := NewMockClock(ctrl)
+	mockClock.EXPECT().AdjFreqPPB((float64(0))).Times(2)
+	mockClock.EXPECT().Step(time.Duration(200002000))
+	mockServo := NewMockServo(ctrl)
+	mockServo.EXPECT().IsSpike(int64(-200002000)).Return(true)
+	mockServo.EXPECT().MeanFreq().Times(2)
+	mockServo.EXPECT().SetLastFreq(float64(0)).Times(2)
+
+	mockStatsServer := NewMockStatsServer(ctrl)
+	mockStatsServer.EXPECT().SetGmsTotal(0)
+	mockStatsServer.EXPECT().SetGmsAvailable(0)
+	mockStatsServer.EXPECT().SetGmsTotal(1)
+	mockStatsServer.EXPECT().SetGmsAvailable(100)
+	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+	mockStatsServer.EXPECT().SetServoState(gomock.Any())
+	mockStatsServer.EXPECT().SetTickDuration(gomock.Any()).Times(2)
+
+	cfg := DefaultConfig()
+	cfg.Servers = map[string]int{
+		"192.168.0.10": 1,
+	}
+	p := &SPTP{
+		clock:      mockClock,
+		pi:         mockServo,
+		stats:      mockStatsServer,
+		cfg:        cfg,
+		eventConns: []UDPConnWithTS{nil},
+		lastTick:   time.Now().Add(-time.Minute * 2),
+	}
+	emptyResults := map[netip.Addr]*RunResult{}
+
+	results := map[netip.Addr]*RunResult{
+		netip.MustParseAddr("192.168.0.10"): {
+			Server: netip.MustParseAddr("192.168.0.10"),
+			Measurement: &MeasurementResult{
+				Delay:     299995 * time.Microsecond,
+				S2CDelay:  100,
+				C2SDelay:  110,
+				Offset:    -200002 * time.Microsecond,
+				Timestamp: ts,
+			},
+		},
+	}
+	err = p.initClients()
+	require.NoError(t, err)
+	p.processResults(emptyResults)
+	require.True(t, p.isStalled)
+	p.lastTick = time.Now().Add(-time.Second)
+	// we step here
+	p.processResults(results)
+	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
+	require.Nil(t, nil, results[netip.MustParseAddr("192.168.0.10")])
+	require.False(t, p.isStalled)
+}
+
 func TestRunListenerErr(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

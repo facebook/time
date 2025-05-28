@@ -63,6 +63,7 @@ type SPTP struct {
 	priorities map[netip.Addr]int
 	backoff    map[netip.Addr]*backoff
 	lastTick   time.Time
+	isStalled  bool
 
 	clockID ptp.ClockIdentity
 	genConn UDPConnNoTS
@@ -353,7 +354,6 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 	}()
 
 	isBadTick := false
-	isStalled := false
 	now := time.Now()
 	var tickDuration time.Duration
 	if !p.lastTick.IsZero() {
@@ -363,7 +363,7 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 		p.stats.SetTickDuration(tickDuration)
 		if tickDuration.Seconds() > 60 {
 			log.Warningf("tick took %vs, the app seems to be stalled", tickDuration.Seconds())
-			isStalled = true
+			p.isStalled = true
 		} else if 100*tickDuration > 110*p.cfg.Interval || 100*tickDuration < 90*p.cfg.Interval {
 			log.Warningf("tick took %vms, which is outside of expected +-10%% from the interval %vms", tickDuration.Milliseconds(), p.cfg.Interval.Milliseconds())
 			isBadTick = true
@@ -421,10 +421,12 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 
 	var state servo.State
 	var freqAdj float64
-	if isStalled {
+	if p.isStalled {
 		if _, err := p.setMeanFreq(); err != nil {
 			return err
 		}
+		// if we are in the stalled state, we can step the clock, but only once
+		p.isStalled = false
 		// if calculated offset is far away from the range - step it after stall
 		if isSpike {
 			state = servo.StateJump
