@@ -23,7 +23,7 @@ limitations under the License.
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/types.h>
+#include <time.h>
 #include <unistd.h> // close
 #include "missing.h"
 
@@ -37,6 +37,7 @@ limitations under the License.
 #endif
 
 #define FBCLOCK_CLOCKDATA_SIZE sizeof(fbclock_clockdata)
+#define FBCLOCK_CLOCKDATA_V2_SIZE sizeof(fbclock_clockdata_v2)
 #define FBCLOCK_MAX_READ_TRIES 1000
 #define NANOSECONDS_IN_SECONDS 1e9
 
@@ -67,6 +68,16 @@ static inline uint64_t fbclock_clockdata_crc(fbclock_clockdata* value) {
   return counter ^ 0xFFFFFFFF;
 }
 
+int ends_with(const char* str, const char* suffix) {
+  if (!str || !suffix)
+    return 0;
+  size_t lenstr = strlen(str);
+  size_t lensuffix = strlen(suffix);
+  if (lensuffix > lenstr)
+    return 0;
+  return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
+}
+
 int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data) {
   fbclock_shmdata* shmp = mmap(
       NULL, FBCLOCK_SHMDATA_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -77,6 +88,24 @@ int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data) {
   memcpy(&shmp->data, data, FBCLOCK_CLOCKDATA_SIZE);
   atomic_store(&shmp->crc, crc);
   munmap(shmp, FBCLOCK_SHMDATA_SIZE);
+  return FBCLOCK_E_NO_ERROR;
+}
+
+int fbclock_clockdata_store_data_v2(uint32_t fd, fbclock_clockdata_v2* data) {
+  fbclock_shmdata_v2* shmp = mmap(
+      NULL, FBCLOCK_SHMDATA_V2_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (shmp == MAP_FAILED) {
+    return FBCLOCK_E_SHMEM_MAP_FAILED;
+  }
+  uint64_t seq = atomic_load(&shmp->seq);
+  seq++;
+  atomic_store(&shmp->seq, seq);
+  __sync_synchronize();
+  memcpy(&shmp->data, data, FBCLOCK_CLOCKDATA_V2_SIZE);
+  __sync_synchronize();
+  seq++;
+  atomic_store(&shmp->seq, seq);
+  munmap(shmp, FBCLOCK_SHMDATA_V2_SIZE);
   return FBCLOCK_E_NO_ERROR;
 }
 
@@ -97,6 +126,28 @@ int fbclock_clockdata_load_data(
   // TODO: Enable mismatch error.
   // return FBCLOCK_E_CRC_MISMATCH;
   return FBCLOCK_E_NO_ERROR;
+}
+
+int fbclock_clockdata_load_data_v2(
+    fbclock_shmdata_v2* shmp,
+    fbclock_clockdata_v2* data) {
+  for (int i = 0; i < FBCLOCK_MAX_READ_TRIES; i++) {
+    uint64_t seq = atomic_load(&shmp->seq);
+    if (seq & 1) {
+      __sync_synchronize();
+      continue;
+    }
+    __sync_synchronize();
+    memcpy(data, &shmp->data, FBCLOCK_CLOCKDATA_V2_SIZE);
+    __sync_synchronize();
+    if (seq == atomic_load(&shmp->seq)) {
+      fbclock_debug_print("reading clock data took %d tries\n", i + 1);
+      return FBCLOCK_E_NO_ERROR;
+    }
+  }
+  fbclock_debug_print(
+      "failed to read clock data after %d tries\n", FBCLOCK_MAX_READ_TRIES);
+  return FBCLOCK_E_CRC_MISMATCH;
 }
 
 static inline int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
@@ -177,17 +228,29 @@ int fbclock_init(fbclock_lib* lib, const char* shm_path) {
     lib->gettime = fbclock_read_ptp_offset;
   }
 
-  fbclock_shmdata* shmp =
-      mmap(NULL, FBCLOCK_SHMDATA_SIZE, PROT_READ, MAP_SHARED, lib->shm_fd, 0);
-  if (shmp == MAP_FAILED) {
-    return FBCLOCK_E_SHMEM_MAP_FAILED;
+  if (ends_with(shm_path, "_v2")) {
+    fbclock_debug_print("Using v2 shared memory with path %s\n", shm_path);
+    fbclock_shmdata_v2* shmp = mmap(
+        NULL, FBCLOCK_SHMDATA_V2_SIZE, PROT_READ, MAP_SHARED, lib->shm_fd, 0);
+    if (shmp == MAP_FAILED) {
+      return FBCLOCK_E_SHMEM_MAP_FAILED;
+    }
+    lib->shmp_v2 = shmp;
+
+  } else {
+    fbclock_shmdata* shmp =
+        mmap(NULL, FBCLOCK_SHMDATA_SIZE, PROT_READ, MAP_SHARED, lib->shm_fd, 0);
+    if (shmp == MAP_FAILED) {
+      return FBCLOCK_E_SHMEM_MAP_FAILED;
+    }
+    lib->shmp = shmp;
   }
-  lib->shmp = shmp;
   return FBCLOCK_E_NO_ERROR;
 }
 
 int fbclock_destroy(fbclock_lib* lib) {
   munmap(lib->shmp, FBCLOCK_SHMDATA_SIZE);
+  munmap(lib->shmp_v2, FBCLOCK_SHMDATA_V2_SIZE);
   close(lib->dev_fd);
   close(lib->shm_fd);
   return FBCLOCK_E_NO_ERROR;
@@ -235,10 +298,42 @@ int fbclock_calculate_time(
   return FBCLOCK_E_NO_ERROR;
 }
 
+int fbclock_calculate_time_v2(
+    uint64_t error_bound_ns,
+    double h_value_ns,
+    fbclock_clockdata_v2* state,
+    int64_t phc_time_ns,
+    int64_t sysclock_time_ns,
+    int64_t sysclock_time_now_ns,
+    fbclock_truetime* truetime,
+    int time_standard) {
+  if (state->ingress_time_ns > phc_time_ns) {
+    return FBCLOCK_E_PHC_IN_THE_PAST;
+  }
+  // check how far back since last SYNC message from GM (in seconds)
+  double seconds =
+      (double)(phc_time_ns - state->ingress_time_ns) / NANOSECONDS_IN_SECONDS;
+
+  // UTC offset applied if time standard used is UTC (and not TAI)
+  if (time_standard == FBCLOCK_UTC) {
+    phc_time_ns = fbclock_apply_utc_offset_v2(state, phc_time_ns);
+  }
+
+  int64_t diff_ns = sysclock_time_now_ns - sysclock_time_ns;
+  phc_time_ns += diff_ns;
+
+  // calculate the Window of Uncertainty (WOU) (in nanoseconds)
+  uint64_t wou_ns =
+      fbclock_window_of_uncertainty(seconds, error_bound_ns, h_value_ns);
+  truetime->earliest_ns = phc_time_ns - wou_ns;
+  truetime->latest_ns = phc_time_ns + wou_ns;
+  return FBCLOCK_E_NO_ERROR;
+}
+
 int fbclock_gettime_tz(
     fbclock_lib* lib,
     fbclock_truetime* truetime,
-    int timezone) {
+    int time_standard) {
   struct phc_time_res res;
   fbclock_clockdata state = {};
   int rcode = fbclock_clockdata_load_data(lib->shmp, &state);
@@ -268,14 +363,66 @@ int fbclock_gettime_tz(
   double h_value = (double)state.holdover_multiplier_ns / FBCLOCK_POW2_16;
 
   return fbclock_calculate_time(
-      error_bound, h_value, &state, res.ts, truetime, timezone);
+      error_bound, h_value, &state, res.ts, truetime, time_standard);
+}
+
+int fbclock_gettime_tz_v2(
+    fbclock_lib* lib,
+    fbclock_truetime* truetime,
+    int time_standard) {
+  fbclock_clockdata_v2 state = {};
+  int rcode = fbclock_clockdata_load_data_v2(lib->shmp_v2, &state);
+  if (rcode != FBCLOCK_E_NO_ERROR) {
+    return rcode;
+  }
+
+  // cannot determine Truetime without these values
+  if (state.error_bound_ns == 0 || state.ingress_time_ns == 0) {
+    return FBCLOCK_E_NO_DATA;
+  }
+  if (state.phc_time_ns == 0 || state.sysclock_time_ns == 0) {
+    return FBCLOCK_E_NO_DATA;
+  }
+
+  // if the value is stored as UINT32_MAX then it's too big
+  if (state.error_bound_ns == UINT32_MAX ||
+      state.holdover_multiplier_ns == UINT32_MAX) {
+    return FBCLOCK_E_WOU_TOO_BIG;
+  }
+
+  uint64_t error_bound =
+      state.error_bound_ns; // FIXME add sys clock error bound here
+  double h_value = (double)state.holdover_multiplier_ns / FBCLOCK_POW2_16;
+
+  struct timespec ts;
+  if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == -1) {
+    return FBCLOCK_E_PTP_READ_OFFSET;
+  }
+  int64_t sysclock_time_now_ns =
+      ts.tv_sec * NANOSECONDS_IN_SECONDS + ts.tv_nsec;
+
+  return fbclock_calculate_time_v2(
+      error_bound,
+      h_value,
+      &state,
+      state.phc_time_ns,
+      state.sysclock_time_ns,
+      sysclock_time_now_ns,
+      truetime,
+      time_standard);
 }
 
 int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
+  if (lib->shmp_v2) {
+    return fbclock_gettime_tz_v2(lib, truetime, FBCLOCK_TAI);
+  }
   return fbclock_gettime_tz(lib, truetime, FBCLOCK_TAI);
 }
 
 int fbclock_gettime_utc(fbclock_lib* lib, fbclock_truetime* truetime) {
+  if (lib->shmp_v2) {
+    return fbclock_gettime_tz_v2(lib, truetime, FBCLOCK_UTC);
+  }
   return fbclock_gettime_tz(lib, truetime, FBCLOCK_UTC);
 }
 
@@ -299,6 +446,42 @@ uint64_t fbclock_apply_smear(
 
 uint64_t fbclock_apply_utc_offset(
     fbclock_clockdata* state,
+    int64_t phctime_ns) {
+  // Fixed offset is applied if tzdata information not in shared memory
+  if (state->utc_offset_pre_s == 0 && state->utc_offset_post_s == 0) {
+    phctime_ns += UTC_TAI_OFFSET_NS;
+    return (uint64_t)phctime_ns;
+  }
+
+  fbclock_debug_print(
+      "UTC-TAI Offset Before Leap Second Event: %d\n", state->utc_offset_pre_s);
+  fbclock_debug_print(
+      "UTC-TAI Offset After Leap Second Event: %d\n", state->utc_offset_post_s);
+  fbclock_debug_print(
+      "Clock Smearing Start Time (TAI): %lu\n", state->clock_smearing_start_s);
+  fbclock_debug_print(
+      "Clock Smearing End Time (TAI): %lu\n", state->clock_smearing_end_s);
+
+  // Multipler may be negative (if a negative leap second is applied)
+  int multiplier = state->utc_offset_post_s - state->utc_offset_pre_s;
+
+  // Switch to nanoseconds
+  uint64_t smear_end_ns = state->clock_smearing_end_s * 1e9;
+  uint64_t smear_start_ns = state->clock_smearing_start_s * 1e9;
+  uint64_t offset_post_ns = state->utc_offset_post_s * 1e9;
+  uint64_t offset_pre_ns = state->utc_offset_pre_s * 1e9;
+
+  return fbclock_apply_smear(
+      phctime_ns,
+      offset_pre_ns,
+      offset_post_ns,
+      smear_start_ns,
+      smear_end_ns,
+      multiplier);
+}
+
+uint64_t fbclock_apply_utc_offset_v2(
+    fbclock_clockdata_v2* state,
     int64_t phctime_ns) {
   // Fixed offset is applied if tzdata information not in shared memory
   if (state->utc_offset_pre_s == 0 && state->utc_offset_post_s == 0) {

@@ -71,3 +71,34 @@ func TestShmem(t *testing.T) {
 	require.Equal(t, d.ErrorBoundNS, readD.ErrorBoundNS)
 	require.InDelta(t, d.HoldoverMultiplierNS, readD.HoldoverMultiplierNS, 0.001)
 }
+
+func TestShmemV2(t *testing.T) {
+	tmpfile, err := os.CreateTemp("", "shmemtest_v2")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+	shm, err := lib.OpenFBClockShmCustomVer(tmpfile.Name(), 2)
+	require.NoError(t, err)
+	defer shm.Close()
+	d := lib.DataV2{
+		IngressTimeNS:        1648137249050666302,
+		ErrorBoundNS:         314000000, // over 65k, our old limit
+		HoldoverMultiplierNS: 1.001,
+		PHCTimeNS:            1648137249050666302,
+		SysclockTimeNS:       1648137249050666302,
+		ClockID:              1, // CLOCK_MONOTONIC
+	}
+	err = lib.StoreFBClockDataV2(shm.File.Fd(), d)
+	require.NoError(t, err)
+
+	shmdata, err := lib.MmapShmpDataV2(shm.File.Fd())
+	require.NoError(t, err)
+
+	readD, err := lib.ReadFBClockDataV2(shmdata)
+	require.NoError(t, err)
+	require.Equal(t, d.IngressTimeNS, readD.IngressTimeNS)
+	require.Equal(t, d.ErrorBoundNS, readD.ErrorBoundNS)
+	require.InDelta(t, d.HoldoverMultiplierNS, readD.HoldoverMultiplierNS, 0.001)
+	require.Equal(t, d.PHCTimeNS, readD.PHCTimeNS)
+	require.Equal(t, d.SysclockTimeNS, readD.SysclockTimeNS)
+	require.Equal(t, d.ClockID, readD.ClockID)
+}

@@ -67,14 +67,46 @@ typedef struct fbclock_clockdata {
 
 } fbclock_clockdata;
 
+typedef struct fbclock_clockdata_v2 {
+  // PHC time when ptp client last time received sync message
+  int64_t ingress_time_ns;
+  // error bound calculated based on PTP client GM offset, path delay and
+  // frequency adjustment
+  uint32_t error_bound_ns;
+  // multiplier we use to adjust error bound when clock in holdover mode
+  uint32_t holdover_multiplier_ns;
+  // start time (TAI) to begin smearing clock
+  uint64_t clock_smearing_start_s;
+  // end time (TAI) to stop smearing clock
+  uint64_t clock_smearing_end_s;
+  // UTC offset before latest published leap second (tzdata)
+  int32_t utc_offset_pre_s;
+  // UTC offset after latest published leap second (tzdata)
+  int32_t utc_offset_post_s;
+  // periodically updated PHC time
+  int64_t phc_time_ns;
+  // system clock time received during periodical update of PHC time
+  int64_t sysclock_time_ns;
+  // we may have sys clock read with MONOTONIC_RAW or REALTIME clock source
+  uint32_t clockId;
+
+} fbclock_clockdata_v2;
+
 // fbclock shared memory object
 typedef struct fbclock_shmdata {
   atomic_uint64 crc;
   fbclock_clockdata data;
 } fbclock_shmdata;
+// fbclock shared memory object
+typedef struct fbclock_shmdata_v2 {
+  atomic_uint64 seq;
+  fbclock_clockdata_v2 data;
+} fbclock_shmdata_v2;
 
 #define FBCLOCK_SHMDATA_SIZE sizeof(fbclock_shmdata)
+#define FBCLOCK_SHMDATA_V2_SIZE sizeof(fbclock_shmdata_v2)
 #define FBCLOCK_PATH "/run/fbclock_data_v1"
+#define FBCLOCK_PATH_V2 "/run/fbclock_data_v2"
 #define FBCLOCK_POW2_16 ((double)(1ULL << 16))
 #define FBCLOCK_PTPPATH "/dev/fbclock/ptp"
 
@@ -95,11 +127,16 @@ typedef struct fbclock_lib {
   int dev_fd; // file descriptor of opened /dev/ptpN
   int64_t min_phc_delay; // minimal PHC request delay observed
   fbclock_shmdata* shmp; // mmap-ed data
+  fbclock_shmdata_v2* shmp_v2; // mmap-ed data
   int (*gettime)(int, struct phc_time_res*); // pointer to gettime function
 } fbclock_lib;
 
 int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data);
+int fbclock_clockdata_store_data_v2(uint32_t fd, fbclock_clockdata_v2* data);
 int fbclock_clockdata_load_data(fbclock_shmdata* shm, fbclock_clockdata* data);
+int fbclock_clockdata_load_data_v2(
+    fbclock_shmdata_v2* shmp,
+    fbclock_clockdata_v2* data);
 uint64_t fbclock_window_of_uncertainty(
     double seconds,
     uint64_t error_bound_ns,
@@ -112,6 +149,9 @@ int fbclock_calculate_time(
     fbclock_truetime* truetime,
     int timezone);
 uint64_t fbclock_apply_utc_offset(fbclock_clockdata* state, int64_t phctime_ns);
+uint64_t fbclock_apply_utc_offset_v2(
+    fbclock_clockdata_v2* state,
+    int64_t phctime_ns);
 uint64_t fbclock_apply_smear(
     uint64_t time,
     uint64_t offset_pre_ns,
