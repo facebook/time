@@ -191,12 +191,12 @@ int reader_thread_v2(fbclock_shmdata_v2* shmp, int tries) {
       printf("ingress_time_ns: %lu\n", data.ingress_time_ns);
       printf("error_bound_ns: %d\n", data.error_bound_ns);
       printf("holdover_multiplier_ns: %d\n", data.holdover_multiplier_ns);
-      return -1;
+      return -2;
     }
     if ((data.phc_time_ns - data.sysclock_time_ns) != 37000000000) {
       printf("phc_time_ns: %lu\n", data.phc_time_ns);
       printf("sysclock_time_ns: %lu\n", data.sysclock_time_ns);
-      return -1;
+      return -3;
     }
   }
   return 0;
