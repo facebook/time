@@ -236,7 +236,7 @@ int fbclock_init(fbclock_lib* lib, const char* shm_path) {
       return FBCLOCK_E_SHMEM_MAP_FAILED;
     }
     lib->shmp_v2 = shmp;
-
+    lib->shmp = NULL;
   } else {
     fbclock_shmdata* shmp =
         mmap(NULL, FBCLOCK_SHMDATA_SIZE, PROT_READ, MAP_SHARED, lib->shm_fd, 0);
@@ -244,6 +244,7 @@ int fbclock_init(fbclock_lib* lib, const char* shm_path) {
       return FBCLOCK_E_SHMEM_MAP_FAILED;
     }
     lib->shmp = shmp;
+    lib->shmp_v2 = NULL;
   }
   return FBCLOCK_E_NO_ERROR;
 }
