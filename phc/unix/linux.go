@@ -340,8 +340,8 @@ const (
 	SYS_IOCTL                     = unix.SYS_IOCTL                     //nolint:revive
 	SYS_RECVMSG                   = unix.SYS_RECVMSG                   //nolint:revive
 	TIME_OK                       = unix.TIME_OK                       //nolint:revive
-	CLOCK_REALTIME				  = unix.CLOCK_REALTIME				   //nolint:revive
-	CLOCK_MONOTONIC_RAW			  = unix.CLOCK_MONOTONIC_RAW		   //nolint:revive
+	CLOCK_REALTIME                = unix.CLOCK_REALTIME                //nolint:revive
+	CLOCK_MONOTONIC_RAW           = unix.CLOCK_MONOTONIC_RAW           //nolint:revive
 )
 
 var (

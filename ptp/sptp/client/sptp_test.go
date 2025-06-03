@@ -59,7 +59,7 @@ func TestProcessResultsNoResults(t *testing.T) {
 	mockClock.EXPECT().AdjFreqPPB(gomock.Any())
 	mockStatsServer.EXPECT().SetGmsTotal(0)
 	mockStatsServer.EXPECT().SetGmsAvailable(0)
-	p.processResults(results)
+	_ = p.processResults(results)
 
 	require.Equal(t, netip.Addr{}, p.bestGM)
 }
@@ -94,7 +94,7 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsTotal(1)
 	mockStatsServer.EXPECT().SetGmsAvailable(0)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
-	p.processResults(results)
+	_ = p.processResults(results)
 	require.Equal(t, netip.Addr{}, p.bestGM)
 }
 
@@ -145,7 +145,7 @@ func TestProcessResultsSingle(t *testing.T) {
 	err = p.initClients()
 	require.NoError(t, err)
 	// we step here
-	p.processResults(results)
+	_ = p.processResults(results)
 	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 
 	// we have to wait a second to avoid "samples are too fast" error
@@ -156,7 +156,7 @@ func TestProcessResultsSingle(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetTickDuration(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
-	p.processResults(results)
+	_ = p.processResults(results)
 	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 }
 
@@ -206,7 +206,7 @@ func TestProcessResultsFastSamples(t *testing.T) {
 	err = p.initClients()
 	require.NoError(t, err)
 	// we step here
-	p.processResults(results)
+	_ = p.processResults(results)
 	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 
 	// we stick to holdover mode and mean freq
@@ -214,7 +214,7 @@ func TestProcessResultsFastSamples(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetTickDuration(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
-	p.processResults(results)
+	_ = p.processResults(results)
 	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 }
 
@@ -278,7 +278,7 @@ func TestProcessResultsMulti(t *testing.T) {
 		},
 	}
 	// we step here
-	p.processResults(results)
+	_ = p.processResults(results)
 	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 
 	// we have to wait a second to avoid "samples are too fast" error
@@ -300,7 +300,7 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockStatsServer.EXPECT().SetTickDuration(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
-	p.processResults(results)
+	_ = p.processResults(results)
 	require.Equal(t, netip.MustParseAddr("192.168.0.11"), p.bestGM)
 }
 
@@ -341,7 +341,7 @@ func TestProcessResultsFilteredDelay(t *testing.T) {
 		},
 	}
 	// we step here
-	p.processResults(results)
+	_ = p.processResults(results)
 	require.Equal(t, netip.Addr{}, p.bestGM)
 }
 
@@ -432,7 +432,7 @@ func TestRunFiltered(t *testing.T) {
 	err = p.initClients()
 	require.NoError(t, err)
 	// we step here
-	p.processResults(results)
+	_ = p.processResults(results)
 	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 	require.Nil(t, nil, results[netip.MustParseAddr("192.168.0.10")])
 }
@@ -487,11 +487,11 @@ func TestRunStalled(t *testing.T) {
 	}
 	err = p.initClients()
 	require.NoError(t, err)
-	p.processResults(emptyResults)
+	_ = p.processResults(emptyResults)
 	require.True(t, p.isStalled)
 	p.lastTick = time.Now().Add(-time.Second)
 	// we step here
-	p.processResults(results)
+	_ = p.processResults(results)
 	require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
 	require.Nil(t, nil, results[netip.MustParseAddr("192.168.0.10")])
 	require.False(t, p.isStalled)
