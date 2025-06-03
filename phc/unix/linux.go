@@ -231,7 +231,7 @@ func IoctlPtpSysOffsetPrecise(fd int) (*PtpSysOffsetPrecise, error) {
 // clock offset compared to the system clock. The samples parameter
 // specifies the desired number of measurements.
 func IoctlPtpSysOffsetExtended(fd int, samples uint) (*PtpSysOffsetExtended, error) {
-	return IoctlPtpSysOffsetExtendedClock(fd, unix.CLOCK_MONOTONIC_RAW, samples)
+	return IoctlPtpSysOffsetExtendedClock(fd, unix.CLOCK_REALTIME, samples)
 }
 
 // IoctlPtpSysOffsetExtendedClock returns an extended description of the
