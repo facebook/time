@@ -179,6 +179,7 @@ int reader_thread_v2(fbclock_shmdata_v2* shmp, int tries) {
   for (int i = 0; i < tries; i++) {
     err = fbclock_clockdata_load_data_v2(shmp, &data);
     if (err != 0) {
+      printf("load v2 data failed: %d\n", err);
       return err;
     }
     if (data.ingress_time_ns * 2 != data.error_bound_ns) {

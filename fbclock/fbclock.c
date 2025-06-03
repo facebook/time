@@ -104,6 +104,8 @@ int fbclock_clockdata_store_data_v2(uint32_t fd, fbclock_clockdata_v2* data) {
   memcpy(&shmp->data, data, FBCLOCK_CLOCKDATA_V2_SIZE);
   __sync_synchronize();
   seq++;
+  if (!seq)
+    seq += 2; // avoid 0 value on wraparound
   atomic_store(&shmp->seq, seq);
   munmap(shmp, FBCLOCK_SHMDATA_V2_SIZE);
   return FBCLOCK_E_NO_ERROR;
@@ -133,6 +135,11 @@ int fbclock_clockdata_load_data_v2(
     fbclock_clockdata_v2* data) {
   for (int i = 0; i < FBCLOCK_MAX_READ_TRIES; i++) {
     uint64_t seq = atomic_load(&shmp->seq);
+    if (!seq) { // 0 value means uninitialized
+      usleep(10);
+      __sync_synchronize();
+      continue;
+    }
     if (seq & 1) {
       __sync_synchronize();
       continue;
