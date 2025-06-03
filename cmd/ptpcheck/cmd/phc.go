@@ -130,7 +130,7 @@ func tunePHC(device string, freq float64) error {
 func printPHC(device string) error {
 	timeAndOffset, err := phc.TimeAndOffsetFromDevice(device, phc.MethodIoctlSysOffsetPrecise)
 	if err != nil {
-		timeAndOffset, err = phc.TimeAndOffsetFromDevice(device, phc.MethodIoctlSysOffsetExtended)
+		timeAndOffset, err = phc.TimeAndOffsetFromDevice(device, phc.MethodIoctlSysOffsetExtendedRealTimeClock)
 	}
 	if err != nil {
 		log.Warningf("Falling back to clock_gettime method: %v", err)

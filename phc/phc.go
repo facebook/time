@@ -32,9 +32,10 @@ type TimeMethod string
 
 // Methods we support to get time
 const (
-	MethodSyscallClockGettime    TimeMethod = "syscall_clock_gettime"
-	MethodIoctlSysOffsetExtended TimeMethod = "ioctl_PTP_SYS_OFFSET_EXTENDED"
-	MethodIoctlSysOffsetPrecise  TimeMethod = "ioctl_PTP_SYS_OFFSET_PRECISE"
+	MethodSyscallClockGettime                 TimeMethod = "syscall_clock_gettime"
+	MethodIoctlSysOffsetExtended              TimeMethod = "ioctl_PTP_SYS_OFFSET_EXTENDED"
+	MethodIoctlSysOffsetPrecise               TimeMethod = "ioctl_PTP_SYS_OFFSET_PRECISE"
+	MethodIoctlSysOffsetExtendedRealTimeClock TimeMethod = "ioctl_PTP_SYS_OFFSET_EXTENDED_REALTIMECLOCK"
 )
 
 type (
@@ -86,6 +87,14 @@ func Time(iface string, method TimeMethod) (time.Time, error) {
 		return dev.Time()
 	case MethodIoctlSysOffsetExtended:
 		extended, err := dev.ReadSysoffExtended1()
+		if err != nil {
+			return time.Time{}, err
+		}
+		latest := extended.Ts[extended.Samples-1]
+		tp := latest[1]
+		return time.Unix(tp.Sec, int64(tp.Nsec)), nil
+	case MethodIoctlSysOffsetExtendedRealTimeClock:
+		extended, err := dev.ReadSysoffExtendedRealTimeClock1()
 		if err != nil {
 			return time.Time{}, err
 		}

@@ -136,6 +136,12 @@ func TimeAndOffsetFromDevice(device string, method TimeMethod) (SysoffResult, er
 			return SysoffResult{}, err
 		}
 		return extended.BestSample(), nil
+	case MethodIoctlSysOffsetExtendedRealTimeClock:
+		extended, err := dev.ReadSysoffExtendedRealTimeClock1()
+		if err != nil {
+			return SysoffResult{}, err
+		}
+		return extended.BestSample(), nil
 	case MethodIoctlSysOffsetPrecise:
 		precise, err := dev.ReadSysoffPrecise()
 		if err != nil {
