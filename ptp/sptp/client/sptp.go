@@ -426,7 +426,8 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 	var state servo.State
 	var freqAdj float64
 	if p.isStalled {
-		if _, err := p.setMeanFreq(); err != nil {
+		var err error
+		if freqAdj, err = p.setMeanFreq(); err != nil {
 			return err
 		}
 		// if we are in the stalled state, we can step the clock, but only once
@@ -439,7 +440,8 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 		}
 	} else if isSpike {
 		p.stats.IncFiltered()
-		if _, err := p.setMeanFreq(); err != nil {
+		var err error
+		if freqAdj, err = p.setMeanFreq(); err != nil {
 			return err
 		}
 		if p.pi.GetState() == servo.StateLocked {
@@ -449,7 +451,8 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 		}
 		results[bestAddr].Measurement = nil
 	} else if isBadTick {
-		if _, err := p.setMeanFreq(); err != nil {
+		var err error
+		if freqAdj, err = p.setMeanFreq(); err != nil {
 			return err
 		}
 		state = servo.StateHoldover
