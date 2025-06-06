@@ -94,11 +94,12 @@ type DataV2 struct {
 	HoldoverMultiplierNS float64 // float stored as multiplier of 2**16
 	SmearingStartS       uint64  // Smearing starts before the Leap Second Event Time (midnight on June-30 or Dec-31)
 	SmearingEndS         uint64  // Smearing ends after the Leap Second Event Time (midnight on June-30 or Dec-31)
-	UTCOffsetPreS        int32   // UTC Offset before Leap Second Event
-	UTCOffsetPostS       int32   // UTC Offset after Leap Second Event
+	UTCOffsetPreS        int16   // UTC Offset before Leap Second Event
+	UTCOffsetPostS       int16   // UTC Offset after Leap Second Event
+	ClockID              uint32  // Clock ID of SysclockTimeNS (MONOTONIC_RAW or REALTIME)
 	PHCTimeNS            int64   // Periodically updated PHC time used to calculate real PHC time
 	SysclockTimeNS       int64   // Periodically updated system clock time (MONOTONIC_RAW or REALTIME) received with PHC time
-	ClockID              uint32  // Clock ID of SysclockTimeNS (MONOTONIC_RAW or REALTIME)
+	CoefPPB              int64   // Coefficient of the approximation of the PHC time
 }
 
 // OpenFBClockShmCustom returns opened POSIX shared mem used by fbclock,
@@ -227,11 +228,12 @@ func StoreFBClockDataV2(fd uintptr, d DataV2) error {
 		holdover_multiplier_ns: C.uint32_t(FloatAsUint32(d.HoldoverMultiplierNS)),
 		clock_smearing_start_s: C.uint64_t(d.SmearingStartS),
 		clock_smearing_end_s:   C.uint64_t(d.SmearingEndS),
-		utc_offset_pre_s:       C.int32_t(d.UTCOffsetPreS),
-		utc_offset_post_s:      C.int32_t(d.UTCOffsetPostS),
+		utc_offset_pre_s:       C.int16_t(d.UTCOffsetPreS),
+		utc_offset_post_s:      C.int16_t(d.UTCOffsetPostS),
+		clockId:                C.uint32_t(d.ClockID),
 		phc_time_ns:            C.int64_t(d.PHCTimeNS),
 		sysclock_time_ns:       C.int64_t(d.SysclockTimeNS),
-		clockId:                C.uint32_t(d.ClockID),
+		coef_ppb:               C.int64_t(d.CoefPPB),
 	}
 	// fbclock_clockdata_store_data comes from fbclock.c
 	res := C.fbclock_clockdata_store_data_v2(C.uint(fd), cData)
@@ -257,5 +259,6 @@ func ReadFBClockDataV2(shmp unsafe.Pointer) (*DataV2, error) {
 		PHCTimeNS:            int64(cData.phc_time_ns),
 		SysclockTimeNS:       int64(cData.sysclock_time_ns),
 		ClockID:              uint32(cData.clockId),
+		CoefPPB:              int64(cData.coef_ppb),
 	}, nil
 }

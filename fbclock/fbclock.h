@@ -80,15 +80,17 @@ typedef struct fbclock_clockdata_v2 {
   // end time (TAI) to stop smearing clock
   uint64_t clock_smearing_end_s;
   // UTC offset before latest published leap second (tzdata)
-  int32_t utc_offset_pre_s;
+  int16_t utc_offset_pre_s;
   // UTC offset after latest published leap second (tzdata)
-  int32_t utc_offset_post_s;
+  int16_t utc_offset_post_s;
+  // we may have sys clock read with MONOTONIC_RAW or REALTIME clock source
+  uint32_t clockId;
   // periodically updated PHC time
   int64_t phc_time_ns;
   // system clock time received during periodical update of PHC time
   int64_t sysclock_time_ns;
-  // we may have sys clock read with MONOTONIC_RAW or REALTIME clock source
-  uint32_t clockId;
+  // extrapolation coefficient in PPB
+  int64_t coef_ppb;
 
 } fbclock_clockdata_v2;
 
@@ -146,6 +148,13 @@ int fbclock_calculate_time(
     double h_value_ns,
     fbclock_clockdata* state,
     int64_t phctime_ns,
+    fbclock_truetime* truetime,
+    int timezone);
+int fbclock_calculate_time_v2(
+    uint64_t error_bound_ns,
+    double h_value_ns,
+    fbclock_clockdata_v2* state,
+    int64_t sysclock_time_now_ns,
     fbclock_truetime* truetime,
     int timezone);
 uint64_t fbclock_apply_utc_offset(fbclock_clockdata* state, int64_t phctime_ns);

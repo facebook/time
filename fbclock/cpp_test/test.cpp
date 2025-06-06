@@ -151,9 +151,9 @@ int writer_thread_v2(int sfd_rw, int tries) {
       .ingress_time_ns = 1,
       .error_bound_ns = 2,
       .holdover_multiplier_ns = 3,
+      .clockId = CLOCK_MONOTONIC_RAW,
       .phc_time_ns = 1748164346441310791,
       .sysclock_time_ns = 1748164309441310791,
-      .clockId = CLOCK_MONOTONIC_RAW,
   };
   for (int i = 0; i < tries; i++) {
     err = fbclock_clockdata_store_data_v2(sfd_rw, &data);
@@ -288,6 +288,63 @@ TEST(fbclockTest, test_fbclock_calculate_time) {
   ASSERT_EQ(err, 0);
   EXPECT_EQ(truetime.earliest_ns, 1647290691802010729);
   EXPECT_EQ(truetime.latest_ns, 1647290691804195223);
+}
+
+TEST(fbclockTest, test_fbclock_calculate_time_v2) {
+  int err;
+  fbclock_truetime truetime;
+  fbclock_clockdata_v2 state = {
+      .ingress_time_ns = 1647269091803102957,
+      .clockId = CLOCK_MONOTONIC_RAW,
+      // phc time is before ingress time, error
+      .phc_time_ns = 1647269082943150996,
+  };
+  double error_bound = 172.0;
+  double h_value = 50.5;
+
+  struct timespec tp = {};
+  clock_gettime(CLOCK_MONOTONIC_RAW, &tp);
+
+  int64_t sysclock_time_ns = tp.tv_sec * 1000000000 + tp.tv_nsec;
+  state.sysclock_time_ns = sysclock_time_ns;
+
+  err = fbclock_calculate_time_v2(
+      error_bound,
+      h_value,
+      &state,
+      sysclock_time_ns + 1000, // + 1us
+      &truetime,
+      FBCLOCK_TAI);
+  ASSERT_EQ(err, FBCLOCK_E_PHC_IN_THE_PAST);
+
+  // phc time is after ingress time, all good
+  state = {
+      .ingress_time_ns = 1647269082943150996,
+      .clockId = CLOCK_MONOTONIC_RAW,
+      .phc_time_ns = 1647269091803102957,
+      .sysclock_time_ns = sysclock_time_ns,
+      .coef_ppb = 12,
+  };
+  err = fbclock_calculate_time_v2(
+      error_bound,
+      h_value,
+      &state,
+      sysclock_time_ns + 1000,
+      &truetime,
+      FBCLOCK_TAI);
+  ASSERT_EQ(err, 0);
+
+  EXPECT_EQ(truetime.earliest_ns, 1647269091803103381);
+  EXPECT_EQ(truetime.latest_ns, 1647269091803104619);
+
+  // WOU is very big
+  error_bound = 1000.0;
+  sysclock_time_ns += 6 * 3600 * 1000000000ULL; // + 6 hours
+  err = fbclock_calculate_time_v2(
+      error_bound, h_value, &state, sysclock_time_ns, &truetime, FBCLOCK_TAI);
+  ASSERT_EQ(err, 0);
+  EXPECT_EQ(truetime.earliest_ns, 1647290691803360857);
+  EXPECT_EQ(truetime.latest_ns, 1647290691803363751);
 }
 
 TEST(fbclockTest, test_fbclock_apply_smear_after_2017_leap_second) {

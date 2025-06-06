@@ -310,11 +310,10 @@ int fbclock_calculate_time_v2(
     uint64_t error_bound_ns,
     double h_value_ns,
     fbclock_clockdata_v2* state,
-    int64_t phc_time_ns,
-    int64_t sysclock_time_ns,
     int64_t sysclock_time_now_ns,
     fbclock_truetime* truetime,
     int time_standard) {
+  int64_t phc_time_ns = state->phc_time_ns;
   if (state->ingress_time_ns > phc_time_ns) {
     return FBCLOCK_E_PHC_IN_THE_PAST;
   }
@@ -322,13 +321,13 @@ int fbclock_calculate_time_v2(
   double seconds =
       (double)(phc_time_ns - state->ingress_time_ns) / NANOSECONDS_IN_SECONDS;
 
+  int64_t diff_ns = sysclock_time_now_ns - state->sysclock_time_ns;
+  phc_time_ns += diff_ns + diff_ns * state->coef_ppb / NANOSECONDS_IN_SECONDS;
+
   // UTC offset applied if time standard used is UTC (and not TAI)
   if (time_standard == FBCLOCK_UTC) {
     phc_time_ns = fbclock_apply_utc_offset_v2(state, phc_time_ns);
   }
-
-  int64_t diff_ns = sysclock_time_now_ns - sysclock_time_ns;
-  phc_time_ns += diff_ns;
 
   // calculate the Window of Uncertainty (WOU) (in nanoseconds)
   uint64_t wou_ns =
@@ -403,7 +402,7 @@ int fbclock_gettime_tz_v2(
   double h_value = (double)state.holdover_multiplier_ns / FBCLOCK_POW2_16;
 
   struct timespec ts;
-  if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == -1) {
+  if (clock_gettime(state.clockId, &ts) == -1) {
     return FBCLOCK_E_PTP_READ_OFFSET;
   }
   int64_t sysclock_time_now_ns =
@@ -413,8 +412,6 @@ int fbclock_gettime_tz_v2(
       error_bound,
       h_value,
       &state,
-      state.phc_time_ns,
-      state.sysclock_time_ns,
       sysclock_time_now_ns,
       truetime,
       time_standard);
