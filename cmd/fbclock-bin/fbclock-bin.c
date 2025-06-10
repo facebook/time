@@ -31,9 +31,10 @@ int main(int argc, char* argv[]) {
 
   int fflag = 0;
   int uflag = 0;
+  int vval = 1;
   int c;
 
-  while ((c = getopt(argc, argv, "fu")) != -1)
+  while ((c = getopt(argc, argv, "hfuV:")) != -1)
     switch (c) {
       case 'f':
         fflag = 1;
@@ -41,15 +42,37 @@ int main(int argc, char* argv[]) {
       case 'u':
         uflag = 1;
         break;
+      case 'V':
+        vval = atoi(optarg);
+        break;
+      case '?':
+        if (optopt == 'V') {
+          fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+        }
+        break;
       default:
         fprintf(
             stderr,
-            "Usage: %s [-f]\n  -f will print TrueTime in a loop\n",
+            "Usage: %s [-f] [-u] [-V 1|2]\n"
+            "  -f will print TrueTime in a loop\n"
+            "  -u will print UTC TrueTime\n"
+            "  -V 1|2 will use version 1 or 2 of the shared memory file\n",
             argv[0]);
         exit(EXIT_FAILURE);
     }
+  char* shmem_path = FBCLOCK_PATH;
+  switch (vval) {
+    case 1:
+      break;
+    case 2:
+      shmem_path = FBCLOCK_PATH_V2;
+      break;
+    default:
+      fprintf(stderr, "Invalid -v value, supported 1 and 2: %d\n", vval);
+      exit(EXIT_FAILURE);
+  }
 
-  err = fbclock_init(&lib, FBCLOCK_PATH);
+  err = fbclock_init(&lib, shmem_path);
   if (err != 0) {
     show_error(err);
     exit(EXIT_FAILURE);

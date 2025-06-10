@@ -109,7 +109,8 @@ type Daemon struct {
 	l     Logger
 
 	// function to get PHC time from configured PHC device
-	getPHCTime func() (time.Time, error)
+	getPHCTime       func() (time.Time, error)
+	getPHCAndSysTime func() (time.Time, time.Time, uint32, error)
 	// function to get PHC freq from configured PHC device
 	getPHCFreqPPB func() (float64, error)
 }
@@ -210,6 +211,16 @@ func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
 
 	// function to get time from phc
 	s.getPHCTime = func() (time.Time, error) { return dev.Time() }
+	s.getPHCAndSysTime = func() (time.Time, time.Time, uint32, error) {
+		data, err := dev.ReadSysoffExtended()
+		if err != nil {
+			return time.Time{}, time.Time{}, 0, err
+		}
+		best := data.BestSample()
+		phcTime := best.PHCTime
+		monoTime := best.SysTime
+		return phcTime, monoTime, uint32(best.SysClockID), nil //nolint:gosec
+	}
 	s.getPHCFreqPPB = func() (float64, error) { return dev.FreqPPB() }
 	// calculated values
 	s.stats.SetCounter("m_ns", 0)
@@ -219,6 +230,8 @@ func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
 	s.stats.SetCounter("data_error", 0)
 	s.stats.SetCounter("processing_error", 0)
 	s.stats.SetCounter("data_sanity_check_error", 0)
+	s.stats.SetCounter("monotonictime_error", 0)
+	s.stats.SetCounter("phc_read_error", 0)
 	// values collected from ptp4l
 	s.stats.SetCounter("ingress_time_ns", 0)
 	s.stats.SetCounter("master_offset_ns", 0)
@@ -375,6 +388,7 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 		}
 		return err
 	}
+	s.state.lastStoredData = d
 	if err := fbclock.StoreFBClockData(shm.File.Fd(), *d); err != nil {
 		return err
 	}
@@ -483,6 +497,67 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 	}
 }
 
+func calcCoeffPPB(prev, cur *fbclock.DataV2) (int64, error) {
+	if prev.SysclockTimeNS == 0 {
+		// first run, no previous data
+		return 0, nil
+	}
+	// calculate the ratio of PHC time to system time (how faster (or slower) PHC ticks compared to system time)
+	mCoeff := float64(cur.PHCTimeNS-prev.PHCTimeNS) / float64(cur.SysclockTimeNS-prev.SysclockTimeNS)
+	// calculate the ratio in parts per billion (PPB)
+	coefPPB := int64(mCoeff*float64(time.Second) - float64(time.Second))
+	// check continuity of extrapolated PHC time
+	sysTimeDiff := cur.SysclockTimeNS - prev.SysclockTimeNS - 1
+	phcTimeFixed := prev.PHCTimeNS + sysTimeDiff + coefPPB*sysTimeDiff/time.Second.Nanoseconds()
+	var err error
+	if phcTimeFixed > cur.PHCTimeNS {
+		err = fmt.Errorf("PHC time is not monotonic: %d > %d", phcTimeFixed, cur.PHCTimeNS)
+	}
+	return coefPPB, err
+}
+
+// populateDataV2 populates fbclock.DataV2 with data from fbclock.Data plus calculated values
+func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
+	prevDataV2 := fbclock.DataV2{}
+
+	fastTicker := time.NewTicker(10 * time.Millisecond)
+	defer fastTicker.Stop()
+	for ; true; <-fastTicker.C { // first run without delay, then at interval
+		if s.state.lastStoredData != nil {
+			// we need a copy of the latest v1 data to fill in parts of v2 data
+			// the pointer dereference is needed to avoid partial reads of the data
+			curData := *s.state.lastStoredData
+			phcTime, sysTime, clockID, err := s.getPHCAndSysTime()
+			if err != nil {
+				log.Errorf("reading PHC time from %s: %v", s.cfg.Iface, err)
+				s.stats.UpdateCounterBy("phc_read_error", 1)
+				continue
+			}
+			dataV2 := fbclock.DataV2{
+				IngressTimeNS:        curData.IngressTimeNS,
+				ErrorBoundNS:         curData.ErrorBoundNS,
+				HoldoverMultiplierNS: curData.HoldoverMultiplierNS,
+				SmearingStartS:       curData.SmearingStartS,
+				SmearingEndS:         curData.SmearingEndS,
+				UTCOffsetPreS:        int16(curData.UTCOffsetPreS),  //nolint:gosec
+				UTCOffsetPostS:       int16(curData.UTCOffsetPostS), //nolint:gosec
+				PHCTimeNS:            phcTime.UnixNano(),
+				SysclockTimeNS:       sysTime.UnixNano(),
+				ClockID:              clockID,
+				CoefPPB:              0,
+			}
+			if dataV2.CoefPPB, err = calcCoeffPPB(&prevDataV2, &dataV2); err != nil {
+				log.Warning(err)
+				s.stats.UpdateCounterBy("monotonictime_error", 1)
+			}
+			if err := fbclock.StoreFBClockDataV2(shmv2.File.Fd(), dataV2); err != nil {
+				log.Errorf("writing dataV2 to shm: %v", err)
+			}
+			prevDataV2 = dataV2
+		}
+	}
+}
+
 // Run a daemon
 func (s *Daemon) Run(ctx context.Context) error {
 	shm, err := fbclock.OpenFBClockSHM()
@@ -494,6 +569,16 @@ func (s *Daemon) Run(ctx context.Context) error {
 	if s.cfg.LinearizabilityTestInterval != 0 {
 		go s.runLinearizabilityTests(ctx)
 	}
+
+	if s.cfg.EnableDataV2 {
+		shmv2, err := fbclock.OpenFBClockSHMv2()
+		if err != nil {
+			return fmt.Errorf("opening fbclock shm v2: %w", err)
+		}
+		defer shmv2.Close()
+		go s.populateDataV2(shmv2)
+	}
+
 	ticker := time.NewTicker(s.cfg.Interval)
 	defer ticker.Stop()
 	for ; true; <-ticker.C { // first run without delay, then at interval

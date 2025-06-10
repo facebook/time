@@ -37,6 +37,7 @@ type Config struct {
 	SPTP                           bool          // denotes whether we are running in sptp or ptp4l mode
 	LinearizabilityTestMaxGMOffset time.Duration // max offset between GMs before linearizability test considered failed
 	BootDelay                      time.Duration // postpone startup by this time after boot
+	EnableDataV2                   bool          // enable fbclock data v2
 }
 
 // EvalAndValidate makes sure config is valid and evaluates expressions for further use.

@@ -725,3 +725,18 @@ func TestNoPHC(t *testing.T) {
 	err := s.doWork(&fbclock.Shm{}, &DataPoint{})
 	require.ErrorIs(t, err, errNoPHC)
 }
+
+func TestCoeffV2(t *testing.T) {
+	prevDataV2 := fbclock.DataV2{}
+	curDataV2 := fbclock.DataV2{}
+	c, err := calcCoeffPPB(&prevDataV2, &curDataV2)
+	require.Equal(t, int64(0), c)
+	require.NoError(t, err)
+	prevDataV2.SysclockTimeNS = 1749167822494826022
+	prevDataV2.PHCTimeNS = 1749167859494830869
+	curDataV2.SysclockTimeNS = 1749167822504951677
+	curDataV2.PHCTimeNS = 1749167859504956519
+	c, err = calcCoeffPPB(&prevDataV2, &curDataV2)
+	require.Equal(t, int64(-493), c)
+	require.NoError(t, err)
+}

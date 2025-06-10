@@ -21,6 +21,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/facebook/time/fbclock"
 	"github.com/facebook/time/ptp/linearizability"
 )
 
@@ -33,6 +34,7 @@ type daemonState struct {
 	linearizabilityTestResults *ring.Ring // linearizability test results
 
 	lastIngressTimeNS int64
+	lastStoredData    *fbclock.Data
 }
 
 func newDaemonState(ringSize int) *daemonState {
