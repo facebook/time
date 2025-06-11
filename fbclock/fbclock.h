@@ -77,8 +77,6 @@ typedef struct fbclock_clockdata_v2 {
   uint32_t holdover_multiplier_ns;
   // start time (TAI) to begin smearing clock
   uint64_t clock_smearing_start_s;
-  // end time (TAI) to stop smearing clock
-  uint64_t clock_smearing_end_s;
   // UTC offset before latest published leap second (tzdata)
   int16_t utc_offset_pre_s;
   // UTC offset after latest published leap second (tzdata)

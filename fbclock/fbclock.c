@@ -40,6 +40,7 @@ limitations under the License.
 #define FBCLOCK_CLOCKDATA_V2_SIZE sizeof(fbclock_clockdata_v2)
 #define FBCLOCK_MAX_READ_TRIES 1000
 #define NANOSECONDS_IN_SECONDS 1e9
+#define SMEAR_DURATION 62500
 
 #ifdef __x86_64__
 #define fbclock_crc64 __builtin_ia32_crc32di
@@ -501,13 +502,15 @@ uint64_t fbclock_apply_utc_offset_v2(
   fbclock_debug_print(
       "Clock Smearing Start Time (TAI): %lu\n", state->clock_smearing_start_s);
   fbclock_debug_print(
-      "Clock Smearing End Time (TAI): %lu\n", state->clock_smearing_end_s);
+      "Clock Smearing End Time (TAI): %lu\n",
+      state->clock_smearing_start_s + SMEAR_DURATION);
 
   // Multipler may be negative (if a negative leap second is applied)
   int multiplier = state->utc_offset_post_s - state->utc_offset_pre_s;
 
   // Switch to nanoseconds
-  uint64_t smear_end_ns = state->clock_smearing_end_s * 1e9;
+  uint64_t smear_end_ns =
+      (state->clock_smearing_start_s + SMEAR_DURATION) * 1e9;
   uint64_t smear_start_ns = state->clock_smearing_start_s * 1e9;
   uint64_t offset_post_ns = state->utc_offset_post_s * 1e9;
   uint64_t offset_pre_ns = state->utc_offset_pre_s * 1e9;

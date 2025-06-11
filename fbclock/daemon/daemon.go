@@ -538,7 +538,6 @@ func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 				ErrorBoundNS:         curData.ErrorBoundNS,
 				HoldoverMultiplierNS: curData.HoldoverMultiplierNS,
 				SmearingStartS:       curData.SmearingStartS,
-				SmearingEndS:         curData.SmearingEndS,
 				UTCOffsetPreS:        int16(curData.UTCOffsetPreS),  //nolint:gosec
 				UTCOffsetPostS:       int16(curData.UTCOffsetPostS), //nolint:gosec
 				PHCTimeNS:            phcTime.UnixNano(),

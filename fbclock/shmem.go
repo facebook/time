@@ -93,7 +93,6 @@ type DataV2 struct {
 	ErrorBoundNS         uint64
 	HoldoverMultiplierNS float64 // float stored as multiplier of 2**16
 	SmearingStartS       uint64  // Smearing starts before the Leap Second Event Time (midnight on June-30 or Dec-31)
-	SmearingEndS         uint64  // Smearing ends after the Leap Second Event Time (midnight on June-30 or Dec-31)
 	UTCOffsetPreS        int16   // UTC Offset before Leap Second Event
 	UTCOffsetPostS       int16   // UTC Offset after Leap Second Event
 	ClockID              uint32  // Clock ID of SysclockTimeNS (MONOTONIC_RAW or REALTIME)
@@ -227,7 +226,6 @@ func StoreFBClockDataV2(fd uintptr, d DataV2) error {
 		error_bound_ns:         C.uint32_t(Uint64ToUint32(d.ErrorBoundNS)),
 		holdover_multiplier_ns: C.uint32_t(FloatAsUint32(d.HoldoverMultiplierNS)),
 		clock_smearing_start_s: C.uint64_t(d.SmearingStartS),
-		clock_smearing_end_s:   C.uint64_t(d.SmearingEndS),
 		utc_offset_pre_s:       C.int16_t(d.UTCOffsetPreS),
 		utc_offset_post_s:      C.int16_t(d.UTCOffsetPostS),
 		clockId:                C.uint32_t(d.ClockID),
