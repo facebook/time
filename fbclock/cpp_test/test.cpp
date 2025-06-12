@@ -334,8 +334,8 @@ TEST(fbclockTest, test_fbclock_calculate_time_v2) {
       FBCLOCK_TAI);
   ASSERT_EQ(err, 0);
 
-  EXPECT_EQ(truetime.earliest_ns, 1647269091803103381);
-  EXPECT_EQ(truetime.latest_ns, 1647269091803104619);
+  EXPECT_EQ(truetime.earliest_ns, 1647269091803103338);
+  EXPECT_EQ(truetime.latest_ns, 1647269091803104576);
 
   // WOU is very big
   error_bound = 1000.0;
@@ -343,8 +343,8 @@ TEST(fbclockTest, test_fbclock_calculate_time_v2) {
   err = fbclock_calculate_time_v2(
       error_bound, h_value, &state, sysclock_time_ns, &truetime, FBCLOCK_TAI);
   ASSERT_EQ(err, 0);
-  EXPECT_EQ(truetime.earliest_ns, 1647290691803360857);
-  EXPECT_EQ(truetime.latest_ns, 1647290691803363751);
+  EXPECT_EQ(truetime.earliest_ns, 1647290691803360710);
+  EXPECT_EQ(truetime.latest_ns, 1647290691803363604);
 }
 
 TEST(fbclockTest, test_fbclock_apply_smear_after_2017_leap_second) {

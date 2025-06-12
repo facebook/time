@@ -37,7 +37,7 @@ limitations under the License.
 #define FBCLOCK_CLOCKDATA_SIZE sizeof(fbclock_clockdata)
 #define FBCLOCK_CLOCKDATA_V2_SIZE sizeof(fbclock_clockdata_v2)
 #define FBCLOCK_MAX_READ_TRIES 1000
-#define NANOSECONDS_IN_SECONDS 1e9
+#define NANOSECONDS_IN_SECONDS 1000000000ULL
 #define SMEAR_DURATION 62500
 
 #ifdef __x86_64__
@@ -470,10 +470,11 @@ uint64_t fbclock_apply_utc_offset(
   int multiplier = state->utc_offset_post_s - state->utc_offset_pre_s;
 
   // Switch to nanoseconds
-  uint64_t smear_end_ns = state->clock_smearing_end_s * 1e9;
-  uint64_t smear_start_ns = state->clock_smearing_start_s * 1e9;
-  uint64_t offset_post_ns = state->utc_offset_post_s * 1e9;
-  uint64_t offset_pre_ns = state->utc_offset_pre_s * 1e9;
+  uint64_t smear_end_ns = state->clock_smearing_end_s * NANOSECONDS_IN_SECONDS;
+  uint64_t smear_start_ns =
+      state->clock_smearing_start_s * NANOSECONDS_IN_SECONDS;
+  uint64_t offset_post_ns = state->utc_offset_post_s * NANOSECONDS_IN_SECONDS;
+  uint64_t offset_pre_ns = state->utc_offset_pre_s * NANOSECONDS_IN_SECONDS;
 
   return fbclock_apply_smear(
       phctime_ns,
@@ -508,10 +509,11 @@ uint64_t fbclock_apply_utc_offset_v2(
 
   // Switch to nanoseconds
   uint64_t smear_end_ns =
-      (state->clock_smearing_start_s + SMEAR_DURATION) * 1e9;
-  uint64_t smear_start_ns = state->clock_smearing_start_s * 1e9;
-  uint64_t offset_post_ns = state->utc_offset_post_s * 1e9;
-  uint64_t offset_pre_ns = state->utc_offset_pre_s * 1e9;
+      (state->clock_smearing_start_s + SMEAR_DURATION) * NANOSECONDS_IN_SECONDS;
+  uint64_t smear_start_ns =
+      state->clock_smearing_start_s * NANOSECONDS_IN_SECONDS;
+  uint64_t offset_post_ns = state->utc_offset_post_s * NANOSECONDS_IN_SECONDS;
+  uint64_t offset_pre_ns = state->utc_offset_pre_s * NANOSECONDS_IN_SECONDS;
 
   return fbclock_apply_smear(
       phctime_ns,
@@ -523,7 +525,7 @@ uint64_t fbclock_apply_utc_offset_v2(
 }
 
 const char* fbclock_strerror(int err_code) {
-  const char* err_info = "unknown error";
+  const char* err_info;
   switch (err_code) {
     case FBCLOCK_E_SHMEM_MAP_FAILED:
       err_info = "shmem map error";
