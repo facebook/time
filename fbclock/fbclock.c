@@ -22,10 +22,8 @@ limitations under the License.
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h> // close
-#include "missing.h"
 
 #if defined(__GNUC__) && !defined(__OPTIMIZE__)
 #define fbclock_debug_print(fmt, ...)  \
