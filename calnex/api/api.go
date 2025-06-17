@@ -109,6 +109,12 @@ type PowerSupplyStatus struct {
 	Supplies        []PowerSupply
 }
 
+// RBStatus is a struct representing Calnex Rubidium clock status JSON response
+type RBStatus struct {
+	RBState     int    `json:"state"`
+	RBStateName string `json:"state_name"`
+}
+
 // Channel is a Calnex channel object
 type Channel string
 
@@ -474,6 +480,7 @@ const (
 	gnssURL             = "https://%s/api/gnss/status"
 	instrumentStatusURL = "https://%s/api/instrument/status"
 	powerSupplyURL      = "https://%s/api/getpowersupplyinfo"
+	rbURL               = "https://%s/api/rb/status"
 )
 
 var (
@@ -971,4 +978,25 @@ func (a *API) FetchUptime() (*Uptime, error) {
 	}
 
 	return u, nil
+}
+
+// RBStatus returns current Rubidium clock status
+func (a *API) RBStatus() (*RBStatus, error) {
+	url := fmt.Sprintf(rbURL, a.source)
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(http.StatusText(resp.StatusCode))
+	}
+
+	rb := &RBStatus{}
+	if err = json.NewDecoder(resp.Body).Decode(rb); err != nil {
+		return nil, err
+	}
+
+	return rb, nil
 }
