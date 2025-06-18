@@ -221,14 +221,6 @@ func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.NTPData, n *chrony.R
 	}
 	// populate data from ntpdata struct
 	if p != nil {
-		refID := chrony.RefidAsHEX(p.RefID)
-		// Only stratum 1 servers can have GPS or something else as string refID
-		if p.Stratum == 1 {
-			refIDStr := chrony.RefidToString(p.RefID)
-			if len(refIDStr) > 0 {
-				refID = refIDStr
-			}
-		}
 		peer.Leap = int(p.Leap)
 		peer.HPoll = int(p.Poll)
 		peer.DSTAdr = p.LocalAddr.String()
@@ -236,7 +228,7 @@ func NewPeerFromChrony(s *chrony.ReplySourceData, p *chrony.NTPData, n *chrony.R
 		peer.Offset = secToMS(p.Offset)
 		peer.Dispersion = secToMS(p.PeerDispersion)
 		peer.DSTPort = int(p.RemotePort)
-		peer.RefID = refID
+		peer.RefID = chrony.RefidToString(p.RefID)
 		peer.PPoll = int(p.Poll)
 		peer.Jitter = secToMS(p.PeerDispersion) // best approx we have
 		peer.RootDelay = secToMS(p.RootDelay)

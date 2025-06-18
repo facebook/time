@@ -31,6 +31,7 @@ import (
 
 	"github.com/facebook/time/leaphash"
 	"github.com/facebook/time/leapsectz"
+	"github.com/facebook/time/ntp/chrony"
 	ntp "github.com/facebook/time/ntp/protocol"
 	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
@@ -232,7 +233,7 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int, ntp
 		sumOffset += offset
 
 		if i == requests-1 {
-			fmt.Printf("\nServer: %s, Stratum: %d, Requests %d\n", addr, response.Stratum, requests)
+			fmt.Printf("\nServer: %s, Stratum: %d, Reference ID: %s, Requests %d\n", addr, response.Stratum, chrony.RefidToString(response.ReferenceID), requests)
 			fmt.Print("Last Request:")
 			fmt.Printf("Offset: %fs (%sus) | Delay: %fs (%sus)\n",
 				float64(offset)/float64(time.Second.Nanoseconds()),

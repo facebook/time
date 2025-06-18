@@ -66,8 +66,12 @@ func TestRefidToString(t *testing.T) {
 			out: "GPS",
 		},
 		{
-			in:  2139029761,
-			out: "",
+			in:  2139029761, // This doesn't convert to a printable string
+			out: "7F7F0101", // Prints hex
+		},
+		{
+			in:  0xC0A80001, // 192.168.0.1 as uint32
+			out: "C0A80001", // Prints hex
 		},
 	}
 

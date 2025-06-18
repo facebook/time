@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strconv"
 	"time"
-	"unicode"
 )
 
 // ChronySocketPath is the default path to chronyd socket
@@ -124,10 +124,15 @@ func RefidAsHEX(refID uint32) string {
 func RefidToString(refID uint32) string {
 	result := []rune{}
 
-	for i := 0; i < 4 && i < 64-1; i++ {
+	for i := range 4 {
 		c := rune((refID >> (24 - uint(i)*8)) & 0xff)
-		if unicode.IsPrint(c) {
+		if c == 0 {
+			continue
+		}
+		if strconv.IsPrint(c) {
 			result = append(result, c)
+		} else {
+			return RefidAsHEX(refID)
 		}
 	}
 
