@@ -63,20 +63,37 @@ int main(int argc, char* argv[]) {
     auto start_time = std::chrono::steady_clock::now();
     fbclock_gettime_utc(&fbclock, &true_time);
     auto end_time = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
         end_time - start_time);
-    if (duration.count() >= 1000)
-      time_histogram[1000]++;
-    else
-      time_histogram[duration.count()]++;
+    long hist_idx;
+    if (duration.count() > 1000) {
+      hist_idx = duration.count() / 1000; // convert to microseconds
+      hist_idx += 20;
+    } else if (duration.count() > 100) {
+      hist_idx = duration.count() / 100; // convert to tens of microseconds
+      hist_idx += 10;
+    } else {
+      hist_idx = duration.count() / 10; // convert to tens of nanoseconds
+    }
+    if (hist_idx >= 1000)
+      hist_idx = 1000;
+
+    time_histogram[hist_idx]++;
     if (true_time.earliest_ns + 10000 <= true_time.latest_ns)
       std::cout << "WoU is more than 10us [" << true_time.earliest_ns << ","
                 << true_time.latest_ns << "] " << std::endl;
   }
   std::cout << "Histogram of query time:" << std::endl;
   for (int i = 0; i < 1001; i++) {
-    if (time_histogram[i])
-      std::cout << i << "us: " << time_histogram[i] << std::endl;
+    if (time_histogram[i]) {
+      if (i <= 10) {
+        std::cout << i << "0ns: " << time_histogram[i] << std::endl;
+      } else if (i < 20) {
+        std::cout << i - 9 << "00ns: " << time_histogram[i] << std::endl;
+      } else {
+        std::cout << i - 20 << "us: " << time_histogram[i] << std::endl;
+      }
+    }
   }
   fbclock_destroy(&fbclock);
 }
