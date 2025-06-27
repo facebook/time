@@ -808,28 +808,20 @@ asymmetry:
   simple: true
 `))
 	require.NoError(t, err)
-
-	// Get the default flag values. This is what the flag variables would hold
-	// if the user did not set them on the command line.
 	defaults := DefaultConfig()
-
-	// Call PrepareConfig with an EMPTY setFlags map to simulate no user flags.
 	cfg, err := PrepareConfig(f.Name(), nil, defaults.Iface, defaults.MonitoringPort, defaults.Interval, defaults.DSCP, map[string]bool{})
 	require.NoError(t, err)
-
-	// The 'want' struct should match the values from the config file,
-	// proving that the default flag values did NOT override the file.
 	want := &Config{
-		Iface:                    "eth1",                 // Value from file
-		Timestamping:             timestamp.HW,           // Value from file
-		MonitoringPort:           8000,                   // Value from file
-		Interval:                 2 * time.Second,        // Value from file
-		ExchangeTimeout:          200 * time.Millisecond, // Value from file
-		DSCP:                     35,                     // Value from file
-		FirstStepThreshold:       time.Second,            // Value from file
-		MetricsAggregationWindow: 10 * time.Second,       // Value from file
-		MaxClockClass:            6,                      // Value from file
-		MaxClockAccuracy:         32,                     // Value from file
+		Iface:                    "eth1",
+		Timestamping:             timestamp.HW,
+		MonitoringPort:           8000,
+		Interval:                 2 * time.Second,
+		ExchangeTimeout:          200 * time.Millisecond,
+		DSCP:                     35,
+		FirstStepThreshold:       time.Second,
+		MetricsAggregationWindow: 10 * time.Second,
+		MaxClockClass:            6,
+		MaxClockAccuracy:         32,
 		Servers: map[string]int{
 			"192.168.0.10": 2,
 			"192.168.0.13": 3,
@@ -853,6 +845,5 @@ asymmetry:
 			Simple:                     true,
 		},
 	}
-
 	require.Equal(t, want, cfg)
 }
