@@ -18,12 +18,12 @@ package client
 
 import (
 	"math"
-	"sort"
 )
 
 type slidingWindow struct {
 	size        int
 	currentSize int
+	head        int
 	sum         float64
 	samples     []float64
 	sorted      []float64
@@ -35,6 +35,7 @@ func newSlidingWindow(size int) *slidingWindow {
 	}
 	w := &slidingWindow{
 		size:    size,
+		head:    size - 1,
 		samples: make([]float64, size),
 		sorted:  make([]float64, size),
 	}
@@ -46,21 +47,18 @@ func newSlidingWindow(size int) *slidingWindow {
 }
 
 func (w *slidingWindow) add(sample float64) {
+	w.head = (w.head + 1) % w.size
 	if !w.Full() {
 		w.currentSize++
 	} else {
-		w.sum -= w.samples[w.size-1]
+		w.sum -= w.samples[w.head]
 	}
-	for i := w.currentSize - 1; i > 0; i-- {
-		w.samples[i] = w.samples[i-1]
-	}
-
-	w.samples[0] = sample
+	w.samples[w.head] = sample
 	w.sum += sample
 }
 
 func (w *slidingWindow) lastSample() float64 {
-	return w.samples[0]
+	return w.samples[w.head]
 }
 
 func (w *slidingWindow) allSamples() []float64 {
@@ -72,24 +70,49 @@ func (w *slidingWindow) allSamples() []float64 {
 	return w.sorted[0:w.currentSize]
 }
 
-func mean(data []float64) float64 {
-	sum := 0.0
-	for _, v := range data {
-		sum += v
+func partition(arr []float64, low, high int) int {
+	pivot := arr[high]
+	i := low
+	for j := low; j < high; j++ {
+		if arr[j] < pivot {
+			arr[i], arr[j] = arr[j], arr[i]
+			i++
+		}
 	}
-	return sum / float64(len(data))
+	arr[i], arr[high] = arr[high], arr[i]
+	return i
+}
+
+func quickselect(arr []float64, low, high, k int) float64 {
+	for low <= high {
+		pi := partition(arr, low, high)
+		if pi == k {
+			return arr[pi]
+		} else if pi < k {
+			low = pi + 1
+		} else {
+			high = pi - 1
+		}
+	}
+	return math.NaN()
 }
 
 func (w *slidingWindow) median() float64 {
 	c := w.allSamples()
-	sort.Float64s(c)
 	l := len(c)
 	if l == 0 {
 		return math.NaN()
-	} else if l%2 == 0 {
-		return mean(c[l/2-1 : l/2+1])
+	} else if l%2 == 1 {
+		return quickselect(c, 0, l-1, l/2)
 	}
-	return c[l/2]
+	mid1 := quickselect(c, 0, l-1, l/2-1)
+	mid2 := c[l/2]
+	for i := l/2 + 1; i < l; i++ {
+		if c[i] < mid2 {
+			mid2 = c[i]
+		}
+	}
+	return (mid1 + mid2) / 2.0
 }
 
 func (w *slidingWindow) mean() float64 {
