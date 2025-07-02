@@ -70,7 +70,19 @@ func (w *slidingWindow) allSamples() []float64 {
 	return w.sorted[0:w.currentSize]
 }
 
+func medianOfThree(arr []float64, low, high int) {
+	mid := low + (high-low)/2
+	if (arr[low] > arr[mid]) != (arr[low] > arr[high]) {
+		arr[low], arr[high] = arr[high], arr[low]
+	} else if (arr[mid] > arr[low]) != (arr[mid] > arr[high]) {
+		arr[mid], arr[high] = arr[high], arr[mid]
+	}
+}
+
 func partition(arr []float64, low, high int) int {
+	if high-low > 3 {
+		medianOfThree(arr, low, high)
+	}
 	pivot := arr[high]
 	i := low
 	for j := low; j < high; j++ {
