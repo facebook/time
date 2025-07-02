@@ -141,7 +141,10 @@ type Config struct {
 // DefaultConfig returns Config initialized with default values
 func DefaultConfig() *Config {
 	return &Config{
+		Iface:                    "eth0",
+		MonitoringPort:           4269,
 		Interval:                 time.Second,
+		DSCP:                     0,
 		ExchangeTimeout:          100 * time.Millisecond,
 		MaxClockClass:            ptp.ClockClass7,
 		MaxClockAccuracy:         ptp.ClockAccuracyMicrosecond10,
@@ -252,7 +255,7 @@ func addrToIPstr(address string) string {
 }
 
 // PrepareConfig prepares final version of config based on defaults, CLI flags and on-disk config, and validates resulting config
-func PrepareConfig(cfgPath string, targets []string, iface string, monitoringPort int, interval time.Duration, dscp int) (*Config, error) {
+func PrepareConfig(cfgPath string, targets []string, iface string, monitoringPort int, interval time.Duration, dscp int, setFlags map[string]bool) (*Config, error) {
 	cfg := DefaultConfig()
 	var err error
 	warn := func(name string) {
@@ -279,22 +282,19 @@ func PrepareConfig(cfgPath string, targets []string, iface string, monitoringPor
 		}
 		cfg.Servers = newServers
 	}
-	if iface != "" && iface != cfg.Iface {
+	if setFlags["iface"] {
 		warn("iface")
 		cfg.Iface = iface
 	}
-
-	if monitoringPort != 0 && monitoringPort != cfg.MonitoringPort {
+	if setFlags["monitoringport"] {
 		warn("monitoringPort")
 		cfg.MonitoringPort = monitoringPort
 	}
-
-	if interval != 0 && interval != cfg.Interval {
+	if setFlags["interval"] {
 		warn("interval")
 		cfg.Interval = interval
 	}
-
-	if dscp != 0 && dscp != cfg.DSCP {
+	if setFlags["dscp"] {
 		warn("dscp")
 		cfg.DSCP = dscp
 	}

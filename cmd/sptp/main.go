@@ -53,22 +53,27 @@ func main() {
 		configFlag         string
 		pprofFlag          string
 	)
+	defaults := client.DefaultConfig()
 
 	flag.BoolVar(&verboseFlag, "verbose", false, "verbose output")
-	flag.StringVar(&ifaceFlag, "iface", "eth0", "network interface to use")
+	flag.StringVar(&ifaceFlag, "iface", defaults.Iface, "network interface to use")
 	flag.StringVar(&configFlag, "config", "", "path to the config")
-	flag.IntVar(&monitoringPortFlag, "monitoringport", 4269, "port to start monitoring http server on")
-	flag.IntVar(&dscpFlag, "dscp", 0, "DSCP for PTP packets, valid values are between 0-63 (used by send workers)")
-	flag.DurationVar(&intervalFlag, "interval", time.Second, "how often to send DelayReq to each GM")
+	flag.IntVar(&monitoringPortFlag, "monitoringport", defaults.MonitoringPort, "port to start monitoring http server on")
+	flag.IntVar(&dscpFlag, "dscp", defaults.DSCP, "DSCP for PTP packets, valid values are between 0-63 (used by send workers)")
+	flag.DurationVar(&intervalFlag, "interval", defaults.Interval, "how often to send DelayReq to each GM")
 	flag.StringVar(&pprofFlag, "pprof", "", "Address to have the profiler listen on, disabled if empty.")
 
 	flag.Parse()
+	setFlags := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) {
+		setFlags[f.Name] = true
+	})
 
 	log.SetLevel(log.InfoLevel)
 	if verboseFlag {
 		log.SetLevel(log.DebugLevel)
 	}
-	cfg, err := client.PrepareConfig(configFlag, flag.Args(), ifaceFlag, monitoringPortFlag, intervalFlag, dscpFlag)
+	cfg, err := client.PrepareConfig(configFlag, flag.Args(), ifaceFlag, monitoringPortFlag, intervalFlag, dscpFlag, setFlags)
 	if err != nil {
 		log.Fatal(err)
 	}

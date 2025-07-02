@@ -37,6 +37,8 @@ func TestReadConfigDefaults(t *testing.T) {
 	cfg, err := ReadConfig(f.Name())
 	require.NoError(t, err)
 	want := &Config{
+		Iface:                    "eth0",
+		MonitoringPort:           4269,
 		Interval:                 time.Second,
 		ExchangeTimeout:          100 * time.Millisecond,
 		MetricsAggregationWindow: time.Duration(60) * time.Second,
@@ -687,7 +689,13 @@ asymmetry:
   simple: true
 `))
 	require.NoError(t, err)
-	cfg, err := PrepareConfig(f.Name(), nil, "eth1", 3456, 2*time.Second, 42)
+	setFlags := map[string]bool{
+		"iface":          true,
+		"monitoringport": true,
+		"interval":       true,
+		"dscp":           true,
+	}
+	cfg, err := PrepareConfig(f.Name(), nil, "eth1", 3456, 2*time.Second, 42, setFlags)
 	require.NoError(t, err)
 	want := &Config{
 		Iface:                    "eth1",
@@ -727,7 +735,13 @@ asymmetry:
 }
 
 func TestPrepareConfigDefaults(t *testing.T) {
-	cfg, err := PrepareConfig("", []string{"192.168.0.10"}, "eth1", 3456, 2*time.Second, 42)
+	setFlags := map[string]bool{
+		"iface":          true,
+		"monitoringport": true,
+		"interval":       true,
+		"dscp":           true,
+	}
+	cfg, err := PrepareConfig("", []string{"192.168.0.10"}, "eth1", 3456, 2*time.Second, 42, setFlags)
 	require.NoError(t, err)
 	want := &Config{
 		Iface:                    "eth1",
@@ -754,6 +768,82 @@ func TestPrepareConfigDefaults(t *testing.T) {
 		},
 		ListenAddress: "::",
 		Asymmetry:     AsymmetryConfig{MaxConsecutiveAsymmetry: 10},
+	}
+	require.Equal(t, want, cfg)
+}
+
+func TestPrepareConfigFromFileWithoutFlags(t *testing.T) {
+	f, err := os.CreateTemp("", "sptp-no-flags")
+	require.NoError(t, err)
+	defer os.Remove(f.Name()) // clean up
+	_, err = f.Write([]byte(`iface: eth1
+interval: 2s
+exchangetimeout: 200ms
+timestamping: hardware
+listenaddress: "192.168.0.1"
+monitoringport: 8000
+dscp: 35
+firststepthreshold: 1s
+metricsaggregationwindow: 10s
+attemptstxts: 12
+timeouttxts: 40ms
+maxclockclass: 6
+maxclockaccuracy: 32
+servers:
+  192.168.0.10: 2
+  192.168.0.13: 3
+  192.168.0.15: 1
+measurement:
+  path_delay_filter_length: 59
+  path_delay_filter: "median"
+  path_delay_discard_filter_enabled: true
+  path_delay_discard_below: 2us
+  path_delay_discard_multiplier: 3
+asymmetry:
+  max_consecutive_asymmetry: 10
+  correction_enabled: true
+  threshold: 1us
+  max_consecutive_asymmetry: 10
+  max_port_changes: 30
+  simple: true
+`))
+	require.NoError(t, err)
+	defaults := DefaultConfig()
+	cfg, err := PrepareConfig(f.Name(), nil, defaults.Iface, defaults.MonitoringPort, defaults.Interval, defaults.DSCP, map[string]bool{})
+	require.NoError(t, err)
+	want := &Config{
+		Iface:                    "eth1",
+		Timestamping:             timestamp.HW,
+		MonitoringPort:           8000,
+		Interval:                 2 * time.Second,
+		ExchangeTimeout:          200 * time.Millisecond,
+		DSCP:                     35,
+		FirstStepThreshold:       time.Second,
+		MetricsAggregationWindow: 10 * time.Second,
+		MaxClockClass:            6,
+		MaxClockAccuracy:         32,
+		Servers: map[string]int{
+			"192.168.0.10": 2,
+			"192.168.0.13": 3,
+			"192.168.0.15": 1,
+		},
+		AttemptsTXTS: 12,
+		TimeoutTXTS:  time.Duration(40) * time.Millisecond,
+		Measurement: MeasurementConfig{
+			PathDelayFilterLength:         59,
+			PathDelayFilter:               "median",
+			PathDelayDiscardFilterEnabled: true,
+			PathDelayDiscardBelow:         2 * time.Microsecond,
+			PathDelayDiscardMultiplier:    3,
+		},
+		ListenAddress: "192.168.0.1",
+		Asymmetry: AsymmetryConfig{
+			AsymmetryCorrectionEnabled: true,
+			AsymmetryThreshold:         1 * time.Microsecond,
+			MaxConsecutiveAsymmetry:    10,
+			MaxPortChanges:             30,
+			Simple:                     true,
+		},
 	}
 	require.Equal(t, want, cfg)
 }
