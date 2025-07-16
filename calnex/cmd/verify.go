@@ -36,7 +36,7 @@ func init() {
 var verifyCmd = &cobra.Command{
 	Use:   "verify",
 	Short: "verify if the appliance needs to be sent to repair",
-	Run: func(_ *cobra.Command, _ []string) {
+	Run: func(cmd *cobra.Command, _ []string) {
 		v := &verify.VF{Checks: []checks.Check{
 			&checks.Ping{Remediation: checks.PingRemediation{}},
 			&checks.HTTP{Remediation: checks.HTTPRemediation{}},
@@ -44,7 +44,7 @@ var verifyCmd = &cobra.Command{
 			&checks.PSU{Remediation: checks.PSURemediation{}},
 			&checks.Module{Remediation: checks.ModuleRemediation{}},
 		}}
-		if err := verify.Verify(target, insecureTLS, v, apply); err != nil {
+		if err := verify.Verify(cmd.Context(), target, insecureTLS, v, apply); err != nil {
 			log.Fatal(err)
 		}
 	},

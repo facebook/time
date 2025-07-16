@@ -17,6 +17,7 @@ limitations under the License.
 package checks
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -50,14 +51,14 @@ func (p *GNSS) Run(target string, insecureTLS bool) error {
 }
 
 // Remediate the check
-func (p *GNSS) Remediate() (string, error) {
-	return p.Remediation.Remediate()
+func (p *GNSS) Remediate(ctx context.Context) (string, error) {
+	return p.Remediation.Remediate(ctx)
 }
 
 // GNSSRemediation is an open source remediation for GNSS check
 type GNSSRemediation struct{}
 
 // Remediate remediates the GNSS check failure
-func (a GNSSRemediation) Remediate() (string, error) {
+func (a GNSSRemediation) Remediate(_ context.Context) (string, error) {
 	return "Check antenna cabling", nil
 }

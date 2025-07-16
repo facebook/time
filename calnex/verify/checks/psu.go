@@ -17,6 +17,7 @@ limitations under the License.
 package checks
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -55,14 +56,14 @@ func (p *PSU) Run(target string, insecureTLS bool) error {
 }
 
 // Remediate the check
-func (p *PSU) Remediate() (string, error) {
-	return p.Remediation.Remediate()
+func (p *PSU) Remediate(ctx context.Context) (string, error) {
+	return p.Remediation.Remediate(ctx)
 }
 
 // PSURemediation is an open source remediation for PSU check
 type PSURemediation struct{}
 
 // Remediate remediates the PSU check failure
-func (a PSURemediation) Remediate() (string, error) {
+func (a PSURemediation) Remediate(_ context.Context) (string, error) {
 	return "Replace failed PSU", nil
 }

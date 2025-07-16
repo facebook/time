@@ -17,6 +17,8 @@ limitations under the License.
 package verify
 
 import (
+	"context"
+
 	"github.com/facebook/time/calnex/verify/checks"
 	log "github.com/sirupsen/logrus"
 )
@@ -27,12 +29,12 @@ type VF struct {
 }
 
 // Verify runs health checks and report diagnosis
-func Verify(target string, insecureTLS bool, verify *VF, apply bool) error {
+func Verify(ctx context.Context, target string, insecureTLS bool, verify *VF, apply bool) error {
 	for _, c := range verify.Checks {
 		if err := c.Run(target, insecureTLS); err != nil {
 			log.Warningf("%s: %s check fail: %v", target, c.Name(), err)
 			if apply {
-				result, err := c.Remediate()
+				result, err := c.Remediate(ctx)
 				if result != "" {
 					log.Warningf("%s: %s", target, result)
 				}

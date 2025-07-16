@@ -16,14 +16,16 @@ limitations under the License.
 
 package checks
 
+import "context"
+
 // Check abstracts the checks to be executed
 type Check interface {
 	Name() string
 	Run(name string, insecureTLS bool) error
-	Remediate() (string, error)
+	Remediate(ctx context.Context) (string, error)
 }
 
 // Remediation interface with check remediation
 type Remediation interface {
-	Remediate() (string, error)
+	Remediate(ctx context.Context) (string, error)
 }

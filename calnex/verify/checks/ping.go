@@ -17,6 +17,7 @@ limitations under the License.
 package checks
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -97,14 +98,14 @@ func (p *Ping) Run(target string, _ bool) error {
 }
 
 // Remediate the check
-func (p *Ping) Remediate() (string, error) {
-	return p.Remediation.Remediate()
+func (p *Ping) Remediate(ctx context.Context) (string, error) {
+	return p.Remediation.Remediate(ctx)
 }
 
 // PingRemediation is an open source action for Ping check
 type PingRemediation struct{}
 
 // Remediate remediates the Ping check failure
-func (a PingRemediation) Remediate() (string, error) {
+func (a PingRemediation) Remediate(_ context.Context) (string, error) {
 	return "Restart the device", nil
 }

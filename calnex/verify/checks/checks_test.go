@@ -17,6 +17,7 @@ limitations under the License.
 package checks
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -76,8 +77,9 @@ func TestGNSSError(t *testing.T) {
 	err := c.Run("1.2.3.4", false)
 	require.Error(t, err)
 
-	want, _ := r.Remediate()
-	got, err := c.Remediate()
+	ctx := context.Background()
+	want, _ := r.Remediate(ctx)
+	got, err := c.Remediate(ctx)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }
@@ -110,8 +112,9 @@ func TestHTTPError(t *testing.T) {
 	err := c.Run("1.2.3.4", false)
 	require.Error(t, err)
 
-	want, _ := r.Remediate()
-	got, err := c.Remediate()
+	ctx := context.Background()
+	want, _ := r.Remediate(ctx)
+	got, err := c.Remediate(ctx)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }
@@ -184,8 +187,9 @@ func TestPSUError(t *testing.T) {
 	err := c.Run("1.2.3.4", false)
 	require.Error(t, err)
 
-	want, _ := r.Remediate()
-	got, err := c.Remediate()
+	ctx := context.Background()
+	want, _ := r.Remediate(ctx)
+	got, err := c.Remediate(ctx)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }
@@ -238,8 +242,9 @@ func TestModuleError(t *testing.T) {
 	err := c.Run("1.2.3.4", false)
 	require.Error(t, err)
 
-	want, _ := r.Remediate()
-	got, err := c.Remediate()
+	ctx := context.Background()
+	want, _ := r.Remediate(ctx)
+	got, err := c.Remediate(ctx)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }

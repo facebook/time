@@ -17,6 +17,7 @@ limitations under the License.
 package checks
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -45,14 +46,14 @@ func (p *HTTP) Run(target string, insecureTLS bool) error {
 }
 
 // Remediate the check
-func (p *HTTP) Remediate() (string, error) {
-	return p.Remediation.Remediate()
+func (p *HTTP) Remediate(ctx context.Context) (string, error) {
+	return p.Remediation.Remediate(ctx)
 }
 
 // HTTPRemediation is an open source remediation for HTTP check
 type HTTPRemediation struct{}
 
 // Remediate remediates the HTTP check failure
-func (a HTTPRemediation) Remediate() (string, error) {
+func (a HTTPRemediation) Remediate(_ context.Context) (string, error) {
 	return "Restart the device", nil
 }

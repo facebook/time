@@ -17,6 +17,7 @@ limitations under the License.
 package checks
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -58,14 +59,14 @@ func (m *Module) Run(target string, insecureTLS bool) error {
 }
 
 // Remediate the check
-func (m *Module) Remediate() (string, error) {
-	return m.Remediation.Remediate()
+func (m *Module) Remediate(ctx context.Context) (string, error) {
+	return m.Remediation.Remediate(ctx)
 }
 
 // ModuleRemediation is an open source remediation for Module check
 type ModuleRemediation struct{}
 
 // Remediate remediates the Module check failure
-func (a ModuleRemediation) Remediate() (string, error) {
+func (a ModuleRemediation) Remediate(_ context.Context) (string, error) {
 	return "Restart the device", nil
 }

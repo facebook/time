@@ -17,6 +17,7 @@ limitations under the License.
 package checks
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -55,14 +56,14 @@ func (p *RB) Run(target string, insecureTLS bool) error {
 }
 
 // Remediate the check
-func (p *RB) Remediate() (string, error) {
-	return p.Remediation.Remediate()
+func (p *RB) Remediate(ctx context.Context) (string, error) {
+	return p.Remediation.Remediate(ctx)
 }
 
 // RBRemediation is an open source remediation for RB check
 type RBRemediation struct{}
 
 // Remediate remediates the RB check failure
-func (a RBRemediation) Remediate() (string, error) {
+func (a RBRemediation) Remediate(_ context.Context) (string, error) {
 	return "Replace failed unit", nil
 }

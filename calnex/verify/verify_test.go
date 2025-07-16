@@ -17,6 +17,7 @@ limitations under the License.
 package verify
 
 import (
+	"context"
 	"testing"
 
 	"github.com/facebook/time/calnex/verify/checks"
@@ -28,9 +29,10 @@ func TestVerify(t *testing.T) {
 		&checks.Ping{Remediation: checks.PingRemediation{}},
 	}}
 
-	err := Verify("localhost", false, v, true)
+	ctx := context.Background()
+	err := Verify(ctx, "localhost", false, v, true)
 	require.NoError(t, err)
 
-	err = Verify("1.2.3.4", false, v, true)
+	err = Verify(ctx, "1.2.3.4", false, v, true)
 	require.NoError(t, err)
 }
