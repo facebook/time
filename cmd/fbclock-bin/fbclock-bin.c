@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
   int vval = 1;
   int c;
 
-  while ((c = getopt(argc, argv, "hfuV:")) != -1)
+  while ((c = getopt(argc, argv, "hfuV:")) != -1) {
     switch (c) {
       case 'f':
         fflag = 1;
@@ -60,6 +60,7 @@ int main(int argc, char* argv[]) {
             argv[0]);
         exit(EXIT_FAILURE);
     }
+  }
   char* shmem_path = FBCLOCK_PATH;
   switch (vval) {
     case 1:
