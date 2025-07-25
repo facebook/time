@@ -22,7 +22,7 @@ limitations under the License.
 
 int parseVersion(int argc, char* argv[]) {
   int c, vval = 1;
-  while ((c = getopt(argc, argv, "hV:")) != -1)
+  while ((c = getopt(argc, argv, "hV:")) != -1) {
     switch (c) {
       case 'V':
         vval = atoi(optarg);
@@ -35,6 +35,7 @@ int parseVersion(int argc, char* argv[]) {
             argv[0]);
         exit(EXIT_FAILURE);
     }
+  }
   return vval;
 }
 
@@ -75,13 +76,15 @@ int main(int argc, char* argv[]) {
     } else {
       hist_idx = duration.count() / 10; // convert to tens of nanoseconds
     }
-    if (hist_idx >= 1000)
+    if (hist_idx >= 1000) {
       hist_idx = 1000;
+    }
 
     time_histogram[hist_idx]++;
-    if (true_time.earliest_ns + 10000 <= true_time.latest_ns)
+    if (true_time.earliest_ns + 10000 <= true_time.latest_ns) {
       std::cout << "WoU is more than 10us [" << true_time.earliest_ns << ","
                 << true_time.latest_ns << "] " << std::endl;
+    }
   }
   std::cout << "Histogram of query time:" << std::endl;
   for (int i = 0; i < 1001; i++) {

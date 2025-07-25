@@ -68,12 +68,14 @@ static inline uint64_t fbclock_clockdata_crc(fbclock_clockdata* value) {
 }
 
 int ends_with(const char* str, const char* suffix) {
-  if (!str || !suffix)
+  if (!str || !suffix) {
     return 0;
+  }
   size_t lenstr = strlen(str);
   size_t lensuffix = strlen(suffix);
-  if (lensuffix > lenstr)
+  if (lensuffix > lenstr) {
     return 0;
+  }
   return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
 
@@ -103,8 +105,9 @@ int fbclock_clockdata_store_data_v2(uint32_t fd, fbclock_clockdata_v2* data) {
   memcpy(&shmp->data, data, FBCLOCK_CLOCKDATA_V2_SIZE);
   __sync_synchronize();
   seq++;
-  if (!seq)
+  if (!seq) {
     seq += 2; // avoid 0 value on wraparound
+  }
   atomic_store(&shmp->seq, seq);
   munmap(shmp, FBCLOCK_SHMDATA_V2_SIZE);
   return FBCLOCK_E_NO_ERROR;
