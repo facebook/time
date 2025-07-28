@@ -70,36 +70,36 @@ func (w *slidingWindow) allSamples() []float64 {
 	return w.sorted[0:w.currentSize]
 }
 
-func medianOfThree(arr []float64, low, high int) {
+func medianOfThree(data []float64, low, high int) {
 	mid := low + (high-low)/2
-	if (arr[low] > arr[mid]) != (arr[low] > arr[high]) {
-		arr[low], arr[high] = arr[high], arr[low]
-	} else if (arr[mid] > arr[low]) != (arr[mid] > arr[high]) {
-		arr[mid], arr[high] = arr[high], arr[mid]
+	if (data[low] > data[mid]) != (data[low] > data[high]) {
+		data[low], data[high] = data[high], data[low]
+	} else if (data[low] > data[mid]) != (data[high] > data[mid]) {
+		data[mid], data[high] = data[high], data[mid]
 	}
 }
 
-func partition(arr []float64, low, high int) int {
+func partition(data []float64, low, high int) int {
 	if high-low > 3 {
-		medianOfThree(arr, low, high)
+		medianOfThree(data, low, high)
 	}
-	pivot := arr[high]
+	pivot := data[high]
 	i := low
 	for j := low; j < high; j++ {
-		if arr[j] < pivot {
-			arr[i], arr[j] = arr[j], arr[i]
+		if data[j] < pivot {
+			data[i], data[j] = data[j], data[i]
 			i++
 		}
 	}
-	arr[i], arr[high] = arr[high], arr[i]
+	data[i], data[high] = data[high], data[i]
 	return i
 }
 
-func quickselect(arr []float64, low, high, k int) float64 {
+func quickselect(data []float64, low, high, k int) float64 {
 	for low <= high {
-		pi := partition(arr, low, high)
+		pi := partition(data, low, high)
 		if pi == k {
-			return arr[pi]
+			return data[pi]
 		} else if pi < k {
 			low = pi + 1
 		} else {
