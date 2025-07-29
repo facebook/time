@@ -195,7 +195,7 @@ func SockaddrToIP(sa unix.Sockaddr) net.IP {
 func SockaddrToAddr(sa unix.Sockaddr) netip.Addr {
 	switch sa := sa.(type) {
 	case *unix.SockaddrInet4:
-		return netip.AddrFrom4(sa.Addr)
+		return netip.AddrFrom4(sa.Addr).Unmap()
 	case *unix.SockaddrInet6:
 		return netip.AddrFrom16(sa.Addr)
 	}

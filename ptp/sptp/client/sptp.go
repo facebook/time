@@ -234,6 +234,7 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					doneChan <- fmt.Errorf("received packet on port 320 with nil source address")
 					return
 				}
+				addr = addr.Unmap()
 				log.Debugf("got packet on port 320, n = %v, addr = %v", bbuf, addr)
 				cc, found := p.clients[addr]
 				if !found {
