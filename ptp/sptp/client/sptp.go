@@ -277,8 +277,8 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 						doneChan <- err
 						return
 					}
-					log.Debugf("got packet on port 319, addr = %v", addr)
 					ip := timestamp.SockaddrToAddr(addr)
+					log.Debugf("got packet on port 319, addr = %v", ip)
 					cc, found := p.clients[ip]
 					if !found {
 						log.Warningf("ignoring packets from server %v. Trying ptping", ip)
