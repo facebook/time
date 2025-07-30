@@ -107,6 +107,8 @@ func ioctlHWTimestampCaps(fd int, ifname string) (int32, int32, error) {
 
 	if hw.Rx_filters&(1<<unix.HWTSTAMP_FILTER_PTP_V2_L4_EVENT) > 0 {
 		rxFilter = unix.HWTSTAMP_FILTER_PTP_V2_L4_EVENT
+	} else if hw.Rx_filters&(1<<unix.HWTSTAMP_FILTER_PTP_V2_EVENT) > 0 {
+		rxFilter = unix.HWTSTAMP_FILTER_PTP_V2_EVENT
 	} else if hw.Rx_filters&(1<<unix.HWTSTAMP_FILTER_ALL) > 0 {
 		rxFilter = unix.HWTSTAMP_FILTER_ALL
 	}
