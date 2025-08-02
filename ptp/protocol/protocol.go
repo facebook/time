@@ -268,7 +268,7 @@ func (p *SyncDelayReq) MarshalBinaryTo(b []byte) (int, error) {
 
 // MarshalBinary converts packet to []bytes
 func (p *SyncDelayReq) MarshalBinary() ([]byte, error) {
-	buf := make([]byte, 50)
+	buf := make([]byte, 64)
 	n, err := p.MarshalBinaryTo(buf)
 	return buf[:n], err
 }
