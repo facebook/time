@@ -290,6 +290,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 		switch msgType {
 		case ptp.MessageDelayReq:
 			dReq.TLVs = zerotlv
+			workerOffset = 0
 			if err := ptp.FromBytes(buf[:bbuf], dReq); err != nil {
 				log.Errorf("Failed to read the ptp SyncDelayReq: %v", err)
 				continue
