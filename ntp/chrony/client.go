@@ -17,7 +17,9 @@ limitations under the License.
 package chrony
 
 import (
+	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 )
 
@@ -30,16 +32,26 @@ type Client struct {
 // Communicate sends the packet to chronyd, parse response into something usable
 func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
 	n.Sequence++
-	var err error
 	packet.SetSequence(n.Sequence)
-	err = binary.Write(n.Connection, binary.BigEndian, packet)
-	if err != nil {
-		return nil, err
+
+	var buf bytes.Buffer
+	if err := binary.Write(&buf, binary.BigEndian, packet); err != nil {
+		return nil, fmt.Errorf("failed to encode packet: %w", err)
 	}
+
+	if _, err := n.Connection.Write(buf.Bytes()); err != nil {
+		return nil, fmt.Errorf("failed to write packet to connection: %w", err)
+	}
+
 	response := make([]uint8, 1024)
 	read, err := n.Connection.Read(response)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("connection.Read failed: %w", err)
 	}
+
+	if read == 0 {
+		return nil, fmt.Errorf("no data received")
+	}
+
 	return decodePacket(response[:read])
 }
