@@ -72,6 +72,7 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	mockStatsServer := NewMockStatsServer(ctrl)
 
 	cfg := DefaultConfig()
+	cfg.Iface = "lo"
 	cfg.Servers = map[string]int{
 		"192.168.0.10": 1,
 	}
@@ -120,6 +121,7 @@ func TestProcessResultsSingle(t *testing.T) {
 	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
 
 	cfg := DefaultConfig()
+	cfg.Iface = "lo"
 	cfg.Servers = map[string]int{
 		"192.168.0.10": 1,
 	}
