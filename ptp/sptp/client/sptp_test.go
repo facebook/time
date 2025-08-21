@@ -181,6 +181,7 @@ func TestProcessResultsFastSamples(t *testing.T) {
 	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
 
 	cfg := DefaultConfig()
+	cfg.Iface = "lo"
 	cfg.Servers = map[string]int{
 		"192.168.0.10": 1,
 	}
@@ -241,6 +242,7 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
 
 	cfg := DefaultConfig()
+	cfg.Iface = "lo"
 	cfg.Servers = map[string]int{
 		"192.168.0.10": 1,
 		"192.168.0.11": 1,
@@ -319,6 +321,7 @@ func TestProcessResultsFilteredDelay(t *testing.T) {
 	mockStatsServer.EXPECT().IncFiltered()
 
 	cfg := DefaultConfig()
+	cfg.Iface = "lo"
 	cfg.Servers = map[string]int{
 		"192.168.0.10": 1,
 	}
@@ -408,6 +411,7 @@ func TestRunFiltered(t *testing.T) {
 	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
 
 	cfg := DefaultConfig()
+	cfg.Iface = "lo"
 	cfg.Servers = map[string]int{
 		"192.168.0.10": 1,
 	}
@@ -461,6 +465,7 @@ func TestRunStalled(t *testing.T) {
 	mockStatsServer.EXPECT().SetTickDuration(gomock.Any()).Times(2)
 
 	cfg := DefaultConfig()
+	cfg.Iface = "lo"
 	cfg.Servers = map[string]int{
 		"192.168.0.10": 1,
 	}
@@ -677,7 +682,7 @@ func TestPTPing(t *testing.T) {
 		clock:      mockClock,
 		pi:         mockServo,
 		stats:      mockStatsServer,
-		cfg:        &Config{},
+		cfg:        &Config{Iface: "lo"},
 		eventConns: []UDPConnWithTS{mockEventConn},
 	}
 
