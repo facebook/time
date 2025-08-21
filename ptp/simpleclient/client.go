@@ -223,7 +223,7 @@ func (c *Client) setup(ctx context.Context, eg *errgroup.Group) error {
 	}
 
 	// we need to enable HW or SW timestamps on event port
-	if err := timestamp.EnableTimestamps(c.cfg.Timestamping, connFd, c.cfg.Iface); err != nil {
+	if err := timestamp.EnableTimestamps(c.cfg.Timestamping, connFd, iface); err != nil {
 		return err
 	}
 

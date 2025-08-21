@@ -169,6 +169,12 @@ func (s *Server) Start() error {
 // startEventListener launches the listener which listens to subscription requests
 func (s *Server) startEventListener() {
 	var err error
+
+	iface, err := net.InterfaceByName(s.Config.Interface)
+	if err != nil {
+		log.Fatalf("failed to get interface: %v", err)
+	}
+
 	log.Infof("Binding on %s %d", s.Config.IP, ptp.PortEvent)
 	eventConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: s.Config.IP, Port: ptp.PortEvent})
 	if err != nil {
@@ -183,7 +189,7 @@ func (s *Server) startEventListener() {
 	}
 
 	// Enable RX timestamps. Delay requests need to be timestamped by ptp4u on receipt
-	if err := timestamp.EnableTimestamps(s.Config.TimestampType, s.eFd, s.Config.Interface); err != nil {
+	if err := timestamp.EnableTimestamps(s.Config.TimestampType, s.eFd, iface); err != nil {
 		log.Fatal(err)
 	}
 

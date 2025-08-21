@@ -369,6 +369,7 @@ func TestRunInternalAllDead(t *testing.T) {
 		pi:    mockServo,
 		stats: mockStatsServer,
 		cfg: &Config{
+			Iface:    "lo",
 			Interval: time.Second,
 			Servers: map[string]int{
 				"192.168.0.10": 1,
@@ -513,6 +514,7 @@ func TestRunListenerErr(t *testing.T) {
 		pi:    mockServo,
 		stats: mockStatsServer,
 		cfg: &Config{
+			Iface:    "lo",
 			Interval: time.Second,
 			Servers: map[string]int{
 				"192.168.0.10": 1,
@@ -546,6 +548,7 @@ func TestRunListenerError(t *testing.T) {
 		pi:    mockServo,
 		stats: mockStatsServer,
 		cfg: &Config{
+			Iface:    "lo",
 			Interval: time.Second,
 			Servers: map[string]int{
 				"192.168.0.10": 1,
@@ -625,6 +628,7 @@ func TestRunListenerGood(t *testing.T) {
 		pi:    mockServo,
 		stats: mockStatsServer,
 		cfg: &Config{
+			Iface:    "lo",
 			Interval: time.Second,
 			Servers: map[string]int{
 				"192.168.0.10": 1,

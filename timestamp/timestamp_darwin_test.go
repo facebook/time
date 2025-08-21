@@ -67,7 +67,7 @@ func TestEnableTimestamps(t *testing.T) {
 
 	// SOFTWARE
 	// Allow reading of kernel timestamps via socket
-	err = EnableTimestamps(SW, connFd, "lo")
+	err = EnableTimestamps(SW, connFd, &net.Interface{Name: "lo", Index: 1})
 	require.NoError(t, err)
 
 	// Check that socket option is set
@@ -78,7 +78,7 @@ func TestEnableTimestamps(t *testing.T) {
 	require.Greater(t, kernelTimestampsEnabled, 0, "Kernel timestamps are not enabled")
 
 	// HARDWARE
-	err = EnableTimestamps(HW, connFd, "lo")
+	err = EnableTimestamps(HW, connFd, &net.Interface{Name: "lo", Index: 1})
 	require.Equal(t, fmt.Errorf("Unrecognized timestamp type: %s", HW), err)
 }
 

@@ -87,7 +87,7 @@ type UDPConnTS struct {
 }
 
 // NewUDPConnTS initialises a new struct UDPConnTS
-func NewUDPConnTS(address net.IP, port int, ts timestamp.Timestamp, iface string, dscpValue int) (*UDPConnTS, error) {
+func NewUDPConnTS(address net.IP, port int, ts timestamp.Timestamp, iface *net.Interface, dscpValue int) (*UDPConnTS, error) {
 	udpConn, err := NewUDPConn(address, port)
 	if err != nil {
 		return nil, err

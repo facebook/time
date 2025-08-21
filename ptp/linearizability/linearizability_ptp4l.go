@@ -318,7 +318,7 @@ func (lt *PTP4lTester) init(ifaceStr, destination string) error {
 	}
 
 	// we need to enable HW or SW timestamps on event port
-	if err := timestamp.EnableHWTimestamps(connFd, ifaceStr); err != nil {
+	if err := timestamp.EnableHWTimestamps(connFd, iface); err != nil {
 		return fmt.Errorf("failed to enable hardware timestamps on port %d: %w", lt.localEventPort, err)
 	}
 

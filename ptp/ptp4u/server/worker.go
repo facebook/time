@@ -64,6 +64,12 @@ func (s *sendWorker) listen() (eventFD, generalFD int, err error) {
 	if s.config.IP.To4() != nil {
 		domain = unix.AF_INET
 	}
+
+	iface, err := net.InterfaceByName(s.config.Interface)
+	if err != nil {
+		return -1, -1, fmt.Errorf("failed to get interface: %w", err)
+	}
+
 	// set up event connection
 	eventFD, err = unix.Socket(domain, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
 	if err != nil {
@@ -100,7 +106,7 @@ func (s *sendWorker) listen() (eventFD, generalFD int, err error) {
 	}
 
 	// Syncs sent from event port, so need to turn on timestamping here
-	if err := timestamp.EnableTimestamps(s.config.TimestampType, eventFD, s.config.Interface); err != nil {
+	if err := timestamp.EnableTimestamps(s.config.TimestampType, eventFD, iface); err != nil {
 		return -1, -1, err
 	}
 

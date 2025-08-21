@@ -33,6 +33,7 @@ func TestWorkerQueue(t *testing.T) {
 		clockIdentity: ptp.ClockIdentity(1234),
 		StaticConfig: StaticConfig{
 			TimestampType: timestamp.SW,
+			Interface:     "lo",
 		},
 	}
 

@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"net"
 	"syscall"
 	"time"
 	"unsafe"
@@ -164,12 +165,12 @@ func EnableSWTimestamps(connFd int) error {
 }
 
 // EnableHWTimestamps enables HW timestamps (TX and RX) on the socket
-func EnableHWTimestamps(connFd int, iface string) error {
-	rxFilter, _, err := ioctlHWTimestampCaps(connFd, iface)
+func EnableHWTimestamps(connFd int, iface *net.Interface) error {
+	rxFilter, _, err := ioctlHWTimestampCaps(connFd, iface.Name)
 	if err != nil {
 		return err
 	}
-	if err := ioctlTimestamp(connFd, iface, rxFilter); err != nil {
+	if err := ioctlTimestamp(connFd, iface.Name, rxFilter); err != nil {
 		return err
 	}
 
@@ -186,16 +187,19 @@ func EnableHWTimestamps(connFd int, iface string) error {
 		return err
 	}
 
+	// Bind socket to the interface
+	_ = unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_BINDTODEVICE, iface.Index)
+
 	return unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1)
 }
 
 // EnableHWTimestampsRx enables HW RX timestamps on the socket
-func EnableHWTimestampsRx(connFd int, iface string) error {
-	rxFilter, _, err := ioctlHWTimestampCaps(connFd, iface)
+func EnableHWTimestampsRx(connFd int, iface *net.Interface) error {
+	rxFilter, _, err := ioctlHWTimestampCaps(connFd, iface.Name)
 	if err != nil {
 		return err
 	}
-	if err := ioctlTimestamp(connFd, iface, rxFilter); err != nil {
+	if err := ioctlTimestamp(connFd, iface.Name, rxFilter); err != nil {
 		return err
 	}
 
@@ -379,7 +383,7 @@ func ReadTXtimestamp(connFd int) (time.Time, int, error) {
 }
 
 // EnableTimestamps enables timestamps on the socket based on requested type
-func EnableTimestamps(ts Timestamp, connFd int, iface string) error {
+func EnableTimestamps(ts Timestamp, connFd int, iface *net.Interface) error {
 	switch ts {
 	case HW:
 		if err := EnableHWTimestamps(connFd, iface); err != nil {

@@ -151,6 +151,11 @@ func (s *Server) startListener(conn *net.UDPConn) {
 	s.Checker.IncListeners()
 	defer s.Checker.DecListeners()
 
+	iface, err := net.InterfaceByName(s.Config.Iface)
+	if err != nil {
+		log.Fatalf("failed to get interface: %v", err)
+	}
+
 	// get connection file descriptor
 	connFd, err := timestamp.ConnFd(conn)
 	if err != nil {
@@ -158,7 +163,7 @@ func (s *Server) startListener(conn *net.UDPConn) {
 	}
 
 	// Enable RX timestamps
-	if err := timestamp.EnableTimestamps(s.Config.TimestampType, connFd, s.Config.Iface); err != nil {
+	if err := timestamp.EnableTimestamps(s.Config.TimestampType, connFd, iface); err != nil {
 		log.Fatal(err)
 	}
 

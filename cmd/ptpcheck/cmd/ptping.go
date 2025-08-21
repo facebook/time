@@ -78,18 +78,18 @@ type ptping struct {
 }
 
 func (p *ptping) init() error {
-	i, err := net.InterfaceByName(p.iface)
+	iface, err := net.InterfaceByName(p.iface)
 	if err != nil {
 		return err
 	}
 
-	cid, err := ptp.NewClockIdentity(i.HardwareAddr)
+	cid, err := ptp.NewClockIdentity(iface.HardwareAddr)
 	if err != nil {
 		return err
 	}
 	p.clockID = cid
 
-	p.eventConn, err = client.NewUDPConnTS(net.ParseIP(listenAddr), 0, timestamp.HW, p.iface, p.dscp)
+	p.eventConn, err = client.NewUDPConnTS(net.ParseIP(listenAddr), 0, timestamp.HW, iface, p.dscp)
 	if err != nil {
 		return err
 	}

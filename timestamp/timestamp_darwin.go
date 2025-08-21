@@ -19,6 +19,7 @@ package timestamp
 import (
 	"encoding/binary"
 	"fmt"
+	"net"
 	"time"
 	"unsafe"
 
@@ -68,7 +69,7 @@ func EnableSWTimestampsRx(connFd int) error {
 }
 
 // EnableTimestamps enables timestamps on the socket based on requested type
-func EnableTimestamps(ts Timestamp, connFd int, _ string) error {
+func EnableTimestamps(ts Timestamp, connFd int, _ *net.Interface) error {
 	switch ts {
 	case SW:
 		if err := EnableSWTimestampsRx(connFd); err != nil {

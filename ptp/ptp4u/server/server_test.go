@@ -81,6 +81,7 @@ func TestStartEventListener(t *testing.T) {
 			SendWorkers:   10,
 			RecvWorkers:   10,
 			IP:            net.ParseIP("127.0.0.1"),
+			Interface:     "lo",
 		},
 	}
 	s := Server{

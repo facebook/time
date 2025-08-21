@@ -89,6 +89,10 @@ func NewSPTP(cfg *Config, stats StatsServer) (*SPTP, error) {
 }
 
 func (p *SPTP) initClients() error {
+	iface, err := net.InterfaceByName(p.cfg.Iface)
+	if err != nil {
+		return err
+	}
 	p.clients = map[netip.Addr]*Client{}
 	p.priorities = map[netip.Addr]int{}
 	p.backoff = map[netip.Addr]*backoff{}
@@ -103,7 +107,7 @@ func (p *SPTP) initClients() error {
 		}
 		var econn UDPConnWithTS
 		if p.cfg.ParallelTX {
-			econn, err = NewUDPConnTS(net.ParseIP(p.cfg.ListenAddress), ptp.PortEvent, p.cfg.Timestamping, p.cfg.Iface, p.cfg.DSCP)
+			econn, err = NewUDPConnTS(net.ParseIP(p.cfg.ListenAddress), ptp.PortEvent, p.cfg.Timestamping, iface, p.cfg.DSCP)
 			if err != nil {
 				return err
 			}
@@ -142,7 +146,7 @@ func (p *SPTP) init() error {
 
 	if !p.cfg.ParallelTX {
 		// bind to event port
-		eventConn, err := NewUDPConnTS(net.ParseIP(p.cfg.ListenAddress), ptp.PortEvent, p.cfg.Timestamping, p.cfg.Iface, p.cfg.DSCP)
+		eventConn, err := NewUDPConnTS(net.ParseIP(p.cfg.ListenAddress), ptp.PortEvent, p.cfg.Timestamping, iface, p.cfg.DSCP)
 		if err != nil {
 			return fmt.Errorf("binding to %d: %w", ptp.PortEvent, err)
 		}
