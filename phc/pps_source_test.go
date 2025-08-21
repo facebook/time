@@ -73,7 +73,7 @@ func TestActivatePPSSource(t *testing.T) {
 	expectedPeroutRequest := &PtpPeroutRequest{
 		Index:        uint32(0),
 		Flags:        uint32(2),
-		StartOrPhase: PtpClockTime{Sec: 2},
+		StartOrPhase: PtpClockTime{Sec: 1075896002},
 		Period:       PtpClockTime{Sec: 1},
 		On:           PtpClockTime{Nsec: 500000000},
 	}
@@ -124,9 +124,9 @@ func TestActivatePPSSourceSetPTPPeroutFailure(t *testing.T) {
 	expectedPeroutRequest := &PtpPeroutRequest{
 		Index:        uint32(0),
 		Flags:        uint32(0x0),
-		StartOrPhase: PtpClockTime{Sec: 2},
+		StartOrPhase: PtpClockTime{Sec: 1075896002},
 		Period:       PtpClockTime{Sec: 1},
-		On:           PtpClockTime{Nsec: 500000000},
+		On:           PtpClockTime{Nsec: 0},
 	}
 
 	// Act

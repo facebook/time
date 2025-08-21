@@ -102,7 +102,7 @@ func ts2phcRun(srcDevicePath string, dstDeviceName string, interval time.Duratio
 }
 
 func getPPSSourceFromPath(srcDevicePath string, pinIndex uint) (*phc.PPSSource, error) {
-	srcDeviceFile, err := os.Open(srcDevicePath)
+	srcDeviceFile, err := os.OpenFile(srcDevicePath, os.O_RDWR, 0)
 	if err != nil {
 		return nil, fmt.Errorf("error opening source device: %w", err)
 	}

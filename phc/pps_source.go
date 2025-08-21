@@ -140,7 +140,7 @@ func ActivatePPSSource(dev DeviceController, pinIndex uint) (*PPSSource, error) 
 	// Set phase or start time
 	// TODO: reintroduce peroutPhase != -1 condition once peroutPhase is configurable
 	peroutRequest.StartOrPhase = PtpClockTime{
-		Sec:  int64(ts.Second() + ppsStartDelay),
+		Sec:  ts.Unix() + ppsStartDelay,
 		Nsec: 0,
 	}
 
@@ -148,6 +148,7 @@ func ActivatePPSSource(dev DeviceController, pinIndex uint) (*PPSSource, error) 
 
 	if err != nil {
 		peroutRequest.Flags &^= ptpPeroutDutyCycle
+		peroutRequest.On = PtpClockTime{}
 		err = dev.setPTPPerout(peroutRequest)
 
 		if err != nil {
