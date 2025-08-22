@@ -833,6 +833,32 @@ func TestReplyNTPSourceNameBounds(t *testing.T) {
 // TestDirectBinaryWritePanicPrevention reproduces and prevents the panic from Telegraf issue #17453
 // The panic occurred when binary.Write was used directly on a network connection with certain
 // packet structures, particularly during sourcestats collection with DNS lookup enabled.
+//
+// Reproduction case (can be run as standalone program):
+//
+//	package main
+//	import (
+//	    "encoding/binary"
+//	    "net"
+//	)
+//
+//	type RequestSourceStats struct {
+//	    // ... header fields ...
+//	    Index int32
+//	    EOR   int32
+//	    data  [388]uint8  // This large array causes issues
+//	}
+//
+//	func main() {
+//	    conn, _ := net.Dial("tcp", "localhost:323")
+//	    packet := &RequestSourceStats{Index: 0, EOR: 1}
+//	    // This can panic with "index out of range [256] with length 256"
+//	    err := binary.Write(conn, binary.BigEndian, packet)
+//	    // Solution: use bytes.Buffer first
+//	    // var buf bytes.Buffer
+//	    // binary.Write(&buf, binary.BigEndian, packet)
+//	    // conn.Write(buf.Bytes())
+//	}
 func TestDirectBinaryWritePanicPrevention(t *testing.T) {
 	// Create a mock network connection that simulates the problematic behavior
 	mockConn := &mockConnWriteFail{}
