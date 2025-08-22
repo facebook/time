@@ -47,7 +47,6 @@ type PacketType uint8
 
 // we implement latest (at the moment) protocol version
 const protoVersionNumber uint8 = 6
-const maxDataLen = 396
 
 // packet types
 const (
@@ -262,8 +261,6 @@ type ResponsePacket interface {
 // RequestSources - packet to request number of sources (peers)
 type RequestSources struct {
 	RequestHead
-	// we actually need this to send proper packet
-	data [maxDataLen]uint8
 }
 
 // RequestSourceData - packet to request source data for source id
@@ -271,8 +268,6 @@ type RequestSourceData struct {
 	RequestHead
 	Index int32
 	EOR   int32
-	// we pass i32 - 4 bytes
-	data [maxDataLen - 4]uint8
 }
 
 // RequestNTPData - packet to request NTP data for peer IP.
@@ -281,8 +276,6 @@ type RequestNTPData struct {
 	RequestHead
 	IPAddr ipAddr
 	EOR    int32
-	// we pass at max ipv6 addr - 16 bytes
-	data [maxDataLen - 16]uint8
 }
 
 // RequestNTPSourceName - packet to request source name for peer IP.
@@ -290,22 +283,16 @@ type RequestNTPSourceName struct {
 	RequestHead
 	IPAddr ipAddr
 	EOR    int32
-	// we pass at max ipv6 addr - 16 bytes
-	data [maxDataLen - 16]uint8
 }
 
 // RequestServerStats - packet to request server stats
 type RequestServerStats struct {
 	RequestHead
-	// we actually need this to send proper packet
-	data [maxDataLen]uint8
 }
 
 // RequestTracking - packet to request 'tracking' data
 type RequestTracking struct {
 	RequestHead
-	// we actually need this to send proper packet
-	data [maxDataLen]uint8
 }
 
 // RequestSourceStats - packet to request 'sourcestats' data for source id
@@ -313,15 +300,11 @@ type RequestSourceStats struct {
 	RequestHead
 	Index int32
 	EOR   int32
-	// we pass i32 - 4 bytes
-	data [maxDataLen - 4]uint8
 }
 
 // RequestActivity - packet to request 'activity' data
 type RequestActivity struct {
 	RequestHead
-	// we actually need this to send proper packet
-	data [maxDataLen]uint8
 }
 
 // RequestSelectData - packet to request 'selectdata' data
@@ -329,8 +312,6 @@ type RequestSelectData struct {
 	RequestHead
 	Index int32
 	EOR   int32
-	// we pass i32 - 4 bytes
-	data [maxDataLen - 4]uint8
 }
 
 // ReplyHead is the first (common) part of the reply packet,
@@ -719,9 +700,15 @@ type NTPSourceName struct {
 }
 
 func newNTPSourceName(r *replyNTPSourceNameContent) *NTPSourceName {
+	// Find the first null terminator to avoid reading garbage
+	nameBytes := r.Name[:]
+	nullIndex := bytes.IndexByte(nameBytes, 0)
+	if nullIndex >= 0 {
+		nameBytes = nameBytes[:nullIndex]
+	}
+
 	return &NTPSourceName{
-		// this field is zero padded in chrony, so we need to trim it
-		Name: string(bytes.TrimRight(r.Name[:], "\x00")),
+		Name: string(nameBytes),
 	}
 }
 
@@ -889,7 +876,6 @@ func NewSourcesPacket() *RequestSources {
 			PKTType: pktTypeCmdRequest,
 			Command: reqNSources,
 		},
-		data: [maxDataLen]uint8{},
 	}
 }
 
@@ -901,7 +887,6 @@ func NewTrackingPacket() *RequestTracking {
 			PKTType: pktTypeCmdRequest,
 			Command: reqTracking,
 		},
-		data: [maxDataLen]uint8{},
 	}
 }
 
@@ -914,7 +899,7 @@ func NewSourceStatsPacket(sourceID int32) *RequestSourceStats {
 			Command: reqSourceStats,
 		},
 		Index: sourceID,
-		data:  [maxDataLen - 4]uint8{},
+		EOR:   0,
 	}
 }
 
@@ -927,7 +912,7 @@ func NewSourceDataPacket(sourceID int32) *RequestSourceData {
 			Command: reqSourceData,
 		},
 		Index: sourceID,
-		data:  [maxDataLen - 4]uint8{},
+		EOR:   0,
 	}
 }
 
@@ -940,7 +925,7 @@ func NewNTPDataPacket(ip net.IP) *RequestNTPData {
 			Command: reqNTPData,
 		},
 		IPAddr: *newIPAddr(ip),
-		data:   [maxDataLen - 16]uint8{},
+		EOR:    0,
 	}
 }
 
@@ -953,7 +938,7 @@ func NewNTPSourceNamePacket(ip net.IP) *RequestNTPSourceName {
 			Command: reqNTPSourceName,
 		},
 		IPAddr: *newIPAddr(ip),
-		data:   [maxDataLen - 16]uint8{},
+		EOR:    0,
 	}
 }
 
@@ -965,7 +950,6 @@ func NewServerStatsPacket() *RequestServerStats {
 			PKTType: pktTypeCmdRequest,
 			Command: reqServerStats,
 		},
-		data: [maxDataLen]uint8{},
 	}
 }
 
@@ -977,7 +961,6 @@ func NewActivityPacket() *RequestActivity {
 			PKTType: pktTypeCmdRequest,
 			Command: reqActivity,
 		},
-		data: [maxDataLen]uint8{},
 	}
 }
 
@@ -990,7 +973,7 @@ func NewSelectDataPacket(sourceID int32) *RequestSelectData {
 			Command: reqSelectData,
 		},
 		Index: sourceID,
-		data:  [maxDataLen - 4]uint8{},
+		EOR:   0,
 	}
 }
 
