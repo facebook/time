@@ -111,10 +111,10 @@ func convolve(input, coeffs []float64) ([]float64, error) {
 	}
 
 	output := make([]float64, len(input))
-	for i := 0; i < len(coeffs); i++ {
+	for i := range len(coeffs) {
 		var sum float64
 
-		for j := 0; j <= i; j++ {
+		for j := range i + 1 {
 			sum += (input[j] * coeffs[len(coeffs)-(1+i-j)])
 		}
 		output[i] = sum
@@ -122,7 +122,7 @@ func convolve(input, coeffs []float64) ([]float64, error) {
 
 	for i := len(coeffs); i < len(input); i++ {
 		var sum float64
-		for j := 0; j < len(coeffs); j++ {
+		for j := range len(coeffs) {
 			sum += (input[i-j] * coeffs[j])
 		}
 		output[i] = sum
@@ -216,7 +216,7 @@ func prepareMathParameters(lastN []*DataPoint) map[string][]float64 {
 	freqChanges := make([]float64, size-1)
 	freqChangesAbs := make([]float64, size-1)
 	prev := lastN[0]
-	for i := 0; i < size; i++ {
+	for i := range size {
 		offsets[i] = lastN[i].MasterOffsetNS
 		delays[i] = lastN[i].PathDelayNS
 		freqs[i] = lastN[i].FreqAdjustmentPPB
