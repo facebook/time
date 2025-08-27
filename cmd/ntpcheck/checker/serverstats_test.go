@@ -19,6 +19,7 @@ package checker
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/facebook/time/ntp/chrony"
@@ -82,9 +83,10 @@ func TestNewServerStatsFromNTP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := NewServerStatsFromNTP(tt.p)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewServerStatsFromNTP() error = %v, wantErr %v", err, tt.wantErr)
-				return
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 			require.Equal(t, tt.want, got)
 		})
