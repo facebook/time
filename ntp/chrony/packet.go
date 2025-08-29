@@ -719,9 +719,16 @@ type NTPSourceName struct {
 }
 
 func newNTPSourceName(r *replyNTPSourceNameContent) *NTPSourceName {
+	// Find the first null terminator to avoid reading garbage
+	nullIndex := bytes.IndexByte(r.Name[:], 0)
+	if nullIndex >= 0 {
+		return &NTPSourceName{
+			Name: string(r.Name[:nullIndex]),
+		}
+	}
+
 	return &NTPSourceName{
-		// this field is zero padded in chrony, so we need to trim it
-		Name: string(bytes.TrimRight(r.Name[:], "\x00")),
+		Name: string(r.Name[:]),
 	}
 }
 
