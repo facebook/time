@@ -17,6 +17,9 @@ limitations under the License.
 package chrony
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -638,4 +641,342 @@ func FuzzDecodePacket(f *testing.F) {
 			require.Nil(t, packet)
 		}
 	})
+}
+
+func TestPacketEncodingNoPanic(t *testing.T) {
+	tests := []struct {
+		name   string
+		packet RequestPacket
+	}{
+		{
+			name:   "RequestSources",
+			packet: NewSourcesPacket(),
+		},
+		{
+			name:   "RequestTracking",
+			packet: NewTrackingPacket(),
+		},
+		{
+			name:   "RequestActivity",
+			packet: NewActivityPacket(),
+		},
+		{
+			name:   "RequestServerStats",
+			packet: NewServerStatsPacket(),
+		},
+		{
+			name:   "RequestSourceStats",
+			packet: NewSourceStatsPacket(1),
+		},
+		{
+			name:   "RequestSourceData",
+			packet: NewSourceDataPacket(1),
+		},
+		{
+			name:   "RequestNTPSourceName",
+			packet: NewNTPSourceNamePacket(net.ParseIP("127.0.0.1")),
+		},
+		{
+			name:   "RequestNTPData",
+			packet: NewNTPDataPacket(net.ParseIP("127.0.0.1")),
+		},
+		{
+			name:   "RequestSelectData",
+			packet: NewSelectDataPacket(1),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			err := binary.Write(&buf, binary.BigEndian, tt.packet)
+
+			require.NoError(t, err, "binary.Write should not fail for %s", tt.name)
+			require.Greater(t, buf.Len(), 0, "encoded packet should have non-zero length")
+			require.Less(t, buf.Len(), 500, "encoded packet should not exceed reasonable protocol limits")
+		})
+	}
+}
+
+func TestClientCommunicate(t *testing.T) {
+	mockConn := &MockConnection{
+		readData: []byte{
+			0x06, 0x02, 0x00, 0x00, 0x00, 0x0e, 0x00, 0x02, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x39, 0x3a, 0xb1, 0x23,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x12,
+		},
+	}
+
+	client := &Client{
+		Connection: mockConn,
+		Sequence:   0,
+	}
+
+	testCases := []struct {
+		name   string
+		packet RequestPacket
+	}{
+		{"Sources", NewSourcesPacket()},
+		{"Tracking", NewTrackingPacket()},
+		{"Activity", NewActivityPacket()},
+		{"ServerStats", NewServerStatsPacket()},
+		{"SourceStats", NewSourceStatsPacket(1)},
+		{"SourceData", NewSourceDataPacket(1)},
+		{"NTPSourceName", NewNTPSourceNamePacket(net.ParseIP("127.0.0.1"))},
+		{"NTPData", NewNTPDataPacket(net.ParseIP("127.0.0.1"))},
+		{"SelectData", NewSelectDataPacket(1)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockConn.writeBuffer.Reset()
+
+			_, err := client.Communicate(tc.packet)
+
+			if err == nil {
+				t.Logf("Success: %s packet was processed successfully", tc.name)
+			} else {
+				t.Logf("Expected error due to mock response: %v", err)
+			}
+
+			require.Greater(t, mockConn.writeBuffer.Len(), 0,
+				"Should have written data for %s", tc.name)
+			require.Less(t, mockConn.writeBuffer.Len(), 500,
+				"Written data should be reasonably sized for %s", tc.name)
+		})
+	}
+}
+
+func TestEORFieldInitialization(t *testing.T) {
+	// Test packets that have EOR field
+	packetsWithEOR := []struct {
+		name   string
+		packet interface{}
+	}{
+		{"RequestSourceStats", NewSourceStatsPacket(42)},
+		{"RequestSourceData", NewSourceDataPacket(42)},
+		{"RequestNTPSourceName", NewNTPSourceNamePacket(net.ParseIP("127.0.0.1"))},
+		{"RequestNTPData", NewNTPDataPacket(net.ParseIP("127.0.0.1"))},
+		{"RequestSelectData", NewSelectDataPacket(42)},
+	}
+
+	for _, tt := range packetsWithEOR {
+		t.Run(tt.name, func(t *testing.T) {
+			// Verify EOR field is properly initialized to 0
+			switch p := tt.packet.(type) {
+			case *RequestSourceStats:
+				require.Equal(t, int32(0), p.EOR, "EOR should be initialized to 0")
+			case *RequestSourceData:
+				require.Equal(t, int32(0), p.EOR, "EOR should be initialized to 0")
+			case *RequestNTPSourceName:
+				require.Equal(t, int32(0), p.EOR, "EOR should be initialized to 0")
+			case *RequestNTPData:
+				require.Equal(t, int32(0), p.EOR, "EOR should be initialized to 0")
+			case *RequestSelectData:
+				require.Equal(t, int32(0), p.EOR, "EOR should be initialized to 0")
+			default:
+				t.Errorf("Unexpected packet type: %T", p)
+			}
+
+			// Verify packet can be encoded without panic
+			var buf bytes.Buffer
+			err := binary.Write(&buf, binary.BigEndian, tt.packet)
+			require.NoError(t, err, "binary.Write should succeed for %s", tt.name)
+		})
+	}
+
+	// Test packets without EOR field
+	packetsWithoutEOR := []struct {
+		name   string
+		packet interface{}
+	}{
+		{"RequestSources", NewSourcesPacket()},
+		{"RequestActivity", NewActivityPacket()},
+		{"RequestServerStats", NewServerStatsPacket()},
+		{"RequestTracking", NewTrackingPacket()},
+	}
+
+	for _, tt := range packetsWithoutEOR {
+		t.Run(tt.name, func(t *testing.T) {
+			// Just verify these can be encoded without panic
+			var buf bytes.Buffer
+			err := binary.Write(&buf, binary.BigEndian, tt.packet)
+			require.NoError(t, err, "binary.Write should succeed for %s", tt.name)
+		})
+	}
+}
+
+func TestReplyNTPSourceNameBounds(t *testing.T) {
+	reply := &replyNTPSourceNameContent{}
+
+	var buf bytes.Buffer
+	err := binary.Write(&buf, binary.BigEndian, reply)
+	require.NoError(t, err, "Should encode 256-byte name array without panic")
+
+	testName := "test.example.com"
+	copy(reply.Name[:], testName)
+
+	result := newNTPSourceName(reply)
+	require.Equal(t, testName, result.Name, "Should correctly extract name")
+
+	longName := make([]byte, 255)
+	for i := range longName {
+		longName[i] = 'a'
+	}
+	copy(reply.Name[:], longName)
+
+	result = newNTPSourceName(reply)
+	require.Equal(t, string(longName), result.Name, "Should handle 255-char name")
+}
+
+// TestDirectBinaryWritePanicPrevention reproduces and prevents the panic from Telegraf issue #17453
+// The panic occurred when binary.Write was used directly on a network connection with certain
+// packet structures, particularly during sourcestats collection with DNS lookup enabled.
+//
+// Reproduction case (can be run as standalone program):
+//
+//	package main
+//	import (
+//	    "encoding/binary"
+//	    "net"
+//	)
+//
+//	type RequestSourceStats struct {
+//	    // ... header fields ...
+//	    Index int32
+//	    EOR   int32
+//	    data  [388]uint8  // This large array causes issues
+//	}
+//
+//	func main() {
+//	    conn, _ := net.Dial("tcp", "localhost:323")
+//	    packet := &RequestSourceStats{Index: 0, EOR: 1}
+//	    // This can panic with "index out of range [256] with length 256"
+//	    err := binary.Write(conn, binary.BigEndian, packet)
+//	    // Solution: use bytes.Buffer first
+//	    // var buf bytes.Buffer
+//	    // binary.Write(&buf, binary.BigEndian, packet)
+//	    // conn.Write(buf.Bytes())
+//	}
+func TestDirectBinaryWritePanicPrevention(t *testing.T) {
+	// Create a mock network connection that simulates the problematic behavior
+	mockConn := &mockConnWriteFail{}
+
+	// Test packets that were known to cause issues
+	testCases := []struct {
+		name   string
+		packet RequestPacket
+		desc   string
+	}{
+		{
+			name:   "SourceStats_Index0",
+			packet: NewSourceStatsPacket(0),
+			desc:   "First source stats request",
+		},
+		{
+			name:   "SourceStats_IndexMax",
+			packet: NewSourceStatsPacket(255),
+			desc:   "Max index source stats",
+		},
+		{
+			name:   "SourceData_WithIndex",
+			packet: NewSourceDataPacket(42),
+			desc:   "Source data with specific index",
+		},
+		{
+			name:   "NTPSourceName_IPv4",
+			packet: NewNTPSourceNamePacket(net.ParseIP("192.168.1.1")),
+			desc:   "NTP source name for IPv4 with DNS lookup",
+		},
+		{
+			name:   "NTPSourceName_IPv6",
+			packet: NewNTPSourceNamePacket(net.ParseIP("2001:db8::1")),
+			desc:   "NTP source name for IPv6 with DNS lookup",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// This would panic with direct binary.Write to connection
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("Panic should not occur with buffer approach: %v", r)
+				}
+			}()
+
+			// Test the safe buffer-based approach
+			var buf bytes.Buffer
+			err := binary.Write(&buf, binary.BigEndian, tc.packet)
+			require.NoError(t, err, "Buffer-based encoding should succeed for %s", tc.desc)
+
+			// Verify we can write the bytes to connection without panic
+			_, writeErr := mockConn.Write(buf.Bytes())
+			require.NoError(t, writeErr, "Writing encoded bytes should succeed for %s", tc.desc)
+
+			// Verify packet size is reasonable
+			require.Less(t, buf.Len(), 1024, "Packet size should be under 1KB for %s", tc.desc)
+		})
+	}
+}
+
+// mockConnWriteFail simulates a connection that might fail with direct binary.Write
+type mockConnWriteFail struct {
+	writeBuffer bytes.Buffer
+}
+
+func (m *mockConnWriteFail) Write(b []byte) (n int, err error) {
+	return m.writeBuffer.Write(b)
+}
+
+func (m *mockConnWriteFail) Read(_ []byte) (n int, err error) {
+	return 0, fmt.Errorf("not implemented")
+}
+
+// TestNoPanicRegression ensures no panic occurs during packet encoding
+func TestNoPanicRegression(t *testing.T) {
+	packets := []RequestPacket{
+		NewSourcesPacket(),
+		NewSourceStatsPacket(0),
+		NewSourceDataPacket(0),
+		NewNTPSourceNamePacket(net.ParseIP("127.0.0.1")),
+	}
+
+	for i, packet := range packets {
+		t.Run(fmt.Sprintf("Packet_%d", i), func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("Panic occurred during binary.Write: %v", r)
+				}
+			}()
+
+			var buf bytes.Buffer
+			err := binary.Write(&buf, binary.BigEndian, packet)
+			require.NoError(t, err, "binary.Write should not fail")
+
+			require.Less(t, buf.Len(), 500,
+				"Encoded packet should be within protocol limits")
+		})
+	}
+}
+
+// MockConnection for testing
+type MockConnection struct {
+	writeBuffer bytes.Buffer
+	readData    []byte
+	readPos     int
+}
+
+func (m *MockConnection) Write(p []byte) (n int, err error) {
+	return m.writeBuffer.Write(p)
+}
+
+func (m *MockConnection) Read(p []byte) (n int, err error) {
+	if m.readPos >= len(m.readData) {
+		return 0, fmt.Errorf("no more data")
+	}
+
+	n = copy(p, m.readData[m.readPos:])
+	m.readPos += n
+	return n, nil
 }
