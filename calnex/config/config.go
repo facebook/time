@@ -302,3 +302,43 @@ func prepare(c *config, api *api.API, target string, cc *CalnexConfig) (*ini.Fil
 
 	return f, nil
 }
+
+func (cmc *MeasureConfig) isEqual(m *MeasureConfig) bool {
+	return cmc.Name == m.Name && cmc.Target == m.Target && cmc.Probe == m.Probe
+}
+
+func (cc *CalnexConfig) isEqual(c *CalnexConfig) bool {
+	if cc.AntennaDelayNS != c.AntennaDelayNS {
+		return false
+	}
+	if len(cc.Measure) != len(c.Measure) {
+		return false
+	}
+	for ch, m := range cc.Measure {
+		cm, ok := c.Measure[ch]
+		if !ok {
+			return false
+		}
+		if !m.isEqual(&cm) {
+			return false
+		}
+	}
+	return true
+}
+
+// IsEqual compares two sets of Calnex configs
+func (cs *Calnexes) IsEqual(c *Calnexes) bool {
+	if len(*cs) != len(*c) {
+		return false
+	}
+	for target, cc := range *cs {
+		cmc, ok := (*c)[target]
+		if !ok {
+			return false
+		}
+		if !cc.isEqual(cmc) {
+			return false
+		}
+	}
+	return true
+}

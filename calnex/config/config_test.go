@@ -1621,3 +1621,55 @@ func TestPrepare(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedConfig, buf.String())
 }
+
+func TestConfigComparison(t *testing.T) {
+	measures := map[api.Channel]MeasureConfig{
+		api.ChannelC: {
+			Target: "::5",
+			Probe:  api.ProbePPS,
+			Name:   "name5",
+		},
+		api.ChannelE: {
+			Target: "::7",
+			Probe:  api.ProbePPS,
+			Name:   "name7",
+		},
+		api.ChannelF: {
+			Target: "::8",
+			Probe:  api.ProbePPS,
+			Name:   "name8",
+		},
+		api.ChannelVP1: {
+			Target: "::5",
+			Probe:  api.ProbeNTP,
+			Name:   "name5",
+		},
+		api.ChannelVP2: {
+			Target: "::7",
+			Probe:  api.ProbeNTP,
+			Name:   "name7",
+		},
+	}
+	cfg1 := &CalnexConfig{
+		AntennaDelayNS: 672,
+		Measure:        map[api.Channel]MeasureConfig{},
+	}
+	cfg2 := &CalnexConfig{}
+	*cfg2 = *cfg1
+	cfg1.Measure = measures
+	for k, v := range measures {
+		cfg2.Measure[k] = v
+	}
+	cs1 := &Calnexes{"calnex01.zzz1.test.com": cfg1}
+	cs2 := &Calnexes{"calnex01.zzz1.test.com": cfg2}
+	require.True(t, cs1.IsEqual(cs2))
+	cfg2.AntennaDelayNS = 670
+	require.False(t, cs1.IsEqual(cs2))
+	cfg2.AntennaDelayNS = 672
+	cfg2.Measure[api.ChannelVP3] = MeasureConfig{
+		Target: "::7",
+		Probe:  api.ProbePTP,
+		Name:   "name7",
+	}
+	require.False(t, cs1.IsEqual(cs2))
+}
