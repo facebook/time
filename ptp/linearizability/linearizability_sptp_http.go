@@ -28,21 +28,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// SPTPTestResult is what we get after the test run
-type SPTPTestResult struct {
-	Config     SPTPTestConfig
+// SPTPHTTPTestResult is what we get after the test run
+type SPTPHTTPTestResult struct {
+	Config     SPTPHTTPTestConfig
 	Offset     float64
 	Error      error
 	ClockClass ptp.ClockClass
 }
 
 // Target returns value of server
-func (tr SPTPTestResult) Target() string {
+func (tr SPTPHTTPTestResult) Target() string {
 	return tr.Config.Server
 }
 
 // Good check if the test passed
-func (tr SPTPTestResult) Good() (bool, error) {
+func (tr SPTPHTTPTestResult) Good() (bool, error) {
 	if tr.Error != nil {
 		return false, tr.Error
 	}
@@ -57,7 +57,7 @@ func (tr SPTPTestResult) Good() (bool, error) {
 }
 
 // Explain provides plain text explanation of linearizability test result
-func (tr SPTPTestResult) Explain() string {
+func (tr SPTPHTTPTestResult) Explain() string {
 	msg := fmt.Sprintf("linearizability test against %q", tr.Config.Server)
 	good, err := tr.Good()
 	if good {
@@ -69,55 +69,56 @@ func (tr SPTPTestResult) Explain() string {
 	return fmt.Sprintf("%s failed because the offset %.2fns is > %v", msg, tr.Offset, tr.Config.LinearizabilityTestMaxGMOffset)
 }
 
-// Err returns an error value of the PTP4lTestResult
-func (tr SPTPTestResult) Err() error {
+// Err returns an error value of the SPTPHTTPTestResult
+func (tr SPTPHTTPTestResult) Err() error {
 	return tr.Error
 }
 
-// SPTPTestConfig is a configuration for Tester
-type SPTPTestConfig struct {
+// SPTPHTTPTestConfig is a configuration for Tester
+type SPTPHTTPTestConfig struct {
 	Server                         string
 	sptpurl                        string
 	LinearizabilityTestMaxGMOffset time.Duration
 }
 
 // Target sets the server to test
-func (p *SPTPTestConfig) Target(server string) {
+func (p *SPTPHTTPTestConfig) Target(server string) {
 	p.Server = server
 }
 
-// SPTPTester is basically a half of PTP unicast client
-type SPTPTester struct {
-	cfg *SPTPTestConfig
+// SPTPHTTPTester queries sptp http api to get linearizability metrics
+type SPTPHTTPTester struct {
+	cfg *SPTPHTTPTestConfig
 
 	// measurement result
-	result *SPTPTestResult
+	result *SPTPHTTPTestResult
 }
 
-// NewSPTPTester initializes a Tester
-func NewSPTPTester(server string, sptpurl string, linearizabilityTestMaxGMOffset time.Duration) (*SPTPTester, error) {
-	cfg := &SPTPTestConfig{
+// NewSPTPHTTPTester initializes a Tester
+func NewSPTPHTTPTester(server string, sptpurl string, linearizabilityTestMaxGMOffset time.Duration) (*SPTPHTTPTester, error) {
+	cfg := &SPTPHTTPTestConfig{
 		Server:                         server,
 		sptpurl:                        sptpurl,
 		LinearizabilityTestMaxGMOffset: linearizabilityTestMaxGMOffset,
 	}
 
-	t := &SPTPTester{
+	t := &SPTPHTTPTester{
 		cfg: cfg,
 	}
 	return t, nil
 }
 
 // Close the connection
-func (lt *SPTPTester) Close() error {
+func (lt *SPTPHTTPTester) Close() error {
 	return nil
 }
 
 // RunTest performs one Tester run and will exit on completion.
+// It collects sptp linearizability metrics from sptp http api.
 // The result of the test will be returned, including any error arising during the test.
 // Warning: the listener must be started via RunListener before calling this function.
-func (lt *SPTPTester) RunTest(_ context.Context) TestResult {
-	result := SPTPTestResult{
+func (lt *SPTPHTTPTester) RunTest(_ context.Context) TestResult {
+	result := SPTPHTTPTestResult{
 		Config: *lt.cfg,
 		Error:  nil,
 	}

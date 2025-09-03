@@ -706,10 +706,10 @@ func TestRunLinearizabilityTestsNoGMs(t *testing.T) {
 func TestNoTestResults(t *testing.T) {
 	targets := []string{"o", "l", "e", "g"}
 	want := map[string]linearizability.TestResult{
-		"o": linearizability.SPTPTestResult{Error: errNoTestResults},
-		"l": linearizability.SPTPTestResult{Error: errNoTestResults},
-		"e": linearizability.SPTPTestResult{Error: errNoTestResults},
-		"g": linearizability.SPTPTestResult{Error: errNoTestResults},
+		"o": linearizability.SPTPHTTPTestResult{Error: errNoTestResults},
+		"l": linearizability.SPTPHTTPTestResult{Error: errNoTestResults},
+		"e": linearizability.SPTPHTTPTestResult{Error: errNoTestResults},
+		"g": linearizability.SPTPHTTPTestResult{Error: errNoTestResults},
 	}
 
 	got := noTestResults(targets)

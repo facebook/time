@@ -176,7 +176,7 @@ func leapSecondSmearing(leaps []leapsectz.LeapSecond) *clockSmearing {
 func noTestResults(targets []string) map[string]linearizability.TestResult {
 	r := map[string]linearizability.TestResult{}
 	for _, target := range targets {
-		r[target] = linearizability.SPTPTestResult{Error: errNoTestResults}
+		r[target] = linearizability.SPTPHTTPTestResult{Error: errNoTestResults}
 	}
 	return r
 }
@@ -456,7 +456,7 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 			lt, found := testers[server]
 			if !found {
 				if s.cfg.SPTP {
-					lt, err = linearizability.NewSPTPTester(server, fmt.Sprintf("http://%s/", s.cfg.PTPClientAddress), s.cfg.LinearizabilityTestMaxGMOffset)
+					lt, err = linearizability.NewSPTPHTTPTester(server, fmt.Sprintf("http://%s/", s.cfg.PTPClientAddress), s.cfg.LinearizabilityTestMaxGMOffset)
 				} else {
 					lt, err = linearizability.NewPTP4lTester(server, s.cfg.Iface, false)
 				}
