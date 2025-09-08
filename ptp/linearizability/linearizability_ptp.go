@@ -105,9 +105,9 @@ func reqUnicast(clockID ptp.ClockIdentity, port uint16, duration time.Duration, 
 }
 
 // reqDelay is a helper to build ptp.SyncDelayReq
-func reqDelay(clockID ptp.ClockIdentity, port uint16, sptp bool) *ptp.SyncDelayReq {
+func reqDelay(clockID ptp.ClockIdentity, port uint16, proto PTPImplementation) *ptp.SyncDelayReq {
 	ptpFlags := ptp.FlagUnicast
-	if sptp {
+	if proto == SPTP {
 		ptpFlags = ptpFlags | ptp.FlagProfileSpecific1
 	}
 	return &ptp.SyncDelayReq{
@@ -134,6 +134,13 @@ const (
 	stateDone
 )
 
+type PTPImplementation int
+
+const (
+	IEEE1588 = iota
+	SPTP
+)
+
 var stateToString = map[state]string{
 	stateInit:       "INIT",
 	stateDone:       "DONE",
@@ -150,8 +157,8 @@ type inPacket struct {
 	ts   time.Time
 }
 
-// PTP4lTestResult is what we get after the test run
-type PTP4lTestResult struct {
+// PTPTestResult is what we get after the test run
+type PTPTestResult struct {
 	Server      string
 	RXTimestamp time.Time
 	TXTimestamp time.Time
@@ -159,17 +166,17 @@ type PTP4lTestResult struct {
 }
 
 // Target returns value of server
-func (tr PTP4lTestResult) Target() string {
+func (tr PTPTestResult) Target() string {
 	return tr.Server
 }
 
 // Delta is a difference between receiver's RX timestamp and our TX timestamp
-func (tr PTP4lTestResult) Delta() time.Duration {
+func (tr PTPTestResult) Delta() time.Duration {
 	return tr.RXTimestamp.Sub(tr.TXTimestamp)
 }
 
 // Good check if the test passed
-func (tr PTP4lTestResult) Good() (bool, error) {
+func (tr PTPTestResult) Good() (bool, error) {
 	if tr.Error != nil {
 		return false, tr.Error
 	}
@@ -182,7 +189,7 @@ func (tr PTP4lTestResult) Good() (bool, error) {
 }
 
 // Explain provides plain text explanation of linearizability test result
-func (tr PTP4lTestResult) Explain() string {
+func (tr PTPTestResult) Explain() string {
 	msg := fmt.Sprintf("linearizability test against %q", tr.Server)
 	good, err := tr.Good()
 	if good {
@@ -195,27 +202,27 @@ func (tr PTP4lTestResult) Explain() string {
 	return fmt.Sprintf("%s failed because delta (%v) between RX and TX timestamps is not positive. TX=%v, RX=%v", msg, d, tr.TXTimestamp, tr.RXTimestamp)
 }
 
-// Err returns an error value of the PTP4lTestResult
-func (tr PTP4lTestResult) Err() error {
+// Err returns an error value of the PTPTestResult
+func (tr PTPTestResult) Err() error {
 	return tr.Error
 }
 
-// PTP4lTestConfig is a configuration for Tester
-type PTP4lTestConfig struct {
+// PTPTestConfig is a configuration for Tester
+type PTPTestConfig struct {
 	Timeout   time.Duration
 	Server    string
 	Interface string
 }
 
 // Target sets the server to test
-func (p *PTP4lTestConfig) Target(server string) {
+func (p *PTPTestConfig) Target(server string) {
 	p.Server = server
 }
 
-// PTP4lTester is basically a half of PTP unicast client
-type PTP4lTester struct {
+// PTPTester is basically a half of PTP unicast client
+type PTPTester struct {
 	clockID         ptp.ClockIdentity
-	cfg             *PTP4lTestConfig
+	cfg             *PTPTestConfig
 	sequence        uint16
 	eConn           UDPConnWithTS
 	gConn           UDPConn
@@ -228,28 +235,28 @@ type PTP4lTester struct {
 	// chan for received packets regardless of port
 	inChan chan *inPacket
 	// measurement result
-	result *PTP4lTestResult
+	result *PTPTestResult
 	// state enum
 	state state
 	// per sequence
 	sendTS map[uint16]time.Time
-	// whether to use sptp or IEEE 1588 ptp
-	sptp bool
+	// Implementation of the PTP protocol to use (IEEE1588 or SPTP)
+	proto PTPImplementation
 }
 
-// NewPTP4lTester initializes a Tester
-func NewPTP4lTester(server string, iface string, useSPTP bool) (*PTP4lTester, error) {
-	cfg := &PTP4lTestConfig{
+// NewPTPTester initializes a Tester
+func NewPTPTester(server string, iface string, protocol PTPImplementation) (*PTPTester, error) {
+	cfg := &PTPTestConfig{
 		Timeout:   time.Second,
 		Server:    server,
 		Interface: iface,
 	}
 
-	t := &PTP4lTester{
+	t := &PTPTester{
 		inChan: make(chan *inPacket, 10),
 		cfg:    cfg,
 		sendTS: make(map[uint16]time.Time),
-		sptp:   useSPTP,
+		proto:  protocol,
 	}
 	if err := t.init(cfg.Interface, cfg.Server); err != nil {
 		return nil, err
@@ -258,20 +265,20 @@ func NewPTP4lTester(server string, iface string, useSPTP bool) (*PTP4lTester, er
 }
 
 // Close the connection
-func (lt *PTP4lTester) Close() error {
+func (lt *PTPTester) Close() error {
 	lt.eConn.Close()
 	return lt.gConn.Close()
 }
 
 // dedicated function just for logging state changes
-func (lt *PTP4lTester) setState(s state) {
+func (lt *PTPTester) setState(s state) {
 	if lt.state != s {
 		log.Debugf("Changing state to %s", s)
 		lt.state = s
 	}
 }
 
-func (lt *PTP4lTester) init(ifaceStr, destination string) error {
+func (lt *PTPTester) init(ifaceStr, destination string) error {
 	// get iface data and clock ID
 	iface, err := net.InterfaceByName(ifaceStr)
 	if err != nil {
@@ -329,7 +336,7 @@ func (lt *PTP4lTester) init(ifaceStr, destination string) error {
 	return nil
 }
 
-func (lt *PTP4lTester) sendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
+func (lt *PTPTester) sendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
 	seq := lt.sequence
 	p.SetSequence(lt.sequence)
 	b, err := ptp.Bytes(p)
@@ -347,7 +354,7 @@ func (lt *PTP4lTester) sendEventMsg(p ptp.Packet) (uint16, time.Time, error) {
 	return seq, hwts, nil
 }
 
-func (lt *PTP4lTester) sendGeneralMsg(p ptp.Packet) (uint16, error) {
+func (lt *PTPTester) sendGeneralMsg(p ptp.Packet) (uint16, error) {
 	seq := lt.sequence
 	p.SetSequence(lt.sequence)
 	b, err := ptp.Bytes(p)
@@ -365,9 +372,9 @@ func (lt *PTP4lTester) sendGeneralMsg(p ptp.Packet) (uint16, error) {
 	return seq, nil
 }
 
-func (lt *PTP4lTester) sendDelay() error {
+func (lt *PTPTester) sendDelay() error {
 	// form DelayReq, set OriginTimestamp to PHC time
-	delayReq := reqDelay(lt.clockID, lt.localEventPort, lt.sptp)
+	delayReq := reqDelay(lt.clockID, lt.localEventPort, lt.proto)
 	// send DelayReq, store TX ts
 	seq, hwts, err := lt.sendEventMsg(delayReq)
 	if err != nil {
@@ -378,7 +385,7 @@ func (lt *PTP4lTester) sendDelay() error {
 	return nil
 }
 
-func (lt *PTP4lTester) handleMsg(msg *inPacket) error {
+func (lt *PTPTester) handleMsg(msg *inPacket) error {
 	msgType, err := ptp.ProbeMsgType(msg.data)
 	if err != nil {
 		return err
@@ -438,7 +445,7 @@ func (lt *PTP4lTester) handleMsg(msg *inPacket) error {
 
 // runListener starts incoming packet listener.
 // It's meant to be run in a goroutine before issuing calls to RunTest.
-func (lt *PTP4lTester) runListener(ctx context.Context) {
+func (lt *PTPTester) runListener(ctx context.Context) {
 	listen := func(conn UDPConn, expectedAddr net.IP) {
 		for {
 			response := make([]uint8, 1024)
@@ -465,11 +472,11 @@ func (lt *PTP4lTester) runListener(ctx context.Context) {
 
 // runSingleTest performs one Tester run and will exit on completion.
 // The run consists of:
-// * sending the Unicast DelayResponse subscription on the receiver, if subDuration is not zero and not using sptp
-// * sending one DelayRequest (using sptp if lt.sptp is true)
+// * sending the Unicast DelayResponse subscription on the receiver if using IEEE 1588 and not already subscribed
+// * sending one DelayRequest
 // * receiving one DelayResponse
 // The result of the test will be stored in the lt.result variable, unless error was returned.
-func (lt *PTP4lTester) runSingleTest(ctx context.Context, subDuration time.Duration) error {
+func (lt *PTPTester) runSingleTest(ctx context.Context, subDuration time.Duration) error {
 	if !lt.listenerRunning {
 		go lt.runListener(ctx)
 	}
@@ -495,8 +502,8 @@ func (lt *PTP4lTester) runSingleTest(ctx context.Context, subDuration time.Durat
 				case stateInit:
 					// reset the result
 					lt.result = nil
-					if subDuration != 0 && !lt.sptp {
-						// request subscription
+					if subDuration != 0 && lt.proto == IEEE1588 {
+						// request subscription for IEEE 1588
 						reqDelayResp := reqUnicast(lt.clockID, lt.localEventPort, subDuration, ptp.MessageDelayResp)
 						_, err = lt.sendGeneralMsg(reqDelayResp)
 						if err != nil {
@@ -531,20 +538,19 @@ func simplifyIPv6(ipStr string) string {
 
 // RunTest performs one Tester run and will exit on completion.
 // The result of the test will be returned, including any error arising during the test.
-// If sptp is true, sptp is used. Otherwise, IEEE 1588 ptp is used
-func (lt *PTP4lTester) RunTest(ctx context.Context) TestResult {
+func (lt *PTPTester) RunTest(ctx context.Context) TestResult {
 	if !lt.listenerRunning {
 		go lt.runListener(ctx)
 	}
 
-	result := PTP4lTestResult{
+	result := PTPTestResult{
 		Server: lt.cfg.Server,
 	}
 	log.Debugf("test starting %s", simplifyIPv6(lt.cfg.Server))
 	err := lt.runSingleTest(ctx, 0)
 	log.Debugf("test done %s", simplifyIPv6(lt.cfg.Server))
-	// re-run with subscription request. Do not use subscription mechanism with sptp
-	if errors.Is(err, context.DeadlineExceeded) && !lt.sptp {
+	// re-run with subscription request for IEEE 1588
+	if errors.Is(err, context.DeadlineExceeded) && lt.proto == IEEE1588 {
 		log.Debugf("re-running timed out test with subscription renewal %s", simplifyIPv6(lt.cfg.Server))
 		err = lt.runSingleTest(ctx, time.Minute)
 		log.Debugf("test done %s", simplifyIPv6(lt.cfg.Server))
@@ -561,7 +567,7 @@ func (lt *PTP4lTester) RunTest(ctx context.Context) TestResult {
 	return result
 }
 
-func (lt *PTP4lTester) processTimestamp(sequenceID uint16, rxTimestamp time.Time) error {
+func (lt *PTPTester) processTimestamp(sequenceID uint16, rxTimestamp time.Time) error {
 	sendTS, found := lt.sendTS[sequenceID]
 	if !found {
 		expected := []uint16{}
@@ -574,7 +580,7 @@ func (lt *PTP4lTester) processTimestamp(sequenceID uint16, rxTimestamp time.Time
 	log.Debugf("we sent packet at %v", sendTS)
 	log.Debugf("it was received at %v", rxTimestamp)
 	log.Debugf("difference RX - TX = %v", rxTimestamp.Sub(sendTS))
-	lt.result = &PTP4lTestResult{
+	lt.result = &PTPTestResult{
 		Server:      lt.cfg.Server,
 		TXTimestamp: sendTS,
 		RXTimestamp: rxTimestamp,
