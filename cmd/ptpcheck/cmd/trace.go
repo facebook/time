@@ -83,7 +83,7 @@ func runTrace(cfg *client.Config) error {
 	err := c.Run()
 	// try to report in any case, we may have collected some data before failure
 	reportMeasurements(history)
-	if err != nil && !(errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+	if err != nil && (!errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)) {
 		return err
 	}
 	log.Info("done")

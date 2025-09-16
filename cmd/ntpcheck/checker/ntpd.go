@@ -174,7 +174,7 @@ func (n *NTPCheck) ServerStats() (*ServerStats, error) {
 	log.Debugf("More: %v", serverVars.HasMore())
 	log.Debugf("Data string: '%s'", string(serverVars.Data))
 
-	if serverVars.HasError() || !(len(serverVars.Data) > 0) {
+	if serverVars.HasError() || (len(serverVars.Data) <= 0) {
 		return nil, fmt.Errorf("Got bad 'server variables' response %+v", serverVars)
 	}
 
