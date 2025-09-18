@@ -58,7 +58,6 @@ func printOscillatord(status *oscillatord.Status) {
 	fmt.Printf("\tleap_second_change: %s (%d)\n", status.GNSS.LSChange, status.GNSS.LSChange)
 	fmt.Printf("\tleap_seconds: %d\n", status.GNSS.LeapSeconds)
 	fmt.Printf("\tsatellites_count: %d\n", status.GNSS.SatellitesCount)
-	fmt.Printf("\tsurvey_in_position_error: %d\n", status.GNSS.SurveyInPositionError)
 	fmt.Printf("\ttime_accuracy: %d\n", status.GNSS.TimeAccuracy)
 
 	fmt.Println("Clock:")

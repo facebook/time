@@ -35,7 +35,7 @@ func TestOscillatordRead(t *testing.T) {
 		_, err := server.Read(b)
 		require.Nil(t, err)
 		// write response
-		data := `{ "oscillator": { "model": "sa3x", "fine_ctrl": 0, "coarse_ctrl": 0, "lock": false, "temperature": 45.944000000000003 }, "gnss": { "fix": 5, "fixOk": true, "antenna_power": 1, "antenna_status": 4, "lsChange": 0, "leap_seconds": 18, "satellites_count": 10, "survey_in_position_error": 12, "time_accuracy": 13 }, "clock": { "class": "Holdover", "offset": -265095 } }`
+		data := `{ "oscillator": { "model": "sa3x", "fine_ctrl": 0, "coarse_ctrl": 0, "lock": false, "temperature": 45.944000000000003 }, "gnss": { "fix": 5, "fixOk": true, "antenna_power": 1, "antenna_status": 4, "lsChange": 0, "leap_seconds": 18, "satellites_count": 10, "time_accuracy": 13 }, "clock": { "class": "Holdover", "offset": -265095 } }`
 		_, err = server.Write([]byte(data))
 		require.Nil(t, err)
 	}()
@@ -50,15 +50,14 @@ func TestOscillatordRead(t *testing.T) {
 			Temperature: 45.944,
 		},
 		GNSS: GNSS{
-			Fix:                   Fix3D,
-			FixOK:                 true,
-			AntennaPower:          AntPowerOn,
-			AntennaStatus:         AntStatusOpen,
-			LSChange:              LeapNoWarning,
-			LeapSeconds:           18,
-			SatellitesCount:       10,
-			SurveyInPositionError: 12,
-			TimeAccuracy:          13,
+			Fix:             Fix3D,
+			FixOK:           true,
+			AntennaPower:    AntPowerOn,
+			AntennaStatus:   AntStatusOpen,
+			LSChange:        LeapNoWarning,
+			LeapSeconds:     18,
+			SatellitesCount: 10,
+			TimeAccuracy:    13,
 		},
 		Clock: Clock{
 			Class:  ClockClassHoldover,
@@ -185,7 +184,7 @@ func TestClockClassUnmarshalText(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	expected := `{"ptp.timecard.clock.class":7,"ptp.timecard.clock.offset_ns":-265095,"ptp.timecard.gnss.antenna_power":1,"ptp.timecard.gnss.antenna_status":4,"ptp.timecard.gnss.fix_num":5,"ptp.timecard.gnss.fix_ok":1,"ptp.timecard.gnss.leap_second_change":0,"ptp.timecard.gnss.leap_seconds":18,"ptp.timecard.gnss.satellites_count":10,"ptp.timecard.gnss.survey_in_position_error":12,"ptp.timecard.gnss.time_accuracy_ns":13,"ptp.timecard.oscillator.coarse_ctrl":42,"ptp.timecard.oscillator.fine_ctrl":4242,"ptp.timecard.oscillator.lock":0,"ptp.timecard.oscillator.temperature":45.944}`
+	expected := `{"ptp.timecard.clock.class":7,"ptp.timecard.clock.offset_ns":-265095,"ptp.timecard.gnss.antenna_power":1,"ptp.timecard.gnss.antenna_status":4,"ptp.timecard.gnss.fix_num":5,"ptp.timecard.gnss.fix_ok":1,"ptp.timecard.gnss.leap_second_change":0,"ptp.timecard.gnss.leap_seconds":18,"ptp.timecard.gnss.satellites_count":10,"ptp.timecard.gnss.time_accuracy_ns":13,"ptp.timecard.oscillator.coarse_ctrl":42,"ptp.timecard.oscillator.fine_ctrl":4242,"ptp.timecard.oscillator.lock":0,"ptp.timecard.oscillator.temperature":45.944}`
 	s := &Status{
 		Oscillator: Oscillator{
 			Model:       "sa5x",
@@ -195,15 +194,14 @@ func TestJSON(t *testing.T) {
 			Temperature: 45.944,
 		},
 		GNSS: GNSS{
-			Fix:                   Fix3D,
-			FixOK:                 true,
-			AntennaPower:          AntPowerOn,
-			AntennaStatus:         AntStatusOpen,
-			LSChange:              LeapNoWarning,
-			LeapSeconds:           18,
-			SatellitesCount:       10,
-			SurveyInPositionError: 12,
-			TimeAccuracy:          13,
+			Fix:             Fix3D,
+			FixOK:           true,
+			AntennaPower:    AntPowerOn,
+			AntennaStatus:   AntStatusOpen,
+			LSChange:        LeapNoWarning,
+			LeapSeconds:     18,
+			SatellitesCount: 10,
+			TimeAccuracy:    13,
 		},
 		Clock: Clock{
 			Class:  ClockClassHoldover,

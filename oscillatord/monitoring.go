@@ -215,15 +215,14 @@ type Oscillator struct {
 
 // GNSS describes structure that oscillatord returns for gnss
 type GNSS struct {
-	Fix                   GNSSFix          `json:"fix"`
-	FixOK                 bool             `json:"fixOk"`
-	AntennaPower          AntennaPower     `json:"antenna_power"`
-	AntennaStatus         AntennaStatus    `json:"antenna_status"`
-	LSChange              LeapSecondChange `json:"lsChange"`
-	LeapSeconds           int              `json:"leap_seconds"`
-	SatellitesCount       int              `json:"satellites_count"`
-	SurveyInPositionError int              `json:"survey_in_position_error"`
-	TimeAccuracy          int              `json:"time_accuracy"`
+	Fix             GNSSFix          `json:"fix"`
+	FixOK           bool             `json:"fixOk"`
+	AntennaPower    AntennaPower     `json:"antenna_power"`
+	AntennaStatus   AntennaStatus    `json:"antenna_status"`
+	LSChange        LeapSecondChange `json:"lsChange"`
+	LeapSeconds     int              `json:"leap_seconds"`
+	SatellitesCount int              `json:"satellites_count"`
+	TimeAccuracy    time.Duration    `json:"time_accuracy"`
 }
 
 // Clock describes structure that oscillatord returns for clock
@@ -246,21 +245,20 @@ func (s *Status) MonitoringJSON(prefix string) ([]byte, error) {
 	}
 
 	output := map[string]any{
-		fmt.Sprintf("%soscillator.temperature", prefix):        s.Oscillator.Temperature,
-		fmt.Sprintf("%soscillator.fine_ctrl", prefix):          int64(s.Oscillator.FineCtrl),
-		fmt.Sprintf("%soscillator.coarse_ctrl", prefix):        int64(s.Oscillator.CoarseCtrl),
-		fmt.Sprintf("%soscillator.lock", prefix):               bool2int(s.Oscillator.Lock),
-		fmt.Sprintf("%sgnss.fix_num", prefix):                  int64(s.GNSS.Fix),
-		fmt.Sprintf("%sgnss.fix_ok", prefix):                   bool2int(s.GNSS.FixOK),
-		fmt.Sprintf("%sgnss.antenna_power", prefix):            int64(s.GNSS.AntennaPower),
-		fmt.Sprintf("%sgnss.antenna_status", prefix):           int64(s.GNSS.AntennaStatus),
-		fmt.Sprintf("%sgnss.leap_second_change", prefix):       int64(s.GNSS.LSChange),
-		fmt.Sprintf("%sgnss.leap_seconds", prefix):             int64(s.GNSS.LeapSeconds),
-		fmt.Sprintf("%sgnss.satellites_count", prefix):         int64(s.GNSS.SatellitesCount),
-		fmt.Sprintf("%sgnss.survey_in_position_error", prefix): int64(s.GNSS.SurveyInPositionError),
-		fmt.Sprintf("%sgnss.time_accuracy_ns", prefix):         int64(s.GNSS.TimeAccuracy),
-		fmt.Sprintf("%sclock.class", prefix):                   int64(s.Clock.Class),
-		fmt.Sprintf("%sclock.offset_ns", prefix):               int64(s.Clock.Offset),
+		fmt.Sprintf("%soscillator.temperature", prefix):  s.Oscillator.Temperature,
+		fmt.Sprintf("%soscillator.fine_ctrl", prefix):    int64(s.Oscillator.FineCtrl),
+		fmt.Sprintf("%soscillator.coarse_ctrl", prefix):  int64(s.Oscillator.CoarseCtrl),
+		fmt.Sprintf("%soscillator.lock", prefix):         bool2int(s.Oscillator.Lock),
+		fmt.Sprintf("%sgnss.fix_num", prefix):            int64(s.GNSS.Fix),
+		fmt.Sprintf("%sgnss.fix_ok", prefix):             bool2int(s.GNSS.FixOK),
+		fmt.Sprintf("%sgnss.antenna_power", prefix):      int64(s.GNSS.AntennaPower),
+		fmt.Sprintf("%sgnss.antenna_status", prefix):     int64(s.GNSS.AntennaStatus),
+		fmt.Sprintf("%sgnss.leap_second_change", prefix): int64(s.GNSS.LSChange),
+		fmt.Sprintf("%sgnss.leap_seconds", prefix):       int64(s.GNSS.LeapSeconds),
+		fmt.Sprintf("%sgnss.satellites_count", prefix):   int64(s.GNSS.SatellitesCount),
+		fmt.Sprintf("%sgnss.time_accuracy_ns", prefix):   int64(s.GNSS.TimeAccuracy),
+		fmt.Sprintf("%sclock.class", prefix):             int64(s.Clock.Class),
+		fmt.Sprintf("%sclock.offset_ns", prefix):         int64(s.Clock.Offset),
 	}
 	return json.Marshal(output)
 }
