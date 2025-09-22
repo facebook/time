@@ -28,6 +28,7 @@ import (
 	"github.com/facebook/time/fbclock/stats"
 	ptp "github.com/facebook/time/ptp/protocol"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -137,12 +138,12 @@ func TestLinearizabilityTestRunTest(t *testing.T) {
 				}
 				return 20, nil
 			default:
-				t.Errorf("got unexpected grant for %s", msgType)
+				assert.Fail(t, fmt.Sprintf("got unexpected grant for %s", msgType))
 			}
 		case *ptp.CancelUnicastTransmissionTLV:
 			return 0, nil
 		default:
-			t.Errorf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type())
+			assert.Fail(t, fmt.Sprintf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type()))
 		}
 		return 10, nil
 	})
@@ -254,12 +255,12 @@ func TestLinearizabilityTestRunSingleTest(t *testing.T) {
 				}
 				return 20, nil
 			default:
-				t.Errorf("got unexpected grant for %s", msgType)
+				assert.Fail(t, fmt.Sprintf("got unexpected grant for %s", msgType))
 			}
 		case *ptp.CancelUnicastTransmissionTLV:
 			return 0, nil
 		default:
-			t.Errorf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type())
+			assert.Fail(t, fmt.Sprintf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type()))
 		}
 		return 10, nil
 	})
@@ -369,12 +370,12 @@ func TestLinearizabilityTestRunSingleTestError(t *testing.T) {
 				}
 				return 20, nil
 			default:
-				t.Errorf("got unexpected grant for %s", msgType)
+				assert.Fail(t, fmt.Sprintf("got unexpected grant for %s", msgType))
 			}
 		case *ptp.CancelUnicastTransmissionTLV:
 			return 0, nil
 		default:
-			t.Errorf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type())
+			assert.Fail(t, fmt.Sprintf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type()))
 		}
 		return 10, nil
 	})
