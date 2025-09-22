@@ -135,7 +135,7 @@ func (s *JSONStats) IncWorkerSubs(workerid int) {
 
 // IncReload atomically add 1 to the counter
 func (s *JSONStats) IncReload() {
-	atomic.StoreInt64(&s.reload, 1)
+	atomic.AddInt64(&s.reload, 1)
 }
 
 // DecSubscription atomically removes 1 from the counter
@@ -194,7 +194,7 @@ func (s *JSONStats) SetMaxTXTSAttempts(workerid int, attempts int64) {
 
 // IncTXTSMissing atomically increments the counter when all retries to get latest TX timestamp exceeded
 func (s *JSONStats) IncTXTSMissing() {
-	atomic.StoreInt64(&s.txtsMissing, 1)
+	atomic.AddInt64(&s.txtsMissing, 1)
 }
 
 // SetUTCOffsetSec atomically sets the utcoffset
