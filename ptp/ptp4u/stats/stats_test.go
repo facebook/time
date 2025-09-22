@@ -17,6 +17,7 @@ limitations under the License.
 package stats
 
 import (
+	"slices"
 	"testing"
 
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -34,11 +35,8 @@ func TestSyncMapInt64Keys(t *testing.T) {
 
 	found := 0
 	for _, k := range s.keys() {
-		for _, i := range expected {
-			if i == k {
-				found++
-				break
-			}
+		if slices.Contains(expected, k) {
+			found++
 		}
 	}
 
