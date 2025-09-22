@@ -235,12 +235,12 @@ func TestClientRun(t *testing.T) {
 				}
 				return 20, nil
 			default:
-				t.Errorf("got unexpected grant for %s", msgType)
+				require.Fail(t, "got unexpected grant", "message type: %s", msgType)
 			}
 		case *ptp.CancelUnicastTransmissionTLV:
 			return 0, nil
 		default:
-			t.Errorf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type())
+			require.Fail(t, "got unsupported TLV type", "type: %s(%d)", tlv.Type(), tlv.Type())
 		}
 		return 10, nil
 	}).Times(4)
