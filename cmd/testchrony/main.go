@@ -90,7 +90,7 @@ func runCommand(address string, cmd string) error {
 		}
 		nSources := response.(*chrony.ReplySources).NSources
 		fmt.Printf("Got %d sources\n", nSources)
-		for i := 0; i < nSources; i++ {
+		for i := range nSources {
 			req := chrony.NewSourceDataPacket(int32(i))
 			sourceData, err := client.Communicate(req)
 			if err != nil {
@@ -113,7 +113,7 @@ func runCommand(address string, cmd string) error {
 		}
 		nSources := response.(*chrony.ReplySources).NSources
 		fmt.Printf("Got %d sources\n", nSources)
-		for i := 0; i < nSources; i++ {
+		for i := range nSources {
 			req := chrony.NewSourceStatsPacket(int32(i))
 			selectData, err := client.Communicate(req)
 			if err != nil {
@@ -143,7 +143,7 @@ func runCommand(address string, cmd string) error {
 		}
 		nSources := response.(*chrony.ReplySources).NSources
 		fmt.Printf("Got %d sources\n", nSources)
-		for i := 0; i < nSources; i++ {
+		for i := range nSources {
 			sourceDataReq := chrony.NewSourceDataPacket(int32(i))
 			packet, err := client.Communicate(sourceDataReq)
 			if err != nil {
@@ -165,7 +165,7 @@ func runCommand(address string, cmd string) error {
 		}
 		nSources := response.(*chrony.ReplySources).NSources
 		fmt.Printf("Got %d sources\n", nSources)
-		for i := 0; i < nSources; i++ {
+		for i := range nSources {
 			sourceDataReq := chrony.NewSourceDataPacket(int32(i))
 			packet, err := client.Communicate(sourceDataReq)
 			if err != nil {
@@ -187,7 +187,7 @@ func runCommand(address string, cmd string) error {
 		}
 		nSources := response.(*chrony.ReplySources).NSources
 		fmt.Printf("Got %d sources\n", nSources)
-		for i := 0; i < nSources; i++ {
+		for i := range nSources {
 			req := chrony.NewSelectDataPacket(int32(i))
 			selectData, err := client.Communicate(req)
 			if err != nil {
