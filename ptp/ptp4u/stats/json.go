@@ -73,6 +73,7 @@ func (s *JSONStats) Snapshot() {
 	s.report.drain = s.drain
 	s.report.reload = s.reload
 	s.report.txtsMissing = s.txtsMissing
+	s.report.minMaxCF = s.minMaxCF
 }
 
 // handleRequest is a handler used for all http monitoring requests
@@ -195,6 +196,33 @@ func (s *JSONStats) SetMaxTXTSAttempts(workerid int, attempts int64) {
 // IncTXTSMissing atomically increments the counter when all retries to get latest TX timestamp exceeded
 func (s *JSONStats) IncTXTSMissing() {
 	atomic.AddInt64(&s.txtsMissing, 1)
+}
+
+// SetMinMaxCF atomically sets max CF value observed (assuming all CF values are positive)
+// or min CF (if any CF values are negative)
+// CF values may be negative if PTP TCs are malfunctioning
+func (s *JSONStats) SetMinMaxCF(cf int64) {
+	for {
+		mmCF := atomic.LoadInt64(&s.minMaxCF)
+		var shouldUpdate bool
+
+		if cf > 0 && mmCF >= 0 && cf > mmCF {
+			shouldUpdate = true
+		} else if cf <= 0 && cf < mmCF {
+			shouldUpdate = true
+		}
+
+		if !shouldUpdate {
+			return
+		}
+
+		// Atomically compare and swap - retry if another goroutine modified the value
+		if atomic.CompareAndSwapInt64(&s.minMaxCF, mmCF, cf) {
+			return
+		}
+		// If CompareAndSwap failed, another goroutine modified the value
+		// Continue the loop to retry with the new value
+	}
 }
 
 // SetUTCOffsetSec atomically sets the utcoffset

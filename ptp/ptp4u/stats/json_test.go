@@ -22,6 +22,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -202,6 +203,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	stats.IncReload()
 	stats.IncTXTSMissing()
 	stats.IncTXTSMissing()
+	stats.SetMinMaxCF(6969)
 
 	stats.Snapshot()
 
@@ -216,6 +218,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	expectedStats.drain = 1
 	expectedStats.reload = 2
 	expectedStats.txtsMissing = 2
+	expectedStats.minMaxCF = 6969
 
 	require.Equal(t, expectedStats.subscriptions.m, stats.report.subscriptions.m)
 	require.Equal(t, expectedStats.tx.m, stats.report.tx.m)
@@ -226,6 +229,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	require.Equal(t, expectedStats.drain, stats.report.drain)
 	require.Equal(t, expectedStats.reload, stats.report.reload)
 	require.Equal(t, expectedStats.txtsMissing, stats.report.txtsMissing)
+	require.Equal(t, expectedStats.minMaxCF, stats.report.minMaxCF)
 }
 
 func TestJSONExport(t *testing.T) {
@@ -252,6 +256,7 @@ func TestJSONExport(t *testing.T) {
 	stats.IncReload()
 	stats.IncTXTSMissing()
 	stats.IncTXTSMissing()
+	stats.SetMinMaxCF(6969)
 
 	stats.Snapshot()
 
@@ -277,6 +282,145 @@ func TestJSONExport(t *testing.T) {
 	expectedMap["drain"] = 1
 	expectedMap["reload"] = 3
 	expectedMap["txts.missing"] = 2
+	expectedMap["min_max_cf"] = 6969
 
 	require.Equal(t, expectedMap, data)
+}
+
+func TestJSONStatsSetMinMaxCF_PositiveMax(t *testing.T) {
+	stats := NewJSONStats()
+
+	// Test positive values - should update to maximum
+	stats.SetMinMaxCF(100)
+	require.Equal(t, int64(100), atomic.LoadInt64(&stats.minMaxCF))
+
+	stats.SetMinMaxCF(200) // Higher - should update
+	require.Equal(t, int64(200), atomic.LoadInt64(&stats.minMaxCF))
+
+	stats.SetMinMaxCF(150) // Lower - should not update
+	require.Equal(t, int64(200), atomic.LoadInt64(&stats.minMaxCF))
+
+	stats.SetMinMaxCF(300) // Higher - should update
+	require.Equal(t, int64(300), atomic.LoadInt64(&stats.minMaxCF))
+}
+
+func TestJSONStatsSetMinMaxCF_NegativeMin(t *testing.T) {
+	stats := NewJSONStats()
+
+	// Test negative values - should update to minimum (most negative)
+	stats.SetMinMaxCF(-100)
+	require.Equal(t, int64(-100), atomic.LoadInt64(&stats.minMaxCF))
+
+	stats.SetMinMaxCF(-200) // More negative - should update
+	require.Equal(t, int64(-200), atomic.LoadInt64(&stats.minMaxCF))
+
+	stats.SetMinMaxCF(-150) // Less negative - should not update
+	require.Equal(t, int64(-200), atomic.LoadInt64(&stats.minMaxCF))
+
+	stats.SetMinMaxCF(-300) // More negative - should update
+	require.Equal(t, int64(-300), atomic.LoadInt64(&stats.minMaxCF))
+}
+
+func TestJSONStatsSetMinMaxCF_MixedValues(t *testing.T) {
+	stats := NewJSONStats()
+
+	// Start with positive value
+	stats.SetMinMaxCF(100)
+	require.Equal(t, int64(100), atomic.LoadInt64(&stats.minMaxCF))
+
+	// Negative value should update when we have positive
+	stats.SetMinMaxCF(-50)
+	require.Equal(t, int64(-50), atomic.LoadInt64(&stats.minMaxCF))
+
+	// Reset and start with negative
+	atomic.StoreInt64(&stats.minMaxCF, 0)
+	stats.SetMinMaxCF(-100)
+	require.Equal(t, int64(-100), atomic.LoadInt64(&stats.minMaxCF))
+
+	// Positive value should not update when we have negative
+	stats.SetMinMaxCF(50)
+	require.Equal(t, int64(-100), atomic.LoadInt64(&stats.minMaxCF))
+}
+
+func TestJSONStatsSetMinMaxCF_ZeroHandling(t *testing.T) {
+	stats := NewJSONStats()
+
+	// Start with 0 (initial state)
+	require.Equal(t, int64(0), atomic.LoadInt64(&stats.minMaxCF))
+
+	// First positive update should work
+	stats.SetMinMaxCF(50)
+	require.Equal(t, int64(50), atomic.LoadInt64(&stats.minMaxCF))
+
+	// Reset to 0 and test negative
+	atomic.StoreInt64(&stats.minMaxCF, 0)
+	stats.SetMinMaxCF(-50)
+	require.Equal(t, int64(-50), atomic.LoadInt64(&stats.minMaxCF))
+
+	// Reset to 0 and test zero doesn't update from positive
+	atomic.StoreInt64(&stats.minMaxCF, 100)
+	stats.SetMinMaxCF(0)
+	require.Equal(t, int64(0), atomic.LoadInt64(&stats.minMaxCF))
+}
+
+func TestJSONStatsSetMinMaxCF_AtomicBehavior(t *testing.T) {
+	stats := NewJSONStats()
+
+	// Test Compare-And-Swap behavior by verifying updates are atomic
+	stats.SetMinMaxCF(100)
+	original := atomic.LoadInt64(&stats.minMaxCF)
+	require.Equal(t, int64(100), original)
+
+	// Multiple updates should still result in the maximum
+	stats.SetMinMaxCF(50)  // Should not update
+	stats.SetMinMaxCF(200) // Should update
+	stats.SetMinMaxCF(75)  // Should not update
+	stats.SetMinMaxCF(300) // Should update
+
+	final := atomic.LoadInt64(&stats.minMaxCF)
+	require.Equal(t, int64(300), final)
+}
+
+func TestJSONStatsSetMinMaxCF_SnapshotBehavior(t *testing.T) {
+	stats := NewJSONStats()
+
+	// Set value in main field
+	stats.SetMinMaxCF(42424)
+	require.Equal(t, int64(42424), atomic.LoadInt64(&stats.minMaxCF))
+
+	// Before snapshot, report field should be 0
+	require.Equal(t, int64(0), stats.report.minMaxCF)
+
+	// After snapshot, report field should match main field
+	stats.Snapshot()
+	require.Equal(t, int64(42424), stats.report.minMaxCF)
+	require.Equal(t, int64(42424), atomic.LoadInt64(&stats.minMaxCF))
+}
+
+func TestJSONStatsSetMinMaxCF_EdgeCases(t *testing.T) {
+	stats := NewJSONStats()
+
+	// Test boundary values
+	stats.SetMinMaxCF(1)
+	require.Equal(t, int64(1), atomic.LoadInt64(&stats.minMaxCF))
+
+	stats.SetMinMaxCF(-1)
+	require.Equal(t, int64(-1), atomic.LoadInt64(&stats.minMaxCF)) // Should not update
+
+	// Reset and test the other way
+	atomic.StoreInt64(&stats.minMaxCF, 0)
+	stats.SetMinMaxCF(-1)
+	require.Equal(t, int64(-1), atomic.LoadInt64(&stats.minMaxCF))
+
+	stats.SetMinMaxCF(1)
+	require.Equal(t, int64(-1), atomic.LoadInt64(&stats.minMaxCF)) // Should not update
+
+	// Test very large values
+	atomic.StoreInt64(&stats.minMaxCF, 0)
+	stats.SetMinMaxCF(9223372036854775807) // Max int64
+	require.Equal(t, int64(9223372036854775807), atomic.LoadInt64(&stats.minMaxCF))
+
+	atomic.StoreInt64(&stats.minMaxCF, 0)
+	stats.SetMinMaxCF(-9223372036854775808) // Min int64
+	require.Equal(t, int64(-9223372036854775808), atomic.LoadInt64(&stats.minMaxCF))
 }

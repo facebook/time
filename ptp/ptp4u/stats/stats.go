@@ -101,6 +101,9 @@ type Stats interface {
 	// IncTXTSMissing atomically increments the counter when all retries to get latest TX timestamp exceeded
 	IncTXTSMissing()
 
+	// SetMinMaxCF atomically sets min/max CF value observed
+	SetMinMaxCF(cf int64)
+
 	// SetUTCOffsetSec atomically sets the utcoffset
 	SetUTCOffsetSec(utcoffsetSec int64)
 
@@ -198,6 +201,7 @@ type counters struct {
 	drain             int64
 	reload            int64
 	txtsMissing       int64
+	minMaxCF          int64
 }
 
 func (c *counters) init() {
@@ -230,6 +234,7 @@ func (c *counters) reset() {
 	c.drain = 0
 	c.reload = 0
 	c.txtsMissing = 0
+	c.minMaxCF = 0
 }
 
 // toMap converts counters to a map
@@ -299,6 +304,7 @@ func (c *counters) toMap() (export map[string]int64) {
 	res["drain"] = c.drain
 	res["reload"] = c.reload
 	res["txts.missing"] = c.txtsMissing
+	res["min_max_cf"] = c.minMaxCF
 
 	return res
 }

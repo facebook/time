@@ -259,6 +259,10 @@ func (s *sendWorker) Start() {
 				}
 				s.stats.IncTX(c.subscriptionType)
 			case ptp.MessageDelayReq:
+				// Correction Field metrics enable detection of path issues and malfunctioning TCs
+				cf := c.announceP.CorrectionField
+				s.stats.SetMinMaxCF(int64(cf.Duration()))
+
 				// send sync
 				n, err = ptp.BytesTo(c.Sync(), buf)
 				if err != nil {
