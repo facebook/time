@@ -18,6 +18,8 @@ package leaphash
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestHashShouldMatch verifies that the hash value computed from testDoc
@@ -25,9 +27,7 @@ import (
 func TestHashShouldMatch(t *testing.T) {
 	hash := Compute(testDoc)
 	expected := "44dcf58c e28d25aa b36612c8 f3d3e8b5 a8fdf478"
-	if hash != expected {
-		t.Fatalf("invalid hash value, got '%s', expected '%s'", hash, expected)
-	}
+	require.Equal(t, expected, hash)
 }
 
 func FuzzCompute(f *testing.F) {
