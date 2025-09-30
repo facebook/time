@@ -386,7 +386,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 	startTime := time.Duration(1647359186979431900)
 	var d *DataPoint
 	adj := 212131.0
-	for i := 0; i < 58; i++ {
+	for i := range 58 {
 		if i%2 == 0 {
 			adj += float64(i)
 		} else {
@@ -524,7 +524,7 @@ func TestDaemonDoWork(t *testing.T) {
 	var d *DataPoint
 
 	// bad data (ptp4l is just starting)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		d = &DataPoint{
 			IngressTimeNS:     0,
 			MasterOffsetNS:    0,
@@ -547,7 +547,7 @@ func TestDaemonDoWork(t *testing.T) {
 	}
 	// good data
 	adj := 212131.0
-	for i := 0; i < 58; i++ {
+	for i := range 58 {
 		if i%2 == 0 {
 			adj += float64(i)
 		} else {
