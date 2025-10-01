@@ -38,7 +38,7 @@ func newSlidingWindow(size int) *slidingWindow {
 		samples: make([]float64, size),
 		sorted:  make([]float64, size),
 	}
-	for i := 0; i < w.size; i++ {
+	for i := range w.size {
 		w.samples[i] = math.NaN()
 		w.sorted[i] = math.NaN()
 	}
