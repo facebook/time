@@ -58,22 +58,22 @@ func TestWorkerQueue(t *testing.T) {
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 
 	scA := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, interval, expire)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		w.queue <- scA
 	}
 
 	scS := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageSync, c, interval, expire)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		w.queue <- scS
 	}
 
 	scDR := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageDelayResp, c, interval, expire)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		w.queue <- scDR
 	}
 
 	scSig := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageSignaling, c, interval, expire)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		w.signalingQueue <- scSig
 	}
 
