@@ -43,7 +43,7 @@ func CRC16(data []byte) uint16 {
 		part := uint16(character)
 
 		u16CRC = u16CRC ^ (part << 8)
-		for i := 0; i < 8; i++ {
+		for range 8 {
 			if u16CRC&0x8000 > 0 {
 				u16CRC = u16CRC<<1 ^ 0x1021
 			} else {
