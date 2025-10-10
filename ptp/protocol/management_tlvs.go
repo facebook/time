@@ -155,7 +155,7 @@ var mgmtTLVDecoder = map[ManagementID]MgmtTLVDecoderFunc{
 		}
 		tlv.UnicastMasterTable.UnicastMasters = make([]UnicastMasterEntry, int(tlv.UnicastMasterTable.ActualTableSize))
 		n := binary.Size(tlv.ManagementTLVHead) + binary.Size(tlv.UnicastMasterTable.ActualTableSize)
-		for i := 0; i < int(tlv.UnicastMasterTable.ActualTableSize); i++ {
+		for i := range int(tlv.UnicastMasterTable.ActualTableSize) {
 			entry := UnicastMasterEntry{}
 			if err := entry.UnmarshalBinary(data[n:]); err != nil {
 				return nil, err
