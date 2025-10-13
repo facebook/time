@@ -21,30 +21,37 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sync"
+	"sync/atomic"
 )
 
 // Client talks to chronyd
 type Client struct {
 	Connection io.ReadWriter
 	Sequence   uint32
+	sync.Mutex
 }
 
 // Communicate sends the packet to chronyd, parse response into something usable
 func (n *Client) Communicate(packet RequestPacket) (ResponsePacket, error) {
-	n.Sequence++
-	packet.SetSequence(n.Sequence)
+	seq := atomic.AddUint32(&n.Sequence, 1)
+	packet.SetSequence(seq)
 
 	var buf bytes.Buffer
 	if err := binary.Write(&buf, binary.BigEndian, packet); err != nil {
 		return nil, fmt.Errorf("failed to encode packet: %w", err)
 	}
 
+	response := make([]uint8, 1024)
+
+	n.Lock()
 	if _, err := n.Connection.Write(buf.Bytes()); err != nil {
+		n.Unlock()
 		return nil, fmt.Errorf("failed to write packet to connection: %w", err)
 	}
 
-	response := make([]uint8, 1024)
 	read, err := n.Connection.Read(response)
+	n.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("connection.Read failed: %w", err)
 	}
