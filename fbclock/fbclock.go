@@ -66,6 +66,11 @@ func NewFBClock() (*FBClock, error) {
 	return NewFBClockCustom(C.FBCLOCK_PATH)
 }
 
+// NewFBClockV2 returns new FBClock wrapper using v2 data structure
+func NewFBClockV2() (*FBClock, error) {
+	return NewFBClockCustom(C.FBCLOCK_PATH_V2)
+}
+
 // Close destroys fbclock wrapper
 func (f *FBClock) Close() error {
 	errCode := C.fbclock_destroy(f.cFBClock)
