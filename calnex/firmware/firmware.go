@@ -133,7 +133,7 @@ func ParallelFirmwareUpgrade(devices []string, insecureTLS bool, fw FW, ufw Caln
 	var wg = sync.WaitGroup{}
 	errors := make([]error, 0, len(devices))
 	errorMutex := sync.Mutex{}
-	for i := 0; i < len(devices); i++ {
+	for i := range len(devices) {
 		wg.Add(1)
 		device := devices[i]
 		go func(device string) {
