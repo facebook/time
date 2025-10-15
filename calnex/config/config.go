@@ -86,6 +86,11 @@ func (c *config) measureConfig(target string, s *ini.Section, mc map[api.Channel
 	channelEnabled := make(map[api.Channel]bool)
 
 	for ch, m := range mc {
+		// Check that physical channel (not virtual) is installed before trying to change any settings
+		if c.chGet(s, ch, "installed") != "1" {
+			log.Debugf("%s: no change to channel %s it is not installed", target, ch)
+			continue
+		}
 		channelEnabled[ch] = true
 		probe := ""
 
@@ -146,7 +151,7 @@ func (c *config) measureConfig(target string, s *ini.Section, mc map[api.Channel
 		c.set(target, s, probe, m.Probe.CalnexName())
 	}
 
-	// Disable unused channels
+	// Disable unused channels, only channels that have already been checked for installation can get here
 	for ch, datatype := range api.MeasureChannelDatatypeMap {
 		if !channelEnabled[ch] {
 			c.set(target, s, fmt.Sprintf("%s\\used", ch.CalnexAPI()), api.NO)
@@ -203,8 +208,10 @@ func (c *config) baseConfig(target string, measure *ini.Section, gnss *ini.Secti
 
 	// Enable 1st Physical channel
 	c.set(target, measure, fmt.Sprintf("%s\\used", api.ChannelONE.CalnexAPI()), api.YES)
-	// Disable 2nd Physical channel
-	c.set(target, measure, fmt.Sprintf("%s\\used", api.ChannelTWO.CalnexAPI()), api.NO)
+	// Disable 2nd Physical channel only if it is installed
+	if maxChannel == api.ChannelTWO {
+		c.set(target, measure, fmt.Sprintf("%s\\used", api.ChannelTWO.CalnexAPI()), api.NO)
+	}
 
 	// Disable packet measurement on the two physical channel measurements
 	c.chSet(target, measure, api.ChannelONE, maxChannel, "%s\\protocol_enabled", api.OFF)
