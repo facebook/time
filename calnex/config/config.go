@@ -151,9 +151,9 @@ func (c *config) measureConfig(target string, s *ini.Section, mc map[api.Channel
 		c.set(target, s, probe, m.Probe.CalnexName())
 	}
 
-	// Disable unused channels, only channels that have already been checked for installation can get here
+	// Disable unused channels
 	for ch, datatype := range api.MeasureChannelDatatypeMap {
-		if !channelEnabled[ch] {
+		if !channelEnabled[ch] && c.chGet(s, ch, "installed") == "1" {
 			c.set(target, s, fmt.Sprintf("%s\\used", ch.CalnexAPI()), api.NO)
 			if datatype == api.TWOWAYTE {
 				c.set(target, s, fmt.Sprintf("%s\\protocol_enabled", ch.CalnexAPI()), api.OFF)
