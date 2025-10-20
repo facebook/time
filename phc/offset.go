@@ -91,13 +91,13 @@ func SysoffEstimateBasic(ts1, rt, ts2 time.Time) SysoffResult {
 // the logic is loosely based on sysoff_estimate from ptp4l sysoff.c
 func (extended *PTPSysOffsetExtended) BestSample() SysoffResult {
 	best := sysoffFromExtendedTS(extended.Ts[0])
-	best.SysClockID = int(extended.ClockID)
 	for i := 1; i < int(extended.Samples); i++ {
 		sysoff := sysoffFromExtendedTS(extended.Ts[i])
 		if sysoff.Delay < best.Delay {
 			best = sysoff
 		}
 	}
+	best.SysClockID = int(extended.ClockID)
 	return best
 }
 
