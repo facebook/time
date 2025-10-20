@@ -23,16 +23,18 @@ jobs:
   owner: "@meta"
   project: time
   targets:
-    - fedora-all-aarch64
+    - fedora-stable-aarch64
     - fedora-stable-i386
-    - fedora-all-ppc64le
+    - fedora-stable-ppc64le
+    - fedora-stable-s390x
     - fedora-all-x86_64
 - job: copr_build
   trigger: pull_request
   owner: "@meta"
   project: time
   targets:
-    - fedora-all-aarch64
+    - fedora-stable-aarch64
     - fedora-stable-i386
-    - fedora-all-ppc64le
+    - fedora-stable-ppc64le
+    - fedora-stable-s390x
     - fedora-all-x86_64
