@@ -93,22 +93,30 @@ int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data) {
 }
 
 int fbclock_clockdata_store_data_v2(uint32_t fd, fbclock_clockdata_v2* data) {
+  uint64_t seq;
   fbclock_shmdata_v2* shmp = mmap(
       NULL, FBCLOCK_SHMDATA_V2_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (shmp == MAP_FAILED) {
     return FBCLOCK_E_SHMEM_MAP_FAILED;
   }
-  uint64_t seq = atomic_load(&shmp->seq);
-  seq++;
+  for (int i = 0;
+       i < FBCLOCK_MAX_READ_TRIES && (seq = atomic_load(&shmp->seq)) & 1;
+       i++) {
+    // LSB means "in writing mode", but there should be only one writer
+    // so we just wait for other writer to finish (make seq even)
+    usleep(1);
+  }
+  seq = (seq & ~1) + 1;
   atomic_store(&shmp->seq, seq);
+  seq++;
   __sync_synchronize();
   memcpy(&shmp->data, data, FBCLOCK_CLOCKDATA_V2_SIZE);
   __sync_synchronize();
-  seq++;
   if (!seq) {
     seq += 2; // avoid 0 value on wraparound
   }
   atomic_store(&shmp->seq, seq);
+  __sync_synchronize();
   munmap(shmp, FBCLOCK_SHMDATA_V2_SIZE);
   return FBCLOCK_E_NO_ERROR;
 }
