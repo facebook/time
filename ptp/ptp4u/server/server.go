@@ -21,12 +21,12 @@ package server
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
 	"os/signal"
 	"time"
-	"unsafe"
 
 	"github.com/cespare/xxhash"
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -268,7 +268,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 	var sc *SubscriptionClient
 	var gclisa unix.Sockaddr
 	var expire time.Time
-	var workerOffset int64
+	var workerOffset uint64
 
 	for {
 		bbuf, eclisa, rxTS, err := timestamp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
@@ -306,7 +306,7 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 			for _, tlv := range dReq.TLVs {
 				switch v := tlv.(type) {
 				case *ptp.AlternateResponsePortTLV:
-					workerOffset = int64(v.Offset)
+					workerOffset = uint64(v.Offset)
 				}
 			}
 
@@ -450,9 +450,10 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 	}
 }
 
-func (s *Server) findWorker(clientID ptp.PortIdentity, offset int64) *sendWorker {
-	val := int64(clientID.ClockIdentity) + int64(clientID.PortNumber) + offset //#nosec G115
-	hashableBytes := unsafe.Slice((*byte)(unsafe.Pointer(&val)), 8)
+func (s *Server) findWorker(clientID ptp.PortIdentity, offset uint64) *sendWorker {
+	val := uint64(clientID.ClockIdentity) + uint64(clientID.PortNumber) + offset
+	hashableBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(hashableBytes, val)
 	hash := xxhash.Sum64(hashableBytes)
 	return s.sw[hash%uint64(s.Config.SendWorkers)] //#nosec G115
 }
