@@ -46,13 +46,15 @@ func TestSysoffBestSample(t *testing.T) {
 			{{Sec: 1667818190, Nsec: 552297533}, {Sec: 1667818153, Nsec: 552297582}, {Sec: 1667818190, Nsec: 552297622}},
 			{{Sec: 1667818190, Nsec: 552297644}, {Sec: 1667818153, Nsec: 552297661}, {Sec: 1667818190, Nsec: 552297722}},
 		},
+		ClockID: unix.CLOCK_MONOTONIC_RAW,
 	}
 	got := extended.BestSample()
 	want := SysoffResult{
-		SysTime: time.Unix(0, 1667818190552297683),
-		PHCTime: time.Unix(0, 1667818153552297661),
-		Delay:   time.Duration(78),
-		Offset:  time.Duration(37000000022),
+		SysTime:    time.Unix(0, 1667818190552297683),
+		PHCTime:    time.Unix(0, 1667818153552297661),
+		Delay:      time.Duration(78),
+		Offset:     time.Duration(37000000022),
+		SysClockID: unix.CLOCK_MONOTONIC_RAW,
 	}
 	require.Equal(t, want, got)
 }
