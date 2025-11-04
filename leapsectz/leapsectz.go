@@ -156,7 +156,7 @@ func parseVx(r io.Reader) ([]LeapSecond, error) {
 		// calculate the amount of bytes to skip after reading leap seconds array
 		skip = int(hdr.IsUtcCnt) + int(hdr.IsStdCnt)
 
-		for i := 0; i < int(hdr.LeapCnt); i++ {
+		for range int(hdr.LeapCnt) {
 			var l LeapSecond
 			if version == 0 {
 				lsv0 := []uint32{0, 0}
@@ -258,7 +258,7 @@ func Write(f io.Writer, ver byte, ls []LeapSecond, name string) error {
 	}
 
 	// array of leap seconds
-	for i := 0; i < len(ls); i++ {
+	for i := range len(ls) {
 		l := []uint32{uint32(ls[i].Tleap), uint32(ls[i].Nleap)}
 		if err := binary.Write(f, binary.BigEndian, &l); err != nil {
 			return err
@@ -286,7 +286,7 @@ func Write(f io.Writer, ver byte, ls []LeapSecond, name string) error {
 	}
 
 	// array of leap seconds version 2
-	for i := 0; i < len(ls); i++ {
+	for i := range len(ls) {
 		l := ls[i]
 		if err := binary.Write(f, binary.BigEndian, &l); err != nil {
 			return err
