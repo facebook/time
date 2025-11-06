@@ -44,7 +44,7 @@ func newDaemonState(ringSize int) *daemonState {
 		linearizabilityTestResults: ring.New(ringSize),
 	}
 	// init ring buffers with nils
-	for i := 0; i < ringSize; i++ {
+	for range ringSize {
 		s.DataPoints.Value = nil
 		s.DataPoints = s.DataPoints.Next()
 
@@ -81,7 +81,7 @@ func (s *daemonState) takeDataPoint(n int) []*DataPoint {
 	defer s.Unlock()
 	result := []*DataPoint{}
 	r := s.DataPoints.Prev()
-	for j := 0; j < n; j++ {
+	for range n {
 		if r.Value == nil {
 			continue
 		}
@@ -96,7 +96,7 @@ func (s *daemonState) aggregateDataPointsMax(n int) *DataPoint {
 	defer s.Unlock()
 	d := &DataPoint{}
 	r := s.DataPoints.Prev()
-	for j := 0; j < n; j++ {
+	for range n {
 		if r.Value == nil {
 			continue
 		}
@@ -127,7 +127,7 @@ func (s *daemonState) takeM(n int) []float64 {
 	defer s.Unlock()
 	result := []float64{}
 	r := s.mmms.Prev()
-	for j := 0; j < n; j++ {
+	for range n {
 		if r.Value == nil {
 			continue
 		}
@@ -149,7 +149,7 @@ func (s *daemonState) takeLinearizabilityTestResult(n int) []linearizability.Tes
 	defer s.Unlock()
 	result := []linearizability.TestResult{}
 	r := s.linearizabilityTestResults.Prev()
-	for j := 0; j < n; j++ {
+	for range n {
 		if r.Value == nil {
 			continue
 		}
