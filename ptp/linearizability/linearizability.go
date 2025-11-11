@@ -39,6 +39,8 @@ type Tester interface {
 	RunTest(ctx context.Context) TestResult
 }
 
+var b2i = map[bool]int64{false: 0, true: 1}
+
 // ProcessMonitoringResults returns map of metrics based on TestResults
 func ProcessMonitoringResults(prefix string, results map[string]TestResult, s stats.Server) {
 	failed := 0
@@ -49,6 +51,8 @@ func ProcessMonitoringResults(prefix string, results map[string]TestResult, s st
 		}
 	}
 
+	s.SetCounter(fmt.Sprintf("%sfailed", prefix), b2i[len(results) == failed])
+	// TODO: remove
 	s.SetCounter(fmt.Sprintf("%stotal_tests", prefix), int64(len(results)))
 	s.SetCounter(fmt.Sprintf("%sfailed_tests", prefix), int64(failed))
 	s.SetCounter(fmt.Sprintf("%spassed_tests", prefix), int64(len(results)-failed))

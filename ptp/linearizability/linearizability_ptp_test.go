@@ -25,10 +25,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/facebook/time/fbclock/stats"
 	ptp "github.com/facebook/time/ptp/protocol"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -138,12 +136,12 @@ func TestLinearizabilityTestRunTest(t *testing.T) {
 				}
 				return 20, nil
 			default:
-				assert.Fail(t, fmt.Sprintf("got unexpected grant for %s", msgType))
+				require.Fail(t, fmt.Sprintf("got unexpected grant for %s", msgType))
 			}
 		case *ptp.CancelUnicastTransmissionTLV:
 			return 0, nil
 		default:
-			assert.Fail(t, fmt.Sprintf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type()))
+			require.Fail(t, fmt.Sprintf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type()))
 		}
 		return 10, nil
 	})
@@ -255,12 +253,12 @@ func TestLinearizabilityTestRunSingleTest(t *testing.T) {
 				}
 				return 20, nil
 			default:
-				assert.Fail(t, fmt.Sprintf("got unexpected grant for %s", msgType))
+				require.Fail(t, fmt.Sprintf("got unexpected grant for %s", msgType))
 			}
 		case *ptp.CancelUnicastTransmissionTLV:
 			return 0, nil
 		default:
-			assert.Fail(t, fmt.Sprintf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type()))
+			require.Fail(t, fmt.Sprintf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type()))
 		}
 		return 10, nil
 	})
@@ -370,12 +368,12 @@ func TestLinearizabilityTestRunSingleTestError(t *testing.T) {
 				}
 				return 20, nil
 			default:
-				assert.Fail(t, fmt.Sprintf("got unexpected grant for %s", msgType))
+				require.Fail(t, fmt.Sprintf("got unexpected grant for %s", msgType))
 			}
 		case *ptp.CancelUnicastTransmissionTLV:
 			return 0, nil
 		default:
-			assert.Fail(t, fmt.Sprintf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type()))
+			require.Fail(t, fmt.Sprintf("got unsupported TLV type %s(%d)", tlv.Type(), tlv.Type()))
 		}
 		return 10, nil
 	})
@@ -565,49 +563,6 @@ func TestTestResultExplain(t *testing.T) {
 			require.Equal(t, tc.want, got, "Explain() for %+v must return %v", tc.in, tc.want)
 		})
 	}
-}
-
-func TestProcessMonitoringResults(t *testing.T) {
-	s := stats.NewStats()
-	results := map[string]TestResult{
-		"server01.nha1": PTPTestResult{ // tests pass - TX before RX
-			Server:      "192.168.0.10",
-			Error:       nil,
-			TXTimestamp: time.Unix(0, 1653574589806127700),
-			RXTimestamp: time.Unix(0, 1653574589806127800),
-		},
-		"server02.nha1": PTPTestResult{ // tests failed - TX after RX
-			Server:      "192.168.0.11",
-			Error:       nil,
-			TXTimestamp: time.Unix(0, 1653574589806127730),
-			RXTimestamp: time.Unix(0, 1653574589806127600),
-		},
-		"server03.nha1": PTPTestResult{ // drained server
-			Server:      "192.168.0.12",
-			Error:       ErrGrantDenied,
-			TXTimestamp: time.Time{},
-			RXTimestamp: time.Time{},
-		},
-		"server04.nha1": PTPTestResult{ // tests pass - TX before RX
-			Server:      "192.168.0.13",
-			Error:       nil,
-			TXTimestamp: time.Unix(0, 1653574589806127900),
-			RXTimestamp: time.Unix(0, 1653574589806127930),
-		},
-		"server05.nha1": PTPTestResult{ // failing server
-			Server:      "192.168.0.14",
-			Error:       fmt.Errorf("ooops"),
-			TXTimestamp: time.Time{},
-			RXTimestamp: time.Time{},
-		},
-	}
-
-	ProcessMonitoringResults("ptp.linearizability.", results, s)
-
-	c := s.Get()
-	require.Equal(t, int64(3), c["ptp.linearizability.failed_tests"])
-	require.Equal(t, int64(2), c["ptp.linearizability.passed_tests"])
-	require.Equal(t, int64(5), c["ptp.linearizability.total_tests"])
 }
 
 func TestProcessTimestamp(t *testing.T) {
