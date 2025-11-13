@@ -698,9 +698,7 @@ func TestRunLinearizabilityTestsNoGMs(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	c := stats.Get()
 	t.Log(c)
-	require.Equal(t, int64(len(defaultTargets)), c["linearizability.total_tests"], "linearizability.total_tests must be set")
-	require.Equal(t, int64(len(defaultTargets)), c["linearizability.failed_tests"], "linearizability.failed_tests must be set")
-	require.Equal(t, int64(0), c["linearizability.passed_tests"])
+	require.Equal(t, int64(1), c["linearizability.failed"])
 }
 
 func TestNoTestResults(t *testing.T) {

@@ -65,9 +65,6 @@ func TestProcessMonitoringResults(t *testing.T) {
 	ProcessMonitoringResults("ptp.linearizability.", results, s)
 
 	c := s.Get()
-	require.Equal(t, int64(3), c["ptp.linearizability.failed_tests"])
-	require.Equal(t, int64(2), c["ptp.linearizability.passed_tests"])
-	require.Equal(t, int64(5), c["ptp.linearizability.total_tests"])
 	require.Equal(t, int64(0), c["ptp.linearizability.failed"])
 }
 
@@ -97,9 +94,6 @@ func TestProcessMonitoringResultsSPTP(t *testing.T) {
 	ProcessMonitoringResults("ptp.linearizability.", results, s)
 
 	c := s.Get()
-	require.Equal(t, int64(2), c["ptp.linearizability.failed_tests"])
-	require.Equal(t, int64(0), c["ptp.linearizability.passed_tests"])
-	require.Equal(t, int64(2), c["ptp.linearizability.total_tests"])
 	require.Equal(t, int64(1), c["ptp.linearizability.failed"])
 }
 

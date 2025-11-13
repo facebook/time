@@ -52,8 +52,4 @@ func ProcessMonitoringResults(prefix string, results map[string]TestResult, s st
 	}
 
 	s.SetCounter(fmt.Sprintf("%sfailed", prefix), b2i[len(results) == failed])
-	// TODO: remove
-	s.SetCounter(fmt.Sprintf("%stotal_tests", prefix), int64(len(results)))
-	s.SetCounter(fmt.Sprintf("%sfailed_tests", prefix), int64(failed))
-	s.SetCounter(fmt.Sprintf("%spassed_tests", prefix), int64(len(results)-failed))
 }
