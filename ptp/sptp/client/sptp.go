@@ -34,6 +34,8 @@ import (
 	"github.com/facebook/time/timestamp"
 )
 
+var ErrInterfaceDown = errors.New("network interface is down")
+
 // Servo abstracts away servo
 type Servo interface {
 	SyncInterval(float64)
@@ -327,6 +329,30 @@ func (p *SPTP) handleExchangeError(addr netip.Addr, err error, tickDuration time
 	}
 }
 
+// checkInterfaceDown checks if the network interface is down or has no carrier.
+// It queries the current interface state using net.InterfaceByName which returns
+// a fresh snapshot of the interface status from the kernel.
+func checkInterfaceDown(ifaceName string) error {
+	iface, err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		return fmt.Errorf("interface not found: %w", err)
+	}
+
+	// Check IFF_UP flag (administratively up)
+	if iface.Flags&net.FlagUp == 0 {
+		return fmt.Errorf("administratively down (no UP flag)")
+	}
+
+	// Check IFF_RUNNING flag (has carrier/link)
+	// Running flag support: https://go-review.googlesource.com/c/go/+/413454
+	if iface.Flags&net.FlagRunning == 0 {
+		return fmt.Errorf("no carrier (NO-CARRIER, no RUNNING flag)")
+	}
+
+	// Interface appears healthy based on flags
+	return nil
+}
+
 func (p *SPTP) setMeanFreq() (float64, error) {
 	freqAdj := p.pi.MeanFreq()
 	p.pi.SetLastFreq(freqAdj)
@@ -400,6 +426,15 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 	}
 	p.stats.SetGmsTotal(gmsTotal)
 	if gmsTotal != 0 {
+		if gmsAvailable == 0 {
+			// If no GMs are available, check the interface status
+			log.Debugf("No GMs are available, checking interface %s status", p.cfg.Iface)
+			if ifaceErr := checkInterfaceDown(p.cfg.Iface); ifaceErr != nil {
+				log.Errorf("Interface %s is down: %v", p.cfg.Iface, ifaceErr)
+				return fmt.Errorf("%w (%s): %w", ErrInterfaceDown, p.cfg.Iface, ifaceErr)
+			}
+			log.Debugf("Interface %s is healthy, errors are due to other issues", p.cfg.Iface)
+		}
 		p.stats.SetGmsAvailable(int((float64(gmsAvailable) / float64(gmsTotal)) * 100))
 	} else {
 		p.stats.SetGmsAvailable(0)

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -95,7 +96,9 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsTotal(1)
 	mockStatsServer.EXPECT().SetGmsAvailable(0)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
-	_ = p.processResults(results)
+	err = p.processResults(results)
+	// as we no interface down error, we expect no error
+	require.NoError(t, err)
 	require.Equal(t, netip.Addr{}, p.bestGM)
 }
 
@@ -733,4 +736,35 @@ func TestShiftPriorities(t *testing.T) {
 	require.Equal(t, 2, p.priorities[l])
 	require.Equal(t, 3, p.priorities[e])
 	require.Equal(t, 4, p.priorities[g])
+}
+
+func TestCheckInterfaceDown(t *testing.T) {
+	iface, err := net.InterfaceByName("lo")
+	if err != nil {
+		t.Skip("loopback interface 'lo' not available")
+	}
+
+	// Verify loopback has both required flags
+	require.NotEqual(t, 0, iface.Flags&net.FlagUp)
+	require.NotEqual(t, 0, iface.Flags&net.FlagRunning)
+
+	// Test checkInterfaceDown with loopback
+	err = checkInterfaceDown("lo")
+	require.NoError(t, err)
+}
+
+func TestCheckInterfaceDownAdminDown(t *testing.T) {
+	ifaceName := "test_down"
+
+	cmd := exec.Command("ip", "link", "add", ifaceName, "type", "dummy")
+	if err := cmd.Run(); err != nil {
+		t.Skip("Cannot create interface (need CAP_NET_ADMIN)")
+	}
+	defer func() {
+		_ = exec.Command("ip", "link", "delete", ifaceName).Run()
+	}()
+	// Interface is created DOWN by default
+	err := checkInterfaceDown(ifaceName)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "administratively down")
 }
