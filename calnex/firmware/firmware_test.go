@@ -227,3 +227,49 @@ func TestRecoveryMode(t *testing.T) {
 	err = up.Firmware(parsed.Host, true, fw, true, false)
 	require.NoError(t, err)
 }
+
+func TestInternalError(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "calnex")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	filepath := path.Join(dir, "sentinel_fw_v2.13.1.0.5583D-20210924.tar")
+	f, err := os.Create(filepath)
+	require.NoError(t, err)
+	require.NotNil(t, f)
+	f.Close()
+
+	fw, err := NewOSSFW(filepath)
+	require.NoError(t, err)
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		if strings.Contains(r.URL.Path, "version") {
+			// FetchVersion
+			fmt.Fprintln(w, "{ \"firmware\": \"2.11.1.0.5583D-20210924\" }")
+		} else if strings.Contains(r.URL.Path, "getstatus") {
+			// FetchStatus
+			fmt.Fprintln(w, "{\n\"referenceReady\": false,\n\"modulesReady\": false,\n\"measurementActive\": false\n}")
+		} else if strings.Contains(r.URL.Path, "stopmeasurement") {
+			// StopMeasure
+			fmt.Fprintln(w, "{\n\"result\": true\n}")
+		} else if strings.Contains(r.URL.Path, "reboot") {
+			// Reboot
+			fmt.Fprintln(w, "{\n\"result\": true\n}")
+		} else if strings.Contains(r.URL.Path, "updatefirmware") {
+			// PushVersion
+			w.WriteHeader(http.StatusInternalServerError)
+		} else if strings.Contains(r.URL.Path, "instrument/status") {
+			fmt.Fprintln(w, "{\"Channels\": null, \"Modules\": null, \"isRecoveryMode\": true}")
+		}
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI.Client = ts.Client()
+
+	up := CalnexUpgrader{}
+	err = up.Firmware(parsed.Host, true, fw, true, false)
+	require.Equal(t, api.ErrInternalError, err)
+}

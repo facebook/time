@@ -129,6 +129,11 @@ func (up CalnexUpgrader) Firmware(target string, insecureTLS bool, fw FW, apply 
 		return err
 	}
 	_, err = api.PushVersion(p)
+	if errors.Is(err, calnexAPI.ErrInternalError) {
+		log.Infof("%s: firmware update failed with 500 Internal Server error, trying to reboot", target)
+		_ = api.Reboot()
+		return err
+	}
 	if err != nil {
 		return err
 	}

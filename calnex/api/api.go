@@ -47,6 +47,7 @@ type Status struct {
 	MeasurementReady  bool
 	ModulesReady      bool
 	ReferenceReady    bool
+	IsRecoveryMode    bool
 }
 
 // InstrumentStatus is a struct representing Calnex instrument status JSON response
@@ -412,6 +413,9 @@ var probeToServerType = map[Probe]string{
 	ProbeNTP: "server_ip_ipv6",
 	ProbePPS: "server_ip",
 }
+
+// ErrInteralError is returned when Calnex returns 500 Internal server error
+var ErrInternalError = errors.New("500 Internal server error")
 
 // ProbeFromString returns Channel object from String version
 func ProbeFromString(value string) (*Probe, error) {
@@ -810,6 +814,10 @@ func (a *API) postFile(url string, content *os.File) (*Result, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusInternalServerError {
+		return nil, ErrInternalError
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to upload firmware: %s", resp.Status)
