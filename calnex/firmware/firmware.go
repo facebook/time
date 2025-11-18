@@ -17,6 +17,7 @@ limitations under the License.
 package firmware
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -26,6 +27,9 @@ import (
 	version "github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 )
+
+// ErrRecoveryMode is returned when device is in recovery mode
+var ErrRecoveryMode = errors.New("device is in recovery mode")
 
 // FW is an interface of the Firmware Version
 type FW interface {
@@ -72,6 +76,10 @@ func (up CalnexUpgrader) InProgress(target string, api *calnexAPI.API) (bool, er
 	instrumentStatus, statusErr := api.FetchInstrumentStatus()
 	if statusErr != nil {
 		return false, statusErr
+	}
+	if instrumentStatus.IsRecoveryMode {
+		log.Infof("%s: is in recovery mode", target)
+		return false, ErrRecoveryMode
 	}
 	if instrumentStatus.Channels[calnexAPI.ChannelONE].Progress != -1 {
 		log.Infof("%s: update %d%% complete", target, instrumentStatus.Channels[calnexAPI.ChannelONE].Progress)

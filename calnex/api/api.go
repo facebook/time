@@ -51,8 +51,9 @@ type Status struct {
 
 // InstrumentStatus is a struct representing Calnex instrument status JSON response
 type InstrumentStatus struct {
-	Channels map[Channel]ChannelStatus
-	Modules  map[Channel]ModuleStatus
+	Channels       map[Channel]ChannelStatus
+	Modules        map[Channel]ModuleStatus
+	IsRecoveryMode bool `json:"isRecoveryMode"`
 }
 
 // ChannelStatus is a struct representing Calnex channel instrument status
