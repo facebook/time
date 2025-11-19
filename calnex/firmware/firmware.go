@@ -18,7 +18,6 @@ package firmware
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -129,11 +128,6 @@ func (up CalnexUpgrader) Firmware(target string, insecureTLS bool, fw FW, apply 
 		return err
 	}
 	_, err = api.PushVersion(p)
-	if errors.Is(err, calnexAPI.ErrInternalError) {
-		log.Infof("%s: firmware update failed with 500 Internal Server error, trying to reboot", target)
-		_ = api.Reboot()
-		return err
-	}
 	if err != nil {
 		return err
 	}
@@ -142,9 +136,9 @@ func (up CalnexUpgrader) Firmware(target string, insecureTLS bool, fw FW, apply 
 
 // ParallelFirmwareUpgrade upgrades the provided list of devices in parallel
 // Returns a slice of errors, which contains an error for each device that failed to upgrade
-func ParallelFirmwareUpgrade(devices []string, insecureTLS bool, fw FW, ufw CalnexUpgraderInterface, apply bool, force bool) []error {
+func ParallelFirmwareUpgrade(devices []string, insecureTLS bool, fw FW, ufw CalnexUpgraderInterface, apply bool, force bool) map[string]error {
 	var wg = sync.WaitGroup{}
-	errors := make([]error, 0, len(devices))
+	errors := make(map[string]error, len(devices))
 	errorMutex := sync.Mutex{}
 	for i := range len(devices) {
 		wg.Add(1)
@@ -154,7 +148,7 @@ func ParallelFirmwareUpgrade(devices []string, insecureTLS bool, fw FW, ufw Caln
 			err := ufw.Firmware(device, insecureTLS, fw, apply, force)
 			if err != nil {
 				errorMutex.Lock()
-				errors = append(errors, fmt.Errorf("%s: error during firmware upgrade: %w", device, err))
+				errors[device] = err
 				errorMutex.Unlock()
 			}
 		}(device)

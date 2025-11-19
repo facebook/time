@@ -811,7 +811,7 @@ func (a *API) postFile(url string, content *os.File) (*Result, error) {
 
 	resp, err := a.Client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to send post request with firmware: %w, %s", err, resp.Status)
 	}
 	defer resp.Body.Close()
 
@@ -832,10 +832,6 @@ func (a *API) postFile(url string, content *os.File) (*Result, error) {
 		return nil, fmt.Errorf("failed to decode response, body: %s, err: %w", string(s), err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return r, errors.New(http.StatusText(resp.StatusCode))
-	}
-
 	if !r.Result {
 		return nil, errors.New(r.Message)
 	}
@@ -852,6 +848,9 @@ func (a *API) post(url string, content *bytes.Buffer) (*Result, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusInternalServerError {
+		return nil, ErrInternalError
+	}
 	r := &Result{}
 	if err = json.NewDecoder(resp.Body).Decode(r); err != nil {
 		return nil, err
@@ -875,6 +874,10 @@ func (a *API) get(path string) error {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusInternalServerError {
+		return ErrInternalError
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return errors.New(http.StatusText(resp.StatusCode))

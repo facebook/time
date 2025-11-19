@@ -173,7 +173,7 @@ func TestParallelFirmwareUpgrade(t *testing.T) {
 
 	mockUpgrader.AssertNumberOfCalls(t, "Firmware", 5)
 	require.Len(t, errors, 1)
-	require.Equal(t, errors[0].Error(), "deviceError: error during firmware upgrade: error")
+	require.Equal(t, "error", errors["deviceError"].Error())
 }
 
 func TestParallelFirmwareUpgradeNoDevices(t *testing.T) {
@@ -182,7 +182,7 @@ func TestParallelFirmwareUpgradeNoDevices(t *testing.T) {
 	errors := ParallelFirmwareUpgrade([]string{}, true, nil, mockUpgrader, true, false)
 
 	mockUpgrader.AssertNumberOfCalls(t, "Firmware", 0)
-	require.ElementsMatch(t, errors, []error{})
+	require.ElementsMatch(t, errors, map[string]error{})
 }
 
 func TestRecoveryMode(t *testing.T) {
