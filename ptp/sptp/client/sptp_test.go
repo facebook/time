@@ -95,7 +95,9 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsTotal(1)
 	mockStatsServer.EXPECT().SetGmsAvailable(0)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
-	_ = p.processResults(results)
+	err = p.processResults(results)
+	// as we no interface down error, we expect no error
+	require.NoError(t, err)
 	require.Equal(t, netip.Addr{}, p.bestGM)
 }
 
@@ -733,4 +735,69 @@ func TestShiftPriorities(t *testing.T) {
 	require.Equal(t, 2, p.priorities[l])
 	require.Equal(t, 3, p.priorities[e])
 	require.Equal(t, 4, p.priorities[g])
+}
+
+func TestCheckInterfaceDown(t *testing.T) {
+	// Test interface that exists and is up (loopback)
+	iface, err := net.InterfaceByName("lo")
+	require.NoError(t, err)
+
+	// Verify loopback has both required flags
+	require.NotEqual(t, 0, iface.Flags&net.FlagUp)
+	require.NotEqual(t, 0, iface.Flags&net.FlagRunning)
+
+	// Test checkInterfaceDown with loopback - should succeed
+	err = checkInterfaceDown("lo")
+	require.NoError(t, err)
+
+	// Test interface that doesn't exist - should fail
+	err = checkInterfaceDown("nonexistent_iface_xyz123")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "interface not found")
+}
+
+func TestProcessResultsInterfaceDown(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClock := NewMockClock(ctrl)
+	mockServo := NewMockServo(ctrl)
+	mockStatsServer := NewMockStatsServer(ctrl)
+
+	// Use a non-existent interface to trigger the error path
+	cfg := DefaultConfig()
+	cfg.Iface = "nonexistent_iface_xyz123"
+	cfg.Servers = map[string]int{
+		"192.168.0.10": 1,
+	}
+
+	p := &SPTP{
+		clock:      mockClock,
+		pi:         mockServo,
+		stats:      mockStatsServer,
+		cfg:        cfg,
+		eventConns: []UDPConnWithTS{nil},
+		priorities: map[netip.Addr]int{
+			netip.MustParseAddr("192.168.0.10"): 1,
+		},
+		backoff: map[netip.Addr]*backoff{
+			netip.MustParseAddr("192.168.0.10"): newBackoff(BackoffConfig{}),
+		},
+	}
+
+	// Results with error - this triggers gmsAvailable == 0
+	results := map[netip.Addr]*RunResult{
+		netip.MustParseAddr("192.168.0.10"): {
+			Server: netip.MustParseAddr("192.168.0.10"),
+			Error:  fmt.Errorf("connection timeout"),
+		},
+	}
+
+	mockStatsServer.EXPECT().SetGmsTotal(1)
+	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+
+	// processResults should return ErrInterfaceDown wrapped error
+	err := p.processResults(results)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInterfaceDown)
+	require.Contains(t, err.Error(), "nonexistent_iface_xyz123")
 }
