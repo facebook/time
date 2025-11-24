@@ -1,5 +1,4 @@
 //go:build !darwin
-// +build !darwin
 
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
