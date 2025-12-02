@@ -93,25 +93,22 @@ func TestClientRun(t *testing.T) {
 	// handle whatever client is sending over eventConn
 	statsServer.EXPECT().IncTXDelayReq()
 	// unexpected packet we just ignore
-	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ unix.Sockaddr) (int, time.Time, error) {
+	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ unix.Sockaddr, seq uint16) (time.Time, error) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
 		require.Nil(t, err, "reading delayReq msg")
 
 		sync := syncPkt(int(delayReq.SequenceID))
-		syncBytes, err := ptp.Bytes(sync)
-		require.Nil(t, err)
 		c.handleSync(sync, time.Now())
 		c.inChan <- true
 		// send in irrelevant packet client should ignore
 		c.inChan <- true
 
 		announce = announcePkt(int(delayReq.SequenceID))
-		require.Nil(t, err)
 		c.handleAnnounce(announce)
 		c.inChan <- true
 
-		return len(syncBytes), time.Now(), nil
+		return time.Now(), nil
 	})
 
 	ctx := context.Background()
@@ -148,7 +145,7 @@ func TestClientTimeout(t *testing.T) {
 	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, &cfg, statsServer)
 	require.NoError(t, err)
 	statsServer.EXPECT().IncTXDelayReq()
-	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any())
+	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any())
 
 	ctx := context.Background()
 	runResult := c.RunOnce(ctx, &Config{ExchangeTimeout: defaultTestTimeout})
@@ -176,13 +173,13 @@ func TestClientBadPacket(t *testing.T) {
 
 	// handle whatever client is sending over eventConn
 	statsServer.EXPECT().IncTXDelayReq()
-	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ unix.Sockaddr) (int, time.Time, error) {
+	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ unix.Sockaddr, seq uint16) (time.Time, error) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
 		require.Nil(t, err, "reading delayReq msg")
 		c.inChan <- true
 
-		return 10, time.Now(), nil
+		return time.Now(), nil
 	})
 
 	ctx := context.Background()

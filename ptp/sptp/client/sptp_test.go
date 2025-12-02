@@ -356,7 +356,7 @@ func TestRunInternalAllDead(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).Times(4)
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).Times(4)
 	mockClock := NewMockClock(ctrl)
 	mockClock.EXPECT().AdjFreqPPB((float64(0))).Times(3)
 	mockServo := NewMockServo(ctrl)
@@ -584,7 +584,7 @@ func TestRunListenerGood(t *testing.T) {
 	syncBytes, _ := ptp.Bytes(&ptp.SyncDelayReq{})
 	announceBytes, _ := ptp.Bytes(&ptp.Announce{})
 
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).AnyTimes()
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).DoAndReturn(func(b, oob []byte) (int, unix.Sockaddr, time.Time, error) {
 		// limit how many we send, so we don't overwhelm the client. packets from uknown IPs will be discarded
 		if sentEvent > 10 {
@@ -678,7 +678,7 @@ func TestPTPing(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any()).Times(2)
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).Times(2)
 	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)

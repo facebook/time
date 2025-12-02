@@ -54,7 +54,7 @@ func ReqDelay(clockID ptp.ClockIdentity, portID uint16) *ptp.SyncDelayReq {
 }
 
 // ReqAnnounce is a helper to build ptp.Announce
-// It's used for external pingers such as ptping and not required for sptp itself
+// Used for ptping not sptp (sptp sends Delay Requests only)
 func ReqAnnounce(clockID ptp.ClockIdentity, portID uint16, ts time.Time) *ptp.Announce {
 	return &ptp.Announce{
 		Header: ptp.Header{
@@ -81,8 +81,9 @@ type RunResult struct {
 	Error       error
 }
 
-// Client is a part of PTPNG that talks to only one server
+// Client contains data associated with a single client-server interaction
 type Client struct {
+	// server address
 	server netip.Addr
 	// packet sequence counter
 	eventSequence uint16
@@ -98,18 +99,14 @@ type Client struct {
 	delayRequest *ptp.SyncDelayReq
 	// outgoing packet bytes buffer
 	delayReqBytes []byte
-
+	// socket address
 	eventAddr unix.Sockaddr
-
 	// where we store timestamps
 	m *measurements
-
 	// where we store our metrics
 	stats StatsServer
-
 	// Whether the client is assumed to be using an asymmetric path
 	asymmetric bool
-
 	// Running counter of consecutive asymmetric results received
 	asymmetryCounter int
 }
@@ -119,8 +116,8 @@ func (c *Client) incrementSequence() {
 	c.eventSequence = c.sequenceIDValue + (c.eventSequence & c.sequenceIDMask)
 }
 
-// SendEventMsg sends an event message via event socket
-func (c *Client) SendEventMsg(p *ptp.SyncDelayReq) (uint16, time.Time, error) {
+// SendDelayReq sends an Delay Request message via event socket
+func (c *Client) SendDelayReq(p *ptp.SyncDelayReq) (uint16, time.Time, error) {
 	seq := c.eventSequence
 	p.SetSequence(c.eventSequence)
 	_, err := ptp.BytesTo(p, c.delayReqBytes)
@@ -128,7 +125,7 @@ func (c *Client) SendEventMsg(p *ptp.SyncDelayReq) (uint16, time.Time, error) {
 		return 0, time.Time{}, err
 	}
 	// send packet
-	_, hwts, err := c.eventConn.WriteToWithTS(c.delayReqBytes, c.eventAddr)
+	hwts, err := c.eventConn.WriteToWithTS(c.delayReqBytes, c.eventAddr, seq)
 
 	c.incrementSequence()
 	if err != nil {
@@ -140,8 +137,8 @@ func (c *Client) SendEventMsg(p *ptp.SyncDelayReq) (uint16, time.Time, error) {
 	return seq, hwts, nil
 }
 
-// SendAnnounce sends an announce message via event socket
-// It's used for external pingers such as ptping and not required for sptp itself
+// SendAnnounce sends an Announce message via event socket
+// Used for ptping not sptp (sptp sends Delay Requests only)
 func (c *Client) SendAnnounce(p *ptp.Announce) (uint16, error) {
 	seq := c.eventSequence
 	p.SetSequence(c.eventSequence)
@@ -151,7 +148,7 @@ func (c *Client) SendAnnounce(p *ptp.Announce) (uint16, error) {
 	}
 	// send packet
 	// since client only has the event conn we have to read the TS
-	_, _, err = c.eventConn.WriteToWithTS(b, c.eventAddr)
+	_, err = c.eventConn.WriteToWithTS(b, c.eventAddr, seq)
 
 	c.incrementSequence()
 	if err != nil {
@@ -184,7 +181,7 @@ func NewClient(target netip.Addr, targetPort int, clockID ptp.ClockIdentity, eve
 	return c, nil
 }
 
-// handleAnnounce handles ANNOUNCE packet and records UTC offset from it's data
+// handleAnnounce handles ANNOUNCE packet and updates measurements
 func (c *Client) handleAnnounce(b *ptp.Announce) {
 	t1 := b.OriginTimestamp.Time()
 	cf := b.CorrectionField.Duration()
@@ -217,16 +214,16 @@ func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) {
 		cf)
 	// T2 and CF1
 	c.m.addT2andCF1(b.SequenceID, ts, cf)
-	// sync carries T4 as well
+	// sync includes T4 as well
 	c.m.addT4(b.SequenceID, t4)
 }
 
-// handleDelayReq handles Delay Reqest packet and responds with SYNC
-// It's used for external pingers such as ptping and not required for sptp itself
+// handleDelayReq handles DELAY_REQ packet and responds with SYNC and ANNOUNCE
+// Used for ptping not sptp (sptp sends Delay Requests only)
 func (c *Client) handleDelayReq(clockID ptp.ClockIdentity, ts time.Time) error {
 	sync := ReqDelay(clockID, 1)
 	sync.OriginTimestamp = ptp.NewTimestamp(ts)
-	_, txts, err := c.SendEventMsg(sync)
+	_, txts, err := c.SendDelayReq(sync)
 	if err != nil {
 		return err
 	}
@@ -248,8 +245,7 @@ func (c *Client) RunOnce(ctx context.Context, config *Config) *RunResult {
 
 	go func() {
 		defer close(errchan)
-		// ask for delay
-		seq, hwts, err := c.SendEventMsg(c.delayRequest)
+		seq, hwts, err := c.SendDelayReq(c.delayRequest)
 		if err != nil {
 			errchan <- err
 			return
@@ -267,7 +263,6 @@ func (c *Client) RunOnce(ctx context.Context, config *Config) *RunResult {
 			case <-c.inChan:
 				latest, err := c.m.latest()
 				if err != nil {
-					log.Debugf("[%s] getting latest measurement: %v", c.server, err)
 					if !errors.Is(err, errNotEnoughData) {
 						errchan <- err
 						return

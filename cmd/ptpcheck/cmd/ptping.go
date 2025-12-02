@@ -185,7 +185,7 @@ func ptpingRun(iface string, dscp int, server string, count int, timeout time.Du
 	for c := 1; c <= count; c++ {
 		p.ts.reset()
 		start := time.Now()
-		_, p.ts.t3, err = p.client.SendEventMsg(client.ReqDelay(p.clockID, portID))
+		_, p.ts.t3, err = p.client.SendDelayReq(client.ReqDelay(p.clockID, portID))
 
 		if err != nil {
 			log.Errorf("failed to send request: %s", err)
