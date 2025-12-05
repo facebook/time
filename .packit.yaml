@@ -9,8 +9,13 @@ files_to_sync:
 upstream_package_name: time
 downstream_package_name: golang-github-facebook-time
 actions:
-  # Fetch the specfile from Rawhide, remove the snapshot and drop any patches
-  post-upstream-clone: "bash -c \"curl -s https://src.fedoraproject.org/rpms/golang-github-facebook-time/raw/main/f/golang-github-facebook-time.spec | sed -e '/^%global date/d' -e '/^%global commit/d' -e '/^%global shortcommit/d' -e '/^Patch[0-9]/d' -e 's/^Version:.*/Version:        0/' -e '/^%undefine distprefix/d' > golang-github-facebook-time.spec\""
+  post-upstream-clone:
+    - "bash -c \"curl -s https://src.fedoraproject.org/rpms/golang-github-facebook-time/raw/main/f/golang-github-facebook-time.spec | sed -e '/^Patch[0-9]/d' -e 's|^%global commit.*|%global commit          '$(git rev-parse HEAD)'|' -e 's|^%global date.*|%global date            '$(date +%Y%m%d)'|' -e 's|mv fbclock-bin %{gobuilddir}/bin/fbclock-bin|mkdir -p %{gobuilddir}/bin \\&\\& mv fbclock-bin %{gobuilddir}/bin/fbclock-bin|' > golang-github-facebook-time.spec\""
+    - "curl -s -o go-vendor-tools.toml https://src.fedoraproject.org/rpms/golang-github-facebook-time/raw/main/f/go-vendor-tools.toml"
+    - "bash -c \"curl -s https://src.fedoraproject.org/rpms/golang-github-facebook-time/raw/main/f/sources | grep vendor | sed 's/SHA512 (\\(.*\\)) = \\(.*\\)/\\1 \\2/' | while read file hash; do curl -L https://src.fedoraproject.org/repo/pkgs/rpms/golang-github-facebook-time/$file/sha512/$hash/$file -o $file && mv $file time-$(git rev-parse HEAD)-vendor.tar.bz2; done\""
+  create-archive:
+    - "bash -c 'git archive --prefix time-$(git rev-parse HEAD)/ --output time-$(git rev-parse HEAD).tar.gz HEAD'"
+    - "bash -c 'echo time-$(git rev-parse HEAD).tar.gz'"
 
 srpm_build_deps:
   - bash
@@ -24,7 +29,7 @@ jobs:
   project: time
   targets:
     - fedora-stable-aarch64
-    - fedora-stable-i386
+    # - fedora-stable-i386
     - fedora-stable-ppc64le
     - fedora-stable-s390x
     - fedora-all-x86_64
@@ -34,7 +39,7 @@ jobs:
   project: time
   targets:
     - fedora-stable-aarch64
-    - fedora-stable-i386
+    # - fedora-stable-i386
     - fedora-stable-ppc64le
     - fedora-stable-s390x
     - fedora-all-x86_64
