@@ -50,6 +50,6 @@ func ProcessMonitoringResults(prefix string, results map[string]TestResult, s st
 			failed++
 		}
 	}
-
-	s.SetCounter(fmt.Sprintf("%sfailed", prefix), b2i[len(results) == failed])
+	// there must be at least one result and all results must have failed
+	s.SetCounter(fmt.Sprintf("%sfailed", prefix), b2i[len(results) != 0 && len(results) == failed])
 }

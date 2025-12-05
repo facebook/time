@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestProcessMonitoringResults(t *testing.T) {
+func TestProcessMonitoringResultsSomeOtherNodesPass(t *testing.T) {
 	s := stats.NewStats()
 	results := map[string]TestResult{
 		"server01.nha1": PTPTestResult{ // tests pass
@@ -68,7 +68,7 @@ func TestProcessMonitoringResults(t *testing.T) {
 	require.Equal(t, int64(0), c["ptp.linearizability.failed"])
 }
 
-func TestProcessMonitoringResultsSPTP(t *testing.T) {
+func TestProcessMonitoringResultsBothOtherNodesFail(t *testing.T) {
 	s := stats.NewStats()
 	results := map[string]TestResult{ // test failed - offset > max
 		"server01.nha1": SPTPHTTPTestResult{
@@ -95,6 +95,16 @@ func TestProcessMonitoringResultsSPTP(t *testing.T) {
 
 	c := s.Get()
 	require.Equal(t, int64(1), c["ptp.linearizability.failed"])
+}
+
+func TestProcessMonitoringResultsNoOtherNodes(t *testing.T) {
+	s := stats.NewStats()
+	results := map[string]TestResult{}
+
+	ProcessMonitoringResults("ptp.linearizability.", results, s)
+
+	c := s.Get()
+	require.Equal(t, int64(0), c["ptp.linearizability.failed"])
 }
 
 func TestB2I(t *testing.T) {
