@@ -29,7 +29,6 @@ jobs:
   project: time
   targets:
     - fedora-stable-aarch64
-    # - fedora-stable-i386
     - fedora-stable-ppc64le
     - fedora-stable-s390x
     - fedora-all-x86_64
@@ -39,7 +38,6 @@ jobs:
   project: time
   targets:
     - fedora-stable-aarch64
-    # - fedora-stable-i386
     - fedora-stable-ppc64le
     - fedora-stable-s390x
     - fedora-all-x86_64
