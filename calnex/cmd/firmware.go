@@ -25,9 +25,9 @@ import (
 func init() {
 	RootCmd.AddCommand(firmwareCmd)
 	firmwareCmd.Flags().BoolVar(&apply, "apply", false, "apply the firmware upgrade")
-	firmwareCmd.Flags().BoolVar(&force, "force", false, "force apply same or lower firmware version")
-	firmwareCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
-	firmwareCmd.Flags().StringVar(&target, "device", "", "device to configure")
+	firmwareCmd.Flags().BoolVar(&force, "force", false, "force apply any firmware version")
+	firmwareCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "ignore TLS certificate errors")
+	firmwareCmd.Flags().StringVar(&target, "device", "", "device to upgrade")
 	firmwareCmd.Flags().StringVar(&source, "file", "", "firmware file path")
 	if err := firmwareCmd.MarkFlagRequired("device"); err != nil {
 		log.Fatal(err)
@@ -39,7 +39,7 @@ func init() {
 
 var firmwareCmd = &cobra.Command{
 	Use:   "firmware",
-	Short: "update the device firmware",
+	Short: "upgrade the device firmware",
 	Run: func(_ *cobra.Command, _ []string) {
 		fw, err := firmware.NewOSSFW(source)
 		if err != nil {
