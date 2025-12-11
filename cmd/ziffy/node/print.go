@@ -26,7 +26,7 @@ import (
 	"strings"
 
 	ptp "github.com/facebook/time/ptp/protocol"
-	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter-legacy"
 	log "github.com/sirupsen/logrus"
 )
 
