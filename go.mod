@@ -15,7 +15,7 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/hashicorp/go-version v1.5.0
 	github.com/jsimonetti/rtnetlink v1.2.0
-	github.com/olekukonko/tablewriter v0.0.5
+	github.com/podtserkovskiy/tablewriter-legacy v1.100.0
 	github.com/prometheus/client_golang v1.14.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/sirupsen/logrus v1.9.1

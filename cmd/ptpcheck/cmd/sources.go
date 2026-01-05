@@ -28,7 +28,7 @@ import (
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/sptp/stats"
 
-	"github.com/olekukonko/tablewriter"
+	"github.com/podtserkovskiy/tablewriter-legacy"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
