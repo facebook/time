@@ -62,7 +62,7 @@ func printOscillatord(status *oscillatord.Status) {
 
 	fmt.Println("Clock:")
 	fmt.Printf("\tclass: %s (%d)\n", status.Clock.Class, status.Clock.Class)
-	fmt.Printf("\toffset: %d\n", status.Clock.Offset)
+	fmt.Printf("\toffset: %dns\n", status.Clock.Offset)
 }
 
 func oscillatordRun(address string, jsonOut bool) error {
