@@ -89,6 +89,15 @@ type Uptime struct {
 	Uptime int64
 }
 
+// SystemMonitor is a struct representing Calnex system monitor JSON response
+type SystemMonitor struct {
+	CPUUsage        float64 `json:"cpu_usage"`
+	FreeMemory      int     `json:"free_memory"`
+	InstalledMemory int     `json:"installed_memory"`
+	MemoryUsage     int     `json:"memory_usage"`
+	Threads         int
+}
+
 // GNSS is a struct representing Calnex GNSS JSON response
 type GNSS struct {
 	AntennaStatus         string
@@ -476,11 +485,12 @@ const (
 	clearDeviceURL = "https://%s/api/cleardevice?action=cleardevice"
 	rebootURL      = "https://%s/api/reboot?action=reboot"
 
-	versionURL     = "https://%s/api/version"
-	uptimeURL      = "https://%s/api/uptime"
-	firmwareURL    = "https://%s/api/updatefirmware"
-	certificateURL = "https://%s/api/installcertificate"
-	licenseURL     = "https://%s/api/option/load"
+	versionURL       = "https://%s/api/version"
+	uptimeURL        = "https://%s/api/uptime"
+	systemMonitorURL = "https://%s/api/monitor/system"
+	firmwareURL      = "https://%s/api/updatefirmware"
+	certificateURL   = "https://%s/api/installcertificate"
+	licenseURL       = "https://%s/api/option/load"
 
 	gnssURL             = "https://%s/api/gnss/status"
 	instrumentStatusURL = "https://%s/api/instrument/status"
@@ -990,6 +1000,27 @@ func (a *API) FetchUptime() (*Uptime, error) {
 	}
 
 	return u, nil
+}
+
+// FetchSystemMonitor returns system monitor data
+func (a *API) FetchSystemMonitor() (*SystemMonitor, error) {
+	url := fmt.Sprintf(systemMonitorURL, a.source)
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(http.StatusText(resp.StatusCode))
+	}
+
+	s := &SystemMonitor{}
+	if err = json.NewDecoder(resp.Body).Decode(s); err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
 
 // RBStatus returns current Rubidium clock status

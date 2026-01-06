@@ -856,3 +856,28 @@ func TestFetchUptime(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expected, f)
 }
+
+func TestFetchSystemMonitor(t *testing.T) {
+	sampleResp := `{"cpu_usage":48.01,"free_memory":380489728,"installed_memory":1034510336,"memory_usage":540426240,"start_time":3940,"system_time":5484133,"thread_id":2660,"threads":24,"user_time":180330942}`
+	expected := &SystemMonitor{
+		CPUUsage:        48.01,
+		FreeMemory:      380489728,
+		InstalledMemory: 1034510336,
+		MemoryUsage:     540426240,
+		Threads:         24,
+	}
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI.Client = ts.Client()
+
+	f, err := calnexAPI.FetchSystemMonitor()
+	require.NoError(t, err)
+	require.Equal(t, expected, f)
+}
