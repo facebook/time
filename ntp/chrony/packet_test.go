@@ -103,7 +103,7 @@ func TestDecodeSourceData(t *testing.T) {
 			Sequence: 209960819,
 		},
 		SourceData: SourceData{
-			IPAddr:         net.IP{0x24, 0x01, 0xdb, 0x00, 0x31, 0x10, 0x20, 0xc0, 0xfa, 0xce, 0x00, 0x00, 0x00, 0x48, 0x00, 0x00},
+			IPAddr:         &IPAddr{IP: IPToBytes(net.ParseIP("2401:db00:3110:20c0:face::48:0")), Family: IPAddrInet6},
 			Poll:           10,
 			Stratum:        2,
 			State:          4,
@@ -117,6 +117,66 @@ func TestDecodeSourceData(t *testing.T) {
 		},
 	}
 	require.Equal(t, want, packet)
+}
+
+func TestDecodeSourceDataWithIPAddrID(t *testing.T) {
+	// This test verifies that SourceData packets with IPADDR_ID (unresolved addresses)
+	// are correctly decoded. IPADDR_ID represents unresolved DNS names that chrony
+	// hasn't been able to resolve yet, and should display as "ID#XXXXXXXXXX".
+	//
+	// The raw packet is based on TestDecodeSourceData but modified to use:
+	// - Family = 3 (IPAddrID) instead of 2 (IPAddrInet6)
+	// - IP field contains the ID value (0x00000009) in the first 4 bytes
+	raw := []uint8{
+		0x06, 0x02, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x03, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x83, 0xbf, 0x73,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		// IPAddr starts here: IP[16] + Family[2] + Pad[2] = 20 bytes
+		0x00, 0x00, 0x00, 0x09, // IP bytes 0-3: ID value = 9
+		0x00, 0x00, 0x00, 0x00, // IP bytes 4-7
+		0x00, 0x00, 0x00, 0x00, // IP bytes 8-11
+		0x00, 0x00, 0x00, 0x00, // IP bytes 12-15
+		0x00, 0x03, // Family = 3 (IPAddrID)
+		0x00, 0x00, // Pad
+		// Rest of SourceData
+		0x00, 0x0a, // Poll = 10
+		0x00, 0x02, // Stratum = 2
+		0x00, 0x04, // State = 4
+		0x00, 0x00, // Mode = 0
+		0x00, 0x00, // Flags = 0
+		0x00, 0xff, // Reachability = 255
+		0x00, 0x00, 0x06, 0xa9, // SinceSample = 1705
+		0xe6, 0xc5, 0xee, 0xf3, // OrigLatestMeas (chronyFloat)
+		0xe6, 0xd1, 0x4f, 0xbe, // LatestMeas (chronyFloat)
+		0xea, 0xbb, 0x92, 0x3b, // LatestMeasErr (chronyFloat)
+	}
+	packet, err := decodePacket(raw)
+	require.Nil(t, err)
+
+	reply, ok := packet.(*ReplySourceData)
+	require.True(t, ok, "expected *ReplySourceData")
+
+	// Verify the IPAddr has Family = IPAddrID
+	require.Equal(t, IPAddrID, reply.SourceData.IPAddr.Family)
+
+	// Verify the ID value is correctly stored in the IP field
+	require.Equal(t, uint8(0x00), reply.SourceData.IPAddr.IP[0])
+	require.Equal(t, uint8(0x00), reply.SourceData.IPAddr.IP[1])
+	require.Equal(t, uint8(0x00), reply.SourceData.IPAddr.IP[2])
+	require.Equal(t, uint8(0x09), reply.SourceData.IPAddr.IP[3])
+
+	// Verify ToNetIP returns nil for unresolved addresses
+	require.Nil(t, reply.SourceData.IPAddr.ToNetIP())
+
+	// Verify String() returns the correct ID format
+	require.Equal(t, "ID#0000000009", reply.SourceData.IPAddr.String())
+
+	// Verify other fields are correctly parsed
+	require.Equal(t, int16(10), reply.SourceData.Poll)
+	require.Equal(t, uint16(2), reply.SourceData.Stratum)
+	require.Equal(t, SourceStateType(4), reply.SourceData.State)
+	require.Equal(t, uint16(255), reply.SourceData.Reachability)
+	require.Equal(t, uint32(1705), reply.SourceData.SinceSample)
 }
 
 func TestDecodeSourceStats(t *testing.T) {
@@ -674,11 +734,11 @@ func TestPacketEncodingNoPanic(t *testing.T) {
 		},
 		{
 			name:   "RequestNTPSourceName",
-			packet: NewNTPSourceNamePacket(net.ParseIP("127.0.0.1")),
+			packet: NewNTPSourceNamePacket(&IPAddr{IP: IPToBytes(net.ParseIP("127.0.0.1")), Family: IPAddrInet4}),
 		},
 		{
 			name:   "RequestNTPData",
-			packet: NewNTPDataPacket(net.ParseIP("127.0.0.1")),
+			packet: NewNTPDataPacket(&IPAddr{IP: IPToBytes(net.ParseIP("127.0.0.1")), Family: IPAddrInet4}),
 		},
 		{
 			name:   "RequestSelectData",
@@ -723,8 +783,8 @@ func TestClientCommunicate(t *testing.T) {
 		{"ServerStats", NewServerStatsPacket()},
 		{"SourceStats", NewSourceStatsPacket(1)},
 		{"SourceData", NewSourceDataPacket(1)},
-		{"NTPSourceName", NewNTPSourceNamePacket(net.ParseIP("127.0.0.1"))},
-		{"NTPData", NewNTPDataPacket(net.ParseIP("127.0.0.1"))},
+		{"NTPSourceName", NewNTPSourceNamePacket(&IPAddr{IP: IPToBytes(net.ParseIP("127.0.0.1")), Family: IPAddrInet4})},
+		{"NTPData", NewNTPDataPacket(&IPAddr{IP: IPToBytes(net.ParseIP("127.0.0.1")), Family: IPAddrInet4})},
 		{"SelectData", NewSelectDataPacket(1)},
 	}
 
@@ -756,8 +816,8 @@ func TestEORFieldInitialization(t *testing.T) {
 	}{
 		{"RequestSourceStats", NewSourceStatsPacket(42)},
 		{"RequestSourceData", NewSourceDataPacket(42)},
-		{"RequestNTPSourceName", NewNTPSourceNamePacket(net.ParseIP("127.0.0.1"))},
-		{"RequestNTPData", NewNTPDataPacket(net.ParseIP("127.0.0.1"))},
+		{"RequestNTPSourceName", NewNTPSourceNamePacket(&IPAddr{IP: IPToBytes(net.ParseIP("127.0.0.1")), Family: IPAddrInet4})},
+		{"RequestNTPData", NewNTPDataPacket(&IPAddr{IP: IPToBytes(net.ParseIP("127.0.0.1")), Family: IPAddrInet4})},
 		{"RequestSelectData", NewSelectDataPacket(42)},
 	}
 
@@ -886,12 +946,12 @@ func TestDirectBinaryWritePanicPrevention(t *testing.T) {
 		},
 		{
 			name:   "NTPSourceName_IPv4",
-			packet: NewNTPSourceNamePacket(net.ParseIP("192.168.1.1")),
+			packet: NewNTPSourceNamePacket(&IPAddr{IP: IPToBytes(net.ParseIP("192.168.1.1")), Family: IPAddrInet4}),
 			desc:   "NTP source name for IPv4 with DNS lookup",
 		},
 		{
 			name:   "NTPSourceName_IPv6",
-			packet: NewNTPSourceNamePacket(net.ParseIP("2001:db8::1")),
+			packet: NewNTPSourceNamePacket(&IPAddr{IP: IPToBytes(net.ParseIP("2001:db8::1")), Family: IPAddrInet6}),
 			desc:   "NTP source name for IPv6 with DNS lookup",
 		},
 	}
@@ -939,7 +999,7 @@ func TestNoPanicRegression(t *testing.T) {
 		NewSourcesPacket(),
 		NewSourceStatsPacket(0),
 		NewSourceDataPacket(0),
-		NewNTPSourceNamePacket(net.ParseIP("127.0.0.1")),
+		NewNTPSourceNamePacket(&IPAddr{IP: IPToBytes(net.ParseIP("127.0.0.1")), Family: IPAddrInet4}),
 	}
 
 	for i, packet := range packets {

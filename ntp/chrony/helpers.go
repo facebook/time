@@ -34,10 +34,13 @@ const ChronyPortV6Regexp = "[0-9]+: [0-9A-Z]+:0143 .*"
 // This is used in timeSpec.SecHigh for 32-bit timestamps
 const noHighSec uint32 = 0x7fffffff
 
-// ip stuff
+// IPAddr family constants - corresponds to IPAddr_Family in chrony's addressing.h
+// https://gitlab.com/chrony/chrony/-/blob/master/addressing.h
 const (
-	ipAddrInet4 uint16 = 1
-	ipAddrInet6 uint16 = 2
+	IPAddrUnspec uint16 = 0
+	IPAddrInet4  uint16 = 1
+	IPAddrInet6  uint16 = 2
+	IPAddrID     uint16 = 3
 )
 
 // magic numbers to convert chronyFloat to normal float
@@ -46,29 +49,46 @@ const (
 	floatCoefBits = (4*8 - floatExpBits)
 )
 
-type ipAddr struct {
+// IPAddr represents a chrony IP address which can be IPv4, IPv6, or an
+// unresolved ID (for sources that haven't been resolved yet).
+// The struct layout matches chrony's wire format for binary serialization.
+type IPAddr struct {
 	IP     [16]uint8
 	Family uint16
 	Pad    uint16
 }
 
-func (ip *ipAddr) ToNetIP() net.IP {
-	if ip.Family == ipAddrInet4 {
+// ToNetIP returns the underlying net.IP for resolved addresses.
+// Returns nil for unresolved addresses (IPAddrID family) or unspecified addresses.
+func (ip *IPAddr) ToNetIP() net.IP {
+	switch ip.Family {
+	case IPAddrInet4:
 		return net.IP(ip.IP[:4])
+	case IPAddrInet6:
+		return net.IP(ip.IP[:])
+	default:
+		// IPAddrUnspec (0) and IPAddrID (3) don't represent actual IP addresses.
+		// IPAddrID is used for unresolved addresses identified by an ID number.
+		return nil
 	}
-	return net.IP(ip.IP[:])
 }
 
-func newIPAddr(ip net.IP) *ipAddr {
-	family := ipAddrInet6
-	if ip.To4() != nil {
-		family = ipAddrInet4
-	}
-	var nIP [16]byte
-	copy(nIP[:], ip)
-	return &ipAddr{
-		IP:     nIP,
-		Family: family,
+// String returns a human-readable representation of the IP address.
+// For IPAddrID family (unresolved addresses), it returns "ID#XXXXXXXXXX" format
+// similar to chronyc's output with the -a flag.
+func (ip *IPAddr) String() string {
+	switch ip.Family {
+	case IPAddrInet4:
+		return net.IP(ip.IP[:4]).String()
+	case IPAddrInet6:
+		return net.IP(ip.IP[:]).String()
+	case IPAddrID:
+		// Format like chronyc: "ID#XXXXXXXXXX" (10 hex digits)
+		// The ID is stored in the first 4 bytes of the IP field as big-endian uint32
+		id := uint32(ip.IP[0])<<24 | uint32(ip.IP[1])<<16 | uint32(ip.IP[2])<<8 | uint32(ip.IP[3])
+		return fmt.Sprintf("ID#%010X", id)
+	default:
+		return ""
 	}
 }
 
@@ -196,4 +216,17 @@ func ReadNTPTestFlags(flags uint16) []string {
 		}
 	}
 	return results
+}
+
+// IPToBytes converts a net.IP to a [16]uint8 array for use in IPAddr structs.
+// For IPv4, it stores the 4 bytes at the beginning of the array.
+// For IPv6, it uses all 16 bytes.
+func IPToBytes(ip net.IP) [16]uint8 {
+	var result [16]uint8
+	if ip4 := ip.To4(); ip4 != nil {
+		copy(result[:], ip4)
+	} else {
+		copy(result[:], ip)
+	}
+	return result
 }

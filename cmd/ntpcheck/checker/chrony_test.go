@@ -68,7 +68,7 @@ var (
 
 	replySD0 = &chrony.ReplySourceData{
 		SourceData: chrony.SourceData{
-			IPAddr:         net.ParseIP("192.168.0.2"),
+			IPAddr:         &chrony.IPAddr{IP: chrony.IPToBytes(net.ParseIP("192.168.0.2")), Family: chrony.IPAddrInet4},
 			Flags:          chrony.NTPFlagsTests,
 			Poll:           10,
 			Stratum:        2,
@@ -81,7 +81,7 @@ var (
 
 	replySD1 = &chrony.ReplySourceData{
 		SourceData: chrony.SourceData{
-			IPAddr:         net.ParseIP("192.168.0.4"),
+			IPAddr:         &chrony.IPAddr{IP: chrony.IPToBytes(net.ParseIP("192.168.0.4")), Family: chrony.IPAddrInet4},
 			Flags:          chrony.NTPFlagsTests,
 			Poll:           11,
 			Stratum:        2,
