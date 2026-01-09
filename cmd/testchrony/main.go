@@ -150,12 +150,17 @@ func runCommand(address string, cmd string) error {
 				return fmt.Errorf("failed to get 'sourcedata' response for source #%d: %w", i, err)
 			}
 			sourceData := packet.(*chrony.ReplySourceData)
+			// Skip sources with unresolved addresses (IPADDR_ID family)
+			if sourceData.IPAddr.Family == chrony.IPAddrID {
+				fmt.Printf("Source %d: %s (unresolved)\n", i, sourceData.IPAddr.String())
+				continue
+			}
 			req := chrony.NewNTPDataPacket(sourceData.IPAddr)
 			selectData, err := client.Communicate(req)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Source %d (%s): %+v\n", i, sourceData.IPAddr, selectData)
+			fmt.Printf("Source %d (%s): %+v\n", i, sourceData.IPAddr.String(), selectData)
 		}
 	case "sourcename":
 		req := chrony.NewSourcesPacket()
@@ -172,12 +177,17 @@ func runCommand(address string, cmd string) error {
 				return fmt.Errorf("failed to get 'sourcedata' response for source #%d: %w", i, err)
 			}
 			sourceData := packet.(*chrony.ReplySourceData)
+			// Skip sources with unresolved addresses (IPADDR_ID family)
+			if sourceData.IPAddr.Family == chrony.IPAddrID {
+				fmt.Printf("Source %d: %s (unresolved)\n", i, sourceData.IPAddr.String())
+				continue
+			}
 			req := chrony.NewNTPSourceNamePacket(sourceData.IPAddr)
 			selectData, err := client.Communicate(req)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Source %d (%s): %+v\n", i, sourceData.IPAddr, selectData)
+			fmt.Printf("Source %d (%s): %+v\n", i, sourceData.IPAddr.String(), selectData)
 		}
 	case "selectdata":
 		req := chrony.NewSourcesPacket()

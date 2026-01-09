@@ -115,7 +115,7 @@ func TestCommunicateOK(t *testing.T) {
 	}
 	packetBody := replyTrackingContent{
 		RefID:              1,
-		IPAddr:             *newIPAddr(net.IP([]byte{192, 168, 0, 10})),
+		IPAddr:             IPAddr{IP: IPToBytes(net.ParseIP("192.168.0.10")), Family: IPAddrInet4},
 		Stratum:            3,
 		LeapStatus:         0,
 		RefTime:            timeSpec{},

@@ -123,8 +123,9 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 			return nil, fmt.Errorf("Got wrong 'sourcedata' response %+v", packet)
 		}
 		// get ntpdata when using a unix socket
+		// Skip sources with unresolved addresses (IPADDR_ID family) as they don't have valid IPs
 		var ntpData *chrony.NTPData
-		if sourceData.Mode != chrony.SourceModeRef && n.Unix() {
+		if sourceData.Mode != chrony.SourceModeRef && n.Unix() && sourceData.IPAddr.Family != chrony.IPAddrID {
 			ntpDataReq := chrony.NewNTPDataPacket(sourceData.IPAddr)
 			packet, err = n.Client.Communicate(ntpDataReq)
 			if err != nil {
@@ -142,8 +143,9 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 			}
 		}
 		// get peer sourcename using a unix socket
+		// Skip sources with unresolved addresses (IPADDR_ID family) as they don't have valid IPs
 		var ntpSourceName *chrony.ReplyNTPSourceName
-		if sourceData.Mode != chrony.SourceModeRef {
+		if sourceData.Mode != chrony.SourceModeRef && sourceData.IPAddr.Family != chrony.IPAddrID {
 			ntpSourceNameReq := chrony.NewNTPSourceNamePacket(sourceData.IPAddr)
 			packet, err = n.Client.Communicate(ntpSourceNameReq)
 			if err != nil {
@@ -156,7 +158,7 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 		}
 		peer, err := NewPeerFromChrony(sourceData, ntpData, ntpSourceName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create Peer structure from response packet for peer=%s: %w", sourceData.IPAddr, err)
+			return nil, fmt.Errorf("failed to create Peer structure from response packet for peer=%v: %w", sourceData.IPAddr, err)
 		}
 		result.Peers[uint16(i)] = peer
 		// if main sync source, update ClockSource info

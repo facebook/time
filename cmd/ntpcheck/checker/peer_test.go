@@ -17,6 +17,7 @@ limitations under the License.
 package checker
 
 import (
+	"net"
 	"testing"
 	"time"
 
@@ -105,11 +106,21 @@ func TestNewPeerFromChrony(t *testing.T) {
 	sourceData.Reachability = 255
 	sourceData.State = chrony.SourceStateCandidate
 	sourceData.Flags = chrony.NTPFlagsTests
+	sourceData.IPAddr = &chrony.IPAddr{IP: chrony.IPToBytes(net.ParseIP("192.168.1.1")), Family: chrony.IPAddrInet4}
+
+	// Source data with unresolved IP (IPADDR_ID - unresolved address)
+	sourceDataUnresolved := &chrony.ReplySourceData{}
+	sourceDataUnresolved.Stratum = 0
+	sourceDataUnresolved.Poll = 6
+	sourceDataUnresolved.IPAddr = &chrony.IPAddr{IP: [16]uint8{0, 0, 0, 9}, Family: chrony.IPAddrID} // Unresolved address with ID
+	sourceDataUnresolved.State = chrony.SourceStateUnreach                                           // Unresolved sources are unreachable
+	sourceDataUnresolved.Flags = chrony.NTPFlagsTests                                                // Standard flags
 
 	ntpData := &chrony.NTPData{}
 	ntpData.Poll = 10
 	ntpData.RefID = 123456
 	ntpData.RefTime = time.Unix(1587738257, 0)
+	ntpData.LocalAddr = net.IP{10, 0, 0, 1}
 	ntpSourceName := &chrony.ReplyNTPSourceName{}
 	tests := []struct {
 		name    string
@@ -128,6 +139,26 @@ func TestNewPeerFromChrony(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "unresolved address (IPADDR_ID)",
+			s:    sourceDataUnresolved,
+			p:    nil,
+			n:    nil,
+			want: &Peer{
+				Stratum:    0,
+				Offset:     -0,
+				HPoll:      6,
+				PPoll:      6,
+				Flashers:   []string{},
+				Configured: true,
+				Reachable:  false,
+				Selection:  control.SelReject,
+				Condition:  "unreach", // SourceStateUnreach maps to "unreach" condition
+				Reach:      0,
+				SRCAdr:     "ID#0000000009", // Unresolved addresses display as ID#XXXXXXXXXX
+			},
+			wantErr: false,
+		},
+		{
 			name: "fallback, no NTPData",
 			s:    sourceData,
 			p:    nil,
@@ -142,7 +173,7 @@ func TestNewPeerFromChrony(t *testing.T) {
 				Selection:  control.SelCandidate,
 				Condition:  control.PeerSelect[control.SelCandidate],
 				Reach:      255,
-				SRCAdr:     "<nil>",
+				SRCAdr:     "192.168.1.1",
 			},
 			wantErr: false,
 		},
@@ -162,8 +193,8 @@ func TestNewPeerFromChrony(t *testing.T) {
 				Selection:  control.SelCandidate,
 				Condition:  control.PeerSelect[control.SelCandidate],
 				Reach:      255,
-				SRCAdr:     "<nil>",
-				DSTAdr:     "<nil>",
+				SRCAdr:     "192.168.1.1",
+				DSTAdr:     "10.0.0.1",
 				RefID:      "0001E240",
 				RefTime:    ntpData.RefTime.String(),
 				Hostname:   "",

@@ -17,6 +17,7 @@ limitations under the License.
 package chrony
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -105,5 +106,139 @@ func TestNTPTestsFlagsString(t *testing.T) {
 			testCase.out,
 			ReadNTPTestFlags(testCase.in),
 		)
+	}
+}
+
+func TestIPAddrToNetIP(t *testing.T) {
+	testCases := []struct {
+		name  string
+		in    *IPAddr
+		out   net.IP
+		isNil bool
+	}{
+		{
+			name: "IPv4 address",
+			in: &IPAddr{
+				IP:     IPToBytes(net.ParseIP("192.168.1.1")),
+				Family: IPAddrInet4,
+			},
+			out:   net.IP{192, 168, 1, 1},
+			isNil: false,
+		},
+		{
+			name: "IPv6 address",
+			in: &IPAddr{
+				IP:     IPToBytes(net.ParseIP("2001:db8::1")),
+				Family: IPAddrInet6,
+			},
+			out:   net.ParseIP("2001:db8::1"),
+			isNil: false,
+		},
+		{
+			name: "IPADDR_ID (unresolved address)",
+			in: &IPAddr{
+				IP:     [16]uint8{0, 0, 0, 9},
+				Family: IPAddrID,
+			},
+			out:   nil,
+			isNil: true,
+		},
+		{
+			name: "IPADDR_UNSPEC",
+			in: &IPAddr{
+				Family: IPAddrUnspec,
+			},
+			out:   nil,
+			isNil: true,
+		},
+		{
+			name: "Unknown family type",
+			in: &IPAddr{
+				Family: 99,
+			},
+			out:   nil,
+			isNil: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := tc.in.ToNetIP()
+			if tc.isNil {
+				require.Nil(t, result)
+			} else {
+				require.Equal(t, tc.out, result)
+			}
+		})
+	}
+}
+
+func TestIPAddrString(t *testing.T) {
+	testCases := []struct {
+		name string
+		in   *IPAddr
+		out  string
+	}{
+		{
+			name: "IPv4 address",
+			in: &IPAddr{
+				IP:     IPToBytes(net.ParseIP("192.168.1.1")),
+				Family: IPAddrInet4,
+			},
+			out: "192.168.1.1",
+		},
+		{
+			name: "IPv6 address",
+			in: &IPAddr{
+				IP:     IPToBytes(net.ParseIP("2001:db8::1")),
+				Family: IPAddrInet6,
+			},
+			out: "2001:db8::1",
+		},
+		{
+			name: "IPADDR_ID with ID 9",
+			in: &IPAddr{
+				IP:     [16]uint8{0, 0, 0, 9},
+				Family: IPAddrID,
+			},
+			out: "ID#0000000009",
+		},
+		{
+			name: "IPADDR_ID with ID 16 (0x10)",
+			in: &IPAddr{
+				IP:     [16]uint8{0, 0, 0, 0x10},
+				Family: IPAddrID,
+			},
+			out: "ID#0000000010",
+		},
+		{
+			name: "IPADDR_ID with larger ID",
+			in: &IPAddr{
+				IP:     [16]uint8{0x12, 0x34, 0x56, 0x78},
+				Family: IPAddrID,
+			},
+			out: "ID#0012345678",
+		},
+		{
+			name: "IPADDR_UNSPEC",
+			in: &IPAddr{
+				Family: IPAddrUnspec,
+			},
+			out: "",
+		},
+		{
+			name: "Unknown family type",
+			in: &IPAddr{
+				Family: 99,
+			},
+			out: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := tc.in.String()
+			require.Equal(t, tc.out, result)
+		})
 	}
 }

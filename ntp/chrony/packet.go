@@ -279,7 +279,7 @@ type RequestSourceData struct {
 // As of now, it's only allowed by Chrony over unix socket connection.
 type RequestNTPData struct {
 	RequestHead
-	IPAddr ipAddr
+	IPAddr IPAddr
 	EOR    int32
 	// we pass at max ipv6 addr - 16 bytes
 	data [maxDataLen - 16]uint8
@@ -288,7 +288,7 @@ type RequestNTPData struct {
 // RequestNTPSourceName - packet to request source name for peer IP.
 type RequestNTPSourceName struct {
 	RequestHead
-	IPAddr ipAddr
+	IPAddr IPAddr
 	EOR    int32
 	// we pass at max ipv6 addr - 16 bytes
 	data [maxDataLen - 16]uint8
@@ -377,7 +377,7 @@ type ReplySources struct {
 }
 
 type replySourceDataContent struct {
-	IPAddr         ipAddr
+	IPAddr         IPAddr
 	Poll           int16
 	Stratum        uint16
 	State          SourceStateType
@@ -392,7 +392,7 @@ type replySourceDataContent struct {
 
 // SourceData contains parsed version of 'source data' reply
 type SourceData struct {
-	IPAddr         net.IP
+	IPAddr         *IPAddr
 	Poll           int16
 	Stratum        uint16
 	State          SourceStateType
@@ -407,7 +407,7 @@ type SourceData struct {
 
 func newSourceData(r *replySourceDataContent) *SourceData {
 	return &SourceData{
-		IPAddr:         r.IPAddr.ToNetIP(),
+		IPAddr:         &r.IPAddr,
 		Poll:           r.Poll,
 		Stratum:        r.Stratum,
 		State:          r.State,
@@ -429,7 +429,7 @@ type ReplySourceData struct {
 
 type replyTrackingContent struct {
 	RefID              uint32
-	IPAddr             ipAddr // our current sync source
+	IPAddr             IPAddr // our current sync source
 	Stratum            uint16
 	LeapStatus         uint16
 	RefTime            timeSpec
@@ -489,7 +489,7 @@ type ReplyTracking struct {
 
 type replySourceStatsContent struct {
 	RefID              uint32
-	IPAddr             ipAddr
+	IPAddr             IPAddr
 	NSamples           uint32
 	NRuns              uint32
 	SpanSeconds        uint32
@@ -536,8 +536,8 @@ type ReplySourceStats struct {
 }
 
 type replyNTPDataContent struct {
-	RemoteAddr      ipAddr
-	LocalAddr       ipAddr
+	RemoteAddr      IPAddr
+	LocalAddr       IPAddr
 	RemotePort      uint16
 	Leap            uint8
 	Version         uint8
@@ -627,8 +627,8 @@ type ReplyNTPData struct {
 }
 
 type replyNTPData2Content struct {
-	RemoteAddr      ipAddr
-	LocalAddr       ipAddr
+	RemoteAddr      IPAddr
+	LocalAddr       IPAddr
 	RemotePort      uint16
 	Leap            uint8
 	Version         uint8
@@ -836,7 +836,7 @@ type ReplyServerStats4 struct {
 
 type replySelectData struct {
 	RefID          uint32
-	IPAddr         ipAddr
+	IPAddr         IPAddr
 	StateChar      uint8
 	Authentication uint8
 	Leap           uint8
@@ -939,27 +939,27 @@ func NewSourceDataPacket(sourceID int32) *RequestSourceData {
 }
 
 // NewNTPDataPacket creates new packet to request 'ntp data' information for given peer IP
-func NewNTPDataPacket(ip net.IP) *RequestNTPData {
+func NewNTPDataPacket(ip *IPAddr) *RequestNTPData {
 	return &RequestNTPData{
 		RequestHead: RequestHead{
 			Version: protoVersionNumber,
 			PKTType: pktTypeCmdRequest,
 			Command: reqNTPData,
 		},
-		IPAddr: *newIPAddr(ip),
+		IPAddr: *ip,
 		data:   [maxDataLen - 16]uint8{},
 	}
 }
 
 // NewNTPSourceNamePacket creates new packet to request 'source name' information for given peer IP
-func NewNTPSourceNamePacket(ip net.IP) *RequestNTPSourceName {
+func NewNTPSourceNamePacket(ip *IPAddr) *RequestNTPSourceName {
 	return &RequestNTPSourceName{
 		RequestHead: RequestHead{
 			Version: protoVersionNumber,
 			PKTType: pktTypeCmdRequest,
 			Command: reqNTPSourceName,
 		},
-		IPAddr: *newIPAddr(ip),
+		IPAddr: *ip,
 		data:   [maxDataLen - 16]uint8{},
 	}
 }
