@@ -1,20 +1,20 @@
 # See the documentation for more information:
 # https://packit.dev/docs/configuration/
 
-specfile_path: golang-github-facebook-time.spec
+specfile_path: facebook-time.spec
 files_to_sync:
-  - golang-github-facebook-time.spec
+  - facebook-time.spec
   - .packit.yaml
 
 upstream_package_name: time
-downstream_package_name: golang-github-facebook-time
+downstream_package_name: facebook-time
 actions:
   post-upstream-clone:
-    - "bash -c \"curl -s https://src.fedoraproject.org/rpms/golang-github-facebook-time/raw/main/f/golang-github-facebook-time.spec | sed -e '/^Patch[0-9]/d' -e 's|^%global commit.*|%global commit          '$(git rev-parse HEAD)'|' -e 's|^%global date.*|%global date            '$(date +%Y%m%d)'|' -e 's|mv fbclock-bin %{gobuilddir}/bin/fbclock-bin|mkdir -p %{gobuilddir}/bin \\&\\& mv fbclock-bin %{gobuilddir}/bin/fbclock-bin|' > golang-github-facebook-time.spec\""
-    - "curl -s -o go-vendor-tools.toml https://src.fedoraproject.org/rpms/golang-github-facebook-time/raw/main/f/go-vendor-tools.toml"
+    - "bash -c \"curl -s https://src.fedoraproject.org/rpms/facebook-time/raw/main/f/facebook-time.spec | sed -e '/^Patch[0-9]/d' -e 's|^%global commit.*|%global commit          '$(git rev-parse HEAD)'|' -e 's|^%global date.*|%global date            '$(date +%Y%m%d)'|' -e 's|mv fbclock-bin %{gobuilddir}/bin/fbclock-bin|mkdir -p %{gobuilddir}/bin \\&\\& mv fbclock-bin %{gobuilddir}/bin/fbclock-bin|' > facebook-time.spec\""
+    - "curl -s -o go-vendor-tools.toml https://src.fedoraproject.org/rpms/facebook-time/raw/main/f/go-vendor-tools.toml"
   create-archive:
-    - "spectool -g golang-github-facebook-time.spec"
-    - "go_vendor_archive create golang-github-facebook-time.spec"
+    - "spectool -g facebook-time.spec"
+    - "go_vendor_archive create facebook-time.spec"
     - "bash -c 'echo time-$(git rev-parse HEAD).tar.gz'"
 
 srpm_build_deps:
@@ -25,21 +25,21 @@ srpm_build_deps:
   - go-vendor-tools
 
 jobs:
-- job: copr_build
-  trigger: commit
-  owner: "@meta"
-  project: time
-  targets:
-    - fedora-stable-aarch64
-    - fedora-stable-ppc64le
-    - fedora-stable-s390x
-    - fedora-all-x86_64
-- job: copr_build
-  trigger: pull_request
-  owner: "@meta"
-  project: time
-  targets:
-    - fedora-stable-aarch64
-    - fedora-stable-ppc64le
-    - fedora-stable-s390x
-    - fedora-all-x86_64
+  - job: copr_build
+    trigger: commit
+    owner: "@meta"
+    project: time
+    targets:
+      - fedora-stable-aarch64
+      - fedora-stable-ppc64le
+      - fedora-stable-s390x
+      - fedora-all-x86_64
+  - job: copr_build
+    trigger: pull_request
+    owner: "@meta"
+    project: time
+    targets:
+      - fedora-stable-aarch64
+      - fedora-stable-ppc64le
+      - fedora-stable-s390x
+      - fedora-all-x86_64
