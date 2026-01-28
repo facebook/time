@@ -237,7 +237,7 @@ func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 	}
 
 	log.Debugf("Writing response: %+v", response)
-	if err := unix.Sendto(t.connFd, responseBytes, unix.O_NONBLOCK, t.addr); err != nil {
+	if err := unix.Sendto(t.connFd, responseBytes, unix.MSG_DONTWAIT, t.addr); err != nil {
 		log.Debugf("Failed to respond to the request: %v", err)
 		return
 	}
