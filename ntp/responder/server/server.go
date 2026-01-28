@@ -162,6 +162,12 @@ func (s *Server) startListener(conn *net.UDPConn) {
 		log.Fatalf("Getting event connection FD: %s", err)
 	}
 
+	// Dup the fd to get a copy not managed by Go's netpoller
+	connFd, err = unix.Dup(connFd)
+	if err != nil {
+		log.Fatalf("Failed to dup connection FD: %s", err)
+	}
+
 	// Enable RX timestamps
 	if err := timestamp.EnableTimestamps(s.Config.TimestampType, connFd, iface); err != nil {
 		log.Fatal(err)
