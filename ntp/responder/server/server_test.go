@@ -180,12 +180,19 @@ func TestServer(t *testing.T) {
 	}
 	conn := tryListenUDP(t)
 	defer conn.Close()
+
+	// increase socket buffer sizes to 1MB to handle high volume
+	err := conn.SetReadBuffer(1024 * 1024)
+	require.NoError(t, err)
+	err = conn.SetWriteBuffer(1024 * 1024)
+	require.NoError(t, err)
+
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	go s.startListener(conn)
 
 	time.Sleep(100 * time.Millisecond)
 
-	err := s.Checker.Check()
+	err = s.Checker.Check()
 	require.NoError(t, err)
 
 	// talk to local server
@@ -193,6 +200,11 @@ func TestServer(t *testing.T) {
 	sendConn, err := net.DialTimeout("udp", addr, time.Second)
 	require.Nil(t, err)
 	defer sendConn.Close()
+
+	// set read deadline to prevent test from hanging forever
+	err = sendConn.SetDeadline(time.Now().Add(10 * time.Second))
+	require.NoError(t, err)
+
 	// send requests to server, check if response makes sense
 	for range requests {
 		clientTransmitTime := time.Now()
