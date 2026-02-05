@@ -43,12 +43,13 @@ func init() {
 	sourcesCmd.Flags().BoolVarP(&sourcesNoDNSFlag, "no-resolving", "n", false, "disable resolving of IP addresses to hostnames")
 }
 
-func sourcesRunPTP4l(server string, noDNS bool) error {
+func sourcesRunPTP4l(server string, noDNS bool, domainNumber uint8) error {
 	c, cleanup, err := checker.PrepareMgmtClient(server)
 	defer cleanup()
 	if err != nil {
 		return fmt.Errorf("preparing connection: %w", err)
 	}
+	c.SetDomainNumber(domainNumber)
 	ppn, err := c.PortPropertiesNP()
 	if err != nil {
 		return fmt.Errorf("getting PORT_PROPERTIES_NP from ptp4l: %w", err)
@@ -176,12 +177,12 @@ func sourcesRunSPTP(address string, noDNS bool) error {
 	return nil
 }
 
-func sourcesRun(address string, noDNS bool) error {
+func sourcesRun(address string, noDNS bool, domainNumber uint8) error {
 	f := checker.GetFlavour()
 	address = checker.GetServerAddress(address, f)
 	switch f {
 	case checker.FlavourPTP4L:
-		return sourcesRunPTP4l(address, noDNS)
+		return sourcesRunPTP4l(address, noDNS, domainNumber)
 	case checker.FlavourSPTP:
 		return sourcesRunSPTP(address, noDNS)
 	}
@@ -195,7 +196,11 @@ var sourcesCmd = &cobra.Command{
 	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
-		if err := sourcesRun(rootClientFlag, sourcesNoDNSFlag); err != nil {
+		domain, err := RootCmd.PersistentFlags().GetUint8("domain")
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := sourcesRun(rootClientFlag, sourcesNoDNSFlag, domain); err != nil {
 			log.Fatal(err)
 		}
 

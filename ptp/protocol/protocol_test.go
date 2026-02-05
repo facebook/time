@@ -74,6 +74,44 @@ func TestBytesTo(t *testing.T) {
 	})
 }
 
+func TestSetDomainNumber(t *testing.T) {
+	packet := &SyncDelayReq{
+		Header: Header{
+			SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageSync, 1),
+			Version:             MajorVersion,
+			MessageLength:       44,
+			DomainNumber:        0,
+			MinorSdoID:          0,
+			FlagField:           0,
+			CorrectionField:     0,
+			MessageTypeSpecific: 0,
+			SourcePortIdentity: PortIdentity{
+				PortNumber:    1,
+				ClockIdentity: 36138748164966842,
+			},
+			SequenceID:         116,
+			ControlField:       0,
+			LogMessageInterval: 0,
+		},
+		SyncDelayReqBody: SyncDelayReqBody{
+			OriginTimestamp: Timestamp{
+				Seconds:     [6]byte{0x0, 0x00, 0x45, 0xb1, 0x11, 0x5a},
+				Nanoseconds: 174389936,
+			},
+		},
+	}
+
+	require.Equal(t, uint8(0), packet.DomainNumber)
+
+	var testDomain uint8 = 42
+	packet.SetDomainNumber(testDomain)
+	require.Equal(t, testDomain, packet.DomainNumber)
+
+	b, err := Bytes(packet)
+	require.NoError(t, err)
+	require.Equal(t, testDomain, b[4])
+}
+
 func TestParseSync(t *testing.T) {
 	raw := []uint8{
 		0x10, 0x02, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x00,

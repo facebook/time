@@ -65,7 +65,7 @@ func GetServerAddress(address string, f Flavour) string {
 }
 
 // RunCheck is a simple wrapper to connect to address and run Run()
-func RunCheck(address string) (*PTPCheckResult, error) {
+func RunCheck(address string, domainNumber uint8) (*PTPCheckResult, error) {
 	flavour := GetFlavour()
 	address = GetServerAddress(address, flavour)
 	log.Debugf("using address %q", address)
@@ -76,6 +76,7 @@ func RunCheck(address string) (*PTPCheckResult, error) {
 		if err != nil {
 			return nil, err
 		}
+		c.SetDomainNumber(domainNumber)
 		log.Debugf("connected to %s", address)
 		return RunPTP4L(c)
 	case FlavourSPTP:

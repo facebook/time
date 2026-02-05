@@ -109,6 +109,10 @@ func (p *Header) SetSequence(sequence uint16) {
 	p.SequenceID = sequence
 }
 
+func (p *Header) SetDomainNumber(domainNumber uint8) {
+	p.DomainNumber = domainNumber
+}
+
 func checkPacketLength(p *Header, l int) error {
 	if int(p.MessageLength) > l {
 		return fmt.Errorf("cannot decode message of length %d from %d bytes", p.MessageLength, l)

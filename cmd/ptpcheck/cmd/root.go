@@ -33,11 +33,13 @@ var RootCmd = &cobra.Command{
 // flags
 var rootVerboseFlag bool
 var rootClientFlag string
+var rootDomainFlag uint8
 
 var rootClientFlagDesc = "Address of PTP client to connect to. Can be either Unix socket for ptp4l or http endpoint for sptp. Empty means detect automatically."
 
 func init() {
 	RootCmd.PersistentFlags().BoolVarP(&rootVerboseFlag, "verbose", "v", false, "verbose output")
+	RootCmd.PersistentFlags().Uint8Var(&rootDomainFlag, "domain", 0, "PTP domain number only for ptp4l")
 }
 
 // ConfigureVerbosity configures log verbosity based on parsed flags. Needs to be called by any subcommand.
