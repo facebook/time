@@ -290,7 +290,11 @@ Exit code will be equal to sum of failed check, or 127 in case of critical probl
 	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
-		result, err := checker.RunCheck(rootClientFlag)
+		domain, err := RootCmd.PersistentFlags().GetUint8("domain")
+		if err != nil {
+			log.Fatal(err)
+		}
+		result, err := checker.RunCheck(rootClientFlag, domain)
 		if err != nil {
 			log.Fatal(err)
 		}

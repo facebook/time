@@ -722,3 +722,83 @@ func TestMgmtClientUnicastMasterTableNP(t *testing.T) {
 	require.Equal(t, 1, len(conn.inputs))
 	require.Equal(t, conn.inputs[0], b)
 }
+
+func TestMgmtClientDomainNumber(t *testing.T) {
+	var domainNumber uint8 = 24
+	packet := &Management{
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:             Version,
+				MessageLength:       74,
+				DomainNumber:        domainNumber,
+				MinorSdoID:          0,
+				FlagField:           0,
+				CorrectionField:     0,
+				MessageTypeSpecific: 0,
+				SourcePortIdentity: PortIdentity{
+					PortNumber:    0,
+					ClockIdentity: 5212879185253405146,
+				},
+				SequenceID:         0,
+				ControlField:       4,
+				LogMessageInterval: 0x7f,
+			},
+			TargetPortIdentity: PortIdentity{
+				PortNumber:    49810,
+				ClockIdentity: 0,
+			},
+			ActionField: RESPONSE,
+		},
+		TLV: &CurrentDataSetTLV{
+			ManagementTLVHead: ManagementTLVHead{
+				TLVHead: TLVHead{
+					TLVType:     TLVManagement,
+					LengthField: 20,
+				},
+				ManagementID: IDCurrentDataSet,
+			},
+			StepsRemoved:     1,
+			OffsetFromMaster: NewTimeInterval(-768652.0),
+			MeanPathDelay:    NewTimeInterval(42013430.0),
+		},
+	}
+	conn, client := prepareTestClient(t, packet)
+	client.DomainNumber = domainNumber
+
+	got, err := client.CurrentDataSet()
+	require.NoError(t, err)
+	require.Equal(t, packet.TLV, got)
+
+	// check that the request was sent with the correct domain number
+	require.Equal(t, 1, len(conn.inputs))
+	sentPacket := &Management{}
+	err = sentPacket.UnmarshalBinary(conn.inputs[0])
+	require.NoError(t, err)
+	require.Equal(t, domainNumber, sentPacket.DomainNumber)
+}
+
+func TestMgmtClientSendPacketSetsDomainNumber(t *testing.T) {
+	buf := &bytes.Buffer{}
+	conn := newConn([]*bytes.Buffer{buf})
+	var domainNumber uint8 = 42
+	client := &MgmtClient{
+		Sequence:     0,
+		Connection:   conn,
+		DomainNumber: domainNumber,
+	}
+
+	req := CurrentDataSetRequest()
+	err := client.SendPacket(req)
+	require.NoError(t, err)
+
+	// verify domain number was set on the packet
+	require.Equal(t, domainNumber, req.DomainNumber)
+
+	// verify the sent bytes contain the correct domain number
+	require.Equal(t, 1, len(conn.inputs))
+	sentPacket := &Management{}
+	err = sentPacket.UnmarshalBinary(conn.inputs[0])
+	require.NoError(t, err)
+	require.Equal(t, domainNumber, sentPacket.DomainNumber)
+}

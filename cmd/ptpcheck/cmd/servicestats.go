@@ -32,12 +32,13 @@ func init() {
 	serviceStatsCmd.Flags().StringVarP(&rootClientFlag, "client", "C", "", rootClientFlagDesc)
 }
 
-func serviceStatsRunPTP4l(address string) error {
+func serviceStatsRunPTP4l(address string, domainNumber uint8) error {
 	c, cleanup, err := checker.PrepareMgmtClient(address)
 	defer cleanup()
 	if err != nil {
 		return fmt.Errorf("preparing connection: %w", err)
 	}
+	c.SetDomainNumber(domainNumber)
 	tlv, err := c.PortServiceStatsNP()
 	if err != nil {
 		return fmt.Errorf("talking to ptp4l: %w", err)
@@ -63,12 +64,12 @@ func serviceStatsRunSPTP(address string) error {
 	return nil
 }
 
-func serviceStatsRun(address string) error {
+func serviceStatsRun(address string, domainNumber uint8) error {
 	f := checker.GetFlavour()
 	address = checker.GetServerAddress(address, f)
 	switch f {
 	case checker.FlavourPTP4L:
-		return serviceStatsRunPTP4l(address)
+		return serviceStatsRunPTP4l(address, domainNumber)
 	case checker.FlavourSPTP:
 		return serviceStatsRunSPTP(address)
 	}
@@ -80,7 +81,11 @@ var serviceStatsCmd = &cobra.Command{
 	Short: "Print PTP port service stats in JSON format",
 	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
-		if err := serviceStatsRun(rootClientFlag); err != nil {
+		domain, err := RootCmd.PersistentFlags().GetUint8("domain")
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := serviceStatsRun(rootClientFlag, domain); err != nil {
 			log.Fatal(err)
 		}
 

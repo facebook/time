@@ -57,7 +57,11 @@ var portStatsCmd = &cobra.Command{
 	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
 
-		result, err := checker.RunCheck(rootClientFlag)
+		domain, err := RootCmd.PersistentFlags().GetUint8("domain")
+		if err != nil {
+			log.Fatal(err)
+		}
+		result, err := checker.RunCheck(rootClientFlag, domain)
 		if err != nil {
 			log.Fatal(err)
 		}
