@@ -53,7 +53,7 @@ func TestFetchStats(t *testing.T) {
 	sampleResp := `
 [
 	{"gm_address": "127.0.0.1", "selected": false, "port_identity": "oleg", "clock_quality": {"clock_class": 6, "clock_accuracy": 33, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -42.42, "mean_path_delay": 42.42, "steps_removed": 3, "gm_present": 1, "error": ""},
-	{"gm_address": "::1", "selected": true, "port_identity": "oleg1", "clock_quality": {"clock_class": 7, "clock_accuracy": 34, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -43.43, "mean_path_delay": 43.43, "steps_removed": 3, "gm_present": 1}
+	{"gm_address": "::1", "selected": true, "port_identity": "oleg1", "clock_quality": {"clock_class": 7, "clock_accuracy": 34, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -43.43, "mean_path_delay": 43.43, "steps_removed": 3, "gm_present": 1, "servo_state": 2}
 ]
 `
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +69,29 @@ func TestFetchStats(t *testing.T) {
 	fetcher := &HTTPFetcher{}
 	sstats, err := fetcher.FetchStats(cfg)
 	require.Nil(t, err)
-	expected := DataPoint{IngressTimeNS: 0, MasterOffsetNS: -43.43, PathDelayNS: 43.43, FreqAdjustmentPPB: 0, ClockAccuracyNS: 250}
+	expected := DataPoint{IngressTimeNS: 0, MasterOffsetNS: -43.43, PathDelayNS: 43.43, FreqAdjustmentPPB: 0, ClockAccuracyNS: 250, ServoState: 2}
+	require.Equal(t, sstats, &expected)
+}
+
+func TestFetchStatsServoNotLocked(t *testing.T) {
+	sampleResp := `
+[
+	{"gm_address": "::1", "selected": true, "port_identity": "oleg1", "clock_quality": {"clock_class": 7, "clock_accuracy": 34, "offset_scaled_log_variance": 42}, "priority1": 2, "priority2": 3, "priority3": 4, "offset": -43.43, "mean_path_delay": 43.43, "steps_removed": 3, "gm_present": 1, "servo_state": 0}
+]
+`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+	surl, err := url.Parse(ts.URL)
+	require.Nil(t, err)
+	target := fmt.Sprintf("%s:%s", surl.Hostname(), surl.Port())
+	cfg := &Config{
+		PTPClientAddress: target,
+	}
+	fetcher := &HTTPFetcher{}
+	sstats, err := fetcher.FetchStats(cfg)
+	require.Nil(t, err)
+	expected := DataPoint{IngressTimeNS: 0, MasterOffsetNS: -43.43, PathDelayNS: 43.43, FreqAdjustmentPPB: 0, ClockAccuracyNS: 250, ServoState: 0}
 	require.Equal(t, sstats, &expected)
 }

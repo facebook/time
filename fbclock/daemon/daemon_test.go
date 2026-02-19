@@ -348,6 +348,7 @@ func TestDataPointSanityCheck(t *testing.T) {
 				PathDelayNS:       213.0,
 				FreqAdjustmentPPB: 212131,
 				ClockAccuracyNS:   25.0,
+				ServoState:        2,
 			},
 			wantErr: false,
 		},
@@ -398,6 +399,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 			PathDelayNS:       213.0,
 			FreqAdjustmentPPB: adj,
 			ClockAccuracyNS:   100.0,
+			ServoState:        2,
 		}
 		shmData, err := s.calculateSHMData(d, leaps)
 		if i < 29 {
@@ -414,6 +416,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		PathDelayNS:       213.0,
 		FreqAdjustmentPPB: 212131,
 		ClockAccuracyNS:   100.0,
+		ServoState:        2,
 	}
 
 	want := &fbclock.Data{
@@ -457,6 +460,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		PathDelayNS:       213,
 		FreqAdjustmentPPB: 32333,
 		ClockAccuracyNS:   100,
+		ServoState:        2,
 	}
 	shmData, err = s.calculateSHMData(d, leaps)
 	want = &fbclock.Data{
@@ -479,6 +483,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		PathDelayNS:       213,
 		FreqAdjustmentPPB: 32333,
 		ClockAccuracyNS:   100,
+		ServoState:        2,
 	}
 	shmData, err = s.calculateSHMData(d, leaps)
 	want = &fbclock.Data{
@@ -560,6 +565,7 @@ func TestDaemonDoWork(t *testing.T) {
 			PathDelayNS:       213.0,
 			FreqAdjustmentPPB: adj,
 			ClockAccuracyNS:   25.0,
+			ServoState:        2,
 		}
 		phcTime = tme + time.Microsecond
 		err = s.doWork(shm, d)
@@ -598,6 +604,7 @@ func TestDaemonDoWork(t *testing.T) {
 		PathDelayNS:       213.0,
 		FreqAdjustmentPPB: 212131,
 		ClockAccuracyNS:   25.0,
+		ServoState:        2,
 	}
 	phcTime = startTime + 62*time.Second
 

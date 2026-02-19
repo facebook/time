@@ -34,7 +34,7 @@ func TestRunResultToStatsError(t *testing.T) {
 		Server: netip.MustParseAddr("192.168.0.10"),
 		Error:  fmt.Errorf("ooops"),
 	}
-	got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, false)
+	got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, false, 0)
 	want := &gmstats.Stat{
 		GMAddress: "192.168.0.10",
 		Priority3: 1,
@@ -102,12 +102,13 @@ func TestRunResultToStats(t *testing.T) {
 	}
 
 	t.Run("not selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false, 2)
 		require.Equal(t, want, got)
 	})
 	want.Selected = true
+	want.ServoState = 2
 	t.Run("selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true, 2)
 		require.Equal(t, want, got)
 	})
 }

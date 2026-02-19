@@ -53,6 +53,7 @@ type Stat struct {
 	C2SDelay          int64            `json:"client_server_delay"`
 	S2CDelay          int64            `json:"server_client_delay"`
 	PortChangeCount   uint64           `json:"port_change_count"`
+	ServoState        int              `json:"servo_state"`
 }
 
 // Stats is a list of Stat

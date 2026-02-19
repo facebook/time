@@ -377,9 +377,10 @@ func (p *SPTP) reprioritize(bestAddr netip.Addr) {
 }
 
 func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
+	var state servo.State
 	defer func() {
 		for addr, res := range results {
-			s := runResultToGMStats(addr, res, p.priorities[addr], addr == p.bestGM)
+			s := runResultToGMStats(addr, res, p.priorities[addr], addr == p.bestGM, int(state))
 			p.stats.SetGMStats(s)
 		}
 	}()
@@ -463,7 +464,6 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 		// mitigate Broadcom 48bit overflow
 		p.isStalled = true
 	}
-	var state servo.State
 	var freqAdj float64
 	if p.isStalled {
 		var err error

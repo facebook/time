@@ -63,6 +63,8 @@ type DataPoint struct {
 	FreqAdjustmentPPB float64
 	// ClockAccuracyNS represents clock accurary in nanoseconds
 	ClockAccuracyNS float64
+	// ServoState represents the servo state from the PTP client
+	ServoState int
 }
 
 // SanityCheck checks datapoint for correctness
@@ -84,6 +86,9 @@ func (d *DataPoint) SanityCheck() error {
 	}
 	if time.Duration(d.ClockAccuracyNS) >= ptp.ClockAccuracyUnknown.Duration() {
 		return fmt.Errorf("clock accuracy is unknown")
+	}
+	if d.ServoState != 2 { // servo.StateLocked
+		return fmt.Errorf("servo state is %d, not locked", d.ServoState)
 	}
 	return nil
 }

@@ -68,6 +68,7 @@ func (hf *HTTPFetcher) FetchStats(cfg *Config) (*DataPoint, error) {
 				MasterOffsetNS:  s.Offset,
 				PathDelayNS:     s.MeanPathDelay,
 				ClockAccuracyNS: float64(int64(s.GMPresent) * accuracyNS),
+				ServoState:      s.ServoState,
 			}, nil
 		}
 	}
