@@ -123,7 +123,7 @@ func main() {
 
 	// Monitoring
 	// Replace with your implementation of Stats
-	st := stats.NewJSONStats()
+	st := stats.NewJSONStats(c.RecvWorkers)
 	go st.Start(c.MonitoringPort)
 
 	// drain check
