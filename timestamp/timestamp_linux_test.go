@@ -458,3 +458,19 @@ func TestSocketControlMessageSeqIDTimestamp(t *testing.T) {
 		t.Skip("This test supports amd64 platform only")
 	}
 }
+
+func TestSocketControlMessageRXDrops(t *testing.T) {
+	switch runtime.GOARCH {
+	case "amd64":
+		sockControlMsg := []byte{
+			0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // message has len of 20 bytes (0x14), level SOL_SOCKET (0x1), type SO_RXQ_OVFL (0x28)
+			0x01, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00,
+			0x91, 0xd7, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, // Last 4 bytes are there to align the socket message to an 8-byte boundary
+		}
+		drops := socketControlMessageDrops(sockControlMsg, 20)
+		require.Equal(t, uint32(448401), drops)
+	default:
+		t.Skip("This test supports amd64 platform only")
+	}
+
+}

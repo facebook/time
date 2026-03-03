@@ -58,8 +58,13 @@ func scmDataToTime(data []byte) (ts time.Time, err error) {
 }
 
 // socketControlMessageTimestamp parses timestamp from control message
-func socketControlMessageTimestamp(b []byte) (time.Time, error) {
+func socketControlMessageTimestamp(b []byte, _ int) (time.Time, error) {
 	return scmDataToTime(b[unix.CmsgSpace(0):])
+}
+
+// socketControlMessageDrops is not implemented for freebsd
+func socketControlMessageDrops(b []byte, _ int) uint32 {
+	return 0
 }
 
 // EnableSWTimestampsRx enables SW RX timestamps on the socket
@@ -79,4 +84,9 @@ func EnableTimestamps(ts Timestamp, connFd int, _ *net.Interface) error {
 		return fmt.Errorf("Unrecognized timestamp type: %s", ts)
 	}
 	return nil
+}
+
+// EnableRXQueueOverflow is not implemented for freebsd
+func EnableRXQueueOverflow(connFd int) error {
+	return err.Errorf("RX queue overflow is not supported on freebsd")
 }

@@ -192,6 +192,11 @@ func (s *Server) startEventListener() {
 		log.Fatal(err)
 	}
 
+	// Enable SO_RXQ_OVFL to receive socket drops in control messages
+	if err := timestamp.EnableRXQueueOverflow(s.eFd); err != nil {
+		log.Warningf("Failed to enable SO_RXQ_OVFL: %v", err)
+	}
+
 	err = unix.SetNonblock(s.eFd, false)
 	if err != nil {
 		log.Fatalf("Failed to set socket to blocking: %s", err)
@@ -199,10 +204,10 @@ func (s *Server) startEventListener() {
 
 	fail := make(chan bool)
 	for i := 0; i < s.Config.RecvWorkers; i++ {
-		go func() {
-			s.handleEventMessages(eventConn)
+		go func(rworker int) {
+			s.handleEventMessages(eventConn, rworker)
 			fail <- true
-		}()
+		}(i)
 	}
 	<-fail
 }
@@ -256,8 +261,8 @@ func updateSockaddrWithPort(sa unix.Sockaddr, port int) {
 	}
 }
 
-// handleEventMessage is a handler which gets called every time Event Message arrives
-func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
+// handleEventMessages is a handler which gets called every time an Event Message arrives
+func (s *Server) handleEventMessages(eventConn *net.UDPConn, rworker int) {
 	buf := make([]byte, timestamp.PayloadSizeBytes)
 	oob := make([]byte, timestamp.ControlSizeBytes)
 	dReq := &ptp.SyncDelayReq{}
@@ -270,11 +275,21 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn) {
 	var workerOffset uint64
 
 	for {
-		bbuf, eclisa, rxTS, err := timestamp.ReadPacketWithRXTimestampBuf(s.eFd, buf, oob)
+		bbuf, boob, eclisa, err := timestamp.ReadPacketWithCMsgBuf(s.eFd, buf, oob)
 		if err != nil {
 			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
 			continue
 		}
+
+		// Get the timestamp
+		rxTS, err := timestamp.ReadRXTimestamp(oob, boob)
+		if err != nil {
+			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
+			continue
+		}
+		drops := timestamp.ReadSocketDrops(oob, boob)
+		s.Stats.SetRXDrops(rworker, int64(drops))
+
 		if s.Config.TimestampType != timestamp.HW {
 			rxTS = rxTS.Add(s.Config.UTCOffset)
 		}

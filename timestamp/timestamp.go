@@ -157,6 +157,25 @@ func ReadPacketWithRXTimestampBuf(connFd int, buf, oob []byte) (int, unix.Sockad
 	return bbuf, saddr, timestamp, err
 }
 
+// ReadPacketWithCMsgBuf writes byte packet into provided packet and cmsg buffer, and returns number of bytes copied to the buffers
+func ReadPacketWithCMsgBuf(connFd int, buf, oob []byte) (int, int, unix.Sockaddr, error) {
+	bbuf, boob, _, saddr, err := unix.Recvmsg(connFd, buf, oob, 0)
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("failed to read packet: %w", err)
+	}
+	return bbuf, boob, saddr, err
+}
+
+// ReadRXTimestamp returns HW timestamp from CMSG buffer
+func ReadRXTimestamp(oob []byte, boob int) (time.Time, error) {
+	return socketControlMessageTimestamp(oob, boob)
+}
+
+// ReadSocketDrops returns number of dropped packets from CMSG buffer
+func ReadSocketDrops(oob []byte, boob int) uint32 {
+	return socketControlMessageDrops(oob, boob)
+}
+
 // IPToSockaddr converts IP + port into a socket address
 // Somewhat copy from https://github.com/golang/go/blob/16cd770e0668a410a511680b2ac1412e554bd27b/src/net/ipsock_posix.go#L145
 func IPToSockaddr(ip net.IP, port int) unix.Sockaddr {

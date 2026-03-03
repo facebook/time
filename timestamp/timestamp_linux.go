@@ -150,6 +150,12 @@ func EnableSWTimestampsRx(connFd int) error {
 	return unix.SetsockoptInt(connFd, unix.SOL_SOCKET, timestamping, flags)
 }
 
+// EnableRXQueueOverflow enables SO_RXQ_OVFL socket option to receive
+// drop count in control messages
+func EnableRXQueueOverflow(connFd int) error {
+	return unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_RXQ_OVFL, 1)
+}
+
 // EnableSWTimestamps enables SW timestamps (TX and RX) on the socket
 func EnableSWTimestamps(connFd int) error {
 	flags := unix.SOF_TIMESTAMPING_TX_SOFTWARE |
@@ -270,6 +276,24 @@ func socketControlMessageTimestamp(b []byte, boob int) (time.Time, error) {
 		}
 	}
 	return time.Time{}, errNoTimestamp
+}
+
+// socketControlMessageDrops parses SocketControlMessage for drops count
+// drops are provided by SO_RXQ_OVFL control message when enabled
+func socketControlMessageDrops(b []byte, boob int) uint32 {
+	mlen := 0
+	var drops uint32
+	for i := 0; i < boob; i += unix.CmsgSpace(mlen - unix.SizeofCmsghdr) {
+		h := (*unix.Cmsghdr)(unsafe.Pointer(&b[i]))
+		mlen = int(h.Len) //#nosec G115
+		if mlen == 0 {
+			break
+		}
+		if h.Level == unix.SOL_SOCKET && int(h.Type) == unix.SO_RXQ_OVFL {
+			drops = binary.NativeEndian.Uint32(b[i+socketControlMessageHeaderOffset : i+mlen])
+		}
+	}
+	return drops
 }
 
 // socketControlMessageSeqIDTimestamp parses SocketControlMessage Data field into time.Time and returns it

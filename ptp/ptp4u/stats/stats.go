@@ -117,7 +117,7 @@ type Stats interface {
 	// SetDrain atomically sets the drain status
 	SetDrain(drain int64)
 
-	// SetRXDrops adds per-worker socket drops
+	// SetRXDrops sets per-worker socket drops
 	SetRXDrops(rworker int, drops int64)
 }
 
