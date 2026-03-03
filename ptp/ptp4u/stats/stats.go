@@ -182,6 +182,15 @@ func (s *syncMapInt64) load(key int) int64 {
 	return s.m[key]
 }
 
+// load gets the value by the key
+func (s *syncMapInt64) loadAndClear(key int) int64 {
+	s.Lock()
+	defer s.Unlock()
+	v := s.m[key]
+	s.m[key] = 0
+	return v
+}
+
 // inc increments the counter for the given key
 func (s *syncMapInt64) inc(key int) {
 	s.Lock()
@@ -207,6 +216,13 @@ func (s *syncMapInt64) store(key int, value int64) {
 func (s *syncMapInt64) copy(dst *syncMapInt64) {
 	for _, t := range s.keys() {
 		dst.store(t, s.load(t))
+	}
+}
+
+// copy all key-values between maps
+func (s *syncMapInt64) copyAndClear(dst *syncMapInt64) {
+	for _, t := range s.keys() {
+		dst.store(t, s.loadAndClear(t))
 	}
 }
 

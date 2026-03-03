@@ -57,23 +57,23 @@ func (s *JSONStats) Start(monitoringport int) {
 
 // Snapshot the values so they can be reported atomically
 func (s *JSONStats) Snapshot() {
-	s.subscriptions.copy(&s.report.subscriptions)
-	s.rx.copy(&s.report.rx)
-	s.tx.copy(&s.report.tx)
-	s.rxSignalingGrant.copy(&s.report.rxSignalingGrant)
-	s.rxSignalingCancel.copy(&s.report.rxSignalingCancel)
-	s.txSignalingGrant.copy(&s.report.txSignalingGrant)
-	s.txSignalingCancel.copy(&s.report.txSignalingCancel)
-	s.workerQueue.copy(&s.report.workerQueue)
-	s.workerSubs.copy(&s.report.workerSubs)
-	s.txtsattempts.copy(&s.report.txtsattempts)
-	s.report.utcoffsetSec = s.utcoffsetSec
-	s.report.clockaccuracy = s.clockaccuracy
-	s.report.clockclass = s.clockclass
-	s.report.drain = s.drain
-	s.report.reload = s.reload
-	s.report.txtsMissing = s.txtsMissing
-	s.report.minMaxCF = s.minMaxCF
+	s.subscriptions.copyAndClear(&s.report.subscriptions)
+	s.rx.copyAndClear(&s.report.rx)
+	s.tx.copyAndClear(&s.report.tx)
+	s.rxSignalingGrant.copyAndClear(&s.report.rxSignalingGrant)
+	s.rxSignalingCancel.copyAndClear(&s.report.rxSignalingCancel)
+	s.txSignalingGrant.copyAndClear(&s.report.txSignalingGrant)
+	s.txSignalingCancel.copyAndClear(&s.report.txSignalingCancel)
+	s.workerQueue.copyAndClear(&s.report.workerQueue)
+	s.workerSubs.copyAndClear(&s.report.workerSubs)
+	s.txtsattempts.copyAndClear(&s.report.txtsattempts)
+	s.report.utcoffsetSec = atomic.SwapInt64(&s.utcoffsetSec, 0)
+	s.report.clockaccuracy = atomic.SwapInt64(&s.clockaccuracy, 0)
+	s.report.clockclass = atomic.SwapInt64(&s.clockclass, 0)
+	s.report.drain = atomic.SwapInt64(&s.drain, 0)
+	s.report.reload = atomic.SwapInt64(&s.reload, 0)
+	s.report.txtsMissing = atomic.SwapInt64(&s.txtsMissing, 0)
+	s.report.minMaxCF = atomic.SwapInt64(&s.minMaxCF, 0)
 	for k := range s.rxDrops.m {
 		s.report.rxDrops.add(0, s.rxDrops.get(k))
 	}

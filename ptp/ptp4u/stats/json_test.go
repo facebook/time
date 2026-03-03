@@ -397,7 +397,7 @@ func TestJSONStatsSetMinMaxCF_SnapshotBehavior(t *testing.T) {
 	// After snapshot, report field should match main field
 	stats.Snapshot()
 	require.Equal(t, int64(42424), stats.report.minMaxCF)
-	require.Equal(t, int64(42424), atomic.LoadInt64(&stats.minMaxCF))
+	require.Equal(t, int64(0), atomic.LoadInt64(&stats.minMaxCF))
 }
 
 func TestJSONStatsSetMinMaxCF_EdgeCases(t *testing.T) {

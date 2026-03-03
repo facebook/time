@@ -152,7 +152,6 @@ func (s *Server) Start() error {
 			s.Stats.SetClockClass(int64(s.Config.ClockClass))
 
 			s.Stats.Snapshot()
-			s.Stats.Reset()
 		}
 		fail <- true
 	}()
