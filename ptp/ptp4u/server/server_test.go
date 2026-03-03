@@ -40,7 +40,7 @@ func TestFindWorker(t *testing.T) {
 	}
 	s := Server{
 		Config: c,
-		Stats:  stats.NewJSONStats(),
+		Stats:  stats.NewJSONStats(1),
 		sw:     make([]*sendWorker, c.SendWorkers),
 	}
 
@@ -86,7 +86,7 @@ func TestStartEventListener(t *testing.T) {
 	}
 	s := Server{
 		Config: c,
-		Stats:  stats.NewJSONStats(),
+		Stats:  stats.NewJSONStats(1),
 		sw:     make([]*sendWorker, c.SendWorkers),
 	}
 	go s.startEventListener()
@@ -106,7 +106,7 @@ func TestStartGeneralListener(t *testing.T) {
 	}
 	s := Server{
 		Config: c,
-		Stats:  stats.NewJSONStats(),
+		Stats:  stats.NewJSONStats(1),
 		sw:     make([]*sendWorker, c.SendWorkers),
 	}
 	go s.startGeneralListener()
@@ -116,7 +116,7 @@ func TestStartGeneralListener(t *testing.T) {
 func TestDrain(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := Server{
-		Stats:  stats.NewJSONStats(),
+		Stats:  stats.NewJSONStats(1),
 		ctx:    ctx,
 		cancel: cancel,
 	}
@@ -129,7 +129,7 @@ func TestDrain(t *testing.T) {
 func TestUndrain(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := Server{
-		Stats:  stats.NewJSONStats(),
+		Stats:  stats.NewJSONStats(1),
 		ctx:    ctx,
 		cancel: cancel,
 	}
@@ -161,7 +161,7 @@ func TestHandleSighup(t *testing.T) {
 	}
 	s := Server{
 		Config: c,
-		Stats:  stats.NewJSONStats(),
+		Stats:  stats.NewJSONStats(1),
 		sw:     make([]*sendWorker, c.SendWorkers),
 	}
 	clipi := ptp.PortIdentity{
@@ -225,7 +225,7 @@ func TestHandleSigterm(t *testing.T) {
 	c := &Config{StaticConfig: StaticConfig{PidFile: cfg.Name()}}
 	s := Server{
 		Config: c,
-		Stats:  stats.NewJSONStats(),
+		Stats:  stats.NewJSONStats(1),
 	}
 
 	err = c.CreatePidFile()

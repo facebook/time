@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	ptp "github.com/facebook/time/ptp/protocol"
 )
@@ -115,6 +116,41 @@ type Stats interface {
 
 	// SetDrain atomically sets the drain status
 	SetDrain(drain int64)
+
+	// SetRXDrops adds per-worker socket drops
+	SetRXDrops(rworker int, drops int64)
+}
+
+// relaxedMapInt64 map of per-worker counters
+type relaxedMapInt64 struct {
+	m []int64
+}
+
+// init initializes the underlying array
+func (s *relaxedMapInt64) init(cnt int) {
+	s.m = make([]int64, cnt)
+}
+
+// add increments the counter by v for the given key (assumption that worker runs in 1 thread)
+func (s *relaxedMapInt64) add(key int, v int64) {
+	atomic.AddInt64(&s.m[key], v)
+}
+
+// store sets the counter to v for the given key (assumption that worker runs in 1 thread)
+func (s *relaxedMapInt64) store(key int, v int64) {
+	atomic.SwapInt64(&s.m[key], v)
+}
+
+// get returns current value of counter and atomically re-inits it
+func (s *relaxedMapInt64) get(key int) int64 {
+	return atomic.SwapInt64(&(s.m[key]), 0)
+}
+
+// get returns current value of counter and atomically re-inits it
+func (s *relaxedMapInt64) reset() {
+	for k := range s.m {
+		atomic.SwapInt64(&(s.m[k]), 0)
+	}
 }
 
 // syncMapInt64 sync map of PTP messages
@@ -195,6 +231,7 @@ type counters struct {
 	txtsattempts      syncMapInt64
 	workerQueue       syncMapInt64
 	workerSubs        syncMapInt64
+	rxDrops           relaxedMapInt64
 	utcoffsetSec      int64
 	clockaccuracy     int64
 	clockclass        int64
@@ -204,7 +241,7 @@ type counters struct {
 	minMaxCF          int64
 }
 
-func (c *counters) init() {
+func (c *counters) init(rworkers int) {
 	c.subscriptions.init()
 	c.rx.init()
 	c.tx.init()
@@ -215,6 +252,7 @@ func (c *counters) init() {
 	c.workerQueue.init()
 	c.workerSubs.init()
 	c.txtsattempts.init()
+	c.rxDrops.init(rworkers)
 }
 
 func (c *counters) reset() {
@@ -228,6 +266,7 @@ func (c *counters) reset() {
 	c.workerQueue.reset()
 	c.workerSubs.reset()
 	c.txtsattempts.reset()
+	c.rxDrops.reset()
 	c.utcoffsetSec = 0
 	c.clockaccuracy = 0
 	c.clockclass = 0
@@ -297,6 +336,12 @@ func (c *counters) toMap() (export map[string]int64) {
 		c := c.txtsattempts.load(t)
 		res[fmt.Sprintf("worker.%d.txtsattempts", t)] = c
 	}
+
+	var drops int64
+	for k := range c.rxDrops.m {
+		drops += c.rxDrops.get(k)
+	}
+	res["rxdrops"] = drops
 
 	res["utcoffset_sec"] = c.utcoffsetSec
 	res["clockaccuracy"] = c.clockaccuracy

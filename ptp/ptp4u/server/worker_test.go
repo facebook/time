@@ -37,7 +37,7 @@ func TestWorkerQueue(t *testing.T) {
 		},
 	}
 
-	st := stats.NewJSONStats()
+	st := stats.NewJSONStats(1)
 	go st.Start(0)
 	time.Sleep(time.Millisecond)
 	q := make(chan *SubscriptionClient)
@@ -157,7 +157,7 @@ func TestInventoryClients(t *testing.T) {
 		},
 	}
 
-	st := stats.NewJSONStats()
+	st := stats.NewJSONStats(1)
 	go st.Start(0)
 	time.Sleep(10 * time.Millisecond)
 

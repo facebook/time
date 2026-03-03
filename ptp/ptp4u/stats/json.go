@@ -34,11 +34,11 @@ type JSONStats struct {
 }
 
 // NewJSONStats returns a new JSONStats
-func NewJSONStats() *JSONStats {
+func NewJSONStats(rworkers int) *JSONStats {
 	s := &JSONStats{}
 
-	s.init()
-	s.report.init()
+	s.init(rworkers)
+	s.report.init(rworkers)
 
 	return s
 }
@@ -74,6 +74,9 @@ func (s *JSONStats) Snapshot() {
 	s.report.reload = s.reload
 	s.report.txtsMissing = s.txtsMissing
 	s.report.minMaxCF = s.minMaxCF
+	for k := range s.rxDrops.m {
+		s.report.rxDrops.add(0, s.rxDrops.get(k))
+	}
 }
 
 // handleRequest is a handler used for all http monitoring requests
@@ -243,4 +246,9 @@ func (s *JSONStats) SetClockClass(clockclass int64) {
 // SetDrain atomically sets the drain status
 func (s *JSONStats) SetDrain(drain int64) {
 	atomic.StoreInt64(&s.drain, drain)
+}
+
+// SetRXDrops adds rx drops per worker
+func (s *JSONStats) SetRXDrops(rworker int, drops int64) {
+	s.rxDrops.store(rworker, drops)
 }

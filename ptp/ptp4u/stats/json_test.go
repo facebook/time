@@ -50,6 +50,7 @@ func TestJSONStatsReset(t *testing.T) {
 	stats.rxSignalingGrant.init()
 	stats.rxSignalingCancel.init()
 	stats.workerQueue.init()
+	stats.rxDrops.init(1)
 
 	stats.IncSubscription(ptp.MessageAnnounce)
 	stats.IncRXSignalingGrant(ptp.MessageSync)
@@ -64,7 +65,7 @@ func TestJSONStatsReset(t *testing.T) {
 }
 
 func TestJSONStatsAnnounceSubscription(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.IncSubscription(ptp.MessageAnnounce)
 	require.Equal(t, int64(1), stats.subscriptions.load(int(ptp.MessageAnnounce)))
@@ -74,7 +75,7 @@ func TestJSONStatsAnnounceSubscription(t *testing.T) {
 }
 
 func TestJSONStatsSyncSubscription(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.IncSubscription(ptp.MessageSync)
 	require.Equal(t, int64(1), stats.subscriptions.load(int(ptp.MessageSync)))
@@ -84,7 +85,7 @@ func TestJSONStatsSyncSubscription(t *testing.T) {
 }
 
 func TestJSONStatsRX(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.IncRX(ptp.MessageSync)
 	require.Equal(t, int64(1), stats.rx.load(int(ptp.MessageSync)))
@@ -94,7 +95,7 @@ func TestJSONStatsRX(t *testing.T) {
 }
 
 func TestJSONStatsTX(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.IncTX(ptp.MessageSync)
 	require.Equal(t, int64(1), stats.tx.load(int(ptp.MessageSync)))
@@ -104,7 +105,7 @@ func TestJSONStatsTX(t *testing.T) {
 }
 
 func TestJSONStatsRXSignaling(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.IncRXSignalingGrant(ptp.MessageSync)
 	stats.IncRXSignalingCancel(ptp.MessageSync)
@@ -118,7 +119,7 @@ func TestJSONStatsRXSignaling(t *testing.T) {
 }
 
 func TestJSONStatsTXSignaling(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.IncTXSignalingGrant(ptp.MessageSync)
 	stats.IncTXSignalingCancel(ptp.MessageSync)
@@ -132,14 +133,14 @@ func TestJSONStatsTXSignaling(t *testing.T) {
 }
 
 func TestJSONStatsSetMaxWorkerQueue(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.SetMaxWorkerQueue(10, 42)
 	require.Equal(t, int64(42), stats.workerQueue.load(10))
 }
 
 func TestJSONStatsWorkerSubs(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.IncWorkerSubs(10)
 	require.Equal(t, int64(1), stats.workerSubs.load(10))
@@ -149,42 +150,42 @@ func TestJSONStatsWorkerSubs(t *testing.T) {
 }
 
 func TestJSONStatsSetMaxTXTSAttempts(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.SetMaxTXTSAttempts(10, 42)
 	require.Equal(t, int64(42), stats.txtsattempts.load(10))
 }
 
 func TestJSONStatsSetUTCOffset(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.SetUTCOffsetSec(42)
 	require.Equal(t, int64(42), stats.utcoffsetSec)
 }
 
 func TestJSONStatsSetClockAccuracy(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.SetClockAccuracy(42)
 	require.Equal(t, int64(42), stats.clockaccuracy)
 }
 
 func TestJSONStatsSetClockCLass(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.SetClockClass(42)
 	require.Equal(t, int64(42), stats.clockclass)
 }
 
 func TestJSONStatsSetDrain(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	stats.SetDrain(1)
 	require.Equal(t, int64(1), stats.drain)
 }
 
 func TestJSONStatsSnapshot(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	go stats.Start(0)
 	time.Sleep(time.Millisecond)
@@ -208,7 +209,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 	stats.Snapshot()
 
 	expectedStats := counters{}
-	expectedStats.init()
+	expectedStats.init(1)
 	expectedStats.subscriptions.store(int(ptp.MessageAnnounce), 1)
 	expectedStats.tx.store(int(ptp.MessageSync), 2)
 	expectedStats.rxSignalingGrant.store(int(ptp.MessageDelayResp), 3)
@@ -233,7 +234,7 @@ func TestJSONStatsSnapshot(t *testing.T) {
 }
 
 func TestJSONExport(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 	port, err := getFreePort()
 	require.Nil(t, err, "Failed to allocate port")
 	go stats.Start(port)
@@ -257,6 +258,7 @@ func TestJSONExport(t *testing.T) {
 	stats.IncTXTSMissing()
 	stats.IncTXTSMissing()
 	stats.SetMinMaxCF(6969)
+	stats.SetRXDrops(0, 1)
 
 	stats.Snapshot()
 
@@ -283,12 +285,13 @@ func TestJSONExport(t *testing.T) {
 	expectedMap["reload"] = 3
 	expectedMap["txts.missing"] = 2
 	expectedMap["min_max_cf"] = 6969
+	expectedMap["rxdrops"] = 1
 
 	require.Equal(t, expectedMap, data)
 }
 
 func TestJSONStatsSetMinMaxCF_PositiveMax(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	// Test positive values - should update to maximum
 	stats.SetMinMaxCF(100)
@@ -305,7 +308,7 @@ func TestJSONStatsSetMinMaxCF_PositiveMax(t *testing.T) {
 }
 
 func TestJSONStatsSetMinMaxCF_NegativeMin(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	// Test negative values - should update to minimum (most negative)
 	stats.SetMinMaxCF(-100)
@@ -322,7 +325,7 @@ func TestJSONStatsSetMinMaxCF_NegativeMin(t *testing.T) {
 }
 
 func TestJSONStatsSetMinMaxCF_MixedValues(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	// Start with positive value
 	stats.SetMinMaxCF(100)
@@ -343,7 +346,7 @@ func TestJSONStatsSetMinMaxCF_MixedValues(t *testing.T) {
 }
 
 func TestJSONStatsSetMinMaxCF_ZeroHandling(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	// Start with 0 (initial state)
 	require.Equal(t, int64(0), atomic.LoadInt64(&stats.minMaxCF))
@@ -364,7 +367,7 @@ func TestJSONStatsSetMinMaxCF_ZeroHandling(t *testing.T) {
 }
 
 func TestJSONStatsSetMinMaxCF_AtomicBehavior(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	// Test Compare-And-Swap behavior by verifying updates are atomic
 	stats.SetMinMaxCF(100)
@@ -382,7 +385,7 @@ func TestJSONStatsSetMinMaxCF_AtomicBehavior(t *testing.T) {
 }
 
 func TestJSONStatsSetMinMaxCF_SnapshotBehavior(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	// Set value in main field
 	stats.SetMinMaxCF(42424)
@@ -398,7 +401,7 @@ func TestJSONStatsSetMinMaxCF_SnapshotBehavior(t *testing.T) {
 }
 
 func TestJSONStatsSetMinMaxCF_EdgeCases(t *testing.T) {
-	stats := NewJSONStats()
+	stats := NewJSONStats(1)
 
 	// Test boundary values
 	stats.SetMinMaxCF(1)
