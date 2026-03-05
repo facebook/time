@@ -355,7 +355,10 @@ func (c *counters) toMap() (export map[string]int64) {
 
 	var drops int64
 	for k := range c.rxDrops.m {
-		drops += c.rxDrops.get(k)
+		d := c.rxDrops.get(k)
+		if d > drops {
+			drops = d
+		}
 	}
 	res["rxdrops"] = drops
 
