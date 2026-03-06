@@ -44,10 +44,6 @@ type Server struct {
 	Checks []drain.Drain
 	sw     []*sendWorker
 
-	// server source fds
-	eFd int
-	gFd int
-
 	// drain logic
 	cancel context.CancelFunc
 	ctx    context.Context
@@ -174,71 +170,87 @@ func (s *Server) startEventListener() {
 		log.Fatalf("failed to get interface: %v", err)
 	}
 
-	log.Infof("Binding on %s %d", s.Config.IP, ptp.PortEvent)
-	eventConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: s.Config.IP, Port: ptp.PortEvent})
-	if err != nil {
-		log.Fatalf("Listening error: %s", err)
-	}
-	defer eventConn.Close()
-
-	// get connection file descriptor
-	s.eFd, err = timestamp.ConnFd(eventConn)
-	if err != nil {
-		log.Fatalf("Getting event connection FD: %s", err)
-	}
-
-	// Enable RX timestamps. Delay requests need to be timestamped by ptp4u on receipt
-	if err := timestamp.EnableTimestamps(s.Config.TimestampType, s.eFd, iface); err != nil {
-		log.Fatal(err)
-	}
-
-	// Enable SO_RXQ_OVFL to receive socket drops in control messages
-	if err := timestamp.EnableRXQueueOverflow(s.eFd); err != nil {
-		log.Warningf("Failed to enable SO_RXQ_OVFL: %v", err)
-	}
-
-	err = unix.SetNonblock(s.eFd, false)
-	if err != nil {
-		log.Fatalf("Failed to set socket to blocking: %s", err)
+	// socket domain differs depending whether we are listening on ipv4 or ipv6
+	domain := unix.AF_INET6
+	if s.Config.IP.To4() != nil {
+		domain = unix.AF_INET
 	}
 
 	fail := make(chan bool)
 	for i := 0; i < s.Config.RecvWorkers; i++ {
-		go func(rworker int) {
-			s.handleEventMessages(eventConn, rworker)
+		eFD, err := unix.Socket(domain, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
+		if err != nil {
+			log.Fatalf("creating event socket error: %v", err)
+		}
+		defer unix.Close(eFD)
+		sockAddrPort := timestamp.IPToSockaddr(s.Config.IP, ptp.PortEvent)
+
+		// set SO_REUSEPORT to have socket per receive worker
+		if err = unix.SetsockoptInt(eFD, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
+			log.Fatalf("failed to set SO_REUSEPORT on event socket: %v", err)
+		}
+		// bind to PTP Event port
+		if err = unix.Bind(eFD, sockAddrPort); err != nil {
+			log.Fatalf("unable to bind event socket connection: %v", err)
+		}
+		// Enable RX timestamps. Delay requests need to be timestamped by ptp4u on receipt
+		if err := timestamp.EnableTimestamps(s.Config.TimestampType, eFD, iface); err != nil {
+			log.Fatal(err)
+		}
+
+		// Enable SO_RXQ_OVFL to receive socket drops in control messages
+		if err := timestamp.EnableRXQueueOverflow(eFD); err != nil {
+			log.Warningf("Failed to enable SO_RXQ_OVFL: %v", err)
+		}
+
+		err = unix.SetNonblock(eFD, false)
+		if err != nil {
+			log.Fatalf("Failed to set socket to blocking: %v", err)
+		}
+
+		go func(fd, rworker int) {
+			s.handleEventMessages(fd, rworker)
 			fail <- true
-		}(i)
+		}(eFD, i)
 	}
 	<-fail
 }
 
 // startGeneralListener launches the listener which listens to announces
 func (s *Server) startGeneralListener() {
-	var err error
-	log.Infof("Binding on %s %d", s.Config.IP, ptp.PortGeneral)
-	generalConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: s.Config.IP, Port: ptp.PortGeneral})
-	if err != nil {
-		log.Fatalf("Listening error: %s", err)
-	}
-	defer generalConn.Close()
-
-	// get connection file descriptor
-	s.gFd, err = timestamp.ConnFd(generalConn)
-	if err != nil {
-		log.Fatalf("Getting general connection FD: %s", err)
-	}
-
-	err = unix.SetNonblock(s.gFd, false)
-	if err != nil {
-		log.Fatalf("Failed to set socket to blocking: %s", err)
+	// socket domain differs depending whether we are listening on ipv4 or ipv6
+	domain := unix.AF_INET6
+	if s.Config.IP.To4() != nil {
+		domain = unix.AF_INET
 	}
 
 	fail := make(chan bool)
 	for i := 0; i < s.Config.RecvWorkers; i++ {
-		go func() {
-			s.handleGeneralMessages(generalConn)
+		gFD, err := unix.Socket(domain, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
+		if err != nil {
+			log.Fatalf("creating general socket error: %v", err)
+		}
+		defer unix.Close(gFD)
+
+		sockAddrPort := timestamp.IPToSockaddr(s.Config.IP, ptp.PortGeneral)
+
+		// set SO_REUSEPORT to have socket per receive worker
+		if err = unix.SetsockoptInt(gFD, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
+			log.Fatalf("failed to set SO_REUSEPORT on general socket: %v", err)
+		}
+		// bind to PTP Event port
+		if err = unix.Bind(gFD, sockAddrPort); err != nil {
+			log.Fatalf("unable to bind general socket connection: %v", err)
+		}
+
+		err = unix.SetNonblock(gFD, false)
+		if err != nil {
+			log.Fatalf("Failed to set socket to blocking: %s", err)
+		}
+		go func(fd int) {
+			s.handleGeneralMessages(fd)
 			fail <- true
-		}()
+		}(gFD)
 	}
 	<-fail
 }
@@ -261,8 +273,8 @@ func updateSockaddrWithPort(sa unix.Sockaddr, port int) {
 	}
 }
 
-// handleEventMessages is a handler which gets called every time an Event Message arrives
-func (s *Server) handleEventMessages(eventConn *net.UDPConn, rworker int) {
+// handleEventMessages is a handler which processes Event Messages in the loop
+func (s *Server) handleEventMessages(eFD, rworker int) {
 	buf := make([]byte, timestamp.PayloadSizeBytes)
 	oob := make([]byte, timestamp.ControlSizeBytes)
 	dReq := &ptp.SyncDelayReq{}
@@ -274,17 +286,21 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn, rworker int) {
 	var expire time.Time
 	var workerOffset uint64
 
+	localSockAddr, err := unix.Getsockname(eFD)
+	if err != nil {
+		log.Errorf("unable to find local ip: %v", err)
+	}
 	for {
-		bbuf, boob, eclisa, err := timestamp.ReadPacketWithCMsgBuf(s.eFd, buf, oob)
+		bbuf, boob, eclisa, err := timestamp.ReadPacketWithCMsgBuf(eFD, buf, oob)
 		if err != nil {
-			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
+			log.Errorf("Failed to read packet on %s: %v", localSockAddr, err)
 			continue
 		}
 
 		// Get the timestamp
 		rxTS, err := timestamp.ReadRXTimestamp(oob, boob)
 		if err != nil {
-			log.Errorf("Failed to read packet on %s: %v", eventConn.LocalAddr(), err)
+			log.Errorf("Failed to read packet on %s: %v", localSockAddr, err)
 			continue
 		}
 		drops := timestamp.ReadSocketDrops(oob, boob)
@@ -368,8 +384,8 @@ func (s *Server) handleEventMessages(eventConn *net.UDPConn, rworker int) {
 	}
 }
 
-// handleGeneralMessage is a handler which gets called every time General Message arrives
-func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
+// handleGeneralMessage is a handler which processes General Messages arriving in the loop
+func (s *Server) handleGeneralMessages(gFd int) {
 	buf := make([]byte, timestamp.PayloadSizeBytes)
 	signaling := &ptp.Signaling{}
 	zerotlv := []ptp.TLV{}
@@ -381,10 +397,15 @@ func (s *Server) handleGeneralMessages(generalConn *net.UDPConn) {
 	var worker *sendWorker
 	var sc *SubscriptionClient
 
+	localSockAddr, err := unix.Getsockname(gFd)
+	if err != nil {
+		log.Errorf("unable to find local ip: %v", err)
+	}
+
 	for {
-		bbuf, gclisa, err := readPacketBuf(s.gFd, buf)
+		bbuf, gclisa, err := readPacketBuf(gFd, buf)
 		if err != nil {
-			log.Errorf("Failed to read packet on %s: %v", generalConn.LocalAddr(), err)
+			log.Errorf("Failed to read packet on %s: %v", localSockAddr, err)
 			continue
 		}
 
