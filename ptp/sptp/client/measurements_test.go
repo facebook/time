@@ -17,6 +17,7 @@ limitations under the License.
 package client
 
 import (
+	"net/netip"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ import (
 
 func TestMeasurementsFullRun(t *testing.T) {
 	mcfg := &MeasurementConfig{}
-	m := newMeasurements(mcfg)
+	m := newMeasurements(netip.MustParseAddr("1.2.3.4"), mcfg)
 	var seq uint16 = 1
 	announce := ptp.Announce{Header: ptp.Header{SequenceID: seq}, AnnounceBody: ptp.AnnounceBody{GrandmasterIdentity: 42}}
 	t.Run("symmetrical delay, no offset", func(t *testing.T) {
@@ -184,7 +185,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 		PathDelayDiscardBelow:         100 * time.Millisecond,
 		PathDelayDiscardMultiplier:    1000,
 	}
-	m := newMeasurements(mcfg)
+	m := newMeasurements(netip.MustParseAddr("1.2.3.4"), mcfg)
 	var seq uint16 = 1
 	netDelay := 200 * time.Millisecond
 	netDelayBack := 2 * netDelay
@@ -389,7 +390,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 
 func TestMeasurementsCleanup(t *testing.T) {
 	mcfg := &MeasurementConfig{}
-	m := newMeasurements(mcfg)
+	m := newMeasurements(netip.MustParseAddr("1.2.3.4"), mcfg)
 	m.data[123] = &mData{
 		t2: time.Now(),
 	}
@@ -424,7 +425,7 @@ func TestBadDelay(t *testing.T) {
 		PathDelayDiscardBelow:         0,
 		PathDelayDiscardMultiplier:    3,
 	}
-	m := newMeasurements(mcfg)
+	m := newMeasurements(netip.MustParseAddr("1.2.3.4"), mcfg)
 	m.lastData = &mData{}
 
 	m.delay(time.Millisecond)
@@ -461,7 +462,7 @@ func TestBadCF(t *testing.T) {
 		PathDelayDiscardBelow:         0,
 		PathDelayDiscardMultiplier:    3,
 	}
-	m := newMeasurements(mcfg)
+	m := newMeasurements(netip.MustParseAddr("1.2.3.4"), mcfg)
 	m.lastData = &mData{}
 
 	m.delay(time.Millisecond)
@@ -483,7 +484,7 @@ func TestBadCF(t *testing.T) {
 
 func TestNoAnnounce(t *testing.T) {
 	mcfg := &MeasurementConfig{}
-	m := newMeasurements(mcfg)
+	m := newMeasurements(netip.MustParseAddr("1.2.3.4"), mcfg)
 	var seq uint16 = 42
 	now := time.Now()
 

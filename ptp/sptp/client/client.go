@@ -54,7 +54,7 @@ func ReqDelay(clockID ptp.ClockIdentity, portID uint16) *ptp.SyncDelayReq {
 }
 
 // ReqAnnounce is a helper to build ptp.Announce
-// Used for ptping not sptp (sptp sends Delay Requests only)
+// Used for ptping not sptp (sptp sends DELAY_REQ packets only)
 func ReqAnnounce(clockID ptp.ClockIdentity, portID uint16, ts time.Time) *ptp.Announce {
 	return &ptp.Announce{
 		Header: ptp.Header{
@@ -81,7 +81,7 @@ type RunResult struct {
 	Error       error
 }
 
-// Client contains data associated with a single client-server interaction
+// Client contains attributes associated with SPTP client communication to a single server
 type Client struct {
 	// server address
 	server netip.Addr
@@ -95,7 +95,7 @@ type Client struct {
 	inChan chan bool
 	// listening connection on port 319
 	eventConn UDPConnWithTS
-	// outgoing delay request packet
+	// outgoing DELAY_REQ packet
 	delayRequest *ptp.SyncDelayReq
 	// outgoing packet bytes buffer
 	delayReqBytes []byte
@@ -116,7 +116,7 @@ func (c *Client) incrementSequence() {
 	c.eventSequence = c.sequenceIDValue + (c.eventSequence & c.sequenceIDMask)
 }
 
-// SendDelayReq sends an Delay Request message via event socket
+// SendDelayReq sends an DELAY_REQ packet via event socket
 func (c *Client) SendDelayReq(p *ptp.SyncDelayReq) (uint16, time.Time, error) {
 	seq := c.eventSequence
 	p.SetSequence(c.eventSequence)
@@ -129,16 +129,16 @@ func (c *Client) SendDelayReq(p *ptp.SyncDelayReq) (uint16, time.Time, error) {
 
 	c.incrementSequence()
 	if err != nil {
-		log.Warnf("Error sending packet with SeqID = %04x: %v", seq, err)
+		log.Warnf("[%s] Error sending %s [SeqID %04x]: %v", c.server, ptp.MessageDelayReq, seq, err)
 		return 0, time.Time{}, err
 	}
 
-	log.Debugf("sent packet to %v", c.eventAddr)
+	log.Debugf("[%s] client -> %s [SeqID %04x T3 %v]", c.server, ptp.MessageDelayReq, seq, hwts)
 	return seq, hwts, nil
 }
 
-// SendAnnounce sends an Announce message via event socket
-// Used for ptping not sptp (sptp sends Delay Requests only)
+// SendAnnounce sends an ANNOUNCE packet via event socket
+// NOTE: this is used by ptping and is not required for sptp
 func (c *Client) SendAnnounce(p *ptp.Announce) (uint16, error) {
 	seq := c.eventSequence
 	p.SetSequence(c.eventSequence)
@@ -152,11 +152,11 @@ func (c *Client) SendAnnounce(p *ptp.Announce) (uint16, error) {
 
 	c.incrementSequence()
 	if err != nil {
-		log.Warnf("Error sending packet with SeqID = %04x: %v", seq, err)
+		log.Warnf("[%s] Error sending %s [SeqID %04x]: %v", c.server, ptp.MessageAnnounce, seq, err)
 		return 0, err
 	}
 
-	log.Debugf("sent packet to %v", c.eventAddr)
+	log.Debugf("[%s] client -> %s [SeqID %04x]", c.server, ptp.MessageAnnounce, seq)
 	return seq, nil
 }
 
@@ -175,17 +175,17 @@ func NewClient(target netip.Addr, targetPort int, clockID ptp.ClockIdentity, eve
 		eventAddr:       eventAddr,
 		inChan:          make(chan bool, 100),
 		server:          target,
-		m:               newMeasurements(&cfg.Measurement),
+		m:               newMeasurements(target, &cfg.Measurement),
 		stats:           stats,
 	}
 	return c, nil
 }
 
-// handleAnnounce handles ANNOUNCE packet and updates measurements
+// handleAnnounce handles ANNOUNCE packet
 func (c *Client) handleAnnounce(b *ptp.Announce) {
 	t1 := b.OriginTimestamp.Time()
 	cf := b.CorrectionField.Duration()
-	log.Debugf("[%s] server -> %s (seq=%d, T1=%v, CF2=%v, gmIdentity=%s, gmTimeSource=%s, stepsRemoved=%d)",
+	log.Debugf("[%s] server -> %s [SeqID %04x, T1 %v, CF2 %v, gmIdentity %s, gmTimeSource %s, stepsRemoved %d]",
 		c.server,
 		ptp.MessageAnnounce,
 		b.SequenceID,
@@ -205,7 +205,7 @@ func (c *Client) handleAnnounce(b *ptp.Announce) {
 func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) {
 	t4 := b.OriginTimestamp.Time()
 	cf := b.CorrectionField.Duration()
-	log.Debugf("[%s] server -> %s (seq=%d, T2=%v, T4=%v, CF1=%v)",
+	log.Debugf("[%s] server -> %s [SeqID %04x, T2 %v, T4 %v, CF1 %v]",
 		c.server,
 		ptp.MessageSync,
 		b.SequenceID,
@@ -214,12 +214,12 @@ func (c *Client) handleSync(b *ptp.SyncDelayReq, ts time.Time) {
 		cf)
 	// T2 and CF1
 	c.m.addT2andCF1(b.SequenceID, ts, cf)
-	// sync includes T4 as well
+	// SYNC includes T4 as well
 	c.m.addT4(b.SequenceID, t4)
 }
 
-// handleDelayReq handles DELAY_REQ packet and responds with SYNC and ANNOUNCE
-// Used for ptping not sptp (sptp sends Delay Requests only)
+// handleDelayReq handles DELAY_REQ packet and responds with SYNC
+// NOTE: this is used by ptping and is not required for sptp
 func (c *Client) handleDelayReq(clockID ptp.ClockIdentity, ts time.Time) error {
 	sync := ReqDelay(clockID, 1)
 	sync.OriginTimestamp = ptp.NewTimestamp(ts)
@@ -251,7 +251,6 @@ func (c *Client) RunOnce(ctx context.Context, config *Config) *RunResult {
 			return
 		}
 		c.m.addT3(seq, hwts)
-		log.Debugf("[%s] client -> %s (seq=%d, our T3=%v)", c.server, ptp.MessageDelayReq, seq, hwts)
 		c.stats.IncTXDelayReq()
 
 		for {
@@ -263,12 +262,23 @@ func (c *Client) RunOnce(ctx context.Context, config *Config) *RunResult {
 			case <-c.inChan:
 				latest, err := c.m.latest()
 				if err != nil {
+					log.Debugf("[%s] error getting latest measurement: %v", c.server, err)
 					if !errors.Is(err, errNotEnoughData) {
 						errchan <- err
 						return
 					}
 				} else {
-					log.Debugf("[%s] latest measurement: %+v", c.server, latest)
+					log.Debugf("[%s gmid:%s] Offset and Delay Calculation inputs [T1 %v T2 %v T3 %v T4 %v CF1 %v CF2 %v] offset %v delay %v",
+						c.server,
+						latest.Announce.GrandmasterIdentity,
+						latest.T1,
+						latest.T2,
+						latest.T3,
+						latest.T4,
+						latest.CorrectionFieldRX,
+						latest.CorrectionFieldTX,
+						latest.Offset,
+						latest.Delay)
 					result.Measurement = latest
 					errchan <- nil
 					return

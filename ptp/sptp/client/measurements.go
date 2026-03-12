@@ -19,6 +19,7 @@ package client
 import (
 	"fmt"
 	"math"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -42,8 +43,8 @@ type mData struct {
 	t2       time.Time     // arrival time of Sync packet on OC
 	t3       time.Time     // departure time of DelayReq from OC
 	t4       time.Time     // arrival time of DelayReq packet on GM
-	c2       time.Duration // correctionFiled of DelayReq
 	c1       time.Duration // correctionField of Sync
+	c2       time.Duration // correctionField of DelayReq
 	announce ptp.Announce
 }
 
@@ -71,6 +72,7 @@ type MeasurementResult struct {
 // measurements abstracts away tracking and calculation of various packet timestamps
 type measurements struct {
 	sync.Mutex
+	server           netip.Addr
 	cfg              *MeasurementConfig
 	currentUTCoffset time.Duration
 	data             map[uint16]*mData
@@ -159,15 +161,16 @@ func (m *measurements) delay(newDelay time.Duration) bool {
 	// Filter territory
 	if newDelay < m.cfg.PathDelayDiscardBelow {
 		// Discard below min from the beginning
-		log.Warningf("(%s) low path delay %v is not in (%v, %v) - filtered out", m.lastData.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
+		log.Warningf("[%s gmid:%s] low path delay %v not in range (%v, %v) - filtering out", m.server, m.lastData.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
 		return false
+		// TODO: look at this logic again
 	} else if newDelay > m.cfg.PathDelayDiscardFrom && newDelay > maxPathDelay && maxPathDelay > m.cfg.PathDelayDiscardBelow && m.delaysWindow.Full() {
 		// Ignore spikes above maxPathDelay starting from m.cfg.PathDelayDiscardFrom
-		log.Warningf("(%s) high path delay %v is not in (%v, %v) - filtered out", m.lastData.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
+		log.Warningf("[%s gmid:%s] path delay %v not in range (%v, %v) - filtering out", m.server, m.lastData.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
 		return false
 	} else if m.lastData.c1 < 0 || m.lastData.c2 < 0 {
 		// Ignore negative CF
-		log.Warningf("(%s) bad correction fields: CF1 (sync): %v, CF2 (announce): %v - filtered out", m.lastData.announce.GrandmasterIdentity, m.lastData.c1, m.lastData.c2)
+		log.Warningf("[%s gmid:%s] negative CF value(s) - filtering out: CF1: %v, CF2: %v", m.server, m.lastData.announce.GrandmasterIdentity, m.lastData.c1, m.lastData.c2)
 		return false
 	}
 
@@ -237,8 +240,9 @@ func (m *measurements) cleanup() {
 	clear(m.data)
 }
 
-func newMeasurements(cfg *MeasurementConfig) *measurements {
+func newMeasurements(server netip.Addr, cfg *MeasurementConfig) *measurements {
 	return &measurements{
+		server:       server,
 		cfg:          cfg,
 		data:         map[uint16]*mData{},
 		delaysWindow: newSlidingWindow(cfg.PathDelayFilterLength),

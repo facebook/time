@@ -207,15 +207,15 @@ func (p *SPTP) ptping(sourceIP netip.Addr, sourcePort int, response []byte, rxtx
 	// Has to be a delay request from ptping
 	b := &ptp.SyncDelayReq{}
 	if err := ptp.FromBytes(response, b); err != nil {
-		return fmt.Errorf("failed to read delay request %w", err)
+		return fmt.Errorf("failed to read DELAY_REQ %w", err)
 	}
 	// use first event connection, doesn't really matter which one we use
 	c, err := NewClient(sourceIP, sourcePort, p.clockID, p.eventConns[0], p.cfg, p.stats)
 	if err != nil {
-		return fmt.Errorf("failed to respond to a delay request %w", err)
+		return fmt.Errorf("failed to respond to a DELAY_REQ %w", err)
 	}
 	if err := c.handleDelayReq(p.clockID, rxtx); err != nil {
-		return fmt.Errorf("failed to respond to a delay request %w", err)
+		return fmt.Errorf("failed to respond to a DELAY_REQ %w", err)
 	}
 	return nil
 }
@@ -237,19 +237,19 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					return
 				}
 				if !addr.IsValid() {
-					doneChan <- fmt.Errorf("received packet on port 320 with nil source address")
+					doneChan <- fmt.Errorf("received packet on port 320 with invalid source address")
 					return
 				}
 				addr = addr.Unmap()
-				log.Debugf("got packet on port 320, n = %v, addr = %v", bbuf, addr)
+				log.Debugf("[%s] received packet on port 320, n = %v", addr, bbuf)
 				cc, found := p.clients[addr]
 				if !found {
-					log.Warningf("ignoring packets from server %v", addr)
+					log.Warningf("[%s] ignoring packets from unknown server", addr)
 					continue
 				}
 
 				if err = ptp.FromBytes(buf[:bbuf], announce); err != nil {
-					log.Warningf("reading announce msg: %v", err)
+					log.Warningf("[%s] reading ANNOUNCE: %v", addr, err)
 					continue
 				}
 				cc.stats.IncRXAnnounce()
@@ -284,18 +284,18 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 						return
 					}
 					ip := timestamp.SockaddrToAddr(addr)
-					log.Debugf("got packet on port 319, addr = %v", ip)
+					log.Debugf("[%s] received packet on port 319, n = %v", ip, bbuf)
 					cc, found := p.clients[ip]
 					if !found {
-						log.Warningf("ignoring packets from server %v. Trying ptping", ip)
+						log.Warningf("[%s] ignoring packets from unknown server, trying ptping", ip)
 						// Try ptping
 						if err = p.ptping(ip, timestamp.SockaddrToPort(addr), buf, rxtx); err != nil {
-							log.Warning(err)
+							log.Warningf("[%s] ptping error: %v", ip, err)
 						}
 						continue
 					}
 					if err = ptp.FromBytes(buf[:bbuf], sync); err != nil {
-						log.Warningf("reading sync msg: %v", err)
+						log.Warningf("[%s] reading SYNC: %v", ip, err)
 						continue
 					}
 					cc.stats.IncRXSync()
@@ -319,12 +319,12 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 func (p *SPTP) handleExchangeError(addr netip.Addr, err error, tickDuration time.Duration) {
 	if errors.Is(err, errBackoff) {
 		b := p.backoff[addr].dec(tickDuration)
-		log.Debugf("backoff %s: %s", addr, b)
+		log.Debugf("[%s] backoff %s", addr, b)
 	} else {
-		log.Errorf("result %s: %+v", addr, err)
+		log.Errorf("[%s] error: %+v", addr, err)
 		b := p.backoff[addr].inc()
 		if b != 0 {
-			log.Warningf("backoff %s: extended by %s", addr, b)
+			log.Warningf("[%s] backoff extended by %s", addr, b)
 		}
 	}
 }
@@ -412,11 +412,11 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 			continue
 		}
 		p.backoff[addr].reset()
-		log.Debugf("result %s: %+v", addr, res.Measurement)
 		if res.Measurement == nil {
-			log.Errorf("result for %s is missing Measurement", addr)
+			log.Errorf("[%s] RunResult is missing MeasurementResult", addr)
 			continue
 		}
+		log.Debugf("[%s gmid:%s] offset %v delay %v badDelay %v", addr, res.Measurement.Announce.GrandmasterIdentity, res.Measurement.Offset, res.Measurement.Delay, res.Measurement.BadDelay)
 		if res.Measurement.BadDelay {
 			p.stats.IncFiltered()
 		}
@@ -445,19 +445,19 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 		log.Warning("no Best Master selected")
 		p.bestGM = netip.Addr{}
 		freqAdj, err := p.setMeanFreq()
-		log.Infof("offset Unknown s%d freq %+7.0f path delay Unknown", servo.StateHoldover, -freqAdj)
+		log.Infof("[no GM] offset Unknown s%d freq %+7.0f path delay Unknown", servo.StateHoldover, -freqAdj)
 		return err
 	}
 	bestAddr := idsToClients[best.GrandmasterIdentity]
 	bm := results[bestAddr].Measurement
 	if p.bestGM != bestAddr {
 		p.reprioritize(bestAddr)
-		log.Warningf("new best master selected: %q (%s)", bestAddr, bm.Announce.GrandmasterIdentity)
+		log.Warningf("[%s gmid:%s] new best master selected", bestAddr, bm.Announce.GrandmasterIdentity)
 		p.bestGM = bestAddr
 	}
 	bmOffset := int64(bm.Offset)
 	bmDelay := bm.Delay.Nanoseconds()
-	log.Debugf("best master %q (%s)", bestAddr, bm.Announce.GrandmasterIdentity)
+	log.Debugf("[%s gmid:%s] best master", bestAddr, bm.Announce.GrandmasterIdentity)
 	isSpike := p.pi.IsSpike(bmOffset)
 
 	if isSpike && bm.Offset < -77*time.Hour {
@@ -500,7 +500,7 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 		freqAdj, state = p.pi.Sample(bmOffset, uint64(bm.Timestamp.UnixNano()))
 	}
 	p.stats.SetServoState(int(state))
-	log.Infof("offset %10d servo %s freq %+7.0f path delay %10d (%6d:%6d)", bmOffset, state.String(), -freqAdj, bmDelay, bm.C2SDelay, bm.S2CDelay)
+	log.Infof("[%s gmid:%s] offset %10d servo %s freq %+7.0f path delay %10d (%6d:%6d)", bestAddr, bm.Announce.GrandmasterIdentity, bmOffset, state.String(), -freqAdj, bmDelay, bm.C2SDelay, bm.S2CDelay)
 	switch state {
 	case servo.StateJump:
 		log.Infof("stepping clock by %v", -bm.Offset)
