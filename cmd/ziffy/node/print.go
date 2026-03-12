@@ -54,7 +54,7 @@ type keyPair struct {
 // getHostNoPrefix has ip as input and returns device hostname without interface prefix
 func getHostNoPrefix(ip string) string {
 	lun := getLookUpName(ip)
-	if strings.Contains(lun, ".") && lun[:3] == "eth" {
+	if strings.Contains(lun, ".") && len(lun) >= 3 && lun[:3] == "eth" {
 		return lun[strings.Index(lun, ".")+1:]
 	}
 	return lun
@@ -63,7 +63,7 @@ func getHostNoPrefix(ip string) string {
 // getHostIfPrefix has ip as input and returns device interface without suffix
 func getHostIfPrefix(ip string) string {
 	lun := getLookUpName(ip)
-	if strings.Contains(lun, ".") && lun[:3] == "eth" {
+	if strings.Contains(lun, ".") && len(lun) >= 3 && lun[:3] == "eth" {
 		return lun[:strings.Index(lun, ".")]
 	}
 	return ""
@@ -277,7 +277,7 @@ func detailedPrint(info map[keyPair]*SwitchPrintInfo) {
 	// headerRow is the row index for the header
 	headerRow := 0
 	// blank space for data
-	blank := []string{"", "", "", "", "", "", "", "", "", "", ""}
+	blank := []string{"", "", "", "", "", "", "", "", "", "", "", ""}
 
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetColWidth(maxColWidth)

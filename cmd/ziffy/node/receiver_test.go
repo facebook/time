@@ -18,7 +18,6 @@ package node
 
 import (
 	"strconv"
-	"sync"
 	"testing"
 
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -52,7 +51,6 @@ var signalPTPPacket = []byte{
 func TestIncRunningHandlers(t *testing.T) {
 	r := Receiver{
 		Config:          &Config{PTPRecvHandlers: 2},
-		Mutex:           &sync.Mutex{},
 		runningHandlers: 0,
 	}
 
@@ -68,7 +66,6 @@ func TestIncRunningHandlers(t *testing.T) {
 func TestDecRunningHandlers(t *testing.T) {
 	r := Receiver{
 		Config:          &Config{PTPRecvHandlers: 2},
-		Mutex:           &sync.Mutex{},
 		runningHandlers: 2,
 	}
 
@@ -84,7 +81,6 @@ func TestHandlePacket(t *testing.T) {
 
 	r := Receiver{
 		Config:          &Config{PTPRecvHandlers: 3},
-		Mutex:           &sync.Mutex{},
 		runningHandlers: 0,
 	}
 

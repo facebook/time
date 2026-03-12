@@ -17,6 +17,7 @@ limitations under the License.
 package node
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sort"
@@ -151,6 +152,9 @@ func (s *Sender) popAllQueue(routes []*PathInfo) {
 	for i := 0; i < len(routes); i++ {
 		for len(s.inputQueue[i]) > 0 {
 			sw := <-s.inputQueue[i]
+			if routes[sw.routeIdx] == nil {
+				continue
+			}
 			routes[sw.routeIdx].switches = append(routes[sw.routeIdx].switches, *sw)
 		}
 	}
@@ -167,6 +171,9 @@ func (s *Sender) clearPaths(routes []*PathInfo) []*PathInfo {
 	retPaths := make([]*PathInfo, 0, len(routes))
 	idx := 0
 	for _, route := range routes {
+		if route == nil {
+			continue
+		}
 		retPaths = append(retPaths, &PathInfo{switches: nil, rackSwHostname: s.rackSwHostname})
 		// Sort each route. This fixes the scenario where a
 		// packet with lower hop arrives after a packet with higher hop
@@ -283,8 +290,16 @@ func (s *Sender) monitorIcmp(conn net.PacketConn) {
 		case <-s.icmpDone:
 			return
 		default:
+			if err := conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+				log.Debugf("icmp set deadline error: %v", err)
+				return
+			}
 			n, rAddr, err := conn.ReadFrom(buf)
 			if err != nil {
+				var netErr net.Error
+				if errors.As(err, &netErr) && netErr.Timeout() {
+					continue
+				}
 				log.Debugf("icmp listener error: %v", err)
 				continue
 			}
@@ -335,11 +350,16 @@ func (s *Sender) handleIcmpPacket(rawPacket []byte, l int, rAddr net.Addr) {
 		return
 	}
 
-	s.inputQueue[portNum] <- &SwitchTrafficInfo{
+	swInfo := &SwitchTrafficInfo{
 		ip:        rAddr.String(),
 		corrField: corrField,
 		hop:       int(sequenceID),
 		routeIdx:  int(portNum),
+	}
+	select {
+	case s.inputQueue[portNum] <- swInfo:
+	default:
+		log.Warnf("input queue full for route %d, dropping ICMP response", portNum)
 	}
 	log.Debugf("routeIdx %d: %v cf: %v hop: %v", portNum, getLookUpName(rAddr.String()), corrField, sequenceID)
 }
@@ -389,8 +409,11 @@ func rackSwHostnameMonitor(device string, lldpTimeout time.Duration) (string, er
 		pktSrc := gopacket.NewPacketSource(handle, handle.LinkType())
 		for pkt := range pktSrc.Packets() {
 			p := gopacket.NewPacket(pkt.Data(), layers.LinkTypeEthernet, gopacket.DecodeOptions{})
-			info := p.Layer(layers.LayerTypeLinkLayerDiscoveryInfo)
-			rackChan <- info.(*layers.LinkLayerDiscoveryInfo).SysName
+			info, ok := p.Layer(layers.LayerTypeLinkLayerDiscoveryInfo).(*layers.LinkLayerDiscoveryInfo)
+			if !ok || info == nil {
+				continue
+			}
+			rackChan <- info.SysName
 			break
 		}
 	}()
@@ -405,7 +428,7 @@ func rackSwHostnameMonitor(device string, lldpTimeout time.Duration) (string, er
 
 func getLookUpName(ip string) string {
 	addr, err := net.LookupAddr(ip)
-	if err != nil {
+	if err != nil || len(addr) == 0 {
 		return ip
 	}
 	return addr[0]

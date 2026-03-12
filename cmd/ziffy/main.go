@@ -145,7 +145,7 @@ func main() {
 
 		info, err := s.Start()
 		if err != nil {
-			log.Errorf("sender start failed: %v", err)
+			log.Fatalf("sender start failed: %v", err)
 		}
 
 		node.PrettyPrint(c, info, ptp.NewCorrection(float64(nsCFThreshold)))

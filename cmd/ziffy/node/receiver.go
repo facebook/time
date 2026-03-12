@@ -46,7 +46,9 @@ type Receiver struct {
 	Config *Config
 
 	runningHandlers int
-	*sync.Mutex
+	sync.Mutex
+
+	icmpConn net.PacketConn
 }
 
 // Start listens for PTP packets and reply to sender
@@ -65,7 +67,12 @@ func (r *Receiver) Start() error {
 	log.Infof("listening on port %v for PTP EVENT packets (SYNC/DELAY_REQ) with ZiffyHexa signature. Sending back the packets as icmp\n\n",
 		r.Config.DestinationPort)
 
-	r.Mutex = &sync.Mutex{}
+	icmpConn, err := net.ListenPacket("ip6:ipv6-icmp", "")
+	if err != nil {
+		return fmt.Errorf("unable to establish icmp connection: %w", err)
+	}
+	defer icmpConn.Close()
+	r.icmpConn = icmpConn
 	r.runningHandlers = 0
 
 	pktSrc := gopacket.NewPacketSource(handle, handle.LinkType())
@@ -122,15 +129,13 @@ func (r *Receiver) handlePacket(rawPacket gopacket.Packet) {
 
 // sendResponse sends ICMPTypeTimeExceeded to sender
 func (r *Receiver) sendResponse(sourceIP string, rawPacket gopacket.Packet) error {
+	if r.icmpConn == nil {
+		return fmt.Errorf("icmp connection not initialized")
+	}
 	dst, err := net.ResolveIPAddr("ip6:ipv6-icmp", sourceIP)
 	if err != nil {
 		return fmt.Errorf("unable to resolve sender address: %w", err)
 	}
-	conn, err := net.ListenPacket("ip6:ipv6-icmp", "")
-	if err != nil {
-		return fmt.Errorf("unable to establish connection: %w", err)
-	}
-	defer conn.Close()
 
 	mess := icmp.Message{
 		Type: ipv6.ICMPTypeTimeExceeded, Code: 0,
@@ -142,7 +147,7 @@ func (r *Receiver) sendResponse(sourceIP string, rawPacket gopacket.Packet) erro
 	if err != nil {
 		return fmt.Errorf("unable to marshal the icmp packet: %w", err)
 	}
-	if _, err := conn.WriteTo(buf, dst); err != nil {
+	if _, err := r.icmpConn.WriteTo(buf, dst); err != nil {
 		return fmt.Errorf("unable to write to connection: %w", err)
 	}
 	return nil
@@ -159,7 +164,11 @@ func parseSyncPacket(packet gopacket.Packet) (*ptp.SyncDelayReq, string, string,
 		return nil, "", "", fmt.Errorf("unable to parse UDP Header")
 	}
 
-	ptpPacket, err := ptp.DecodePacket(packet.ApplicationLayer().Payload())
+	appLayer := packet.ApplicationLayer()
+	if appLayer == nil {
+		return nil, "", "", fmt.Errorf("unable to parse Application Layer")
+	}
+	ptpPacket, err := ptp.DecodePacket(appLayer.Payload())
 	if err != nil {
 		return nil, "", "", fmt.Errorf("unable to decode PTP packet: %w", err)
 	}
