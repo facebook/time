@@ -26,10 +26,12 @@ import (
 func TestGetMetrics(t *testing.T) {
 	handler := &Handler{
 		maxOffsetAbs: 20.0,
+		lastUpdate:   1710000000,
 	}
 	metrics := handler.getMetrics()
 	require.Equal(t, map[string]float64{
 		"offset.abs_max": 20.0,
+		"last_update":    1710000000.0,
 	}, metrics)
 }
 

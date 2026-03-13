@@ -31,6 +31,7 @@ import (
 // Handler is a handler for a metrics endpoint
 type Handler struct {
 	maxOffsetAbs float64
+	lastUpdate   int64
 	offsets      *list.List
 	offsetsLock  sync.Mutex
 }
@@ -65,6 +66,7 @@ func (h *Handler) ObserveOffset(offset float64) {
 		tmpMaxOffsetAbs = max(tmpMaxOffsetAbs, math.Abs(elem.Value.(float64)))
 	}
 	h.maxOffsetAbs = tmpMaxOffsetAbs
+	h.lastUpdate = time.Now().Unix()
 	h.offsetsLock.Unlock()
 }
 
@@ -83,5 +85,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) getMetrics() map[string]float64 {
 	return map[string]float64{
 		"offset.abs_max": h.maxOffsetAbs,
+		"last_update":    float64(h.lastUpdate),
 	}
 }
