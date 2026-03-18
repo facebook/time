@@ -503,7 +503,7 @@ type replySourceStatsContent struct {
 // SourceStats contains stats about the source
 type SourceStats struct {
 	RefID              uint32
-	IPAddr             net.IP
+	IPAddr             *IPAddr
 	NSamples           uint32
 	NRuns              uint32
 	SpanSeconds        uint32
@@ -517,7 +517,7 @@ type SourceStats struct {
 func newSourceStats(r *replySourceStatsContent) *SourceStats {
 	return &SourceStats{
 		RefID:              r.RefID,
-		IPAddr:             r.IPAddr.ToNetIP(),
+		IPAddr:             &r.IPAddr,
 		NSamples:           r.NSamples,
 		NRuns:              r.NRuns,
 		SpanSeconds:        r.SpanSeconds,
