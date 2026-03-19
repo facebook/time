@@ -482,6 +482,47 @@ func TestBadCF(t *testing.T) {
 	require.Equal(t, 2*time.Millisecond, m.pathDelay)
 }
 
+func TestBadCFHigh(t *testing.T) {
+	mcfg := &MeasurementConfig{
+		PathDelayFilterLength:         2,
+		PathDelayFilter:               FilterMedian,
+		PathDelayDiscardFilterEnabled: true,
+		PathDelayDiscardBelow:         0,
+		PathDelayDiscardMultiplier:    3,
+	}
+	m := newMeasurements(netip.MustParseAddr("1.2.3.4"), mcfg)
+	m.lastData = &mData{}
+
+	m.delay(time.Millisecond)
+	require.Equal(t, time.Millisecond, m.pathDelay)
+
+	m.delay(3 * time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, m.pathDelay)
+
+	// Valid delay, excessively large CF1 (broken TC) - should be filtered
+	m.lastData.c1 = 2 * time.Second
+	m.delay(time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, m.pathDelay)
+
+	// Reset CF1, test excessively large CF2 - should be filtered
+	m.lastData.c1 = 0
+	m.lastData.c2 = 2 * time.Second
+	m.delay(time.Millisecond)
+	require.Equal(t, 2*time.Millisecond, m.pathDelay)
+
+	// CF exactly at maxCorrectionField should be accepted
+	// Use 5ms so median window [3ms, 5ms] -> 4ms is detectably different
+	m.lastData.c1 = maxCorrectionField
+	m.lastData.c2 = 0
+	m.delay(5 * time.Millisecond)
+	require.Equal(t, 4*time.Millisecond, m.pathDelay)
+
+	// CF just above maxCorrectionField should be rejected - pathDelay unchanged
+	m.lastData.c1 = maxCorrectionField + time.Nanosecond
+	m.delay(time.Millisecond)
+	require.Equal(t, 4*time.Millisecond, m.pathDelay)
+}
+
 func TestNoAnnounce(t *testing.T) {
 	mcfg := &MeasurementConfig{}
 	m := newMeasurements(netip.MustParseAddr("1.2.3.4"), mcfg)

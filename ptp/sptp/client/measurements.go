@@ -35,6 +35,10 @@ const (
 	FilterNone   = ""
 	FilterMedian = "median"
 	FilterMean   = "mean"
+
+	// maxCorrectionField is the maximum acceptable CF value.
+	// CF above this indicates a broken Transparent Clock (see S483230).
+	maxCorrectionField = time.Second
 )
 
 // mData is a single measured raw data of GM to OC communication
@@ -168,9 +172,9 @@ func (m *measurements) delay(newDelay time.Duration) bool {
 		// Ignore spikes above maxPathDelay starting from m.cfg.PathDelayDiscardFrom
 		log.Warningf("[%s gmid:%s] path delay %v not in range (%v, %v) - filtering out", m.server, m.lastData.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
 		return false
-	} else if m.lastData.c1 < 0 || m.lastData.c2 < 0 {
-		// Ignore negative CF
-		log.Warningf("[%s gmid:%s] negative CF value(s) - filtering out: CF1: %v, CF2: %v", m.server, m.lastData.announce.GrandmasterIdentity, m.lastData.c1, m.lastData.c2)
+	} else if m.lastData.c1 < 0 || m.lastData.c2 < 0 || m.lastData.c1 > maxCorrectionField || m.lastData.c2 > maxCorrectionField {
+		// Ignore negative or excessively large CF — indicates malfunctioning TC
+		log.Warningf("[%s gmid:%s] bad CF value(s) - filtering out: CF1: %v, CF2: %v", m.server, m.lastData.announce.GrandmasterIdentity, m.lastData.c1, m.lastData.c2)
 		return false
 	}
 
