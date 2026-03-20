@@ -26,7 +26,7 @@ import (
 	"strings"
 
 	ptp "github.com/facebook/time/ptp/protocol"
-	"github.com/podtserkovskiy/tablewriter-legacy"
+	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -279,9 +279,12 @@ func detailedPrint(info map[keyPair]*SwitchPrintInfo) {
 	// blank space for data
 	blank := []string{"", "", "", "", "", "", "", "", "", "", "", ""}
 
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetColWidth(maxColWidth)
-	table.SetHeader(data[headerRow])
+	table := tablewriter.NewTable(os.Stdout)
+	table.Configure(func(cfg *tablewriter.Config) {
+		cfg.Row.ColMaxWidths.Global = maxColWidth
+		cfg.Header.ColMaxWidths.Global = maxColWidth
+	})
+	table.Header(data[headerRow])
 
 	for _, val := range data[headerRow+1:] {
 		hopInd, err := colNumber(data[headerRow], "hop")

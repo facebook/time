@@ -211,8 +211,8 @@ github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/podtserkovskiy/tablewriter-legacy v1.100.0 h1:GIc1WgxoPOLOkpesgnIkwW6O/2PyROt2AyZ7rT9c498=
-github.com/podtserkovskiy/tablewriter-legacy v1.100.0/go.mod h1:C6UceNPWAGkufMaXtXeaf9cbsEszZK/UsFd6QhryFB8=
+github.com/olekukonko/tablewriter v1.1.2 h1:L2kI1Y5tZBct/O/TyZK1zIE9GlBj/TVs+AY5tZDCDSc=
+github.com/olekukonko/tablewriter v1.1.2/go.mod h1:z7SYPugVqGVavWoA2sGsFIoOVNmEHxUAAMrhXONtfkg=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v1.0.0/go.mod h1:db9x61etRT2tGnBNRi70OPL5FsnadC4Ky3P0J6CfImo=
 github.com/prometheus/client_golang v1.7.1/go.mod h1:PY5Wy2awLA44sXw4AOSfFBetzPP4j5+D6mVACh+pe2M=
