@@ -28,7 +28,7 @@ import (
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/sptp/stats"
 
-	"github.com/podtserkovskiy/tablewriter-legacy"
+	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -79,11 +79,11 @@ func sourcesRunPTP4l(server string, noDNS bool, domainNumber uint8) error {
 	} else {
 		currentTime = time.Now()
 	}
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetColWidth(20)
-	table.SetHeader([]string{
+	table := tablewriter.NewTable(os.Stdout)
+	table.Configure(func(cfg *tablewriter.Config) { cfg.Row.ColMaxWidths.Global = 20; cfg.Header.ColMaxWidths.Global = 20 })
+	table.Header(
 		"selected", "identity", "address", "state", "clock", "variance", "p1:p2", "offset(ns)", "delay(ns)", "last sync",
-	})
+	)
 	for _, entry := range tlv.UnicastMasterTable.UnicastMasters {
 		address := entry.Address.String()
 		if !noDNS {
@@ -138,11 +138,11 @@ func sourcesRunSPTP(address string, noDNS bool) error {
 
 	sort.Sort(umt)
 
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetColWidth(20)
-	table.SetHeader([]string{
+	table := tablewriter.NewTable(os.Stdout)
+	table.Configure(func(cfg *tablewriter.Config) { cfg.Row.ColMaxWidths.Global = 20; cfg.Header.ColMaxWidths.Global = 20 })
+	table.Header(
 		"selected", "identity", "address", "clock", "variance", "p1:p2:p3", "offset(ns)", "delay(ns)", "cf tx:rx(ns)", "error",
-	})
+	)
 
 	for _, gm := range umt {
 		address := gm.GMAddress
