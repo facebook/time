@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sort"
@@ -29,6 +30,7 @@ import (
 	"github.com/facebook/time/ptp/sptp/stats"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -79,10 +81,28 @@ func sourcesRunPTP4l(server string, noDNS bool, domainNumber uint8) error {
 	} else {
 		currentTime = time.Now()
 	}
-	table := tablewriter.NewTable(os.Stdout)
-	table.Configure(func(cfg *tablewriter.Config) { cfg.Row.ColMaxWidths.Global = 20; cfg.Header.ColMaxWidths.Global = 20 })
+	table := tablewriter.NewTable(os.Stdout,
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbols(tw.StyleASCII),
+		}),
+		tablewriter.WithHeaderAutoFormat(tw.Off),
+	)
+	table.Configure(func(cfg *tablewriter.Config) {
+		cfg.Row.Alignment.PerColumn = []tw.Align{
+			tw.AlignLeft,  // SELECTED
+			tw.AlignLeft,  // IDENTITY
+			tw.AlignLeft,  // ADDRESS
+			tw.AlignLeft,  // STATE
+			tw.AlignLeft,  // CLOCK
+			tw.AlignLeft,  // VARIANCE
+			tw.AlignLeft,  // P1:P2
+			tw.AlignRight, // OFFSET(NS)
+			tw.AlignRight, // DELAY(NS)
+			tw.AlignLeft,  // LAST SYNC
+		}
+	})
 	table.Header(
-		"selected", "identity", "address", "state", "clock", "variance", "p1:p2", "offset(ns)", "delay(ns)", "last sync",
+		"SELECTED", "IDENTITY", "ADDRESS", "STATE", "CLOCK", "VARIANCE", "P1:P2", "OFFSET(NS)", "DELAY(NS)", "LAST SYNC",
 	)
 	for _, entry := range tlv.UnicastMasterTable.UnicastMasters {
 		address := entry.Address.String()
@@ -124,10 +144,11 @@ func sourcesRunPTP4l(server string, noDNS bool, domainNumber uint8) error {
 		} else {
 			val = append(val, []string{"", "", ""}...)
 		}
-		table.Append(val)
+		if err := table.Append(val); err != nil {
+			return err
+		}
 	}
-	table.Render()
-	return nil
+	return table.Render()
 }
 
 func sourcesRunSPTP(address string, noDNS bool) error {
@@ -138,10 +159,32 @@ func sourcesRunSPTP(address string, noDNS bool) error {
 
 	sort.Sort(umt)
 
-	table := tablewriter.NewTable(os.Stdout)
-	table.Configure(func(cfg *tablewriter.Config) { cfg.Row.ColMaxWidths.Global = 20; cfg.Header.ColMaxWidths.Global = 20 })
+	return sourcesRenderSPTP(os.Stdout, umt, noDNS)
+}
+
+func sourcesRenderSPTP(w io.Writer, umt stats.Stats, noDNS bool) error {
+	table := tablewriter.NewTable(w,
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbols(tw.StyleASCII),
+		}),
+		tablewriter.WithHeaderAutoFormat(tw.Off),
+	)
+	table.Configure(func(cfg *tablewriter.Config) {
+		cfg.Row.Alignment.PerColumn = []tw.Align{
+			tw.AlignLeft,  // SELECTED
+			tw.AlignLeft,  // IDENTITY
+			tw.AlignLeft,  // ADDRESS
+			tw.AlignLeft,  // CLOCK
+			tw.AlignLeft,  // VARIANCE
+			tw.AlignLeft,  // P1:P2:P3
+			tw.AlignRight, // OFFSET(NS)
+			tw.AlignRight, // DELAY(NS)
+			tw.AlignLeft,  // CF TX:RX(NS)
+			tw.AlignLeft,  // ERROR
+		}
+	})
 	table.Header(
-		"selected", "identity", "address", "clock", "variance", "p1:p2:p3", "offset(ns)", "delay(ns)", "cf tx:rx(ns)", "error",
+		"SELECTED", "IDENTITY", "ADDRESS", "CLOCK", "VARIANCE", "P1:P2:P3", "OFFSET(NS)", "DELAY(NS)", "CF TX:RX(NS)", "ERROR",
 	)
 
 	for _, gm := range umt {
@@ -171,10 +214,11 @@ func sourcesRunSPTP(address string, noDNS bool) error {
 			val = append(val, []string{"", "", "", "", "", ""}...)
 		}
 		val = append(val, gm.Error)
-		table.Append(val)
+		if err := table.Append(val); err != nil {
+			return err
+		}
 	}
-	table.Render()
-	return nil
+	return table.Render()
 }
 
 func sourcesRun(address string, noDNS bool, domainNumber uint8) error {
@@ -203,6 +247,5 @@ var sourcesCmd = &cobra.Command{
 		if err := sourcesRun(rootClientFlag, sourcesNoDNSFlag, domain); err != nil {
 			log.Fatal(err)
 		}
-
 	},
 }
