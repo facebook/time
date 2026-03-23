@@ -86,9 +86,10 @@ func TestOSSFW(t *testing.T) {
 	expectedFilePathBadStart := "/tmp/sentrinel_fw_R13.1.0.5583-20210924.tar"
 	checkErrorOSSFW(t, expectedFilePathBadStart)
 
-	//both v2. and R
+	//both v2. and R - regex matches R prefix, go-version strips v, parses as 5 segments
+	expectedVersionRv2, _ := version.NewVersion("v2.13.1.0.5583-20210924")
 	expectedFilePathBadSecond := "/tmp/sentinel_fw_Rv2.13.1.0.5583-20210924.tar"
-	checkErrorOSSFW(t, expectedFilePathBadSecond)
+	checkOSSFW(t, expectedFilePathBadSecond, expectedVersionRv2)
 
 	//.zip not .tar
 	expectedFilePathBadExtension := "/tmp/sentinel_fw_R13.1.0.5583-20210924.zip"
@@ -98,19 +99,27 @@ func TestOSSFW(t *testing.T) {
 	expectedFilePathBadHWVersion := "/tmp/sentinel_fw_v10.13.1.0.5583-20210924.tar"
 	checkErrorOSSFW(t, expectedFilePathBadHWVersion)
 
-	//malformed versions
+	//malformed versions - go-version treats D as prerelease marker
 	expectedFilePathBadBuild1 := "/tmp/sentinel_fw_v2.13.1.0.D5583-20210924.tar"
 	checkErrorOSSFW(t, expectedFilePathBadBuild1)
 
+	expectedVersionBadBuild2, _ := version.NewVersion("13.1d.0.5583-20210924")
 	expectedFilePathBadBuild2 := "/tmp/sentinel_fw_v2.13.1D.0.5583-20210924.tar"
-	checkErrorOSSFW(t, expectedFilePathBadBuild2)
+	checkOSSFW(t, expectedFilePathBadBuild2, expectedVersionBadBuild2)
 
+	expectedVersionBadBuild3, _ := version.NewVersion("13d.1.0.5583-20210924")
 	expectedFilePathBadBuild3 := "/tmp/sentinel_fw_v2.13D.1.0.5583-20210924.tar"
-	checkErrorOSSFW(t, expectedFilePathBadBuild3)
+	checkOSSFW(t, expectedFilePathBadBuild3, expectedVersionBadBuild3)
 
 	expectedFilePathBadBuild4 := "/tmp/sentinel_fw_v2.13.1..10.5583-20210924.tar"
 	checkErrorOSSFW(t, expectedFilePathBadBuild4)
 
+	expectedVersion5Seg, _ := version.NewVersion("13.1.1.10.5583-20210924")
 	expectedFilePathBadBuild5 := "/tmp/sentinel_fw_v2.13.1.1.10.5583-20210924.tar"
-	checkErrorOSSFW(t, expectedFilePathBadBuild5)
+	checkOSSFW(t, expectedFilePathBadBuild5, expectedVersion5Seg)
+
+	// 3-segment version (new-style calnex_combined_fw filenames)
+	expectedVersion3Seg, _ := version.NewVersion("24.0.0")
+	expectedFilePath3Seg := "/tmp/calnex_combined_fw_R24.0.0.tar"
+	checkOSSFW(t, expectedFilePath3Seg, expectedVersion3Seg)
 }

@@ -57,9 +57,9 @@ func NewOSSFW(source string) (*OSSFW, error) {
 	if err != nil {
 		return nil, err
 	}
-	//expect major, minor, patch, build
-	if len(v.Segments()) != 4 {
-		return nil, fmt.Errorf("invalid version format, expected 4 segments: %v", v.Segments())
+	//expect at least major, minor, patch (build optional)
+	if len(v.Segments()) < 3 {
+		return nil, fmt.Errorf("invalid version format, expected at least 3 segments: %v", v.Segments())
 	}
 	fw.version = v
 	return fw, err
