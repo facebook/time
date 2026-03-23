@@ -46,6 +46,14 @@ var (
 	PortGeneral = 320
 )
 
+// PDelay multicast addresses per IEEE1588 spec
+const (
+	// PDelayMulticastIPv6 is the PTP peer delay multicast address for IPv6
+	PDelayMulticastIPv6 = "ff02::6b"
+	// PDelayMulticastIPv4 is the PTP peer delay multicast address for IPv4
+	PDelayMulticastIPv4 = "224.0.0.107"
+)
+
 // TrailingBytes - PTP over UDPv6 requires adding extra two bytes that
 // may be modified by the initiator or an intermediate PTP Instance to ensure that the UDP checksum
 // remains uncompromised after any modification of PTP fields.
@@ -420,6 +428,69 @@ type PDelayRespFollowUpBody struct {
 type PDelayRespFollowUp struct {
 	Header
 	PDelayRespFollowUpBody
+}
+
+// ReqPDelay builds a Pdelay_Req packet
+func ReqPDelay(clockID ClockIdentity, portID uint16, seq uint16) *PDelayReq {
+	return &PDelayReq{
+		Header: Header{
+			SdoIDAndMsgType: NewSdoIDAndMsgType(MessagePDelayReq, 0),
+			Version:         Version,
+			SequenceID:      seq,
+			MessageLength:   headerSize + uint16(binary.Size(PDelayReqBody{})), //#nosec G115
+			FlagField:       0,
+			SourcePortIdentity: PortIdentity{
+				PortNumber:    portID,
+				ClockIdentity: clockID,
+			},
+			LogMessageInterval: 0x7f,
+		},
+		PDelayReqBody: PDelayReqBody{},
+	}
+}
+
+// RespPDelay builds a Pdelay_Resp packet
+func RespPDelay(clockID ClockIdentity, portID uint16, seq uint16, reqReceiptTS Timestamp, reqPortID PortIdentity) *PDelayResp {
+	return &PDelayResp{
+		Header: Header{
+			SdoIDAndMsgType: NewSdoIDAndMsgType(MessagePDelayResp, 0),
+			Version:         Version,
+			SequenceID:      seq,
+			MessageLength:   headerSize + uint16(binary.Size(PDelayRespBody{})), //#nosec G115
+			FlagField:       FlagTwoStep,
+			SourcePortIdentity: PortIdentity{
+				PortNumber:    portID,
+				ClockIdentity: clockID,
+			},
+			LogMessageInterval: 0x7f,
+		},
+		PDelayRespBody: PDelayRespBody{
+			RequestReceiptTimestamp: reqReceiptTS,
+			RequestingPortIdentity:  reqPortID,
+		},
+	}
+}
+
+// RespFollowUpPDelay builds a Pdelay_Resp_Follow_Up packet
+func RespFollowUpPDelay(clockID ClockIdentity, portID uint16, seq uint16, respOriginTS Timestamp, reqPortID PortIdentity) *PDelayRespFollowUp {
+	return &PDelayRespFollowUp{
+		Header: Header{
+			SdoIDAndMsgType: NewSdoIDAndMsgType(MessagePDelayRespFollowUp, 0),
+			Version:         Version,
+			SequenceID:      seq,
+			MessageLength:   headerSize + uint16(binary.Size(PDelayRespFollowUpBody{})), //#nosec G115
+			FlagField:       0,
+			SourcePortIdentity: PortIdentity{
+				PortNumber:    portID,
+				ClockIdentity: clockID,
+			},
+			LogMessageInterval: 0x7f,
+		},
+		PDelayRespFollowUpBody: PDelayRespFollowUpBody{
+			ResponseOriginTimestamp: respOriginTS,
+			RequestingPortIdentity:  reqPortID,
+		},
+	}
 }
 
 // Packet is an interface to abstract all different packets

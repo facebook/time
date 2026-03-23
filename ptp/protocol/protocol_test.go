@@ -19,6 +19,7 @@ package protocol
 import (
 	"encoding/binary"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -504,6 +505,103 @@ func BenchmarkWriteFollowup(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		_, _ = BytesTo(p, buf)
 	}
+}
+
+func TestReqPDelayMarshalUnmarshal(t *testing.T) {
+	clockID := ClockIdentity(0x123456789abcdef0)
+	portID := uint16(1)
+	seq := uint16(42)
+
+	req := ReqPDelay(clockID, portID, seq)
+	require.NotNil(t, req)
+	require.Equal(t, uint16(54), req.MessageLength)
+
+	b, err := Bytes(req)
+	require.NoError(t, err)
+	// Bytes() appends 2 zero bytes for IPv6 checksums
+	require.Len(t, b, 56)
+
+	decoded := new(PDelayReq)
+	err = FromBytes(b, decoded)
+	require.NoError(t, err)
+	require.Equal(t, MessagePDelayReq, decoded.MessageType())
+	require.Equal(t, seq, decoded.SequenceID)
+	require.Equal(t, clockID, decoded.SourcePortIdentity.ClockIdentity)
+	require.Equal(t, portID, decoded.SourcePortIdentity.PortNumber)
+	require.Equal(t, LogInterval(0x7f), decoded.LogMessageInterval)
+
+	pp, err := DecodePacket(b)
+	require.NoError(t, err)
+	require.Equal(t, req, pp)
+}
+
+func TestRespPDelayMarshalUnmarshal(t *testing.T) {
+	clockID := ClockIdentity(0x123456789abcdef0)
+	portID := uint16(1)
+	seq := uint16(42)
+	reqReceiptTS := NewTimestamp(time.Unix(1000, 500000))
+	reqPortID := PortIdentity{
+		ClockIdentity: ClockIdentity(0xfedcba9876543210),
+		PortNumber:    2,
+	}
+
+	resp := RespPDelay(clockID, portID, seq, reqReceiptTS, reqPortID)
+	require.NotNil(t, resp)
+	require.Equal(t, uint16(54), resp.MessageLength)
+
+	b, err := Bytes(resp)
+	require.NoError(t, err)
+	// Bytes() appends 2 zero bytes for IPv6 checksums
+	require.Len(t, b, 56)
+
+	decoded := new(PDelayResp)
+	err = FromBytes(b, decoded)
+	require.NoError(t, err)
+	require.Equal(t, MessagePDelayResp, decoded.MessageType())
+	require.Equal(t, seq, decoded.SequenceID)
+	require.Equal(t, clockID, decoded.SourcePortIdentity.ClockIdentity)
+	require.Equal(t, portID, decoded.SourcePortIdentity.PortNumber)
+	require.Equal(t, reqPortID, decoded.RequestingPortIdentity)
+	require.Equal(t, FlagTwoStep, decoded.FlagField)
+	require.Equal(t, reqReceiptTS, decoded.RequestReceiptTimestamp)
+
+	pp, err := DecodePacket(b)
+	require.NoError(t, err)
+	require.Equal(t, resp, pp)
+}
+
+func TestRespFollowUpPDelayMarshalUnmarshal(t *testing.T) {
+	clockID := ClockIdentity(0x123456789abcdef0)
+	portID := uint16(1)
+	seq := uint16(42)
+	respOriginTS := NewTimestamp(time.Unix(1000, 1000000))
+	reqPortID := PortIdentity{
+		ClockIdentity: ClockIdentity(0xfedcba9876543210),
+		PortNumber:    2,
+	}
+
+	followUp := RespFollowUpPDelay(clockID, portID, seq, respOriginTS, reqPortID)
+	require.NotNil(t, followUp)
+	require.Equal(t, uint16(54), followUp.MessageLength)
+
+	b, err := Bytes(followUp)
+	require.NoError(t, err)
+	// Bytes() appends 2 zero bytes for IPv6 checksums
+	require.Len(t, b, 56)
+
+	decoded := new(PDelayRespFollowUp)
+	err = FromBytes(b, decoded)
+	require.NoError(t, err)
+	require.Equal(t, MessagePDelayRespFollowUp, decoded.MessageType())
+	require.Equal(t, seq, decoded.SequenceID)
+	require.Equal(t, clockID, decoded.SourcePortIdentity.ClockIdentity)
+	require.Equal(t, portID, decoded.SourcePortIdentity.PortNumber)
+	require.Equal(t, reqPortID, decoded.RequestingPortIdentity)
+	require.Equal(t, respOriginTS, decoded.ResponseOriginTimestamp)
+
+	pp, err := DecodePacket(b)
+	require.NoError(t, err)
+	require.Equal(t, followUp, pp)
 }
 
 func FuzzDecodePacket(f *testing.F) {
