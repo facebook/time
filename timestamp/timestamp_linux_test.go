@@ -472,5 +472,4 @@ func TestSocketControlMessageRXDrops(t *testing.T) {
 	default:
 		t.Skip("This test supports amd64 platform only")
 	}
-
 }

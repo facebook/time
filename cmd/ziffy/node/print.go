@@ -300,13 +300,21 @@ func detailedPrint(info map[keyPair]*SwitchPrintInfo) {
 		}
 
 		if nextHop > currentHop {
-			table.Append(blank)
+			if err := table.Append(blank); err != nil {
+				log.Errorf("table append failed: %v", err)
+				return
+			}
 		}
-		table.Append(val)
+		if err := table.Append(val); err != nil {
+			log.Errorf("table append failed: %v", err)
+			return
+		}
 
 		currentHop = nextHop
 	}
-	table.Render()
+	if err := table.Render(); err != nil {
+		log.Errorf("table render failed: %v", err)
+	}
 }
 
 // CsvPrint outputs the data in a csv file
