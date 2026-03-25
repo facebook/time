@@ -70,6 +70,8 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
 
 	cfg := DefaultConfig()
 	cfg.Iface = "lo"
@@ -81,7 +83,7 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 		pi:         mockServo,
 		stats:      mockStatsServer,
 		cfg:        cfg,
-		eventConns: []UDPConnWithTS{nil},
+		eventConns: []UDPConnWithTS{mockEventConn},
 	}
 	err := p.initClients()
 	require.NoError(t, err)
@@ -121,6 +123,8 @@ func TestProcessResultsSingle(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
 
 	cfg := DefaultConfig()
 	cfg.Iface = "lo"
@@ -132,7 +136,7 @@ func TestProcessResultsSingle(t *testing.T) {
 		pi:         mockServo,
 		stats:      mockStatsServer,
 		cfg:        cfg,
-		eventConns: []UDPConnWithTS{nil},
+		eventConns: []UDPConnWithTS{mockEventConn},
 	}
 	results := map[netip.Addr]*RunResult{
 		netip.MustParseAddr("192.168.0.10"): {
@@ -183,6 +187,8 @@ func TestProcessResultsFastSamples(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
 
 	cfg := DefaultConfig()
 	cfg.Iface = "lo"
@@ -194,7 +200,7 @@ func TestProcessResultsFastSamples(t *testing.T) {
 		pi:         mockServo,
 		stats:      mockStatsServer,
 		cfg:        cfg,
-		eventConns: []UDPConnWithTS{nil},
+		eventConns: []UDPConnWithTS{mockEventConn},
 	}
 	results := map[netip.Addr]*RunResult{
 		netip.MustParseAddr("192.168.0.10"): {
@@ -244,6 +250,8 @@ func TestProcessResultsMulti(t *testing.T) {
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
 
 	cfg := DefaultConfig()
 	cfg.Iface = "lo"
@@ -256,7 +264,7 @@ func TestProcessResultsMulti(t *testing.T) {
 		pi:         mockServo,
 		stats:      mockStatsServer,
 		cfg:        cfg,
-		eventConns: []UDPConnWithTS{nil},
+		eventConns: []UDPConnWithTS{mockEventConn},
 	}
 	err = p.initClients()
 	require.NoError(t, err)
@@ -323,6 +331,8 @@ func TestProcessResultsFilteredDelay(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().IncFiltered()
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
 
 	cfg := DefaultConfig()
 	cfg.Iface = "lo"
@@ -334,7 +344,7 @@ func TestProcessResultsFilteredDelay(t *testing.T) {
 		pi:         mockServo,
 		stats:      mockStatsServer,
 		cfg:        cfg,
-		eventConns: []UDPConnWithTS{nil},
+		eventConns: []UDPConnWithTS{mockEventConn},
 	}
 	err := p.initClients()
 	require.NoError(t, err)
@@ -413,6 +423,8 @@ func TestRunFiltered(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetServoState(gomock.Any()).MinTimes(1)
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
 
 	cfg := DefaultConfig()
 	cfg.Iface = "lo"
@@ -424,7 +436,7 @@ func TestRunFiltered(t *testing.T) {
 		pi:         mockServo,
 		stats:      mockStatsServer,
 		cfg:        cfg,
-		eventConns: []UDPConnWithTS{nil},
+		eventConns: []UDPConnWithTS{mockEventConn},
 	}
 	results := map[netip.Addr]*RunResult{
 		netip.MustParseAddr("192.168.0.10"): {
@@ -467,6 +479,8 @@ func TestRunStalled(t *testing.T) {
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().SetServoState(gomock.Any())
 	mockStatsServer.EXPECT().SetTickDuration(gomock.Any()).Times(2)
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
 
 	cfg := DefaultConfig()
 	cfg.Iface = "lo"
@@ -478,7 +492,7 @@ func TestRunStalled(t *testing.T) {
 		pi:         mockServo,
 		stats:      mockStatsServer,
 		cfg:        cfg,
-		eventConns: []UDPConnWithTS{nil},
+		eventConns: []UDPConnWithTS{mockEventConn},
 		lastTick:   time.Now().Add(-time.Minute * 2),
 	}
 	emptyResults := map[netip.Addr]*RunResult{}
@@ -800,4 +814,109 @@ func TestProcessResultsInterfaceDown(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrInterfaceDown)
 	require.Contains(t, err.Error(), "nonexistent_iface_xyz123")
+}
+
+func TestHandlePDelayReqParseError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+
+	p := &SPTP{
+		clockID: ptp.ClockIdentity(0x123456789abcdef0),
+	}
+
+	// Invalid buffer - should fail to parse
+	invalidBuf := []byte{0x01, 0x02}
+	addr := &unix.SockaddrInet4{Addr: [4]byte{192, 168, 0, 10}, Port: 319}
+	rxts := time.Now()
+
+	err := p.handlePDelayReq(mockEventConn, invalidBuf, addr, rxts)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "parsing Pdelay_Req")
+}
+
+func TestHandlePDelayReqSuccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+
+	clockID := ptp.ClockIdentity(0x123456789abcdef0)
+	p := &SPTP{
+		clockID: clockID,
+	}
+
+	// Build a valid PDelayReq
+	reqClockID := ptp.ClockIdentity(0xfedcba9876543210)
+	req := ptp.ReqPDelay(reqClockID, 1, 42)
+	reqBytes, err := ptp.Bytes(req)
+	require.NoError(t, err)
+
+	addr := &unix.SockaddrInet4{Addr: [4]byte{192, 168, 0, 10}, Port: 319}
+	rxts := time.Now()
+	txts := rxts.Add(100 * time.Microsecond)
+
+	// Expect Pdelay_Resp to be sent and return TX timestamp
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(txts, nil)
+	// Expect Pdelay_Resp_Follow_Up to be sent
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(time.Time{}, nil)
+
+	err = p.handlePDelayReq(mockEventConn, reqBytes, addr, rxts)
+	require.NoError(t, err)
+}
+
+func TestHandlePDelayReqRespSendError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+
+	clockID := ptp.ClockIdentity(0x123456789abcdef0)
+	p := &SPTP{
+		clockID: clockID,
+	}
+
+	// Build a valid PDelayReq
+	reqClockID := ptp.ClockIdentity(0xfedcba9876543210)
+	req := ptp.ReqPDelay(reqClockID, 1, 42)
+	reqBytes, err := ptp.Bytes(req)
+	require.NoError(t, err)
+
+	addr := &unix.SockaddrInet4{Addr: [4]byte{192, 168, 0, 10}, Port: 319}
+	rxts := time.Now()
+
+	// Pdelay_Resp send fails
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(time.Time{}, fmt.Errorf("send error"))
+
+	err = p.handlePDelayReq(mockEventConn, reqBytes, addr, rxts)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "sending Pdelay_Resp")
+}
+
+func TestHandlePDelayReqFollowUpSendError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+
+	clockID := ptp.ClockIdentity(0x123456789abcdef0)
+	p := &SPTP{
+		clockID: clockID,
+	}
+
+	// Build a valid PDelayReq
+	reqClockID := ptp.ClockIdentity(0xfedcba9876543210)
+	req := ptp.ReqPDelay(reqClockID, 1, 42)
+	reqBytes, err := ptp.Bytes(req)
+	require.NoError(t, err)
+
+	addr := &unix.SockaddrInet4{Addr: [4]byte{192, 168, 0, 10}, Port: 319}
+	rxts := time.Now()
+	txts := rxts.Add(100 * time.Microsecond)
+
+	// Pdelay_Resp sent successfully
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(txts, nil)
+	// Pdelay_Resp_Follow_Up send fails
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(time.Time{}, fmt.Errorf("send error"))
+
+	err = p.handlePDelayReq(mockEventConn, reqBytes, addr, rxts)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "sending Pdelay_Resp_Follow_Up")
 }

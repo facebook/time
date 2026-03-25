@@ -20,6 +20,7 @@ package timestamp
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"net/netip"
 	"time"
@@ -240,6 +241,38 @@ func NewSockaddrWithPort(sa unix.Sockaddr, port int) unix.Sockaddr {
 		return &unix.SockaddrInet4{Addr: sa.Addr, Port: port}
 	case *unix.SockaddrInet6:
 		return &unix.SockaddrInet6{Addr: sa.Addr, Port: port}
+	}
+	return nil
+}
+
+// JoinMulticast joins a multicast group on the given connection.
+// It supports both IPv4 and IPv6 multicast addresses.
+func JoinMulticast(connFd int, iface *net.Interface, multicastAddr net.IP) error {
+	// linux kernel stores ifindex as int32 and interface index can't be negative
+	if iface.Index <= 0 || iface.Index > math.MaxInt32 {
+		return fmt.Errorf("invalid interface index %d for multicast", iface.Index)
+	}
+
+	if multicastAddr.To4() != nil {
+		// IPv4 multicast - use IPMreqn for reliable interface binding
+		mreqn := &unix.IPMreqn{
+			Ifindex: int32(iface.Index),
+		}
+		copy(mreqn.Multiaddr[:], multicastAddr.To4())
+
+		if err := unix.SetsockoptIPMreqn(connFd, unix.IPPROTO_IP, unix.IP_ADD_MEMBERSHIP, mreqn); err != nil {
+			return fmt.Errorf("joining IPv4 multicast group %s: %w", multicastAddr, err)
+		}
+	} else {
+		// IPv6 multicast
+		mreq := &unix.IPv6Mreq{
+			Interface: uint32(iface.Index),
+		}
+		copy(mreq.Multiaddr[:], multicastAddr.To16())
+
+		if err := unix.SetsockoptIPv6Mreq(connFd, unix.IPPROTO_IPV6, unix.IPV6_JOIN_GROUP, mreq); err != nil {
+			return fmt.Errorf("joining IPv6 multicast group %s: %w", multicastAddr, err)
+		}
 	}
 	return nil
 }

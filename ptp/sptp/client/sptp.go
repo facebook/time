@@ -27,6 +27,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sys/unix"
 
 	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -126,6 +127,24 @@ func (p *SPTP) initClients() error {
 		p.priorities[ip] = prio
 		p.backoff[ip] = newBackoff(p.cfg.Backoff)
 	}
+
+	// Join multicast group based on listen address family
+	listenAddr, err := netip.ParseAddr(p.cfg.ListenAddress)
+	if err != nil {
+		log.Warningf("failed to parse listen address %q: %v, skipping multicast join", p.cfg.ListenAddress, err)
+	} else {
+		var multicastAddr string
+		if listenAddr.Is4() {
+			multicastAddr = ptp.PDelayMulticastIPv4
+		} else {
+			multicastAddr = ptp.PDelayMulticastIPv6
+		}
+		if err := timestamp.JoinMulticast(p.eventConns[0].ConnFd(), iface, net.ParseIP(multicastAddr)); err != nil {
+			log.Warningf("failed to join peer delay multicast group %s: %v", multicastAddr, err)
+		} else {
+			log.Debugf("joined PTP peer delay multicast group %s on interface %s", multicastAddr, iface.Name)
+		}
+	}
 	return nil
 }
 
@@ -220,6 +239,49 @@ func (p *SPTP) ptping(sourceIP netip.Addr, sourcePort int, response []byte, rxtx
 	return nil
 }
 
+// handlePDelayReq responds to a Pdelay_Req message with Pdelay_Resp and Pdelay_Resp_Follow_Up
+// This implements the responder side of peer delay measurement for in-rack linearizability checks
+func (p *SPTP) handlePDelayReq(econn UDPConnWithTS, buf []byte, addr unix.Sockaddr, rxts time.Time) error {
+	req := &ptp.PDelayReq{}
+	if err := ptp.FromBytes(buf, req); err != nil {
+		return fmt.Errorf("parsing Pdelay_Req: %w", err)
+	}
+
+	seq := req.SequenceID
+	t2 := rxts
+
+	log.Debugf("[pdelay-responder] received Pdelay_Req seq=%d, T2=%v", seq, t2)
+
+	// Build and send Pdelay_Resp with T2 (request receipt timestamp)
+	resp := ptp.RespPDelay(p.clockID, 1, seq, ptp.NewTimestamp(t2), req.SourcePortIdentity)
+	respBytes, err := ptp.Bytes(resp)
+	if err != nil {
+		return fmt.Errorf("marshaling Pdelay_Resp: %w", err)
+	}
+
+	t3, err := econn.WriteToWithTS(respBytes, addr, seq)
+	if err != nil {
+		return fmt.Errorf("sending Pdelay_Resp: %w", err)
+	}
+
+	log.Debugf("[pdelay-responder] sent Pdelay_Resp seq=%d, T3=%v", seq, t3)
+
+	// Build and send Pdelay_Resp_Follow_Up with T3 (response origin timestamp)
+	followUp := ptp.RespFollowUpPDelay(p.clockID, 1, seq, ptp.NewTimestamp(t3), req.SourcePortIdentity)
+	followUpBytes, err := ptp.Bytes(followUp)
+	if err != nil {
+		return fmt.Errorf("marshaling Pdelay_Resp_Follow_Up: %w", err)
+	}
+
+	if _, err := econn.WriteToWithTS(followUpBytes, addr, seq); err != nil {
+		return fmt.Errorf("sending Pdelay_Resp_Follow_Up: %w", err)
+	}
+
+	log.Debugf("[pdelay-responder] sent Pdelay_Resp_Follow_Up seq=%d", seq)
+
+	return nil
+}
+
 // RunListener starts a listener, must be run before any client-server interactions happen
 func (p *SPTP) RunListener(ctx context.Context) error {
 	eg, ctx := errgroup.WithContext(ctx)
@@ -285,6 +347,22 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					}
 					ip := timestamp.SockaddrToAddr(addr)
 					log.Debugf("[%s] received packet on port 319, n = %v", ip, bbuf)
+
+					// Probe message type first
+					msgType, err := ptp.ProbeMsgType(buf[:bbuf])
+					if err != nil {
+						log.Warningf("probing message type: %v", err)
+						continue
+					}
+
+					// Handle Pdelay_Req messages for in-rack linearizability checks
+					if msgType == ptp.MessagePDelayReq {
+						if err := p.handlePDelayReq(econn, buf[:bbuf], addr, rxtx); err != nil {
+							log.Warningf("[%s] handling Pdelay_Req: %v", ip, err)
+						}
+						continue
+					}
+
 					cc, found := p.clients[ip]
 					if !found {
 						log.Warningf("[%s] ignoring packets from unknown server, trying ptping", ip)

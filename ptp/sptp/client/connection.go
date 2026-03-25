@@ -42,6 +42,7 @@ type UDPConnWithTS interface {
 	WriteToWithTS(b []byte, addr unix.Sockaddr, seq uint16) (time.Time, error)
 	ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, unix.Sockaddr, time.Time, error)
 	Close() error
+	ConnFd() int
 }
 
 // UDPConn is a wrapper around udp connection and a corresponding fd
@@ -107,6 +108,12 @@ func NewUDPConnTS(address net.IP, port int, ts timestamp.Timestamp, iface *net.I
 		UDPConn:     *udpConn,
 		newerKernel: true, // assume kernel is recent enough to support SCM_TS_OPT_ID
 	}, nil
+}
+
+// ConnFd returns the underlying file descriptor for the connection.
+// This is useful for operations like joining multicast groups.
+func (c *UDPConnTS) ConnFd() int {
+	return c.connFd
 }
 
 // WriteToWithTS writes bytes to addr via underlying UDPConn. Uses the Sequence ID for

@@ -170,3 +170,17 @@ func (mr *MockUDPConnWithTSMockRecorder) WriteToWithTS(b, addr, seq any) *gomock
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteToWithTS", reflect.TypeOf((*MockUDPConnWithTS)(nil).WriteToWithTS), b, addr, seq)
 }
+
+// ConnFd mocks base method.
+func (m *MockUDPConnWithTS) ConnFd() int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConnFd")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// ConnFd indicates an expected call of ConnFd.
+func (mr *MockUDPConnWithTSMockRecorder) ConnFd() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConnFd", reflect.TypeOf((*MockUDPConnWithTS)(nil).ConnFd))
+}
