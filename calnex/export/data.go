@@ -46,9 +46,6 @@ type NormalData struct {
 	Source   string `json:"source"`
 }
 
-// Files is a multitype for flag.Var
-type Files []string
-
 // entryFromCSV generates Entry from CSV
 func entryFromCSV(csvLine []string, channel, target, protocol, source string) (*Entry, error) {
 	timestamp, err := strconv.ParseInt(strings.Split(csvLine[0], ".")[0], 10, 64)
