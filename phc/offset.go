@@ -101,15 +101,6 @@ func (extended *PTPSysOffsetExtended) BestSample() SysoffResult {
 	return best
 }
 
-// TimeAndOffset returns time we got from network card + offset
-func TimeAndOffset(iface string, method TimeMethod) (SysoffResult, error) {
-	device, err := IfaceToPHCDevice(iface)
-	if err != nil {
-		return SysoffResult{}, err
-	}
-	return TimeAndOffsetFromDevice(device, method)
-}
-
 // TimeAndOffsetFromDevice returns time we got from phc device + offset
 func TimeAndOffsetFromDevice(device string, method TimeMethod) (SysoffResult, error) {
 	f, err := os.Open(device)
