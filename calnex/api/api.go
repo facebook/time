@@ -134,13 +134,13 @@ type Channels []Channel
 
 // Calnex Status constants
 const (
-	ON       = "On"
-	OFF      = "Off"
-	YES      = "Yes"
-	NO       = "No"
-	ENABLED  = "Enabled"
+	ON  = "On"
+	OFF = "Off"
+	YES = "Yes"
+	NO  = "No"
+
 	DISABLED = "Disabled"
-	STATIC   = "Static"
+
 	DHCP     = "DHCP"
 	TE       = "te"
 	TWOWAYTE = "2wayte"
