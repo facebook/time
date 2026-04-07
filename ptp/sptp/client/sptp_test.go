@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"runtime"
 	"testing"
 	"time"
 
@@ -752,6 +753,9 @@ func TestShiftPriorities(t *testing.T) {
 }
 
 func TestCheckInterfaceDown(t *testing.T) {
+	if runtime.GOARCH == "s390x" {
+		t.Skip("netlink route attr parsing fails under QEMU s390x emulation")
+	}
 	// Test interface that exists and is up (loopback)
 	iface, err := net.InterfaceByName("lo")
 	require.NoError(t, err)

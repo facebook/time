@@ -18,12 +18,16 @@ package server
 
 import (
 	"net"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestCheckIP(t *testing.T) {
+	if runtime.GOARCH == "s390x" {
+		t.Skip("netlink route attr parsing fails under QEMU s390x emulation")
+	}
 	iface, err := net.InterfaceByName("lo")
 	require.NoError(t, err)
 
@@ -35,6 +39,9 @@ func TestCheckIP(t *testing.T) {
 }
 
 func TestCheckIPFalse(t *testing.T) {
+	if runtime.GOARCH == "s390x" {
+		t.Skip("netlink route attr parsing fails under QEMU s390x emulation")
+	}
 	iface, err := net.InterfaceByName("lo")
 	require.NoError(t, err)
 
