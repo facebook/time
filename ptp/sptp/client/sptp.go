@@ -35,8 +35,6 @@ import (
 	"github.com/facebook/time/timestamp"
 )
 
-var ErrInterfaceDown = errors.New("network interface is down")
-
 // Servo abstracts away servo
 type Servo interface {
 	SyncInterval(float64)
@@ -330,7 +328,6 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 	// if we have parallel TX, we need to listen on all event ports since they all bind to same port with SO_REUSEPORT,
 	// and kernel will distribute incoming packets between them evenly
 	for _, econn := range p.eventConns {
-		econn := econn
 		// get packets from event port
 		eg.Go(func() error {
 			// it's done in non-blocking way, so if context is cancelled we exit correctly
@@ -509,10 +506,10 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 			// If no GMs are available, check the interface status
 			log.Debugf("No GMs are available, checking interface %s status", p.cfg.Iface)
 			if ifaceErr := checkInterfaceDown(p.cfg.Iface); ifaceErr != nil {
-				log.Errorf("Interface %s is down: %v", p.cfg.Iface, ifaceErr)
-				return fmt.Errorf("%w (%s): %w", ErrInterfaceDown, p.cfg.Iface, ifaceErr)
+				log.Warningf("Interface %s is down: %v, entering holdover", p.cfg.Iface, ifaceErr)
+			} else {
+				log.Debugf("Interface %s is healthy, errors are due to other issues", p.cfg.Iface)
 			}
-			log.Debugf("Interface %s is healthy, errors are due to other issues", p.cfg.Iface)
 		}
 		p.stats.SetGmsAvailable(int((float64(gmsAvailable) / float64(gmsTotal)) * 100))
 	} else {
@@ -619,8 +616,6 @@ func (p *SPTP) runInternal(ctx context.Context) error {
 		eg, ictx := errgroup.WithContext(ctx)
 		results := map[netip.Addr]*RunResult{}
 		for addr, c := range p.clients {
-			addr := addr
-			c := c
 			if p.backoff[addr].active() {
 				// skip talking to this GM, we are in backoff mode
 				lock.Lock()

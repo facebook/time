@@ -781,7 +781,7 @@ func TestProcessResultsInterfaceDown(t *testing.T) {
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
 
-	// Use a non-existent interface to trigger the error path
+	// Use a non-existent interface to trigger the interface-down path
 	cfg := DefaultConfig()
 	cfg.Iface = "nonexistent_iface_xyz123"
 	cfg.Servers = map[string]int{
@@ -810,14 +810,18 @@ func TestProcessResultsInterfaceDown(t *testing.T) {
 		},
 	}
 
+	meanFreq := 49651.0
 	mockStatsServer.EXPECT().SetGmsTotal(1)
+	mockStatsServer.EXPECT().SetGmsAvailable(0)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+	mockServo.EXPECT().MeanFreq().Return(meanFreq)
+	mockServo.EXPECT().SetLastFreq(meanFreq)
+	mockClock.EXPECT().AdjFreqPPB(-1 * meanFreq)
 
-	// processResults should return ErrInterfaceDown wrapped error
+	// Interface is down, but processResults should enter holdover instead of returning an error
 	err := p.processResults(results)
-	require.Error(t, err)
-	require.ErrorIs(t, err, ErrInterfaceDown)
-	require.Contains(t, err.Error(), "nonexistent_iface_xyz123")
+	require.NoError(t, err)
+	require.Equal(t, netip.Addr{}, p.bestGM)
 }
 
 func TestHandlePDelayReqParseError(t *testing.T) {
