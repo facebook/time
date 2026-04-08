@@ -25,6 +25,7 @@ limitations under the License.
 package netdiag
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -35,34 +36,78 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"unsafe"
 )
 
 func logEnvInfo(t *testing.T) {
 	t.Helper()
 	t.Logf("GOARCH=%s GOOS=%s", runtime.GOARCH, runtime.GOOS)
 
-	// Check if we're under QEMU user-mode emulation
-	// QEMU sets this env var, and /proc/cpuinfo may differ from GOARCH
-	if v := os.Getenv("QEMU_CPU"); v != "" {
-		t.Logf("QEMU_CPU=%s (QEMU user-mode detected via env)", v)
+	// uname — under QEMU user-mode, uname -m is intercepted (returns guest arch)
+	// but uname -r still shows the host kernel, e.g. "6.19.6-200.fc43.x86_64"
+	if out, err := exec.Command("uname", "-m").Output(); err == nil {
+		t.Logf("uname -m: %s", strings.TrimSpace(string(out)))
+	}
+	if out, err := exec.Command("uname", "-r").Output(); err == nil {
+		t.Logf("uname -r: %s", strings.TrimSpace(string(out)))
 	}
 
-	// Check binfmt_misc for QEMU registration
-	binfmtPath := "/proc/sys/fs/binfmt_misc/qemu-" + runtime.GOARCH
-	if data, err := os.ReadFile(binfmtPath); err == nil {
-		t.Logf("binfmt_misc (%s):\n%s", binfmtPath, string(data))
-		for _, line := range strings.Split(string(data), "\n") {
-			if strings.HasPrefix(line, "interpreter ") {
-				interp := strings.TrimPrefix(line, "interpreter ")
-				if out, err := exec.Command(interp, "--version").CombinedOutput(); err == nil {
-					t.Logf("QEMU version: %s", strings.TrimSpace(string(out)))
-				} else {
-					t.Logf("QEMU interpreter %s found but --version failed: %v", interp, err)
+	// /proc/version — full kernel version string
+	if data, err := os.ReadFile("/proc/version"); err == nil {
+		t.Logf("/proc/version: %s", strings.TrimSpace(string(data)))
+	}
+
+	// QEMU environment variables
+	if v := os.Getenv("QEMU_CPU"); v != "" {
+		t.Logf("QEMU_CPU=%s", v)
+	}
+	for _, env := range os.Environ() {
+		if strings.HasPrefix(env, "QEMU") {
+			t.Logf("env: %s", env)
+		}
+	}
+
+	// Look for QEMU binary in the chroot (static x86_64 binary, runs natively on host)
+	for _, p := range []string{
+		"/usr/bin/qemu-" + runtime.GOARCH + "-static",
+		"/usr/bin/qemu-" + runtime.GOARCH,
+	} {
+		if info, err := os.Stat(p); err == nil {
+			t.Logf("found: %s (%d bytes)", p, info.Size())
+			if out, err := exec.Command(p, "--version").CombinedOutput(); err == nil {
+				t.Logf("  version: %s", strings.TrimSpace(string(out)))
+			}
+		}
+	}
+
+	// Check binfmt_misc for QEMU registration — list all entries
+	binfmtDir := "/proc/sys/fs/binfmt_misc"
+	entries, err := os.ReadDir(binfmtDir)
+	if err != nil {
+		t.Logf("binfmt_misc dir: %v", err)
+	} else {
+		t.Logf("binfmt_misc entries:")
+		for _, e := range entries {
+			t.Logf("  %s", e.Name())
+			data, err := os.ReadFile(filepath.Join(binfmtDir, e.Name()))
+			if err != nil {
+				continue
+			}
+			content := string(data)
+			if strings.Contains(content, "qemu") || strings.Contains(content, "interpreter") {
+				t.Logf("  content of %s:\n%s", e.Name(), content)
+				for _, line := range strings.Split(content, "\n") {
+					if strings.HasPrefix(line, "interpreter ") {
+						interp := strings.TrimPrefix(line, "interpreter ")
+						if out, err := exec.Command(interp, "--version").CombinedOutput(); err == nil {
+							t.Logf("QEMU version: %s", strings.TrimSpace(string(out)))
+						} else {
+							t.Logf("QEMU interpreter %s found but --version failed: %v", interp, err)
+						}
+					}
 				}
 			}
 		}
-	} else {
-		t.Logf("binfmt_misc: %s not found (not running under QEMU, or different registration name)", binfmtPath)
 	}
 
 	// Read /proc/cpuinfo first line for architecture hint
@@ -428,7 +473,14 @@ func TestSummary(t *testing.T) {
 	// We also call t.Errorf if netlink failures are detected, which forces
 	// Go to print all t.Log output for this test.
 	t.Log("")
-	t.Logf("=== NETDIAG DIAGNOSTIC SUMMARY (GOARCH=%s) ===", runtime.GOARCH)
+	t.Logf("=== NETDIAG: Network Interface Detection Diagnostic (GOARCH=%s) ===", runtime.GOARCH)
+	t.Log("")
+	t.Log("TEST: Query network interfaces through every available method.")
+	t.Log("PURPOSE: Determine if netlink RTM_GETLINK is broken while other methods work,")
+	t.Log("  which indicates incomplete byte-order translation in emulated environments.")
+	t.Log("  Go's net.InterfaceByName uses RTM_GETLINK via netlink. The kernel returns")
+	t.Log("  rtattr structs that Go parses via unsafe.Pointer in native byte order.")
+	t.Log("")
 	t.Logf("%-35s %-30s %s", "METHOD", "PATH", "RESULT")
 	t.Logf("%-35s %-30s %s", strings.Repeat("-", 35), strings.Repeat("-", 30), strings.Repeat("-", 30))
 	hasNetlinkFailure := false
@@ -445,18 +497,146 @@ func TestSummary(t *testing.T) {
 		}
 		t.Logf("%-35s %-30s %s", r.method, r.path, status)
 	}
+	// If netlink is failing, walk the full rtattr chain for both RTM_GETLINK (broken)
+	// and RTM_GETADDR (working). We replay exactly what Go's ParseNetlinkRouteAttr
+	// does: read rta_len via native byte order, check rta_len >= 4 && rta_len <= remaining,
+	// advance by aligned rta_len. Show every attr until the one that fails.
+	if hasNetlinkFailure {
+		t.Log("")
+		t.Log("=== RAW BYTE EVIDENCE ===")
+		t.Log("TEST: Walk the rtattr chain for both RTM_GETLINK and RTM_GETADDR responses.")
+		t.Log("PURPOSE: Go's ParseNetlinkRouteAttr reads rta_len via unsafe.Pointer in native")
+		t.Log("  byte order (big-endian on s390x). If the bytes are not swapped to match,")
+		t.Log("  rta_len will be wrong and validation fails with EINVAL.")
+		t.Log("  We walk each rtattr showing native vs swapped interpretation to find")
+		t.Log("  exactly where the chain breaks. RTM_GETADDR is included as a control case.")
+		t.Log("  Go uses Recvfrom (not recvmsg) for netlink via syscall.NetlinkRIB.")
+		t.Log("")
+		for _, tc := range []struct {
+			name  string
+			proto int
+		}{
+			{"RTM_GETLINK", syscall.RTM_GETLINK},
+			{"RTM_GETADDR", syscall.RTM_GETADDR},
+		} {
+			tab, ribErr := syscall.NetlinkRIB(tc.proto, syscall.AF_UNSPEC)
+			if ribErr != nil {
+				t.Logf("[%s] NetlinkRIB failed: %v", tc.name, ribErr)
+				continue
+			}
+			msgs, parseErr := syscall.ParseNetlinkMessage(tab)
+			if parseErr != nil {
+				t.Logf("[%s] ParseNetlinkMessage failed: %v", tc.name, parseErr)
+				continue
+			}
+			for _, msg := range msgs {
+				if msg.Header.Type == syscall.NLMSG_DONE {
+					continue
+				}
+				var rtaOffset int
+				switch msg.Header.Type {
+				case syscall.RTM_NEWLINK, syscall.RTM_DELLINK:
+					rtaOffset = syscall.SizeofIfInfomsg
+				case syscall.RTM_NEWADDR, syscall.RTM_DELADDR:
+					rtaOffset = syscall.SizeofIfAddrmsg
+				default:
+					continue
+				}
+				if len(msg.Data) <= rtaOffset {
+					continue
+				}
+				rtaRegion := msg.Data[rtaOffset:]
+				t.Logf("[%s] nlmsg type=%d, data=%d bytes, rtattr region=%d bytes (offset %d)",
+					tc.name, msg.Header.Type, len(msg.Data), len(rtaRegion), rtaOffset)
+
+				// Walk the rtattr chain exactly as Go does:
+				// RtAttr is {Len uint16; Type uint16} read via unsafe.Pointer (native byte order)
+				b := rtaRegion
+				idx := 0
+				nativeIsLE := *(*uint16)(unsafe.Pointer(&[]byte{1, 0}[0])) == 1
+				for len(b) >= syscall.SizeofRtAttr {
+					// Read rta_len and rta_type in NATIVE byte order (what Go sees via unsafe.Pointer)
+					var nativeLen, nativeType uint16
+					if nativeIsLE {
+						nativeLen = binary.LittleEndian.Uint16(b[0:2])
+						nativeType = binary.LittleEndian.Uint16(b[2:4])
+					} else {
+						nativeLen = binary.BigEndian.Uint16(b[0:2])
+						nativeType = binary.BigEndian.Uint16(b[2:4])
+					}
+
+					// Also show the OTHER byte order for comparison
+					var otherLen, otherType uint16
+					if nativeIsLE {
+						otherLen = binary.BigEndian.Uint16(b[0:2])
+						otherType = binary.BigEndian.Uint16(b[2:4])
+					} else {
+						otherLen = binary.LittleEndian.Uint16(b[0:2])
+						otherType = binary.LittleEndian.Uint16(b[2:4])
+					}
+
+					// This is the exact check Go does in netlinkRouteAttrAndValue:
+					//   if int(a.Len) < SizeofRtAttr || int(a.Len) > len(b) { return EINVAL }
+					valid := int(nativeLen) >= syscall.SizeofRtAttr && int(nativeLen) <= len(b)
+
+					if !valid {
+						t.Logf("[%s]   rtattr[%d] FAIL: raw=[%02x %02x %02x %02x] native(BE) len=%d type=%d, swapped(LE) len=%d type=%d, remaining=%d bytes",
+							tc.name, idx, b[0], b[1], b[2], b[3],
+							nativeLen, nativeType, otherLen, otherType, len(b))
+						if int(otherLen) >= syscall.SizeofRtAttr && int(otherLen) <= len(b) {
+							t.Logf("[%s]   ^^^ len=%d is invalid as BE but valid as LE. Bytes not swapped to guest byte order.",
+								tc.name, otherLen)
+						} else if nativeLen < uint16(syscall.SizeofRtAttr) {
+							t.Logf("[%s]   ^^^ len=%d is too small (min %d). Possibly trailing padding or corrupt data.",
+								tc.name, nativeLen, syscall.SizeofRtAttr)
+						} else {
+							t.Logf("[%s]   ^^^ len=%d exceeds remaining %d bytes.",
+								tc.name, nativeLen, len(b))
+						}
+						// Dump surrounding bytes for context
+						dumpLen := 32
+						if len(b) < dumpLen {
+							dumpLen = len(b)
+						}
+						t.Logf("[%s]   bytes at failure: % 02x", tc.name, b[:dumpLen])
+						break
+					}
+
+					t.Logf("[%s]   rtattr[%d]: native(BE) len=%d type=%d, raw=[%02x %02x %02x %02x]",
+						tc.name, idx, nativeLen, nativeType, b[0], b[1], b[2], b[3])
+
+					// Advance by aligned length (round up to 4)
+					aligned := (int(nativeLen) + 3) &^ 3
+					if aligned > len(b) {
+						break
+					}
+					b = b[aligned:]
+					idx++
+				}
+				t.Logf("[%s] walked %d rtattrs, %d bytes remaining", tc.name, idx, len(b))
+
+				// Confirm with actual ParseNetlinkRouteAttr
+				_, attrErr := syscall.ParseNetlinkRouteAttr(&msg)
+				if attrErr != nil {
+					t.Logf("[%s] ParseNetlinkRouteAttr: FAIL: %v", tc.name, attrErr)
+				} else {
+					t.Logf("[%s] ParseNetlinkRouteAttr: OK", tc.name)
+				}
+				break // first message is enough
+			}
+		}
+		t.Log("=== END RAW BYTE EVIDENCE ===")
+	}
+
 	t.Log("")
 	if hasNetlinkFailure && allNonNetlinkOK {
-		t.Log("DIAGNOSIS: Netlink methods FAIL but sysfs/procfs methods OK.")
-		t.Log("This confirms QEMU user-mode emulation issue: kernel returns")
-		t.Log("netlink data in host byte order (little-endian) but the emulated")
-		t.Log("s390x binary reads it as big-endian.")
-		t.Error("QEMU netlink emulation issue detected (this failure is expected under QEMU)")
+		t.Log("RESULT: Netlink RTM_GETLINK methods fail, all non-netlink methods pass.")
+		t.Log("See raw byte evidence above to determine if this is a byte-order issue.")
+		t.Error("Netlink RTM_GETLINK failure detected")
 	} else if !hasNetlinkFailure {
-		t.Log("DIAGNOSIS: All methods OK. This is a native build (no QEMU issue).")
+		t.Log("RESULT: All methods passed.")
 	} else {
-		t.Log("DIAGNOSIS: Mixed failures across netlink and non-netlink methods.")
-		t.Log("This may indicate a different issue than QEMU emulation.")
+		t.Log("RESULT: Mixed failures across netlink and non-netlink methods.")
 		t.Error("Unexpected failure pattern detected")
 	}
 	t.Log("=== END NETDIAG ===")
