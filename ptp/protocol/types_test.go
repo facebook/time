@@ -533,6 +533,29 @@ func TestPortAddress(t *testing.T) {
 	}
 }
 
+// TestPortAddressUint16Overflow reproduces OSS-Fuzz issue 471472002:
+// 4+uint16(0xFFFF) overflows to 3, causing panic: slice bounds out of range [4:3].
+func TestPortAddressUint16Overflow(t *testing.T) {
+	header := []byte{0x00, 0x01, 0xFF, 0xFF}
+	buf := make([]byte, 4+0xFFFF)
+	copy(buf, header)
+
+	var addr PortAddress
+	err := addr.UnmarshalBinary(buf)
+	require.NoError(t, err)
+	require.Equal(t, uint16(0xFFFF), addr.AddressLength)
+	require.Len(t, addr.AddressField, 0xFFFF)
+}
+
+func TestPortAddressUint16OverflowShortBuffer(t *testing.T) {
+	buf := []byte{0x00, 0x01, 0xFF, 0xFF}
+	buf = append(buf, make([]byte, 1020)...)
+
+	var addr PortAddress
+	err := addr.UnmarshalBinary(buf)
+	require.Error(t, err)
+}
+
 func TestClockAccuracyFromOffset(t *testing.T) {
 	require.Equal(t, ClockAccuracyNanosecond25, ClockAccuracyFromOffset(-8*time.Nanosecond))
 	require.Equal(t, ClockAccuracyNanosecond100, ClockAccuracyFromOffset(42*time.Nanosecond))
