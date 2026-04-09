@@ -32,7 +32,10 @@ jobs:
     targets:
       - fedora-stable-aarch64
       - fedora-stable-ppc64le
-      - fedora-stable-s390x
+      # s390x disabled: COPR uses QEMU user-mode emulation which has a bug in
+      # netlink RTM_GETLINK rtattr byte-order translation. See PR #506 for details.
+      # Native s390x builds work fine in Koji. QEMU bug report submitted upstream.
+      # - fedora-stable-s390x
       - fedora-all-x86_64
   - job: copr_build
     trigger: pull_request
@@ -41,5 +44,5 @@ jobs:
     targets:
       - fedora-stable-aarch64
       - fedora-stable-ppc64le
-      - fedora-stable-s390x
+      # - fedora-stable-s390x
       - fedora-all-x86_64
