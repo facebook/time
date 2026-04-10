@@ -184,3 +184,61 @@ func TestParseSyncDelayReqWithAlternateResponsePort(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, &want, pp)
 }
+
+func TestCheckTLVBufferSize(t *testing.T) {
+	tests := []struct {
+		name    string
+		tlvType TLVType
+		bufLen  int
+		wantErr bool
+	}{
+		{"RequestUnicast enough", TLVRequestUnicastTransmission, tlvHeadSize + 6, false},
+		{"RequestUnicast short", TLVRequestUnicastTransmission, tlvHeadSize + 5, true},
+		{"GrantUnicast enough", TLVGrantUnicastTransmission, tlvHeadSize + 8, false},
+		{"GrantUnicast short", TLVGrantUnicastTransmission, tlvHeadSize, true},
+		{"CancelUnicast enough", TLVCancelUnicastTransmission, tlvHeadSize + 2, false},
+		{"CancelUnicast short", TLVCancelUnicastTransmission, tlvHeadSize + 1, true},
+		{"AcknowledgeCancel enough", TLVAcknowledgeCancelUnicastTransmission, tlvHeadSize + 2, false},
+		{"AcknowledgeCancel empty", TLVAcknowledgeCancelUnicastTransmission, 0, true},
+		{"AlternateTimeOffset enough", TLVAlternateTimeOffsetIndicator, tlvHeadSize + 15, false},
+		{"AlternateTimeOffset short", TLVAlternateTimeOffsetIndicator, tlvHeadSize + 14, true},
+		{"AlternateResponsePort enough", TLVAlternateResponsePort, tlvHeadSize + 2, false},
+		{"AlternateResponsePort short", TLVAlternateResponsePort, 3, true},
+		{"unknown TLV type", TLVType(0x9999), 1024, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkTLVBufferSize(tt.tlvType, make([]byte, tt.bufLen))
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestMarshalBinaryToShortBuffer(t *testing.T) {
+	tests := []struct {
+		name string
+		tlv  BinaryMarshalerTo
+	}{
+		{"RequestUnicast", &RequestUnicastTransmissionTLV{}},
+		{"GrantUnicast", &GrantUnicastTransmissionTLV{}},
+		{"CancelUnicast", &CancelUnicastTransmissionTLV{}},
+		{"AcknowledgeCancel", &AcknowledgeCancelUnicastTransmissionTLV{}},
+		{"PathTrace", &PathTraceTLV{PathSequence: []ClockIdentity{1}}},
+		{"AlternateTimeOffset", &AlternateTimeOffsetIndicatorTLV{}},
+		{"AlternateResponsePort", &AlternateResponsePortTLV{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+" empty", func(t *testing.T) {
+			_, err := tt.tlv.MarshalBinaryTo([]byte{})
+			require.Error(t, err)
+		})
+		t.Run(tt.name+" header only", func(t *testing.T) {
+			_, err := tt.tlv.MarshalBinaryTo(make([]byte, tlvHeadSize))
+			require.Error(t, err)
+		})
+	}
+}
