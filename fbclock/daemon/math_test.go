@@ -125,6 +125,21 @@ func TestPrepareExpressionNotEnoughValues(t *testing.T) {
 	require.Equal(t, float64(3), r)
 }
 
+// TestPrepareExpressionMalformedInput reproduces OSS-Fuzz issue 471488972.
+func TestPrepareExpressionMalformedInput(t *testing.T) {
+	inputs := []string{
+		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+		"[[[[[[[[[[[",
+		string([]byte{0xff, 0xfe, 0xfd}),
+		"",
+	}
+	for _, input := range inputs {
+		require.NotPanics(t, func() {
+			_, _ = prepareExpression(input)
+		})
+	}
+}
+
 func FuzzPrepareExpression(f *testing.F) {
 	f.Add("mean(clockaccuracy, 5) + abs(mean(offset, 5)) + 1.0 * stddev(offset, 4) + 1.0 * stddev(delay, 4) + 1.0 * stddev(freq, 5)")
 	f.Add("abs(mean(offset, 5)) + 1.0 * stddev(missing, 4)")

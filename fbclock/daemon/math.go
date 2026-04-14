@@ -194,8 +194,14 @@ var functions = map[string]govaluate.ExpressionFunction{
 	},
 }
 
-func prepareExpression(exprStr string) (*govaluate.EvaluableExpression, error) {
-	expr, err := govaluate.NewEvaluableExpressionWithFunctions(exprStr, functions)
+func prepareExpression(exprStr string) (expr *govaluate.EvaluableExpression, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			expr = nil
+			err = fmt.Errorf("invalid expression %q: %v", exprStr, r)
+		}
+	}()
+	expr, err = govaluate.NewEvaluableExpressionWithFunctions(exprStr, functions)
 	if err != nil {
 		return nil, err
 	}
