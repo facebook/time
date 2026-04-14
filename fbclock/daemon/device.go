@@ -20,13 +20,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/facebook/time/fbclock"
 	"github.com/facebook/time/phc"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 )
 
 // ManagedPTPDevicePath is the path we will set up a copy of iface's PHC device,
@@ -70,13 +68,4 @@ func SetupDeviceDir(iface string) error {
 		return fmt.Errorf("linking device %s to %s: %w", device, target, err)
 	}
 	return os.Chmod(target, wantMode)
-}
-
-// TimeMonotonicRaw returns the current time from CLOCK_MONOTONIC_RAW
-func TimeMonotonicRaw() (time.Time, error) {
-	var ts unix.Timespec
-	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC_RAW, &ts); err != nil {
-		return time.Time{}, fmt.Errorf("failed clock_gettime: %w", err)
-	}
-	return time.Unix(ts.Unix()), nil
 }
