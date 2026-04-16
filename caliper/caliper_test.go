@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -114,12 +113,12 @@ func TestParseTOR(t *testing.T) {
 	tor, err := ParseTOR(path)
 	require.NoError(t, err)
 
-	assert.Equal(t, 1310, tor.Wavelength, "wavelength should be extracted from InstrumentInfo when field is 0")
-	assert.Equal(t, 1.4682, tor.RefractiveIndex)
-	assert.Equal(t, 1, tor.PulseWidth)
-	assert.Len(t, tor.DataPoints, 3)
-	assert.InDelta(t, 0.05, tor.DataPoints[1].DistanceM, 0.001)
-	assert.InDelta(t, -30.01, tor.DataPoints[1].AmplitudeDB, 0.001)
+	require.Equal(t, 1310, tor.Wavelength, "wavelength should be extracted from InstrumentInfo when field is 0")
+	require.Equal(t, 1.4682, tor.RefractiveIndex)
+	require.Equal(t, 1, tor.PulseWidth)
+	require.Len(t, tor.DataPoints, 3)
+	require.InDelta(t, 0.05, tor.DataPoints[1].DistanceM, 0.001)
+	require.InDelta(t, -30.01, tor.DataPoints[1].AmplitudeDB, 0.001)
 }
 
 func TestParseTORReader(t *testing.T) {
@@ -146,22 +145,22 @@ func TestParseTORReader(t *testing.T) {
 	tor, err := ParseTORReader(strings.NewReader(content))
 	require.NoError(t, err)
 
-	assert.Equal(t, 1550, tor.Wavelength)
-	assert.Equal(t, "ABC123", tor.ModuleSerialNumber)
-	assert.Equal(t, 1.468, tor.RefractiveIndex)
-	assert.Len(t, tor.DataPoints, 2)
+	require.Equal(t, 1550, tor.Wavelength)
+	require.Equal(t, "ABC123", tor.ModuleSerialNumber)
+	require.Equal(t, 1.468, tor.RefractiveIndex)
+	require.Len(t, tor.DataPoints, 2)
 }
 
 func TestParseTORNoDataPoints(t *testing.T) {
 	content := "[DateTime]\n1742036400\n[-]\n[RefractiveIndex]\n1.4682\n[-]\n"
 	_, err := ParseTORReader(strings.NewReader(content))
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no data points")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no data points")
 }
 
 func TestParseTORFileNotFound(t *testing.T) {
 	_, err := ParseTOR("/nonexistent/path/test.tor")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestParseWavelengthFromInfo(t *testing.T) {
@@ -181,9 +180,9 @@ func TestParseWavelengthFromInfo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			wl, ok := parseWavelengthFromInfo(tt.input)
-			assert.Equal(t, tt.ok, ok)
+			require.Equal(t, tt.ok, ok)
 			if ok {
-				assert.Equal(t, tt.expected, wl)
+				require.Equal(t, tt.expected, wl)
 			}
 		})
 	}
@@ -194,7 +193,7 @@ func TestDataPointTimeNs(t *testing.T) {
 	ri := 1.4682
 
 	expected := 100.0 * ri / SpeedOfLight * 1e9
-	assert.InDelta(t, expected, dp.TimeNs(ri), 0.0001)
+	require.InDelta(t, expected, dp.TimeNs(ri), 0.0001)
 }
 
 func TestDetectPeaks(t *testing.T) {
@@ -204,18 +203,18 @@ func TestDetectPeaks(t *testing.T) {
 	require.Len(t, peaks, 4)
 
 	for i, label := range []string{"OA", "OB", "OC", "OD"} {
-		assert.Equal(t, label, peaks[i].Label)
+		require.Equal(t, label, peaks[i].Label)
 	}
 
 	expectedDists := []float64{0.5, 3.0, 25.0, 26.5}
 	for i, p := range peaks {
-		assert.InDelta(t, expectedDists[i], p.DistanceM, 0.15, "peak %s distance", p.Label)
+		require.InDelta(t, expectedDists[i], p.DistanceM, 0.15, "peak %s distance", p.Label)
 	}
 
 	ri := tor.RefractiveIndex
 	for _, p := range peaks {
 		expectedTime := p.DistanceM * ri / SpeedOfLight * 1e9
-		assert.InDelta(t, expectedTime, p.TimeNs, 0.001)
+		require.InDelta(t, expectedTime, p.TimeNs, 0.001)
 	}
 }
 
@@ -248,12 +247,12 @@ func TestDetectPeaksTapSplitter(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, peaks, 4)
 
-	assert.Equal(t, "OA", peaks[0].Label)
-	assert.InDelta(t, 0.5, peaks[0].DistanceM, 0.15)
-	assert.Equal(t, "OB", peaks[1].Label)
-	assert.InDelta(t, 3.0, peaks[1].DistanceM, 0.15)
-	assert.Equal(t, "OC", peaks[2].Label)
-	assert.Equal(t, "OD", peaks[3].Label)
+	require.Equal(t, "OA", peaks[0].Label)
+	require.InDelta(t, 0.5, peaks[0].DistanceM, 0.15)
+	require.Equal(t, "OB", peaks[1].Label)
+	require.InDelta(t, 3.0, peaks[1].DistanceM, 0.15)
+	require.Equal(t, "OC", peaks[2].Label)
+	require.Equal(t, "OD", peaks[3].Label)
 }
 
 func TestDetectPeaksLaunchCableFilter(t *testing.T) {
@@ -283,8 +282,8 @@ func TestDetectPeaksLaunchCableFilter(t *testing.T) {
 	peaks, err := DetectPeaks(tor, 3.0)
 	require.NoError(t, err)
 	require.Len(t, peaks, 4)
-	assert.Equal(t, "OA", peaks[0].Label)
-	assert.InDelta(t, 4.0, peaks[0].DistanceM, 0.15, "OA should be at 4.0m, not 2.0m")
+	require.Equal(t, "OA", peaks[0].Label)
+	require.InDelta(t, 4.0, peaks[0].DistanceM, 0.15, "OA should be at 4.0m, not 2.0m")
 }
 
 func TestDetectPeaksInsufficientData(t *testing.T) {
@@ -293,8 +292,8 @@ func TestDetectPeaksInsufficientData(t *testing.T) {
 		DataPoints:      make([]DataPoint, 5),
 	}
 	_, err := DetectPeaks(tor, 0)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "insufficient data points")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "insufficient data points")
 }
 
 func TestComputeResult(t *testing.T) {
@@ -305,33 +304,33 @@ func TestComputeResult(t *testing.T) {
 	result, err := ComputeResult(tor, peaks, "gnss01.cln1", "PF000142", GNSSoF16RxE, Gen2Phase2, 1.5, 3.0)
 	require.NoError(t, err)
 
-	assert.Equal(t, "gnss01.cln1", result.DeviceName)
-	assert.Equal(t, "PF000142", result.SerialNumber)
-	assert.Equal(t, GNSSoF16RxE, result.Model)
-	assert.Equal(t, Gen2Phase2, result.AntennaGen)
+	require.Equal(t, "gnss01.cln1", result.DeviceName)
+	require.Equal(t, "PF000142", result.SerialNumber)
+	require.Equal(t, GNSSoF16RxE, result.Model)
+	require.Equal(t, Gen2Phase2, result.AntennaGen)
 
-	assert.Equal(t, 2.0, result.Delays.SMAPortOffsetNs)
-	assert.Equal(t, 39.3, result.Delays.AntennaElectricalDelayNs)
-	assert.Greater(t, result.Delays.RxDelayNs, 0.0)
-	assert.Greater(t, result.Delays.CableDelayNs, result.Delays.RxDelayNs)
+	require.Equal(t, 2.0, result.Delays.SMAPortOffsetNs)
+	require.Equal(t, 39.3, result.Delays.AntennaElectricalDelayNs)
+	require.Greater(t, result.Delays.RxDelayNs, 0.0)
+	require.Greater(t, result.Delays.CableDelayNs, result.Delays.RxDelayNs)
 
-	assert.InDelta(t, 1.5*CoaxDelayNsPerM, result.Delays.CoaxCableDelayNs, 0.001)
-	assert.Equal(t, 1.5, result.Delays.CoaxCableLengthM)
+	require.InDelta(t, 1.5*CoaxDelayNsPerM, result.Delays.CoaxCableDelayNs, 0.001)
+	require.Equal(t, 1.5, result.Delays.CoaxCableLengthM)
 
 	expectedTotal := result.Delays.SMAPortOffsetNs +
 		result.Delays.RxDelayNs +
 		result.Delays.CableDelayNs +
 		result.Delays.AntennaOpticalDelayNs +
 		result.Delays.AntennaElectricalDelayNs
-	assert.InDelta(t, expectedTotal, result.Delays.TotalDelayNs, 0.001)
-	assert.InDelta(t, result.Delays.TotalDelayNs+result.Delays.CoaxCableDelayNs,
+	require.InDelta(t, expectedTotal, result.Delays.TotalDelayNs, 0.001)
+	require.InDelta(t, result.Delays.TotalDelayNs+result.Delays.CoaxCableDelayNs,
 		result.Delays.EndToEndDelayNs, 0.001)
 
-	assert.Len(t, result.Trace, len(tor.DataPoints))
+	require.Len(t, result.Trace, len(tor.DataPoints))
 
-	assert.Equal(t, 1310, result.Settings.Wavelength)
-	assert.Equal(t, tor.RefractiveIndex, result.Settings.RefractiveIndex)
-	assert.Equal(t, 3.0, result.Settings.LaunchCableLengthM)
+	require.Equal(t, 1310, result.Settings.Wavelength)
+	require.Equal(t, tor.RefractiveIndex, result.Settings.RefractiveIndex)
+	require.Equal(t, 3.0, result.Settings.LaunchCableLengthM)
 }
 
 func TestComputeResultModels(t *testing.T) {
@@ -355,8 +354,8 @@ func TestComputeResultModels(t *testing.T) {
 		t.Run(string(tt.model)+"_"+string(tt.antennaGen), func(t *testing.T) {
 			result, err := ComputeResult(tor, peaks, "test", "PF000001", tt.model, tt.antennaGen, 0, 0)
 			require.NoError(t, err)
-			assert.Equal(t, tt.expectedSMANs, result.Delays.SMAPortOffsetNs)
-			assert.Equal(t, tt.expectedElecNs, result.Delays.AntennaElectricalDelayNs)
+			require.Equal(t, tt.expectedSMANs, result.Delays.SMAPortOffsetNs)
+			require.Equal(t, tt.expectedElecNs, result.Delays.AntennaElectricalDelayNs)
 		})
 	}
 }
@@ -369,7 +368,7 @@ func TestComputeResultMissingPeaks(t *testing.T) {
 		{Label: "OC", TimeNs: 3.0},
 	}
 	_, err := ComputeResult(tor, peaks, "test", "PF000001", GNSSoF16RxE, Gen2Phase2, 0, 0)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestComputeResultZeroCoax(t *testing.T) {
@@ -380,9 +379,9 @@ func TestComputeResultZeroCoax(t *testing.T) {
 	result, err := ComputeResult(tor, peaks, "test", "PF000001", GNSSoF16RxE, Gen2Phase2, 0, 0)
 	require.NoError(t, err)
 
-	assert.Equal(t, 0.0, result.Delays.CoaxCableLengthM)
-	assert.Equal(t, 0.0, result.Delays.CoaxCableDelayNs)
-	assert.Equal(t, result.Delays.TotalDelayNs, result.Delays.EndToEndDelayNs)
+	require.Equal(t, 0.0, result.Delays.CoaxCableLengthM)
+	require.Equal(t, 0.0, result.Delays.CoaxCableDelayNs)
+	require.Equal(t, result.Delays.TotalDelayNs, result.Delays.EndToEndDelayNs)
 }
 
 func TestComputeResultUnknownModel(t *testing.T) {
@@ -391,8 +390,8 @@ func TestComputeResultUnknownModel(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = ComputeResult(tor, peaks, "test", "PF000001", "UnknownModel", Gen2Phase2, 0, 0)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown receiver model")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unknown receiver model")
 }
 
 func TestComputeResultUnknownAntennaGen(t *testing.T) {
@@ -401,8 +400,8 @@ func TestComputeResultUnknownAntennaGen(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = ComputeResult(tor, peaks, "test", "PF000001", GNSSoF16RxE, "unknown-gen", 0, 0)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown antenna generation")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unknown antenna generation")
 }
 
 func TestComputeResultJSONRoundTrip(t *testing.T) {
@@ -419,17 +418,17 @@ func TestComputeResultJSONRoundTrip(t *testing.T) {
 	var decoded MeasurementResult
 	require.NoError(t, json.Unmarshal(data, &decoded))
 
-	assert.Equal(t, result.DeviceName, decoded.DeviceName)
-	assert.Equal(t, result.SerialNumber, decoded.SerialNumber)
-	assert.Equal(t, result.Model, decoded.Model)
-	assert.Equal(t, result.AntennaGen, decoded.AntennaGen)
-	assert.Equal(t, result.DateTime, decoded.DateTime)
-	assert.Equal(t, result.Settings.LaunchCableLengthM, decoded.Settings.LaunchCableLengthM)
-	assert.Equal(t, result.Settings.Wavelength, decoded.Settings.Wavelength)
-	assert.Equal(t, result.Settings.RefractiveIndex, decoded.Settings.RefractiveIndex)
-	assert.Len(t, decoded.Peaks, 4)
-	assert.InDelta(t, result.Delays.EndToEndDelayNs, decoded.Delays.EndToEndDelayNs, 0.001)
-	assert.Len(t, decoded.Trace, len(result.Trace))
+	require.Equal(t, result.DeviceName, decoded.DeviceName)
+	require.Equal(t, result.SerialNumber, decoded.SerialNumber)
+	require.Equal(t, result.Model, decoded.Model)
+	require.Equal(t, result.AntennaGen, decoded.AntennaGen)
+	require.Equal(t, result.DateTime, decoded.DateTime)
+	require.Equal(t, result.Settings.LaunchCableLengthM, decoded.Settings.LaunchCableLengthM)
+	require.Equal(t, result.Settings.Wavelength, decoded.Settings.Wavelength)
+	require.Equal(t, result.Settings.RefractiveIndex, decoded.Settings.RefractiveIndex)
+	require.Len(t, decoded.Peaks, 4)
+	require.InDelta(t, result.Delays.EndToEndDelayNs, decoded.Delays.EndToEndDelayNs, 0.001)
+	require.Len(t, decoded.Trace, len(result.Trace))
 }
 
 func TestAntennaElectricalDelayNs(t *testing.T) {
@@ -448,10 +447,10 @@ func TestAntennaElectricalDelayNs(t *testing.T) {
 		t.Run(string(tt.gen), func(t *testing.T) {
 			got, err := AntennaElectricalDelayNs(tt.gen)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.expected, got)
+				require.Equal(t, tt.expected, got)
 			}
 		})
 	}
@@ -471,10 +470,10 @@ func TestSMAPortOffsetNs(t *testing.T) {
 		t.Run(string(tt.model), func(t *testing.T) {
 			got, err := SMAPortOffsetNs(tt.model)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.expected, got)
+				require.Equal(t, tt.expected, got)
 			}
 		})
 	}
@@ -482,12 +481,12 @@ func TestSMAPortOffsetNs(t *testing.T) {
 
 func TestPeakDescriptions(t *testing.T) {
 	rxeDescs := PeakDescription(GNSSoF16RxE)
-	assert.Contains(t, rxeDescs["OA"], "FO Out")
-	assert.Contains(t, rxeDescs["OB"], "Q-ODC-12")
+	require.Contains(t, rxeDescs["OA"], "FO Out")
+	require.Contains(t, rxeDescs["OB"], "Q-ODC-12")
 
 	pofDescs := PeakDescription(GNSSPoF164RxE)
-	assert.Contains(t, pofDescs["OA"], "FO Out")
-	assert.Contains(t, pofDescs["OB"], "LC connector")
+	require.Contains(t, pofDescs["OA"], "FO Out")
+	require.Contains(t, pofDescs["OB"], "LC connector")
 }
 
 func TestGenerateSVG(t *testing.T) {
@@ -503,14 +502,14 @@ func TestGenerateSVG(t *testing.T) {
 	require.NoError(t, err)
 
 	svg := buf.String()
-	assert.True(t, strings.HasPrefix(svg, "<svg"))
-	assert.True(t, strings.HasSuffix(strings.TrimSpace(svg), "</svg>"))
+	require.True(t, strings.HasPrefix(svg, "<svg"))
+	require.True(t, strings.HasSuffix(strings.TrimSpace(svg), "</svg>"))
 
 	for _, p := range peaks {
-		assert.Contains(t, svg, p.Label)
+		require.Contains(t, svg, p.Label)
 	}
-	assert.Contains(t, svg, "gnss01.cln1")
-	assert.Contains(t, svg, "GNSSoF16-RxE")
+	require.Contains(t, svg, "gnss01.cln1")
+	require.Contains(t, svg, "GNSSoF16-RxE")
 }
 
 func TestGenerateSVGZoomed(t *testing.T) {
@@ -526,8 +525,8 @@ func TestGenerateSVGZoomed(t *testing.T) {
 	require.NoError(t, err)
 
 	svg := buf.String()
-	assert.Contains(t, svg, "first 50 ns")
-	assert.Contains(t, svg, "<svg")
+	require.Contains(t, svg, "first 50 ns")
+	require.Contains(t, svg, "<svg")
 }
 
 func TestGenerateSVGWindow(t *testing.T) {
@@ -543,27 +542,74 @@ func TestGenerateSVGWindow(t *testing.T) {
 	require.NoError(t, err)
 
 	svg := buf.String()
-	assert.Contains(t, svg, "100-150 ns")
-	assert.Contains(t, svg, "<svg")
+	require.Contains(t, svg, "100-150 ns")
+	require.Contains(t, svg, "<svg")
 }
 
 func TestGenerateSVGNilTOR(t *testing.T) {
 	var buf bytes.Buffer
 	err := GenerateSVG(nil, nil, &MeasurementResult{}, &buf)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestGenerateSVGNilResult(t *testing.T) {
 	tor := buildTestTOR()
 	var buf bytes.Buffer
 	err := GenerateSVG(tor, nil, nil, &buf)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestGenerateSVGEmptyDataPoints(t *testing.T) {
 	tor := &TORFile{RefractiveIndex: 1.4682}
 	var buf bytes.Buffer
 	err := GenerateSVG(tor, nil, &MeasurementResult{}, &buf)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no data points")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no data points")
+}
+
+func TestNiceTicksFloat(t *testing.T) {
+	tests := []struct {
+		name     string
+		lo, hi   float64
+		count    int
+		minTicks int
+	}{
+		{"zero range", 5.0, 5.0, 10, 1},
+		{"small range", 0, 10, 5, 2},
+		{"large range", 0, 1000, 10, 5},
+		{"negative range", -50, 50, 10, 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ticks := niceTicksFloat(tt.lo, tt.hi, tt.count)
+			require.GreaterOrEqual(t, len(ticks), tt.minTicks)
+			for i := 1; i < len(ticks); i++ {
+				require.Greater(t, ticks[i], ticks[i-1], "ticks must be strictly increasing")
+			}
+		})
+	}
+}
+
+func TestGenerateSVGDataPath(t *testing.T) {
+	tor := buildTestTOR()
+	peaks, err := DetectPeaks(tor, 0)
+	require.NoError(t, err)
+
+	result, err := ComputeResult(tor, peaks, "test", "PF000001", GNSSoF16RxE, Gen2Phase2, 0, 0)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	err = GenerateSVG(tor, peaks, result, &buf)
+	require.NoError(t, err)
+
+	svg := buf.String()
+	// Verify the trace path element exists
+	require.Contains(t, svg, `<path d="M`)
+	require.Contains(t, svg, `stroke="#2563eb"`)
+	// Verify axis labels
+	require.Contains(t, svg, "Time (ns)")
+	require.Contains(t, svg, "Amplitude (dB)")
+	// Verify info block
+	require.Contains(t, svg, "Resolution:")
+	require.Contains(t, svg, "Refractive Index:")
 }

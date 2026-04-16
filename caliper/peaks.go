@@ -41,11 +41,32 @@ type PeakGroup struct {
 	Prominence float64
 }
 
-// OB window: the back connector (Q-ODC-12 or FO In) is typically 11-13 ns
-// after OA. Peaks <10 ns after OA are internal tap splitters (~7 ns offset).
-// We search the 10-20 ns window after OA to find the real OB.
+// Peak detection parameters tuned for Luciol LOR-220 OTDR traces.
+// These values are specific to the LOR-220's resolution and signal
+// characteristics. They may need adjustment for other OTDR models.
 const (
+	// prominenceOuterRadius is the number of points on each side used to
+	// compute the local baseline median for prominence calculation.
+	prominenceOuterRadius = 50
+	// prominenceInnerRadius is the number of points on each side excluded
+	// from the baseline (the immediate neighborhood of the point under test).
+	prominenceInnerRadius = 5
+	// minProminenceDB is the minimum local prominence (in dB above local
+	// median) for a point to be considered part of a reflective peak group.
+	minProminenceDB = 0.3
+	// mergeGapM is the maximum distance in meters between two peak groups
+	// for them to be merged into a single group.
+	mergeGapM = 0.5
+	// cableEndDropDB is how far below the cable baseline median (in dB) the
+	// trace must fall to be considered the noise floor (end of cable).
+	cableEndDropDB = 10.0
+	// cableEndSustainedCount is the number of consecutive points below the
+	// drop threshold required to confirm the cable end.
+	cableEndSustainedCount = 10
+	// minOBOffsetNs is the minimum time offset (ns) after OA to search for OB.
+	// Peaks <10 ns after OA are internal tap splitters (~7 ns offset).
 	minOBOffsetNs = 10.0
+	// maxOBOffsetNs is the maximum time offset (ns) after OA to search for OB.
 	maxOBOffsetNs = 20.0
 )
 
@@ -73,10 +94,10 @@ func DetectPeaks(tor *TORFile, launchCableLengthM float64) ([]Peak, error) {
 	prominences := computeLocalProminence(tor.DataPoints)
 
 	// Find local maxima in the prominence signal
-	groups := findProminentGroups(tor.DataPoints, prominences, 0.3)
+	groups := findProminentGroups(tor.DataPoints, prominences, minProminenceDB)
 
-	// Merge groups that are very close together (within 0.5m)
-	groups = mergeCloseGroups(tor.DataPoints, groups, 0.5)
+	// Merge groups that are very close together
+	groups = mergeCloseGroups(tor.DataPoints, groups, mergeGapM)
 
 	// Filter out peaks within the launch cable region
 	if launchCableLengthM > 0 {
@@ -217,8 +238,8 @@ func findCableEnd(points []DataPoint, startDistM float64) float64 {
 	sort.Float64s(baselineAmps)
 	cableBaseline := baselineAmps[len(baselineAmps)/2]
 
-	const dropThresholdDB = 10.0
-	const sustainedCount = 10
+	const dropThresholdDB = cableEndDropDB
+	const sustainedCount = cableEndSustainedCount
 	threshold := cableBaseline - dropThresholdDB
 	consecutive := 0
 	for i := startIdx; i < len(points); i++ {
@@ -240,8 +261,8 @@ func computeLocalProminence(points []DataPoint) []float64 {
 	n := len(points)
 	prominences := make([]float64, n)
 
-	outerRadius := 50
-	innerRadius := 5
+	outerRadius := prominenceOuterRadius
+	innerRadius := prominenceInnerRadius
 
 	localAmps := make([]float64, 0, 2*outerRadius)
 	for i := range points {

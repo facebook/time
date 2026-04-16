@@ -19,6 +19,7 @@ package caliper
 import (
 	"fmt"
 	"math"
+	"time"
 )
 
 // AntennaGen represents antenna generation and phase
@@ -225,7 +226,7 @@ func ComputeResult(
 		Model:        model,
 		AntennaGen:   antennaGen,
 		TORFile:      tor.DateTime.Format("2006-01-02") + "_" + name + ".tor",
-		DateTime:     tor.DateTime.Format("2006-01-02T15:04:05Z"),
+		DateTime:     tor.DateTime.Format(time.RFC3339),
 		Settings: TORSettings{
 			Wavelength:             tor.Wavelength,
 			PulseWidth:             tor.PulseWidth,
