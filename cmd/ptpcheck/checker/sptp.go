@@ -17,6 +17,8 @@ limitations under the License.
 package checker
 
 import (
+	"maps"
+
 	"github.com/facebook/time/ptp/sptp/stats"
 
 	log "github.com/sirupsen/logrus"
@@ -59,12 +61,8 @@ func RunSPTP(address string) (*PTPCheckResult, error) {
 	if err != nil {
 		log.Warningf("couldn't get SPTP counters: %v", err)
 	} else {
-		for k, v := range tx {
-			result.PortStatsTX[k] = v
-		}
-		for k, v := range rx {
-			result.PortStatsRX[k] = v
-		}
+		maps.Copy(result.PortStatsTX, tx)
+		maps.Copy(result.PortStatsRX, rx)
 	}
 
 	return result, nil
