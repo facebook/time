@@ -65,7 +65,7 @@ func Timecards() ([]*Result, error) {
 		return nil, err
 	}
 
-	var results []*Result
+	results := make([]*Result, 0, len(addrs))
 	for _, addr := range addrs {
 		boardID, err := getDevlinkBoardID(addr)
 		if err != nil {
@@ -93,7 +93,7 @@ func findTimecardPCIAddrs(classPath string) ([]string, error) {
 		return nil, fmt.Errorf("no timecard class found at %s: %w", classPath, err)
 	}
 
-	var addrs []string
+	addrs := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		deviceLink := filepath.Join(classPath, entry.Name(), "device")
 		target, err := os.Readlink(deviceLink)
