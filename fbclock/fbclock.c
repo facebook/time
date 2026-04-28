@@ -332,7 +332,13 @@ int fbclock_calculate_time_v2(
       (double)(phc_time_ns - state->ingress_time_ns) / NANOSECONDS_IN_SECONDS;
 
   int64_t diff_ns = sysclock_time_now_ns - state->sysclock_time_ns;
-  phc_time_ns += diff_ns + diff_ns * state->coef_ppb / NANOSECONDS_IN_SECONDS;
+  // Cast divisor to int64_t so the division stays in signed arithmetic.
+  // NANOSECONDS_IN_SECONDS is uint64_t, which would otherwise convert the
+  // signed dividend to unsigned. When coef_ppb is negative the product is
+  // negative, and that conversion turns it into a value near 2^64, making
+  // the quotient ~2^64/1e9 ≈ 18.45 s instead of the intended small ns count.
+  phc_time_ns +=
+      diff_ns + diff_ns * state->coef_ppb / (int64_t)NANOSECONDS_IN_SECONDS;
 
   // UTC offset applied if time standard used is UTC (and not TAI)
   if (time_standard == FBCLOCK_UTC) {
