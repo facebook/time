@@ -663,6 +663,11 @@ func FuzzDecodePacket(f *testing.F) {
 				if ok {
 					return
 				}
+				// ignore Management with UnicastMasterTableNP TLV
+				_, ok = m.TLV.(*UnicastMasterTableNPTLV)
+				if ok {
+					return
+				}
 			case MessageSignaling:
 				m := packet.(*Signaling)
 				// ignore Signaling with PathTrace or AlternateTimeOffsetIndicator TLVs

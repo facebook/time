@@ -29,13 +29,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// buildTestTOR creates a synthetic TOR file with 4 clear reflective peaks.
+// buildTestTOR creates a synthetic TOR file with 4 reflective peaks shaped
+// like a real GNSS receiver trace: OA and OD are strong (FO Out connector and
+// antenna optical isolator), while OB and OC are subtle (Q-ODC-12 / LC / FC
+// APC connectors are designed to suppress back-reflection).
 func buildTestTOR() *TORFile {
 	ri := 1.4682
 	n := 2000
 
 	peakPositions := []float64{0.5, 3.0, 25.0, 26.5}
-	peakAmplitudes := []float64{15.0, 8.0, 10.0, 5.0}
+	peakAmplitudes := []float64{15.0, 3.0, 4.0, 12.0}
 
 	points := make([]DataPoint, n)
 	for i := range points {
@@ -223,7 +226,7 @@ func TestDetectPeaksTapSplitter(t *testing.T) {
 	n := 2000
 
 	peakPositions := []float64{0.5, 1.0, 3.0, 25.0, 26.5}
-	peakAmplitudes := []float64{15.0, 12.0, 8.0, 10.0, 5.0}
+	peakAmplitudes := []float64{15.0, 12.0, 3.0, 4.0, 12.0}
 
 	points := make([]DataPoint, n)
 	for i := range points {
@@ -261,7 +264,7 @@ func TestDetectPeaksLaunchCableFilter(t *testing.T) {
 
 	// Place a peak at 2.0m (within a 3m launch cable), then real peaks at 4.0, 7.0, 28.0, 29.5
 	peakPositions := []float64{2.0, 4.0, 7.0, 28.0, 29.5}
-	peakAmplitudes := []float64{15.0, 15.0, 8.0, 10.0, 5.0}
+	peakAmplitudes := []float64{15.0, 15.0, 3.0, 4.0, 12.0}
 
 	points := make([]DataPoint, n)
 	for i := range points {

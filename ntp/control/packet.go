@@ -35,9 +35,14 @@ const (
 func NormalizeData(data []byte) (map[string]string, error) {
 	result := map[string]string{}
 	pairs := strings.Split(string(data), ",")
+	malformed := 0
 	for _, pair := range pairs {
 		split := strings.Split(pair, "=")
 		if len(split) != 2 {
+			malformed++
+			if malformed > 10 {
+				return nil, fmt.Errorf("too many malformed k=v pairs (%d), aborting", malformed)
+			}
 			log.Printf("WARNING: Malformed packet, bad k=v pair '%s'", pair)
 			continue
 		}

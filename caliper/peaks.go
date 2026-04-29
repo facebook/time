@@ -57,33 +57,38 @@ const (
 	// mergeGapM is the maximum distance in meters between two peak groups
 	// for them to be merged into a single group.
 	mergeGapM = 0.5
-	// cableEndDropDB is how far below the cable baseline median (in dB) the
-	// trace must fall to be considered the noise floor (end of cable).
-	cableEndDropDB = 10.0
-	// cableEndSustainedCount is the number of consecutive points below the
-	// drop threshold required to confirm the cable end.
-	cableEndSustainedCount = 10
 	// minOBOffsetNs is the minimum time offset (ns) after OA to search for OB.
 	// Peaks <10 ns after OA are internal tap splitters (~7 ns offset).
 	minOBOffsetNs = 10.0
 	// maxOBOffsetNs is the maximum time offset (ns) after OA to search for OB.
 	maxOBOffsetNs = 20.0
+	// minOCOffsetNs is the minimum time offset (ns) before OD to search for OC.
+	// The lower bound prevents the search from capturing the rising edge of
+	// OD's reflection.
+	minOCOffsetNs = 2.0
+	// maxOCOffsetNs is the maximum time offset (ns) before OD to search for OC.
+	// The antenna-side connector is typically ~5 ns before the optical isolator;
+	// 10 ns provides margin for variations in antenna geometry.
+	maxOCOffsetNs = 10.0
 )
 
 // DetectPeaks finds the 4 reflective peaks (OA, OB, OC, OD) in the OTDR trace.
-// It uses local prominence detection: for each point, it compares the amplitude
-// against a local baseline computed from surrounding points. This catches both
-// strong reflections (connectors) and subtle bumps (e.g. Q-ODC-12 connectors).
+//
+// OA is found via local prominence detection (it is a strong reflection from
+// the FO Out connector). OB, OC, OD are found by searching for the
+// highest-amplitude raw data point inside fixed time windows, because the
+// connectors at OB and OC can produce subtle reflections (e.g. Q-ODC-12 and
+// FC APC) that don't exceed the prominence threshold.
+//
+// OD is anchored to the strongest reflection past OB (the antenna optical
+// isolator), and OC is then located in a small window before OD. This avoids
+// any reliance on cable-end detection and prevents post-OD saturation noise
+// from being mistaken for a peak.
 //
 // launchCableLengthM specifies the length of the launch cable in meters. Any
 // peaks within this distance from the start of the trace are ignored, as they
 // are reflections from the launch cable connectors rather than the system under
 // test. Use 0 if no launch cable is present.
-//
-// OA, OC, OD are found via top-prominence selection (they produce strong
-// reflections). OB is found by searching for the highest-amplitude raw data
-// point in the 10-20 ns window after OA, because the Q-ODC-12 connector can
-// produce a very subtle bump that doesn't exceed the prominence threshold.
 func DetectPeaks(tor *TORFile, launchCableLengthM float64) ([]Peak, error) {
 	n := len(tor.DataPoints)
 	if n < 10 {
@@ -126,48 +131,34 @@ func DetectPeaks(tor *TORFile, launchCableLengthM float64) ([]Peak, error) {
 	oaTimeNs := oa.PeakDistM * ri / SpeedOfLight * 1e9
 
 	// OB: search raw data points in the 10-20 ns window after OA for the
-	// highest amplitude point. The Q-ODC-12 connector can produce a very
-	// subtle reflection that doesn't exceed the prominence threshold.
+	// highest amplitude point. The Q-ODC-12 and LC connectors can produce a
+	// very subtle reflection that doesn't exceed the prominence threshold.
 	obGroup, err := findOBInWindow(tor.DataPoints, oaTimeNs, ri)
 	if err != nil {
 		return nil, err
 	}
-
-	// Determine end-of-cable: find where the trace amplitude drops to the
-	// noise floor. The cable section (between OB and the cable end) has a
-	// characteristic amplitude around -30 to -50 dB with gradual loss. After
-	// the cable ends the amplitude drops sharply. We detect this by computing
-	// the median amplitude of the cable section, then finding where the
-	// amplitude drops more than 10 dB below that median for a sustained run.
 	obMaxDistM := (oaTimeNs + maxOBOffsetNs) * SpeedOfLight / (ri * 1e9)
-	cableEndDistM := findCableEnd(tor.DataPoints, obMaxDistM)
 
-	// OC and OD: the two most prominent peaks after OB but before the cable
-	// end. Cable-end filtering prevents post-cable noise from being selected,
-	// while prominence ranking ensures we pick the real connector reflections
-	// rather than minor noise between OB and OC.
-	var afterOB []PeakGroup
-	for _, g := range groups {
-		if g.PeakDistM > obMaxDistM && g.PeakDistM <= cableEndDistM {
-			afterOB = append(afterOB, g)
-		}
+	// OD: the antenna optical isolator. It is always the strongest reflection
+	// past OB, so we find it as the highest-amplitude raw data point after the
+	// OB window. Anchoring on amplitude (not prominence) prevents post-OD
+	// saturation noise from competing.
+	odGroup, err := findODAfter(tor.DataPoints, obMaxDistM)
+	if err != nil {
+		return nil, err
 	}
-	if len(afterOB) < 2 {
-		return nil, fmt.Errorf(
-			"expected at least 2 prominent peaks after OB (before cable end at %.1f m) but found %d",
-			cableEndDistM, len(afterOB),
-		)
-	}
-	sort.Slice(afterOB, func(i, j int) bool {
-		return afterOB[i].Prominence > afterOB[j].Prominence
-	})
-	ocod := afterOB[:2]
-	// Re-sort OC/OD by distance so OC < OD
-	sort.Slice(ocod, func(i, j int) bool {
-		return ocod[i].PeakDistM < ocod[j].PeakDistM
-	})
+	odTimeNs := odGroup.PeakDistM * ri / SpeedOfLight * 1e9
 
-	selected := []PeakGroup{oa, obGroup, ocod[0], ocod[1]}
+	// OC: the antenna-side connector (Q-ODC-12 or FC APC). These connectors
+	// are intentionally low-reflection so they produce only a subtle bump
+	// shortly before OD. We find OC as the highest-amplitude raw data point
+	// in a small window before OD.
+	ocGroup, err := findOCInWindow(tor.DataPoints, odTimeNs, ri)
+	if err != nil {
+		return nil, err
+	}
+
+	selected := []PeakGroup{oa, obGroup, ocGroup, odGroup}
 	labels := []string{"OA", "OB", "OC", "OD"}
 	peaks := make([]Peak, 4)
 	for i, g := range selected {
@@ -220,40 +211,68 @@ func findOBInWindow(points []DataPoint, oaTimeNs, ri float64) (PeakGroup, error)
 	}, nil
 }
 
-// findCableEnd finds the distance where the OTDR trace drops to the noise floor,
-// indicating the physical end of the fiber cable.
-func findCableEnd(points []DataPoint, startDistM float64) float64 {
+// findODAfter finds the highest-amplitude raw data point past the OB window.
+// The antenna optical isolator produces the strongest reflection in the OTDR
+// trace beyond OB, so its position is the global amplitude maximum.
+func findODAfter(points []DataPoint, obMaxDistM float64) (PeakGroup, error) {
 	startIdx := sort.Search(len(points), func(i int) bool {
-		return points[i].DistanceM >= startDistM
+		return points[i].DistanceM > obMaxDistM
 	})
-	if startIdx >= len(points) {
-		return points[len(points)-1].DistanceM
-	}
-
-	baselineEnd := min(startIdx+50, len(points))
-	baselineAmps := make([]float64, baselineEnd-startIdx)
-	for i := startIdx; i < baselineEnd; i++ {
-		baselineAmps[i-startIdx] = points[i].AmplitudeDB
-	}
-	sort.Float64s(baselineAmps)
-	cableBaseline := baselineAmps[len(baselineAmps)/2]
-
-	const dropThresholdDB = cableEndDropDB
-	const sustainedCount = cableEndSustainedCount
-	threshold := cableBaseline - dropThresholdDB
-	consecutive := 0
+	bestIdx := -1
+	bestAmp := math.Inf(-1)
 	for i := startIdx; i < len(points); i++ {
-		if points[i].AmplitudeDB < threshold {
-			consecutive++
-			if consecutive >= sustainedCount {
-				return points[i-sustainedCount+1].DistanceM
-			}
-		} else {
-			consecutive = 0
+		if points[i].AmplitudeDB > bestAmp {
+			bestAmp = points[i].AmplitudeDB
+			bestIdx = i
 		}
 	}
+	if bestIdx == -1 {
+		return PeakGroup{}, fmt.Errorf("no data point found past OB window (>%.1f m)", obMaxDistM)
+	}
+	return PeakGroup{
+		StartIdx:  bestIdx,
+		EndIdx:    bestIdx,
+		PeakIdx:   bestIdx,
+		PeakDistM: points[bestIdx].DistanceM,
+		PeakAmpDB: points[bestIdx].AmplitudeDB,
+	}, nil
+}
 
-	return points[len(points)-1].DistanceM
+// findOCInWindow finds the highest-amplitude raw data point in the OC window
+// (minOCOffsetNs to maxOCOffsetNs before OD). Searches raw data points rather
+// than prominent groups because the antenna-side connector can produce a very
+// subtle reflection that doesn't exceed the prominence threshold.
+func findOCInWindow(points []DataPoint, odTimeNs, ri float64) (PeakGroup, error) {
+	minDistM := (odTimeNs - maxOCOffsetNs) * SpeedOfLight / (ri * 1e9)
+	maxDistM := (odTimeNs - minOCOffsetNs) * SpeedOfLight / (ri * 1e9)
+	bestIdx := -1
+	bestAmp := math.Inf(-1)
+	startIdx := sort.Search(len(points), func(i int) bool {
+		return points[i].DistanceM >= minDistM
+	})
+	for i := startIdx; i < len(points); i++ {
+		dp := points[i]
+		if dp.DistanceM > maxDistM {
+			break
+		}
+		if dp.AmplitudeDB > bestAmp {
+			bestAmp = dp.AmplitudeDB
+			bestIdx = i
+		}
+	}
+	if bestIdx == -1 {
+		return PeakGroup{}, fmt.Errorf(
+			"no data point found in OC window (%.0f-%.0f ns before OD)",
+			minOCOffsetNs, maxOCOffsetNs,
+		)
+	}
+	return PeakGroup{
+		StartIdx:  bestIdx,
+		EndIdx:    bestIdx,
+		PeakIdx:   bestIdx,
+		PeakDistM: points[bestIdx].DistanceM,
+		PeakAmpDB: points[bestIdx].AmplitudeDB,
+	}, nil
 }
 
 // computeLocalProminence computes how far above the local baseline each point is.
