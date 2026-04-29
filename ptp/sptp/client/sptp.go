@@ -240,6 +240,10 @@ func (p *SPTP) ptping(sourceIP netip.Addr, sourcePort int, response []byte, rxtx
 // handlePDelayReq responds to a Pdelay_Req message with Pdelay_Resp and Pdelay_Resp_Follow_Up
 // This implements the responder side of peer delay measurement for in-rack linearizability checks
 func (p *SPTP) handlePDelayReq(econn UDPConnWithTS, buf []byte, addr unix.Sockaddr, rxts time.Time) error {
+	if rxts.IsZero() {
+		return fmt.Errorf("no receive timestamp on Pdelay_Req")
+	}
+
 	req := &ptp.PDelayReq{}
 	if err := ptp.FromBytes(buf, req); err != nil {
 		return fmt.Errorf("parsing Pdelay_Req: %w", err)
@@ -339,6 +343,16 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 				for {
 					bbuf, addr, rxtx, err := econn.ReadPacketWithRXTimestampBuf(buf, oob)
 					if err != nil {
+						// If we received packet data but failed to get a timestamp,
+						// check if it's a PDelay_Req we can safely skip.
+						// PDelay is optional monitoring — don't crash the daemon for it.
+						if errors.Is(err, timestamp.ErrNoTimestamp) {
+							if msgType, probeErr := ptp.ProbeMsgType(buf[:bbuf]); probeErr == nil && msgType == ptp.MessagePDelayReq {
+								ip := timestamp.SockaddrToAddr(addr)
+								log.Warningf("[%s] received Pdelay_Req without timestamp, skipping: %v", ip, err)
+								continue
+							}
+						}
 						doneChan <- err
 						return
 					}

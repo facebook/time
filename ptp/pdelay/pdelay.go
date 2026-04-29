@@ -44,8 +44,6 @@ import (
 
 // Result represents the result of a peer delay measurement
 type Result struct {
-	// Requester is the initiator of the measurement (local host name)
-	Requester string
 	// Responder is the target of the measurement (remote host)
 	Responder netip.Addr
 	// T1 is the Pdelay_Req departure time at requester
@@ -60,8 +58,6 @@ type Result struct {
 	CorrectionFieldReq time.Duration
 	// CorrectionFieldResp is the CF from PDelay_Resp_Follow_Up (response path: responder→requester)
 	CorrectionFieldResp time.Duration
-	// RequesterGM is the best GM identity of the requester
-	RequesterGM string
 	// Timestamp is when this measurement was taken
 	Timestamp time.Time
 	// Error contains any error that occurred during measurement

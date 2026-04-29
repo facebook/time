@@ -839,6 +839,31 @@ func TestHandlePDelayReqParseError(t *testing.T) {
 	require.Contains(t, err.Error(), "parsing Pdelay_Req")
 }
 
+func TestHandlePDelayReqNoTimestamp(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+
+	clockID := ptp.ClockIdentity(0x123456789abcdef0)
+	p := &SPTP{
+		clockID: clockID,
+	}
+
+	// Build a valid PDelayReq
+	reqClockID := ptp.ClockIdentity(0xfedcba9876543210)
+	req := ptp.ReqPDelay(reqClockID, 1, 42)
+	reqBytes, err := ptp.Bytes(req)
+	require.NoError(t, err)
+
+	addr := &unix.SockaddrInet4{Addr: [4]byte{192, 168, 0, 10}, Port: 319}
+
+	// Pass zero timestamp — should be rejected before any response is sent
+	err = p.handlePDelayReq(mockEventConn, reqBytes, addr, time.Time{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no receive timestamp")
+	// No WriteToWithTS calls expected — mock will fail if any are made
+}
+
 func TestHandlePDelayReqSuccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

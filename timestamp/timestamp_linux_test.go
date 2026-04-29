@@ -279,7 +279,7 @@ func TestSocketControlMessageTimestampFail(t *testing.T) {
 	}
 
 	_, err := socketControlMessageTimestamp(make([]byte, 16), 16)
-	require.ErrorIs(t, errNoTimestamp, err)
+	require.ErrorIs(t, ErrNoTimestamp, err)
 }
 
 func TestReadPacketWithRXTimestamp(t *testing.T) {

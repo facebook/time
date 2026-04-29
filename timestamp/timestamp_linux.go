@@ -33,7 +33,8 @@ var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
 
 var timestamping = unix.SO_TIMESTAMPING_NEW
 
-var errNoTimestamp = errors.New("failed to find timestamp in socket control message")
+// ErrNoTimestamp is returned when no timestamp is found in the socket control message
+var ErrNoTimestamp = errors.New("failed to find timestamp in socket control message")
 
 func init() {
 	// if kernel is older than 5, it doesn't support unix.SO_TIMESTAMPING_NEW
@@ -275,7 +276,7 @@ func socketControlMessageTimestamp(b []byte, boob int) (time.Time, error) {
 			return scmDataToTime(b[i+socketControlMessageHeaderOffset : i+mlen])
 		}
 	}
-	return time.Time{}, errNoTimestamp
+	return time.Time{}, ErrNoTimestamp
 }
 
 // socketControlMessageDrops parses SocketControlMessage for drops count
@@ -311,24 +312,24 @@ func socketControlMessageSeqIDTimestamp(b []byte, tboob int, seqID uint32) (time
 		if h.Level == unix.SOL_SOCKET && int(h.Type) == unix.SO_TIMESTAMPING_NEW {
 			tstamp, err = scmDataToTime(b[i+socketControlMessageHeaderOffset : i+mlen])
 			if err != nil {
-				return time.Time{}, errNoTimestamp
+				return time.Time{}, ErrNoTimestamp
 			}
 		}
 		if h.Level == unix.SOL_IPV6 && int(h.Type) == unix.IPV6_RECVERR ||
 			h.Level == unix.SOL_IP && int(h.Type) == unix.IP_RECVERR {
 			cseq, err = scmDataToSeqID(b[i+socketControlMessageHeaderOffset : i+mlen])
 			if err != nil {
-				return time.Time{}, errNoTimestamp
+				return time.Time{}, ErrNoTimestamp
 			}
 		}
 	}
 	if tstamp.IsZero() {
-		return time.Time{}, errNoTimestamp
+		return time.Time{}, ErrNoTimestamp
 	}
 	if cseq == seqID {
 		return tstamp, nil
 	}
-	return time.Time{}, errNoTimestamp
+	return time.Time{}, ErrNoTimestamp
 }
 
 // ReadTXtimestampBuf returns HW TX timestamp, needs to be provided 2 buffers which all can be re-used after ReadTXtimestampBuf finishes.
