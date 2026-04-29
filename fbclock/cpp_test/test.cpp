@@ -337,14 +337,56 @@ TEST(fbclockTest, test_fbclock_calculate_time_v2) {
   EXPECT_EQ(truetime.earliest_ns, 1647269091803103338);
   EXPECT_EQ(truetime.latest_ns, 1647269091803104576);
 
-  // WOU is very big
+  // WOU is very big — PHC has been free-running for 6h since last GM sync.
+  // We keep the cached daemon snapshot fresh (sysclock advanced together with
+  // phc), so we exercise the holdover term, not extrapolation.
   error_bound = 1000.0;
-  sysclock_time_ns += 6 * 3600 * 1000000000ULL; // + 6 hours
+  int64_t sixHoursNS = 6 * 3600 * 1000000000LL;
+  state.phc_time_ns += sixHoursNS;
+  state.sysclock_time_ns += sixHoursNS;
   err = fbclock_calculate_time_v2(
-      error_bound, h_value, &state, sysclock_time_ns, &truetime, FBCLOCK_TAI);
+      error_bound,
+      h_value,
+      &state,
+      state.sysclock_time_ns + 1000,
+      &truetime,
+      FBCLOCK_TAI);
   ASSERT_EQ(err, 0);
-  EXPECT_EQ(truetime.earliest_ns, 1647290691803360710);
-  EXPECT_EQ(truetime.latest_ns, 1647290691803363604);
+  EXPECT_EQ(truetime.earliest_ns, 1647290691802011710);
+  EXPECT_EQ(truetime.latest_ns, 1647290691804196204);
+}
+
+TEST(fbclockTest, test_fbclock_calculate_time_v2_stale_data) {
+  fbclock_truetime truetime;
+  fbclock_clockdata_v2 state = {
+      .ingress_time_ns = 1647269082943150996,
+      .clockId = CLOCK_MONOTONIC_RAW,
+      .phc_time_ns = 1647269091803102957,
+      .sysclock_time_ns = 1000000000, // 1s on the sysclock
+      .coef_ppb = 0,
+  };
+  double error_bound = 172.0;
+  double h_value = 50.5;
+
+  // sysclock has advanced 0.5s since the cached snapshot — within bound, OK.
+  int err = fbclock_calculate_time_v2(
+      error_bound, h_value, &state, 1500000000, &truetime, FBCLOCK_TAI);
+  EXPECT_EQ(err, FBCLOCK_E_NO_ERROR);
+
+  // sysclock has advanced past the 1s extrapolation cap — refuse.
+  err = fbclock_calculate_time_v2(
+      error_bound,
+      h_value,
+      &state,
+      1000000000 + FBCLOCK_MAX_EXTRAPOLATION_NS + 1,
+      &truetime,
+      FBCLOCK_TAI);
+  EXPECT_EQ(err, FBCLOCK_E_DATA_STALE);
+
+  // sysclock went backwards (clock-source mismatch or stale snapshot) — refuse.
+  err = fbclock_calculate_time_v2(
+      error_bound, h_value, &state, 999999999, &truetime, FBCLOCK_TAI);
+  EXPECT_EQ(err, FBCLOCK_E_DATA_STALE);
 }
 
 TEST(fbclockTest, test_fbclock_apply_smear_after_2017_leap_second) {

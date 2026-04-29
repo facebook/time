@@ -332,7 +332,12 @@ int fbclock_calculate_time_v2(
       (double)(phc_time_ns - state->ingress_time_ns) / NANOSECONDS_IN_SECONDS;
 
   int64_t diff_ns = sysclock_time_now_ns - state->sysclock_time_ns;
-  // Cast divisor to int64_t so the division stays in signed arithmetic.
+  // Refuse to extrapolate past a sane bound, or backwards in time. Either case
+  // means the daemon stopped updating shared memory or there's a clock-source
+  // mismatch, so the extrapolated PHC time would have unbounded error.
+  if (diff_ns < 0 || diff_ns > FBCLOCK_MAX_EXTRAPOLATION_NS) {
+    return FBCLOCK_E_DATA_STALE;
+  }
   // NANOSECONDS_IN_SECONDS is uint64_t, which would otherwise convert the
   // signed dividend to unsigned. When coef_ppb is negative the product is
   // negative, and that conversion turns it into a value near 2^64, making
@@ -567,6 +572,9 @@ const char* fbclock_strerror(int err_code) {
       break;
     case FBCLOCK_E_CRC_MISMATCH:
       err_info = "CRC check failed all tries";
+      break;
+    case FBCLOCK_E_DATA_STALE:
+      err_info = "shared memory data too old to extrapolate";
       break;
     case FBCLOCK_E_NO_ERROR:
       err_info = "no error";

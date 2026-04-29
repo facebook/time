@@ -36,11 +36,17 @@ typedef atomic_uint_fast64_t atomic_uint64;
 #define FBCLOCK_E_WOU_TOO_BIG -6
 #define FBCLOCK_E_PHC_IN_THE_PAST -7
 #define FBCLOCK_E_CRC_MISMATCH -8
+#define FBCLOCK_E_DATA_STALE -9
 
 // Fixed UTC-TAI offset - used when data not present in shared memory
 #define UTC_TAI_OFFSET_NS (int64_t)(-37e9)
 // Smear step size - smear clock by 1ns every 65us
 #define SMEAR_STEP_NS (int64_t)(65e3)
+// Maximum gap (ns) between cached daemon sysclock sample and current sysclock
+// before the V2 client refuses to extrapolate. Daemon updates every 10 ms; this
+// is a 100x failsafe — if the daemon is dead or the snapshot is corrupt,
+// extrapolation error is unbounded so we'd rather return an error.
+#define FBCLOCK_MAX_EXTRAPOLATION_NS (int64_t)(1000000000)
 
 #ifdef __cplusplus
 extern "C" {

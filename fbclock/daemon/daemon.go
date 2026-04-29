@@ -114,8 +114,10 @@ type Daemon struct {
 	l     Logger
 
 	// function to get PHC time from configured PHC device
-	getPHCTime       func() (time.Time, error)
-	getPHCAndSysTime func() (time.Time, time.Time, uint32, error)
+	getPHCTime func() (time.Time, error)
+	// getPHCAndSysTime returns PHC time, system time, system clock id, and the
+	// PHC↔sys round-trip delay observed during the read (uncertainty bound).
+	getPHCAndSysTime func() (time.Time, time.Time, uint32, time.Duration, error)
 	// function to get PHC freq from configured PHC device
 	getPHCFreqPPB func() (float64, error)
 }
@@ -216,15 +218,13 @@ func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
 
 	// function to get time from phc
 	s.getPHCTime = func() (time.Time, error) { return dev.Time() }
-	s.getPHCAndSysTime = func() (time.Time, time.Time, uint32, error) {
+	s.getPHCAndSysTime = func() (time.Time, time.Time, uint32, time.Duration, error) {
 		data, err := dev.ReadSysoffExtended()
 		if err != nil {
-			return time.Time{}, time.Time{}, 0, err
+			return time.Time{}, time.Time{}, 0, 0, err
 		}
 		best := data.BestSample()
-		phcTime := best.PHCTime
-		monoTime := best.SysTime
-		return phcTime, monoTime, uint32(best.SysClockID), nil //nolint:gosec
+		return best.PHCTime, best.SysTime, uint32(best.SysClockID), best.Delay, nil //nolint:gosec
 	}
 	s.getPHCFreqPPB = func() (float64, error) { return dev.FreqPPB() }
 	// calculated values
@@ -281,7 +281,7 @@ func (s *Daemon) calcW() (float64, error) {
 		return 0, fmt.Errorf("%w getting W: want %d, got %d", errNotEnoughData, s.cfg.RingSize, len(ms))
 	}
 
-	parameters := map[string]interface{}{
+	parameters := map[string]any{
 		"m": ms,
 	}
 	logSample.MeasurementMeanNS = mean(ms)
@@ -436,7 +436,7 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 	for ; true; <-ticker.C { // first run without delay, then at interval
 		eg := new(errgroup.Group)
 		currentResults := map[string]linearizability.TestResult{}
-		targets, err := s.DataFetcher.FetchGMs(s.cfg)
+		targets, err := s.FetchGMs(s.cfg)
 		if err != nil {
 			log.Errorf("getting linearizability test targets: %v", err)
 			if len(oldTargets) > 0 {
@@ -456,7 +456,6 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 		}
 
 		for _, server := range targets {
-			server := server
 			log.Debugf("talking to %s", server)
 			lt, found := testers[server]
 			if !found {
@@ -532,15 +531,20 @@ func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 			// we need a copy of the latest v1 data to fill in parts of v2 data
 			// the pointer dereference is needed to avoid partial reads of the data
 			curData := *s.state.lastStoredData
-			phcTime, sysTime, clockID, err := s.getPHCAndSysTime()
+			phcTime, sysTime, clockID, phcReadDelay, err := s.getPHCAndSysTime()
 			if err != nil {
 				log.Errorf("reading PHC time from %s: %v", s.cfg.Iface, err)
 				s.stats.UpdateCounterBy("phc_read_error", 1)
 				continue
 			}
+			// Fold the PHC↔sys read delay into ErrorBoundNS. V2 clients don't
+			// read the PHC themselves; they extrapolate from this snapshot, so
+			// the daemon-side read uncertainty must be accounted for here
+			// (mirroring V1's min_phc_delay). Delay is measured between two
+			// CLOCK_MONOTONIC_RAW reads so it's non-negative by construction.
 			dataV2 := fbclock.DataV2{
 				IngressTimeNS:        curData.IngressTimeNS,
-				ErrorBoundNS:         curData.ErrorBoundNS,
+				ErrorBoundNS:         curData.ErrorBoundNS + uint64(phcReadDelay.Nanoseconds()), //nolint:gosec
 				HoldoverMultiplierNS: curData.HoldoverMultiplierNS,
 				SmearingStartS:       curData.SmearingStartS,
 				UTCOffsetPreS:        int16(curData.UTCOffsetPreS),  //nolint:gosec
@@ -586,7 +590,7 @@ func (s *Daemon) Run(ctx context.Context) error {
 	ticker := time.NewTicker(s.cfg.Interval)
 	defer ticker.Stop()
 	for ; true; <-ticker.C { // first run without delay, then at interval
-		data, err := s.DataFetcher.FetchStats(s.cfg)
+		data, err := s.FetchStats(s.cfg)
 		if err != nil {
 			log.Error(err)
 			s.stats.UpdateCounterBy("data_error", 1)
