@@ -253,3 +253,16 @@ filtdisp= 0.00 1.95 3.87 5.79 7.79 9.78 11.72 13.71
 		_, _ = NormalizeData(input)
 	})
 }
+
+// TestNormalizeDataManyMalformedPairs verifies NormalizeData returns early
+// on input with excessive malformed k=v pairs instead of looping indefinitely.
+func TestNormalizeDataManyMalformedPairs(t *testing.T) {
+	// 10000 commas = 10001 empty pairs, previously caused a timeout
+	input := make([]byte, 10000)
+	for i := range input {
+		input[i] = ','
+	}
+	_, err := NormalizeData(input)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "too many malformed")
+}
