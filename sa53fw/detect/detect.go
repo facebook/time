@@ -36,9 +36,9 @@ const (
 	VendorUnknown = "unknown"
 
 	// oroliaBoardID is the fixed board.id for Orolia time cards
-	oroliaBoardID = "R4006G000103"
+	oroliaBoardID = "1003066C00"
 	// celesticaBoardID is the fixed board.id for Celestica time cards
-	celesticaBoardID = "1003066C00"
+	celesticaBoardID = "R4006G000103"
 
 	// sysfs path for timecard class devices
 	timecardClassPath = "/sys/class/timecard"

@@ -22,6 +22,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/facebook/time/sa53fw/detect"
@@ -51,6 +53,21 @@ type checkResult struct {
 	Firmware string `json:"firmware"`
 }
 
+// detectMACSerial reads the MAC serial port device name from sysfs.
+// Returns the full device path (e.g. "/dev/ttyS5") or an error if detection fails.
+func detectMACSerial() (string, error) {
+	const ttyMACPath = "/sys/class/timecard/ocp0/tty/ttyMAC"
+	data, err := os.ReadFile(ttyMACPath)
+	if err != nil {
+		return "", fmt.Errorf("cannot read %s: %w", ttyMACPath, err)
+	}
+	ttyName := strings.TrimSpace(string(data))
+	if ttyName == "" {
+		return "", fmt.Errorf("empty tty device name in %s", ttyMACPath)
+	}
+	return filepath.Join("/dev", ttyName), nil
+}
+
 func main() {
 	var serialPort, fwFile string
 	var upgrade, force, check bool
@@ -61,6 +78,21 @@ func main() {
 	flag.BoolVar(&force, "force", false, "Force firmware upgrade")
 	flag.BoolVar(&check, "check", false, "Check firmware version only (JSON output)")
 	flag.Parse()
+
+	// Try to auto-detect serial port from sysfs, only if user didn't explicitly set -serial
+	serialFlagSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "serial" {
+			serialFlagSet = true
+		}
+	})
+	if !serialFlagSet {
+		if detected, err := detectMACSerial(); err == nil {
+			serialPort = detected
+		} else {
+			fmt.Println(warnString, "MAC serial auto-detect failed:", err)
+		}
+	}
 
 	// detect all time card vendors via devlink
 	cards, err := detect.Timecards()

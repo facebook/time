@@ -26,11 +26,11 @@ import (
 )
 
 func TestClassifyVendorOrolia(t *testing.T) {
-	require.Equal(t, VendorOrolia, classifyVendor("R4006G000103"))
+	require.Equal(t, VendorOrolia, classifyVendor("1003066C00"))
 }
 
 func TestClassifyVendorCelestica(t *testing.T) {
-	require.Equal(t, VendorCelestica, classifyVendor("1003066C00"))
+	require.Equal(t, VendorCelestica, classifyVendor("R4006G000103"))
 }
 
 func TestClassifyVendorUnknown(t *testing.T) {
@@ -120,10 +120,10 @@ func TestFindTimecardPCIAddrsNoClass(t *testing.T) {
 }
 
 func TestResultIsSA5x(t *testing.T) {
-	celestica := &Result{Vendor: VendorCelestica, BoardID: "1003066C00", PCIAddr: "0000:11:00.0"}
+	celestica := &Result{Vendor: VendorCelestica, BoardID: "R4006G000103", PCIAddr: "0000:11:00.0"}
 	require.True(t, celestica.IsSA5x())
 
-	orolia := &Result{Vendor: VendorOrolia, BoardID: "R4006G000103", PCIAddr: "0000:11:00.0"}
+	orolia := &Result{Vendor: VendorOrolia, BoardID: "1003066C00", PCIAddr: "0000:11:00.0"}
 	require.False(t, orolia.IsSA5x())
 
 	unknown := &Result{Vendor: VendorUnknown, BoardID: "", PCIAddr: ""}

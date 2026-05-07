@@ -56,7 +56,7 @@ func Init(device string) (*Mac, error) {
 
 	port, err := serial.Open(device, mode)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot open serial port %s: %w", device, err)
 	}
 
 	m := &Mac{
@@ -77,7 +77,7 @@ func (m *Mac) parseMacFirmware(fw string) error {
 	// We care about CPU version only
 	n, err := fmt.Sscanf(fw, "[=V%d.%d.%d.0.%8s", &m.fwMajor, &m.fwMinor, &m.fwPatch, &m.fwCommit)
 	if n != 4 {
-		return fmt.Errorf("wrong firmware version format: %s, %d", fw, n)
+		return fmt.Errorf("wrong firmware version format: got %q (parsed %d/4 fields, expected '[=Vx.x.x.0.XXXXXXXX,Vy.y]')", fw, n)
 	}
 	return err
 }
