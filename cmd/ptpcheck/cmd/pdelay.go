@@ -129,6 +129,37 @@ func RunPeriodicProbe(ctx context.Context, cfg ProbeConfig) error {
 	}
 }
 
+// selectNonLinkLocalAddr returns the first global unicast IPv6 address from addrs.
+// Returns error if no suitable address is found.
+func selectNonLinkLocalAddr(addrs []net.Addr) (net.IP, error) {
+	for _, a := range addrs {
+		ipNet, ok := a.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		ip := ipNet.IP
+		if ip.To4() != nil {
+			continue
+		}
+		if ip.IsLinkLocalUnicast() {
+			continue
+		}
+		if ip.IsGlobalUnicast() {
+			return ip, nil
+		}
+	}
+	return nil, fmt.Errorf("no global unicast IPv6 address found")
+}
+
+// getNonLinkLocalAddr returns a global unicast IPv6 address for the given interface.
+func getNonLinkLocalAddr(iface *net.Interface) (net.IP, error) {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return nil, fmt.Errorf("getting addresses for %s: %w", iface.Name, err)
+	}
+	return selectNonLinkLocalAddr(addrs)
+}
+
 // pdelaySequence is the sequence counter for PDelay_Req messages
 var pdelaySequence uint16
 
@@ -155,8 +186,14 @@ func runMulticastProbe(cfg ProbeConfig) ([]*pdelay.Result, error) {
 		return nil, fmt.Errorf("creating clock identity: %w", err)
 	}
 
+	// Select source address
+	srcIP, err := getNonLinkLocalAddr(iface)
+	if err != nil {
+		return nil, fmt.Errorf("finding source address on %s: %w", cfg.Iface, err)
+	}
+
 	// Create connection for sending/receiving
-	conn, err := client.NewUDPConnTS(nil, 0, ts, iface, cfg.Dscp)
+	conn, err := client.NewUDPConnTS(srcIP, 0, ts, iface, cfg.Dscp)
 	if err != nil {
 		return nil, fmt.Errorf("creating UDP connection: %w", err)
 	}
@@ -174,7 +211,7 @@ func runMulticastProbe(cfg ProbeConfig) ([]*pdelay.Result, error) {
 		return nil, fmt.Errorf("marshaling PDelay_Req: %w", err)
 	}
 
-	// Add zone to multicast address for link-local scope
+	// Send to IPv6 multicast address
 	multicastAddr := netip.MustParseAddr(ptp.PDelayMulticastIPv6).WithZone(cfg.Iface)
 	targetAddr := timestamp.AddrToSockaddr(multicastAddr, ptp.PortEvent)
 
@@ -328,7 +365,7 @@ var pdelayCmd = &cobra.Command{
 	Long: `Run periodic peer delay measurements against all hosts in the same rack.
 
 This command sends PDelay_Req messages to the PTP peer delay multicast address
-(ff02::6b for IPv6, 224.0.0.107 for IPv4) as per IEEE 1588. All SPTP clients
+(ff02::6b) as per IEEE 1588. All SPTP clients
 in the same L2 domain (rack) that have joined the multicast group will receive
 the request and respond.
 
