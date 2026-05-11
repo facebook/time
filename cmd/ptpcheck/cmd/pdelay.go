@@ -53,6 +53,7 @@ var (
 	pdelayDscpf     int
 	pdelayTimeoutf  time.Duration
 	pdelayTsf       string
+	pdelayIPv4f     bool
 )
 
 func init() {
@@ -63,6 +64,7 @@ func init() {
 	pdelayCmd.Flags().IntVarP(&pdelayDscpf, "dscp", "d", 35, "DSCP value (QoS)")
 	pdelayCmd.Flags().DurationVarP(&pdelayTimeoutf, "timeout", "t", time.Second, "timeout for collecting responses")
 	pdelayCmd.Flags().StringVarP(&pdelayTsf, "timestamping", "T", "hardware", "timestamping mode (hardware or software)")
+	pdelayCmd.Flags().BoolVarP(&pdelayIPv4f, "ipv4", "4", false, "use IPv4 multicast (224.0.0.107) instead of IPv6 (ff02::6b)")
 }
 
 // CalculateJitter returns a random duration between 0 and maxJitter
@@ -81,6 +83,7 @@ type ProbeConfig struct {
 	Dscp         int
 	Timeout      time.Duration
 	Timestamping string
+	IPv4         bool
 }
 
 // ProbeResultCallback is called for each measurement result during periodic probing
@@ -94,8 +97,12 @@ var OnProbeResult ProbeResultCallback
 // Sends PDelay_Req to ff02::6b multicast address as per IEEE 1588 specification
 // All SPTP clients in the rack that joined the multicast group will respond
 func RunPeriodicProbe(ctx context.Context, cfg ProbeConfig) error {
+	multicastStr := ptp.PDelayMulticastIPv6
+	if cfg.IPv4 {
+		multicastStr = ptp.PDelayMulticastIPv4
+	}
 	log.Infof("[pdelay] starting periodic multicast probe on %s (interval: %s, jitter: %s)", cfg.Iface, cfg.Interval, cfg.Jitter)
-	log.Infof("[pdelay] sending PDelay_Req to multicast address %s", ptp.PDelayMulticastIPv6)
+	log.Infof("[pdelay] sending PDelay_Req to multicast address %s", multicastStr)
 
 	for {
 		// Calculate next probe time with jitter
@@ -160,6 +167,24 @@ func getNonLinkLocalAddr(iface *net.Interface) (net.IP, error) {
 	return selectNonLinkLocalAddr(addrs)
 }
 
+// getIPv4Addr returns the first IPv4 address for the given interface.
+func getIPv4Addr(iface *net.Interface) (net.IP, error) {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return nil, fmt.Errorf("getting addresses for %s: %w", iface.Name, err)
+	}
+	for _, a := range addrs {
+		ipNet, ok := a.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		if ip := ipNet.IP.To4(); ip != nil {
+			return ip, nil
+		}
+	}
+	return nil, fmt.Errorf("no IPv4 address found on interface %s", iface.Name)
+}
+
 // pdelaySequence is the sequence counter for PDelay_Req messages
 var pdelaySequence uint16
 
@@ -186,8 +211,13 @@ func runMulticastProbe(cfg ProbeConfig) ([]*pdelay.Result, error) {
 		return nil, fmt.Errorf("creating clock identity: %w", err)
 	}
 
-	// Select source address
-	srcIP, err := getNonLinkLocalAddr(iface)
+	// Select source address based on address family
+	var srcIP net.IP
+	if cfg.IPv4 {
+		srcIP, err = getIPv4Addr(iface)
+	} else {
+		srcIP, err = getNonLinkLocalAddr(iface)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("finding source address on %s: %w", cfg.Iface, err)
 	}
@@ -211,8 +241,16 @@ func runMulticastProbe(cfg ProbeConfig) ([]*pdelay.Result, error) {
 		return nil, fmt.Errorf("marshaling PDelay_Req: %w", err)
 	}
 
-	// Send to IPv6 multicast address
-	multicastAddr := netip.MustParseAddr(ptp.PDelayMulticastIPv6).WithZone(cfg.Iface)
+	// Select multicast address based on address family
+	var multicastAddr netip.Addr
+	var multicastStr string
+	if cfg.IPv4 {
+		multicastStr = ptp.PDelayMulticastIPv4
+		multicastAddr = netip.MustParseAddr(multicastStr)
+	} else {
+		multicastStr = ptp.PDelayMulticastIPv6
+		multicastAddr = netip.MustParseAddr(multicastStr).WithZone(cfg.Iface)
+	}
 	targetAddr := timestamp.AddrToSockaddr(multicastAddr, ptp.PortEvent)
 
 	t1, err := conn.WriteToWithTS(reqBytes, targetAddr, seq)
@@ -220,7 +258,7 @@ func runMulticastProbe(cfg ProbeConfig) ([]*pdelay.Result, error) {
 		return nil, fmt.Errorf("sending PDelay_Req to multicast: %w", err)
 	}
 
-	log.Debugf("[pdelay] sent PDelay_Req seq=%d to %s, T1=%v", seq, ptp.PDelayMulticastIPv6, t1)
+	log.Debugf("[pdelay] sent PDelay_Req seq=%d to %s, T1=%v", seq, multicastStr, t1)
 
 	// Collect responses with timeout
 	return collectMulticastResponses(conn, seq, t1, cfg.Timeout), nil
@@ -365,7 +403,7 @@ var pdelayCmd = &cobra.Command{
 	Long: `Run periodic peer delay measurements against all hosts in the same rack.
 
 This command sends PDelay_Req messages to the PTP peer delay multicast address
-(ff02::6b) as per IEEE 1588. All SPTP clients
+(ff02::6b for IPv6, 224.0.0.107 for IPv4) as per IEEE 1588. All SPTP clients
 in the same L2 domain (rack) that have joined the multicast group will receive
 the request and respond.
 
@@ -386,6 +424,7 @@ accurate peer delay measurement with hardware timestamping.`,
 			Dscp:         pdelayDscpf,
 			Timeout:      pdelayTimeoutf,
 			Timestamping: pdelayTsf,
+			IPv4:         pdelayIPv4f,
 		}
 
 		// Set up signal handling for graceful shutdown
