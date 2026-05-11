@@ -366,6 +366,7 @@ func TestRunInternalAllDead(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
 	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).Times(4)
 	mockClock := NewMockClock(ctrl)
 	mockClock.EXPECT().AdjFreqPPB((float64(0))).Times(3)
@@ -525,6 +526,7 @@ func TestRunListenerErr(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
 	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).AnyTimes().Return(0, &unix.SockaddrInet6{}, time.Time{}, fmt.Errorf("oops"))
 	mockGenConn := NewMockUDPConnNoTS(ctrl)
 	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).AnyTimes()
@@ -559,6 +561,7 @@ func TestRunListenerError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
 	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).Return(0, &unix.SockaddrInet6{}, time.Time{}, fmt.Errorf("some error")).AnyTimes()
 	mockGenConn := NewMockUDPConnNoTS(ctrl)
 	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).Return(2, netip.Addr{}, fmt.Errorf("some error")).AnyTimes()
@@ -593,6 +596,7 @@ func TestRunListenerGood(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
 	sentEvent := 0
 	sentGen := 0
 	syncBytes, _ := ptp.Bytes(&ptp.SyncDelayReq{})

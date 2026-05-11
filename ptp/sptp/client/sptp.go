@@ -126,22 +126,32 @@ func (p *SPTP) initClients() error {
 		p.backoff[ip] = newBackoff(p.cfg.Backoff)
 	}
 
-	// Join multicast group based on listen address family
-	listenAddr, err := netip.ParseAddr(p.cfg.ListenAddress)
-	if err != nil {
-		log.Warningf("failed to parse listen address %q: %v, skipping multicast join", p.cfg.ListenAddress, err)
-	} else {
-		var multicastAddr string
-		if listenAddr.Is4() {
-			multicastAddr = ptp.PDelayMulticastIPv4
+	// Join multicast group(s) based on server address families
+	hasIPv4 := false
+	hasIPv6 := false
+	for addr := range p.clients {
+		if addr.Is4() || addr.Is4In6() {
+			hasIPv4 = true
 		} else {
-			multicastAddr = ptp.PDelayMulticastIPv6
+			hasIPv6 = true
 		}
-		if err := timestamp.JoinMulticast(p.eventConns[0].ConnFd(), iface, net.ParseIP(multicastAddr)); err != nil {
-			log.Warningf("failed to join peer delay multicast group %s: %v", multicastAddr, err)
+	}
+	if hasIPv4 {
+		if err := timestamp.JoinMulticast(p.eventConns[0].ConnFd(), iface, net.ParseIP(ptp.PDelayMulticastIPv4)); err != nil {
+			log.Warningf("failed to join IPv4 peer delay multicast group %s: %v", ptp.PDelayMulticastIPv4, err)
 		} else {
-			log.Debugf("joined PTP peer delay multicast group %s on interface %s", multicastAddr, iface.Name)
+			log.Debugf("joined PTP peer delay multicast group %s on interface %s", ptp.PDelayMulticastIPv4, iface.Name)
 		}
+	}
+	if hasIPv6 {
+		if err := timestamp.JoinMulticast(p.eventConns[0].ConnFd(), iface, net.ParseIP(ptp.PDelayMulticastIPv6)); err != nil {
+			log.Warningf("failed to join IPv6 peer delay multicast group %s: %v", ptp.PDelayMulticastIPv6, err)
+		} else {
+			log.Debugf("joined PTP peer delay multicast group %s on interface %s", ptp.PDelayMulticastIPv6, iface.Name)
+		}
+	}
+	if !hasIPv4 && !hasIPv6 {
+		log.Warningf("no servers configured, not joining any peer delay multicast group")
 	}
 	return nil
 }
