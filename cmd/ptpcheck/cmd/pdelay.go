@@ -86,10 +86,10 @@ type ProbeConfig struct {
 	IPv4         bool
 }
 
-// ProbeResultCallback is called for each measurement result during periodic probing
-type ProbeResultCallback func(result *pdelay.Result)
+// ProbeResultCallback is called with all measurement results after each probe cycle
+type ProbeResultCallback func(results []*pdelay.Result)
 
-// OnProbeResult is an optional callback that gets called for each probe result.
+// OnProbeResult is an optional callback that gets called with all results from each probe cycle.
 // Set this from external packages (e.g., internal) to add custom logging.
 var OnProbeResult ProbeResultCallback
 
@@ -127,11 +127,9 @@ func RunPeriodicProbe(ctx context.Context, cfg ProbeConfig) error {
 
 		log.Infof("[pdelay] received %d responses from rack servers", len(results))
 
-		// Call callback for each result
+		// Call callback with all results from this cycle
 		if OnProbeResult != nil {
-			for _, result := range results {
-				OnProbeResult(result)
-			}
+			OnProbeResult(results)
 		}
 	}
 }
