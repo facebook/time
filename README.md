@@ -56,5 +56,11 @@ Pi servo library
 ### clock
 Wrapper around CLOCK_ADJTIME syscall
 
+### NTRIP
+NTRIP v1 SOURCE client library for pushing RTCM correction data to an NTRIP caster. Supports HTTP CONNECT proxy with TLS client certificate authentication.
+
+### RTCM
+Parser and scanner for RTCM 10403.x (RTCM3) binary frames used for GNSS correction data. Includes CRC-24Q validation and stream synchronization.
+
 # License
 time is licensed under Apache 2.0 as found in the [LICENSE file](LICENSE).
