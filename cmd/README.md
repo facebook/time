@@ -95,3 +95,24 @@ Cli Supports several basic commands such as:
 ```console
 go install github.com/facebook/time/cmd/calnex@latest
 ```
+
+# GNSS
+
+## ntripper
+Service that reads RTCM3 correction data from an oscillatord Unix socket and pushes it to an NTRIP caster. Supports connecting through an HTTP CONNECT proxy with TLS client certificate authentication.
+
+### Quick Installation
+```console
+go install github.com/facebook/time/cmd/ntripper@latest
+```
+
+### Usage
+```console
+# Direct connection
+ntripper -caster caster.example.com:2101 -mountpoint /MOUNT01 -password secret
+
+# Via proxy with TLS client certificate
+ntripper -caster caster.example.com:2101 -mountpoint /MOUNT01 -password secret \
+         -proxy proxy.example.com:8082 \
+         -proxy-cert /path/to/cert.pem
+```
