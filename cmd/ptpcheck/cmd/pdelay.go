@@ -54,6 +54,7 @@ var (
 	pdelayTimeoutf  time.Duration
 	pdelayTsf       string
 	pdelayIPv4f     bool
+	pdelayCountf    int
 )
 
 func init() {
@@ -65,6 +66,7 @@ func init() {
 	pdelayCmd.Flags().DurationVarP(&pdelayTimeoutf, "timeout", "t", time.Second, "timeout for collecting responses")
 	pdelayCmd.Flags().StringVarP(&pdelayTsf, "timestamping", "T", "hardware", "timestamping mode (hardware or software)")
 	pdelayCmd.Flags().BoolVarP(&pdelayIPv4f, "ipv4", "4", false, "use IPv4 multicast (224.0.0.107) instead of IPv6 (ff02::6b)")
+	pdelayCmd.Flags().IntVarP(&pdelayCountf, "count", "c", 0, "number of peer delay requests to send (0 = run continuously with interval)")
 }
 
 // CalculateJitter returns a random duration between 0 and maxJitter
@@ -84,6 +86,8 @@ type ProbeConfig struct {
 	Timeout      time.Duration
 	Timestamping string
 	IPv4         bool
+	// Count is the number of probe cycles to run. 0 means run continuously.
+	Count int
 }
 
 // ProbeResultCallback is called with all measurement results after each probe cycle
@@ -96,24 +100,38 @@ var OnProbeResult ProbeResultCallback
 // RunPeriodicProbe runs periodic peer delay measurements using multicast
 // Sends PDelay_Req to ff02::6b multicast address as per IEEE 1588 specification
 // All SPTP clients in the rack that joined the multicast group will respond
+// If cfg.Count > 0, runs exactly that many probe cycles back-to-back without
+// waiting for the interval between them, then returns. Otherwise, runs
+// continuously using cfg.Interval (plus jitter) between cycles.
 func RunPeriodicProbe(ctx context.Context, cfg ProbeConfig) error {
 	multicastStr := ptp.PDelayMulticastIPv6
+	periodic := false
 	if cfg.IPv4 {
 		multicastStr = ptp.PDelayMulticastIPv4
 	}
-	log.Infof("[pdelay] starting periodic multicast probe on %s (interval: %s, jitter: %s)", cfg.Iface, cfg.Interval, cfg.Jitter)
+	if cfg.Count > 0 {
+		log.Infof("[pdelay] starting multicast probe on %s (count: %d)", cfg.Iface, cfg.Count)
+	} else {
+		log.Infof("[pdelay] starting periodic multicast probe on %s (interval: %s, jitter: %s)", cfg.Iface, cfg.Interval, cfg.Jitter)
+		periodic = true
+	}
 	log.Infof("[pdelay] sending PDelay_Req to multicast address %s", multicastStr)
+	nextProbe := time.Second
 
-	for {
+	for periodic || cfg.Count > 0 {
 		// Calculate next probe time with jitter
-		jitter := CalculateJitter(cfg.Jitter)
-		nextProbe := cfg.Interval + jitter
+		if periodic {
+			jitter := CalculateJitter(cfg.Jitter)
+			nextProbe = cfg.Interval + jitter
+		} else {
+			cfg.Count--
+		}
 
 		log.Debugf("[pdelay] waiting %s until next probe cycle", nextProbe)
 
 		select {
 		case <-ctx.Done():
-			log.Infof("[pdelay] stopping periodic probe")
+			log.Infof("[pdelay] stopping probes")
 			return ctx.Err()
 		case <-time.After(nextProbe):
 		}
@@ -132,6 +150,7 @@ func RunPeriodicProbe(ctx context.Context, cfg ProbeConfig) error {
 			OnProbeResult(results)
 		}
 	}
+	return nil
 }
 
 // selectNonLinkLocalAddr returns the first global unicast IPv6 address from addrs.
@@ -423,6 +442,7 @@ accurate peer delay measurement with hardware timestamping.`,
 			Timeout:      pdelayTimeoutf,
 			Timestamping: pdelayTsf,
 			IPv4:         pdelayIPv4f,
+			Count:        pdelayCountf,
 		}
 
 		// Set up signal handling for graceful shutdown
