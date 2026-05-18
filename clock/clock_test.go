@@ -51,16 +51,24 @@ func TestSetTimeNegative(t *testing.T) {
 }
 
 func TestFrequencyPPB(t *testing.T) {
+	tx := &unix.Timex{}
+	wantState, err := unix.Adjtimex(tx)
+	require.NoError(t, err)
+
 	freqPPB, state, err := FrequencyPPB(0)
 	require.NoError(t, err)
-	require.Equal(t, 0, state)
-	require.False(t, freqPPB != freqPPB) // not NaN
+	require.Equal(t, wantState, state)
+	require.Equal(t, float64(tx.Freq)/PPBToTimexPPM, freqPPB)
 }
 
 func TestMaxFreqPPB(t *testing.T) {
+	tx := &unix.Timex{}
+	wantState, err := unix.Adjtimex(tx)
+	require.NoError(t, err)
+
 	maxFreq, state, err := MaxFreqPPB(0)
 	require.NoError(t, err)
-	require.Equal(t, 0, state)
+	require.Equal(t, wantState, state)
 	require.Equal(t, 500000.0, maxFreq)
 }
 
