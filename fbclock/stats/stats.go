@@ -17,6 +17,7 @@ limitations under the License.
 package stats
 
 import (
+	"maps"
 	"sync"
 )
 
@@ -60,9 +61,7 @@ func (s Stats) SetCounter(key string, val int64) {
 func (s Stats) Get() map[string]int64 {
 	ret := make(map[string]int64)
 	mux.Lock()
-	for key, val := range s.counters {
-		ret[key] = val
-	}
+	maps.Copy(ret, s.counters)
 	mux.Unlock()
 	return ret
 }
@@ -70,9 +69,7 @@ func (s Stats) Get() map[string]int64 {
 // Copy all key-values between maps
 func (s Stats) Copy(dst *Stats) {
 	mux.Lock()
-	for k, v := range s.counters {
-		dst.SetCounter(k, v)
-	}
+	maps.Copy(dst.counters, s.counters)
 	mux.Unlock()
 }
 

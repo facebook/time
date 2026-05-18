@@ -102,3 +102,90 @@ func TestShmemV2(t *testing.T) {
 	require.Equal(t, d.SysclockTimeNS, readD.SysclockTimeNS)
 	require.Equal(t, d.ClockID, readD.ClockID)
 }
+
+func TestNewFBClockCustomNonexistentPath(t *testing.T) {
+	_, err := lib.NewFBClockCustom("/nonexistent/fbclock/shm/path")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "initializing FBClock")
+}
+
+func TestShmemV2WithCoefPPB(t *testing.T) {
+	tmpfile, err := os.CreateTemp("", "shmemtest_v2_coef")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+	shm, err := lib.OpenFBClockShmCustomVer(tmpfile.Name(), 2)
+	require.NoError(t, err)
+	defer shm.Close()
+	d := lib.DataV2{
+		IngressTimeNS:        1749167822494826022,
+		ErrorBoundNS:         48,
+		HoldoverMultiplierNS: 64.5,
+		SmearingStartS:       1483228836,
+		UTCOffsetPreS:        36,
+		UTCOffsetPostS:       37,
+		PHCTimeNS:            1749167859494830869,
+		SysclockTimeNS:       1749167822494826022,
+		ClockID:              4, // CLOCK_MONOTONIC_RAW
+		CoefPPB:              -493,
+	}
+	err = lib.StoreFBClockDataV2(shm.File.Fd(), d)
+	require.NoError(t, err)
+
+	shmdata, err := lib.MmapShmpDataV2(shm.File.Fd())
+	require.NoError(t, err)
+
+	readD, err := lib.ReadFBClockDataV2(shmdata)
+	require.NoError(t, err)
+	require.Equal(t, d.IngressTimeNS, readD.IngressTimeNS)
+	require.Equal(t, d.ErrorBoundNS, readD.ErrorBoundNS)
+	require.InDelta(t, d.HoldoverMultiplierNS, readD.HoldoverMultiplierNS, 0.001)
+	require.Equal(t, d.PHCTimeNS, readD.PHCTimeNS)
+	require.Equal(t, d.SysclockTimeNS, readD.SysclockTimeNS)
+	require.Equal(t, d.ClockID, readD.ClockID)
+	require.Equal(t, d.CoefPPB, readD.CoefPPB)
+}
+
+func TestFloatAsUint32EdgeCases(t *testing.T) {
+	require.Equal(t, uint32(0), lib.FloatAsUint32(0))
+	require.Equal(t, uint32(math.MaxUint32), lib.FloatAsUint32(100000))
+
+	v := 1.0
+	encoded := lib.FloatAsUint32(v)
+	decoded := lib.Uint32AsFloat(encoded)
+	require.InDelta(t, v, decoded, 0.001)
+}
+
+func TestUint64ToUint32EdgeCases(t *testing.T) {
+	require.Equal(t, uint32(0), lib.Uint64ToUint32(0))
+	require.Equal(t, uint32(1), lib.Uint64ToUint32(1))
+	require.Equal(t, uint32(math.MaxUint32), lib.Uint64ToUint32(math.MaxUint32))
+	require.Equal(t, uint32(math.MaxUint32), lib.Uint64ToUint32(math.MaxUint64))
+}
+
+func TestShmemMultipleWrites(t *testing.T) {
+	tmpfile, err := os.CreateTemp("", "shmemtest_multi")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+	shm, err := lib.OpenFBClockShmCustom(tmpfile.Name())
+	require.NoError(t, err)
+	defer shm.Close()
+
+	shmdata, err := lib.MmapShmpData(shm.File.Fd())
+	require.NoError(t, err)
+
+	for i := range 10 {
+		d := lib.Data{
+			IngressTimeNS:        int64(1648137249050666302 + i*1000000000),
+			ErrorBoundNS:         uint64(100 + i*10),
+			HoldoverMultiplierNS: 1.0 + float64(i)*0.1,
+		}
+		err = lib.StoreFBClockData(shm.File.Fd(), d)
+		require.NoError(t, err)
+
+		readD, err := lib.ReadFBClockData(shmdata)
+		require.NoError(t, err)
+		require.Equal(t, d.IngressTimeNS, readD.IngressTimeNS)
+		require.Equal(t, d.ErrorBoundNS, readD.ErrorBoundNS)
+		require.InDelta(t, d.HoldoverMultiplierNS, readD.HoldoverMultiplierNS, 0.001)
+	}
+}

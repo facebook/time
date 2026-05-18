@@ -106,6 +106,71 @@ func TestStatsUpdate(t *testing.T) {
 				WOUlt100us: 1,
 			},
 		},
+		{
+			name: "wou between 100us and 1ms",
+			inputs: []in{
+				{
+					tt:  &lib.TrueTime{Earliest: time.Unix(0, 1000000000), Latest: time.Unix(0, 1000500000)},
+					err: nil,
+				},
+			},
+			want: lib.Stats{
+				Requests:    1,
+				WOUAvg:      500000,
+				WOUMax:      500000,
+				WOUlt1000us: 1,
+			},
+		},
+		{
+			name: "wou ge 1ms",
+			inputs: []in{
+				{
+					tt:  &lib.TrueTime{Earliest: time.Unix(0, 1000000000), Latest: time.Unix(0, 1002000000)},
+					err: nil,
+				},
+			},
+			want: lib.Stats{
+				Requests:    1,
+				WOUAvg:      2000000,
+				WOUMax:      2000000,
+				WOUge1000us: 1,
+			},
+		},
+		{
+			name: "wou max tracking",
+			inputs: []in{
+				{
+					tt:  &lib.TrueTime{Earliest: time.Unix(0, 1000000000), Latest: time.Unix(0, 1000000100)},
+					err: nil,
+				},
+				{
+					tt:  &lib.TrueTime{Earliest: time.Unix(0, 1000000000), Latest: time.Unix(0, 1000005000)},
+					err: nil,
+				},
+				{
+					tt:  &lib.TrueTime{Earliest: time.Unix(0, 1000000000), Latest: time.Unix(0, 1000000050)},
+					err: nil,
+				},
+			},
+			want: lib.Stats{
+				Requests:  3,
+				WOUAvg:    1716,
+				WOUMax:    5000,
+				WOUlt10us: 3,
+			},
+		},
+		{
+			name: "all errors",
+			inputs: []in{
+				{tt: nil, err: fmt.Errorf("e1")},
+				{tt: nil, err: fmt.Errorf("e2")},
+				{tt: nil, err: fmt.Errorf("e3")},
+			},
+			want: lib.Stats{
+				Requests: 3,
+				Errors:   3,
+			},
+		},
 	}
 
 	for _, tt := range testCases {
