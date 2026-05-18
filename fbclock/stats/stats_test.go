@@ -119,11 +119,13 @@ func TestConcurrentAccess(t *testing.T) {
 	s := NewStats()
 	var wg sync.WaitGroup
 	for i := range 100 {
-		wg.Go(func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			s.SetCounter("concurrent", int64(i))
 			s.UpdateCounterBy("incr", 1)
 			s.Get()
-		})
+		}()
 	}
 	wg.Wait()
 	got := s.Get()
