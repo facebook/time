@@ -52,7 +52,7 @@ func (p *RB) Run(target string, insecureTLS bool) error {
 		// RBState 7 is "Hold-over (Weak GNSS)"
 		return nil
 	}
-	return fmt.Errorf("Rubidium clock state is: %s", rb.RBStateName)
+	return fmt.Errorf("rubidium clock state is: %s", rb.RBStateName)
 }
 
 // Remediate the check

@@ -80,7 +80,7 @@ func TestObserveOffset(t *testing.T) {
 
 // repeatNumber creates a slice with the given number repeated repetitionCount times
 func repeatNumber(repetitionCount int, number float64) []float64 {
-	slice := []float64{}
+	slice := make([]float64, 0, repetitionCount)
 	for range repetitionCount {
 		slice = append(slice, number)
 	}

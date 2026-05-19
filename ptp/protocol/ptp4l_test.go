@@ -100,7 +100,7 @@ func TestParseTimeStatusNP(t *testing.T) {
 func TestTimeStatusNPRequest(t *testing.T) {
 	req := TimeStatusNPRequest()
 	// it's normally generated from PID, set to know value
-	req.ManagementMsgHead.Header.SourcePortIdentity.PortNumber = 12345
+	req.Header.SourcePortIdentity.PortNumber = 12345
 
 	raw, err := Bytes(req)
 	want := []byte{
@@ -172,7 +172,7 @@ func TestParsePortStatsNP(t *testing.T) {
 func TestPortStatsNPRequest(t *testing.T) {
 	req := PortStatsNPRequest()
 	// it's normally generated from PID, set to know value
-	req.ManagementMsgHead.Header.SourcePortIdentity.PortNumber = 12345
+	req.Header.SourcePortIdentity.PortNumber = 12345
 
 	raw, err := Bytes(req)
 	want := []byte{

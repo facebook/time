@@ -373,7 +373,7 @@ func (c *fakeConn) Write(p []byte) (n int, err error) {
 }
 
 func prepareTestClient(t *testing.T, packets ...ptp.Packet) *ptp.MgmtClient {
-	outputs := []*bytes.Buffer{}
+	outputs := make([]*bytes.Buffer, 0, len(packets))
 	for _, packet := range packets {
 		buf := &bytes.Buffer{}
 		b, err := ptp.Bytes(packet)

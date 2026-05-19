@@ -85,7 +85,7 @@ func peersAverages(peers []*Peer) (*averages, error) {
 }
 
 func medianOffset(peers []*Peer) float64 {
-	offsets := []float64{}
+	offsets := make([]float64, 0, len(peers))
 	for _, p := range peers {
 		offsets = append(offsets, p.Offset)
 	}

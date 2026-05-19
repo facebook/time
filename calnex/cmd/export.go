@@ -40,7 +40,7 @@ var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "export calnex measurement data",
 	Run: func(_ *cobra.Command, _ []string) {
-		var chs []api.Channel
+		chs := make([]api.Channel, 0, len(channels))
 		for _, channel := range channels {
 			chs = append(chs, channel)
 		}

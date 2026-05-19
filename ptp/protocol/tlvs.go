@@ -118,11 +118,7 @@ func writeTLVs(tlvs []TLV, b []byte) (int, error) {
 func readTLVs(tlvs []TLV, maxLength int, b []byte) ([]TLV, error) {
 	pos := 0
 	var tlvType TLVType
-	for {
-		// packet can have trailing bytes, let's make sure we don't try to read past given length
-		if pos+tlvHeadSize > maxLength {
-			break
-		}
+	for pos+tlvHeadSize <= maxLength {
 		tlvType = TLVType(binary.BigEndian.Uint16(b[pos:]))
 
 		switch tlvType {
@@ -353,7 +349,7 @@ func (t *PathTraceTLV) UnmarshalBinary(b []byte) error {
 		return err
 	}
 	t.PathSequence = []ClockIdentity{}
-	for i := 0; i*8 <= int(t.TLVHead.LengthField); i++ {
+	for i := 0; i*8 <= int(t.LengthField); i++ {
 		pos := tlvHeadSize + i*8
 		if pos+8 >= len(b) {
 			break

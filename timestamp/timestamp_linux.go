@@ -81,7 +81,7 @@ func scmDataToTime(data []byte) (ts time.Time, err error) {
 func scmDataToSeqID(data []byte) (seqID uint32, err error) {
 	se := (*unix.SockExtendedErr)(unsafe.Pointer(&data[0]))
 	if unix.Errno(se.Errno) != unix.ENOMSG {
-		return 0, fmt.Errorf("Expected ENOMSG but got %w", unix.Errno(se.Errno))
+		return 0, fmt.Errorf("expected ENOMSG but got %w", unix.Errno(se.Errno))
 	}
 	return se.Data, nil
 }
@@ -95,16 +95,16 @@ func byteToTime(data []byte) (time.Time, error) {
 	return time.Unix(sec, nsec), nil
 }
 
-func ioctlHWTimestampCaps(fd int, ifname string) (int32, int32, error) {
-	var rxFilter, txFilter int32
+func ioctlHWTimestampCaps(fd int, ifname string) (int32, error) {
+	var rxFilter int32
 
 	hw, err := unix.IoctlGetEthtoolTsInfo(fd, ifname)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to run ioctl SIOCETHTOOL to see what is supported: (%w)", err)
+		return 0, fmt.Errorf("failed to run ioctl SIOCETHTOOL to see what is supported: (%w)", err)
 	}
 
-	if hw.Tx_types&(1<<unix.HWTSTAMP_TX_ON) > 0 {
-		txFilter = unix.HWTSTAMP_TX_ON
+	if hw.Tx_types&(1<<unix.HWTSTAMP_TX_ON) == 0 {
+		return 0, fmt.Errorf("hardware TX timestamping is not supported for the interface %s", ifname)
 	}
 
 	if hw.Rx_filters&(1<<unix.HWTSTAMP_FILTER_PTP_V2_L4_EVENT) > 0 {
@@ -115,10 +115,10 @@ func ioctlHWTimestampCaps(fd int, ifname string) (int32, int32, error) {
 		rxFilter = unix.HWTSTAMP_FILTER_ALL
 	}
 
-	if txFilter == 0 || rxFilter == 0 {
-		return rxFilter, txFilter, fmt.Errorf("hardware timestamping is not supported for the interface %s", ifname)
+	if rxFilter == 0 {
+		return 0, fmt.Errorf("hardware RX timestamping is not supported for the interface %s", ifname)
 	}
-	return rxFilter, txFilter, nil
+	return rxFilter, nil
 }
 
 func ioctlTimestamp(fd int, ifname string, filter int32) error {
@@ -173,7 +173,7 @@ func EnableSWTimestamps(connFd int) error {
 
 // EnableHWTimestamps enables HW timestamps (TX and RX) on the socket
 func EnableHWTimestamps(connFd int, iface *net.Interface) error {
-	rxFilter, _, err := ioctlHWTimestampCaps(connFd, iface.Name)
+	rxFilter, err := ioctlHWTimestampCaps(connFd, iface.Name)
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func EnableHWTimestamps(connFd int, iface *net.Interface) error {
 
 // EnableHWTimestampsRx enables HW RX timestamps on the socket
 func EnableHWTimestampsRx(connFd int, iface *net.Interface) error {
-	rxFilter, _, err := ioctlHWTimestampCaps(connFd, iface.Name)
+	rxFilter, err := ioctlHWTimestampCaps(connFd, iface.Name)
 	if err != nil {
 		return err
 	}
@@ -233,7 +233,7 @@ func SeqIDSocketControlMessage(seqID uint32, soob []byte) {
 
 func waitForHWTS(connFd int) error {
 	// Wait until TX timestamp is ready
-	fds := []unix.PollFd{{Fd: int32(connFd), Events: unix.POLLERR, Revents: 0}}
+	fds := []unix.PollFd{{Fd: int32(connFd), Events: unix.POLLERR, Revents: 0}} //nolint:gosec // fd is always small
 	for {
 		n, err := unix.Poll(fds, int(TimeoutTXTS.Milliseconds()))
 		if !errors.Is(err, syscall.EINTR) {
@@ -253,11 +253,16 @@ func recvoob(connFd int, oob []byte) (oobn int, err error) {
 	var msg unix.Msghdr
 	msg.Control = &oob[0]
 	msg.SetControllen(len(oob))
-	_, _, e1 := unix.Syscall(unix.SYS_RECVMSG, uintptr(connFd), uintptr(unsafe.Pointer(&msg)), uintptr(unix.MSG_ERRQUEUE))
+	_, _, e1 := unix.Syscall(unix.SYS_RECVMSG, uintptr(connFd), uintptr(unsafe.Pointer(&msg)), uintptr(unix.MSG_ERRQUEUE)) //nolint:gosec // fd is always small
 	if e1 != 0 {
 		return 0, e1
 	}
-	return int(msg.Controllen), nil
+	// Controllen is bounded by len(oob) we passed to SetControllen
+	n := msg.Controllen
+	if n > uint64(len(oob)) {
+		n = uint64(len(oob))
+	}
+	return int(n), nil
 }
 
 // socketControlMessageTimestamp is a very optimised version of ParseSocketControlMessage
@@ -427,7 +432,7 @@ func EnableTimestamps(ts Timestamp, connFd int, iface *net.Interface) error {
 			return fmt.Errorf("cannot enable software rx timestamps: %w", err)
 		}
 	default:
-		return fmt.Errorf("Unrecognized timestamp type: %s", ts)
+		return fmt.Errorf("unrecognized timestamp type: %s", ts)
 	}
 	return nil
 }

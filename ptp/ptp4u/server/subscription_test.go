@@ -110,7 +110,7 @@ func TestSubscriptionStop(t *testing.T) {
 
 	require.Equal(t, 1, len(w.signalingQueue))
 	s := <-w.signalingQueue
-	require.Equal(t, ptp.TLVCancelUnicastTransmission, s.signaling.TLVs[0].(*ptp.CancelUnicastTransmissionTLV).TLVHead.TLVType)
+	require.Equal(t, ptp.TLVCancelUnicastTransmission, s.signaling.TLVs[0].(*ptp.CancelUnicastTransmissionTLV).TLVType)
 	require.Equal(t, uint16(binary.Size(ptp.Header{})+binary.Size(ptp.PortIdentity{})+binary.Size(ptp.CancelUnicastTransmissionTLV{})), s.signaling.Header.MessageLength)
 }
 
@@ -193,7 +193,7 @@ func TestSyncDelayReqPacket(t *testing.T) {
 	require.Equal(t, uint16(44), sc.Sync().Header.MessageLength) // check packet length
 	require.Equal(t, sequenceID, sc.Sync().Header.SequenceID)
 	require.Equal(t, domainNumber, sc.Sync().Header.DomainNumber)
-	require.Equal(t, ptp.NewTimestamp(received), sc.Sync().SyncDelayReqBody.OriginTimestamp)
+	require.Equal(t, ptp.NewTimestamp(received), sc.Sync().OriginTimestamp)
 }
 
 func TestFollowupPacket(t *testing.T) {
@@ -268,9 +268,9 @@ func TestAnnouncePacket(t *testing.T) {
 	require.Equal(t, sequenceID+1, sc.Announce().Header.SequenceID)
 	require.Equal(t, sp, sc.Announce().Header.SourcePortIdentity)
 	require.Equal(t, i, sc.Announce().Header.LogMessageInterval)
-	require.Equal(t, ptp.ClockClass7, sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockClass)
-	require.Equal(t, ptp.ClockAccuracyMicrosecond1, sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockAccuracy)
-	require.Equal(t, int16(UTCOffset.Seconds()), sc.Announce().AnnounceBody.CurrentUTCOffset)
+	require.Equal(t, ptp.ClockClass7, sc.Announce().GrandmasterClockQuality.ClockClass)
+	require.Equal(t, ptp.ClockAccuracyMicrosecond1, sc.Announce().GrandmasterClockQuality.ClockAccuracy)
+	require.Equal(t, int16(UTCOffset.Seconds()), sc.Announce().CurrentUTCOffset)
 	require.Equal(t, domainNumber, sc.Announce().Header.DomainNumber)
 }
 
@@ -427,7 +427,7 @@ func TestSendSignalingGrant(t *testing.T) {
 	require.Equal(t, 1, len(w.signalingQueue))
 
 	s := <-w.signalingQueue
-	require.Equal(t, ptp.TLVGrantUnicastTransmission, s.signaling.TLVs[0].(*ptp.GrantUnicastTransmissionTLV).TLVHead.TLVType)
+	require.Equal(t, ptp.TLVGrantUnicastTransmission, s.signaling.TLVs[0].(*ptp.GrantUnicastTransmissionTLV).TLVType)
 	require.Equal(t, uint16(binary.Size(ptp.Header{})+binary.Size(ptp.PortIdentity{})+binary.Size(ptp.GrantUnicastTransmissionTLV{})), s.signaling.Header.MessageLength)
 }
 

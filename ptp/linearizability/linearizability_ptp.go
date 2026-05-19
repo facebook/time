@@ -570,7 +570,7 @@ func (lt *PTPTester) RunTest(ctx context.Context) TestResult {
 func (lt *PTPTester) processTimestamp(sequenceID uint16, rxTimestamp time.Time) error {
 	sendTS, found := lt.sendTS[sequenceID]
 	if !found {
-		expected := []uint16{}
+		expected := make([]uint16, 0, len(lt.sendTS))
 		for e := range lt.sendTS {
 			expected = append(expected, e)
 		}

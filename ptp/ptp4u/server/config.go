@@ -157,7 +157,7 @@ func ReadPidFile(path string) (int, error) {
 		return 0, err
 	}
 
-	return strconv.Atoi(strings.Replace(string(content), "\n", "", -1))
+	return strconv.Atoi(strings.ReplaceAll(string(content), "\n", ""))
 }
 
 // ifaceIPs gets all IPs on the specified interface

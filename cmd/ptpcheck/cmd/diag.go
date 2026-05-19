@@ -180,7 +180,6 @@ func checkPathDelay(r *checker.PTPCheckResult) (status, string) {
 }
 
 func portServiceStatsDiagnosers(r *checker.PTPCheckResult) []diagnoser {
-	result := []diagnoser{}
 	// counters are reset on ptp4l restart
 	var maxPacketsLoss uint64 = 100
 
@@ -216,6 +215,7 @@ func portServiceStatsDiagnosers(r *checker.PTPCheckResult) []diagnoser {
 			explanation: "We expect FollowUp packets to arrive in correct order",
 		},
 	}
+	result := make([]diagnoser, 0, len(checks))
 	for _, check := range checks {
 		var f diagnoser
 		check := check // capture loop variable

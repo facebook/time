@@ -90,7 +90,7 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 	log.Debugf("Status: %v", packet.GetStatus())
 	tracking, ok := packet.(*chrony.ReplyTracking)
 	if !ok {
-		return nil, fmt.Errorf("Got wrong 'tracking' response %+v", packet)
+		return nil, fmt.Errorf("got wrong 'tracking' response %+v", packet)
 	}
 	result.Correction = tracking.CurrentCorrection
 	result.LIDesc = control.LeapDesc[uint8(tracking.LeapStatus)]
@@ -106,7 +106,7 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 	}
 	sources, ok := packet.(*chrony.ReplySources)
 	if !ok {
-		return nil, fmt.Errorf("Got wrong 'sources' response %+v", packet)
+		return nil, fmt.Errorf("got wrong 'sources' response %+v", packet)
 	}
 	log.Debugf("Got %d sources", sources.NSources)
 
