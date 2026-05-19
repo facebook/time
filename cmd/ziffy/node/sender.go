@@ -195,7 +195,7 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, routeID int) 
 	route := &PathInfo{switches: nil, rackSwHostname: s.rackSwHostname}
 	ptpUDPAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(destinationIP, fmt.Sprint(s.Config.DestinationPort)))
 	if err != nil {
-		return route, fmt.Errorf("traceRoute unable to resolve UDPAddr: %w", err)
+		return nil, fmt.Errorf("traceRoute unable to resolve UDPAddr: %w", err)
 	}
 	ptpAddr := timestamp.IPToSockaddr(ptpUDPAddr.IP, s.Config.DestinationPort)
 	domain := unix.AF_INET6
@@ -204,16 +204,16 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, routeID int) 
 	}
 	connFd, err := unix.Socket(domain, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
 	if err != nil {
-		return route, fmt.Errorf("traceRoute unable to create connection: %w", err)
+		return nil, fmt.Errorf("traceRoute unable to create connection: %w", err)
 	}
 	defer unix.Close(connFd)
 	// set SO_REUSEPORT so we can trace network path from same source port that ptp4u uses
 	if err = unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
-		return route, fmt.Errorf("setting SO_REUSEPORT on sender socket: %w", err)
+		return nil, fmt.Errorf("setting SO_REUSEPORT on sender socket: %w", err)
 	}
 	localAddr := timestamp.IPToSockaddr(net.IPv6zero, sendingPort)
 	if err := unix.Bind(connFd, localAddr); err != nil {
-		return route, fmt.Errorf("traceRoute unable to bind %v connection: %w", localAddr, err)
+		return nil, fmt.Errorf("traceRoute unable to bind %v connection: %w", localAddr, err)
 	}
 
 	destReached := false
@@ -224,11 +224,11 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, routeID int) 
 	for hop := s.Config.HopMin; hop <= hopMax && (!destReached || s.Config.ContReached); hop++ {
 		for i := 0; i < s.Config.PacketsPerHop; i++ {
 			if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_UNICAST_HOPS, hop); err != nil {
-				return route, err
+				return nil, err
 			}
 			// First 2 bits from Traffic Class are unused, so we shift the value 2 bits
 			if err := unix.SetsockoptInt(connFd, unix.IPPROTO_IPV6, unix.IPV6_TCLASS, s.Config.DSCP<<2); err != nil {
-				return route, err
+				return nil, err
 			}
 			var p ptp.Packet
 			switch s.Config.MessageType {
@@ -237,11 +237,11 @@ func (s *Sender) traceRoute(destinationIP string, sendingPort int, routeID int) 
 			case ptp.MessageSignaling:
 				p = formSignalingPacket(hop, routeID)
 			default:
-				return route, fmt.Errorf("unsupported packet type %v", s.Config.MessageType)
+				return nil, fmt.Errorf("unsupported packet type %v", s.Config.MessageType)
 			}
 
 			if err := s.sendEventMsg(p, connFd, ptpAddr); err != nil {
-				return route, err
+				return nil, err
 			}
 
 			select {
@@ -333,13 +333,13 @@ func (s *Sender) handleIcmpPacket(rawPacket []byte, l int, rAddr net.Addr) {
 	)
 	switch v := ptpPacket.(type) {
 	case *ptp.SyncDelayReq:
-		corrField = v.Header.CorrectionField
-		sequenceID = v.Header.SequenceID
-		portNum = v.Header.SourcePortIdentity.PortNumber
+		corrField = v.CorrectionField
+		sequenceID = v.SequenceID
+		portNum = v.SourcePortIdentity.PortNumber
 	case *ptp.Signaling:
-		corrField = v.Header.CorrectionField
-		sequenceID = v.Header.SequenceID
-		portNum = v.Header.SourcePortIdentity.PortNumber
+		corrField = v.CorrectionField
+		sequenceID = v.SequenceID
+		portNum = v.SourcePortIdentity.PortNumber
 	default:
 		log.Errorf("Received unexpected packet %T, ignoring", v)
 		return

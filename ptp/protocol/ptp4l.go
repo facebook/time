@@ -223,11 +223,12 @@ func (e *UnicastMasterEntry) UnmarshalBinary(b []byte) error {
 	e.ClockQuality.ClockClass = ClockClass(b[10])
 	e.ClockQuality.ClockAccuracy = ClockAccuracy(b[11])
 	e.ClockQuality.OffsetScaledLogVariance = binary.BigEndian.Uint16(b[12:])
-	if b[14] == 0 {
+	switch b[14] {
+	case 0:
 		e.Selected = false
-	} else if b[14] == 1 {
+	case 1:
 		e.Selected = true
-	} else {
+	default:
 		return fmt.Errorf("unexpected 'selected' value %d", b[14])
 	}
 	e.PortState = UnicastMasterState(b[15])

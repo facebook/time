@@ -92,7 +92,7 @@ func TestClearPaths(t *testing.T) {
 }
 
 func TestSortSwitchesByHop(t *testing.T) {
-	var switches []SwitchTrafficInfo
+	switches := make([]SwitchTrafficInfo, 0, 5)
 	switches = append(switches, SwitchTrafficInfo{hop: 3, routeIdx: 1})
 	switches = append(switches, SwitchTrafficInfo{hop: 1, routeIdx: 2})
 	switches = append(switches, SwitchTrafficInfo{hop: 10, routeIdx: 5})

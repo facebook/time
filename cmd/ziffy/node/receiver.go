@@ -113,13 +113,13 @@ func (r *Receiver) handlePacket(rawPacket gopacket.Packet) {
 		log.Tracef("unable to parse PTP: %v", err)
 		return
 	}
-	if ptpSync.Header.ControlField != ZiffyHexa {
+	if ptpSync.ControlField != ZiffyHexa {
 		log.Trace("no ziffy packet")
 		return
 	}
 
-	log.Debugf("Type=%v, CF=%v, sPort=%v, sPort2=%v, sIP=%v", ptpSync.Header.MessageType().String(),
-		ptpSync.Header.CorrectionField, ptpSync.Header.SourcePortIdentity.PortNumber, srcPort, srcIP)
+	log.Debugf("Type=%v, CF=%v, sPort=%v, sPort2=%v, sIP=%v", ptpSync.MessageType().String(),
+		ptpSync.CorrectionField, ptpSync.SourcePortIdentity.PortNumber, srcPort, srcIP)
 
 	if err := r.sendResponse(srcIP, rawPacket); err != nil {
 		log.Tracef("unable to send response: %v", err)

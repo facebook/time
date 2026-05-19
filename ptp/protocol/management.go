@@ -172,20 +172,20 @@ func (p *ManagementMsgErrorStatus) UnmarshalBinary(rawBytes []byte) error {
 	if err := binary.Read(reader, be, &p.ManagementMsgHead); err != nil {
 		return fmt.Errorf("reading ManagementMsgErrorStatus ManagementMsgHead: %w", err)
 	}
-	if err := binary.Read(reader, be, &p.ManagementErrorStatusTLV.TLVHead); err != nil {
+	if err := binary.Read(reader, be, &p.TLVHead); err != nil {
 		return fmt.Errorf("reading ManagementMsgErrorStatus TLVHead: %w", err)
 	}
-	if err := binary.Read(reader, be, &p.ManagementErrorStatusTLV.ManagementErrorID); err != nil {
+	if err := binary.Read(reader, be, &p.ManagementErrorID); err != nil {
 		return fmt.Errorf("reading ManagementMsgErrorStatus ManagementErrorID: %w", err)
 	}
-	if err := binary.Read(reader, be, &p.ManagementErrorStatusTLV.ManagementID); err != nil {
+	if err := binary.Read(reader, be, &p.ManagementID); err != nil {
 		return fmt.Errorf("reading ManagementMsgErrorStatus ManagementID: %w", err)
 	}
 	if err := binary.Read(reader, be, &p.ManagementErrorStatusTLV.Reserved); err != nil {
 		return fmt.Errorf("reading ManagementMsgErrorStatus Reserved: %w", err)
 	}
 	// packet can have trailing bytes, let's make sure we don't try to read past given length
-	toRead := int(p.ManagementMsgHead.Header.MessageLength)
+	toRead := int(p.MessageLength)
 	toRead -= binary.Size(p.ManagementMsgHead)
 	toRead -= binary.Size(p.ManagementErrorStatusTLV.TLVHead)
 	toRead -= binary.Size(p.ManagementErrorStatusTLV.ManagementErrorID)

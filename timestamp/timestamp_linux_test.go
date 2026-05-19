@@ -230,7 +230,7 @@ func TestEnableTimestamps(t *testing.T) {
 
 	// Unsupported
 	err = EnableTimestamps(42, connFd, &net.Interface{Name: "lo", Index: 1})
-	require.Equal(t, fmt.Errorf("Unrecognized timestamp type: Unsupported"), err)
+	require.Equal(t, fmt.Errorf("unrecognized timestamp type: Unsupported"), err)
 }
 
 func TestSocketControlMessageTimestamp(t *testing.T) {
@@ -368,10 +368,9 @@ func TestReadHWTimestampCaps(t *testing.T) {
 	connFd, err := ConnFd(conn)
 	require.NoError(t, err)
 
-	rxFilters, txType, err := ioctlHWTimestampCaps(connFd, "lo")
+	rxFilters, err := ioctlHWTimestampCaps(connFd, "lo")
 	require.Error(t, err)
-	// hw timestamps are disabled for lo
-	require.Equal(t, int32(0), txType)
+	require.Contains(t, err.Error(), "not supported")
 	require.Equal(t, int32(0), rxFilters)
 }
 
@@ -394,7 +393,7 @@ func TestScmDataToSeqIDErrornoNotENOMSG(t *testing.T) {
 	}
 	_, err := scmDataToSeqID(hwData)
 	require.Error(t, err)
-	require.ErrorContains(t, err, "Expected ENOMSG but got function not implemented")
+	require.ErrorContains(t, err, "expected ENOMSG but got function not implemented")
 }
 
 func TestSeqIDSocketControlMessage(t *testing.T) {

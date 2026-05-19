@@ -143,7 +143,10 @@ func ReadPacketWithRXTimestamp(connFd int) ([]byte, unix.Sockaddr, time.Time, er
 	oob := make([]byte, ControlSizeBytes)
 
 	bbuf, sa, t, err := ReadPacketWithRXTimestampBuf(connFd, buf, oob)
-	return buf[:bbuf], sa, t, err
+	if err != nil {
+		return nil, nil, time.Time{}, err
+	}
+	return buf[:bbuf], sa, t, nil
 }
 
 // ReadPacketWithRXTimestampBuf writes byte packet into provide buffer buf, and returns number of bytes copied to the buffer, client ip and HW RX timestamp.
@@ -155,7 +158,10 @@ func ReadPacketWithRXTimestampBuf(connFd int, buf, oob []byte) (int, unix.Sockad
 	}
 
 	timestamp, err := socketControlMessageTimestamp(oob, boob)
-	return bbuf, saddr, timestamp, err
+	if err != nil {
+		return 0, nil, time.Time{}, err
+	}
+	return bbuf, saddr, timestamp, nil
 }
 
 // ReadPacketWithCMsgBuf writes byte packet into provided packet and cmsg buffer, and returns number of bytes copied to the buffers
@@ -164,7 +170,7 @@ func ReadPacketWithCMsgBuf(connFd int, buf, oob []byte) (int, int, unix.Sockaddr
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("failed to read packet: %w", err)
 	}
-	return bbuf, boob, saddr, err
+	return bbuf, boob, saddr, nil
 }
 
 // ReadRXTimestamp returns HW timestamp from CMSG buffer

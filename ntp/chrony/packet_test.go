@@ -157,11 +157,11 @@ func TestDecodeSourceDataWithIPAddrID(t *testing.T) {
 	require.True(t, ok, "expected *ReplySourceData")
 
 	// Verify the IPAddr has Family = IPAddrID
-	require.Equal(t, IPAddrID, reply.SourceData.IPAddr.Family)
+	require.Equal(t, IPAddrID, reply.IPAddr.Family)
 
 	// Verify the ID value is correctly stored in the IP field
-	require.Equal(t, uint8(0x00), reply.SourceData.IPAddr.IP[0])
-	require.Equal(t, uint8(0x00), reply.SourceData.IPAddr.IP[1])
+	require.Equal(t, uint8(0x00), reply.IPAddr.IP[0])
+	require.Equal(t, uint8(0x00), reply.IPAddr.IP[1])
 	require.Equal(t, uint8(0x00), reply.SourceData.IPAddr.IP[2])
 	require.Equal(t, uint8(0x09), reply.SourceData.IPAddr.IP[3])
 
@@ -298,7 +298,7 @@ func TestDecodeServerStats(t *testing.T) {
 	}
 	require.Equal(t, want, packet)
 
-	require.Equal(t, want.ReplyHead.Reply, packet.GetType())
+	require.Equal(t, want.Reply, packet.GetType())
 }
 
 func TestDecodeServerStats2(t *testing.T) {

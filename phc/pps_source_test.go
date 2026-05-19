@@ -355,8 +355,8 @@ func TestNewPiServo(t *testing.T) {
 	servo, err := NewPiServo(time.Duration(1), time.Duration(1), time.Duration(0), mockFrequencyGetter, 0.0)
 
 	require.NoError(t, err)
-	require.Equal(t, int64(1), servo.Servo.FirstStepThreshold)
-	require.Equal(t, true, servo.Servo.FirstUpdate)
+	require.Equal(t, int64(1), servo.FirstStepThreshold)
+	require.Equal(t, true, servo.FirstUpdate)
 	require.Equal(t, -1.0, servo.MeanFreq())
 	require.Equal(t, "INIT", servo.GetState().String())
 	require.Equal(t, 3.0, servo.GetMaxFreq())
@@ -387,8 +387,8 @@ func TestNewPiServoMaxFreqError(t *testing.T) {
 	servo, err := NewPiServo(time.Duration(1), time.Duration(1), time.Duration(0), mockFrequencyGetter, 0.0)
 
 	require.NoError(t, err)
-	require.Equal(t, int64(1), servo.Servo.FirstStepThreshold)
-	require.Equal(t, true, servo.Servo.FirstUpdate)
+	require.Equal(t, int64(1), servo.FirstStepThreshold)
+	require.Equal(t, true, servo.FirstUpdate)
 	require.Equal(t, -1.0, servo.MeanFreq())
 	require.Equal(t, "INIT", servo.GetState().String())
 	require.Equal(t, 500000.0, servo.GetMaxFreq())
@@ -472,7 +472,7 @@ func TestPPSSink_getPPSEventTimestamp(t *testing.T) {
 			err := binary.Write(&intBuffer, hostendian.Order, &event)
 			require.NoError(t, err)
 			copy(buf, intBuffer.Bytes())
-			fmt.Print(buf)
+			fmt.Print(string(buf))
 		})
 
 		// Act

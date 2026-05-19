@@ -238,9 +238,8 @@ func colNumber(header []string, colName string) (int, error) {
 }
 
 func computePrintData(sw []SwitchPrintInfo) [][]string {
-	ret := [][]string{
-		{"uniq", "width", "hop", "ip_address", "sample_sp", "intf", "hostname", "flows", "TC", "avg_CF(ns)", "max_CF(ns)", "min_CF(ns)"},
-	}
+	ret := make([][]string, 0, 1+len(sw))
+	ret = append(ret, []string{"uniq", "width", "hop", "ip_address", "sample_sp", "intf", "hostname", "flows", "TC", "avg_CF(ns)", "max_CF(ns)", "min_CF(ns)"})
 
 	// unique counts number of devices discovered
 	unique := 1

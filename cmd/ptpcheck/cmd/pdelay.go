@@ -300,10 +300,7 @@ func collectMulticastResponses(conn client.UDPConnWithTS, expectedSeq uint16, t1
 	deadline := time.Now().Add(timeout)
 
 	// Set socket read timeout so ReadPacketWithRXTimestampBuf doesn't block forever
-	tv := unix.Timeval{
-		Sec:  int64(timeout.Seconds()),
-		Usec: (timeout % time.Second).Microseconds(),
-	}
+	tv := unix.NsecToTimeval(timeout.Nanoseconds())
 	if err := unix.SetsockoptTimeval(conn.ConnFd(), unix.SOL_SOCKET, unix.SO_RCVTIMEO, &tv); err != nil {
 		log.Warningf("[pdelay] failed to set socket timeout: %v", err)
 	}

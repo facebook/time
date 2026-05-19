@@ -52,7 +52,7 @@ func (m *MultiMessageType) Set(messageType string) error {
 
 // String returns joined list of message types
 func (m *MultiMessageType) String() string {
-	s := []string{}
+	s := make([]string, 0, len(*m))
 	for _, v := range []ptp.MessageType(*m) {
 		s = append(s, v.String())
 	}
@@ -61,7 +61,7 @@ func (m *MultiMessageType) String() string {
 
 // GetDefaults returns default message type filter
 func (m *MultiMessageType) GetDefaults() []ptp.MessageType {
-	res := []ptp.MessageType{}
+	res := make([]ptp.MessageType, 0, len(ptp.MessageTypeToString))
 	for v := range ptp.MessageTypeToString {
 		res = append(res, v)
 	}

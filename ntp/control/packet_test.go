@@ -205,7 +205,7 @@ func TestNTPControlMsg_GetAssociations(t *testing.T) {
 		PeerEventCounter: 0,
 		PeerEventCode:    3,
 	}
-	assocData := []uint8{}
+	assocData := make([]uint8, 0, 8)
 	assocData = append(assocData, uint16to2x8(1)...)
 	assocData = append(assocData, uint16to2x8(peerStatusWord1.Word())...)
 	assocData = append(assocData, uint16to2x8(2)...)
