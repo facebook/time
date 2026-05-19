@@ -18,7 +18,11 @@ package protocol
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
+	"strings"
+	"time"
 
 	"go.bug.st/serial"
 )
@@ -35,13 +39,38 @@ const (
 	ansError              string = "[!1]"
 )
 
+// normalReadTimeout is the read timeout Drain restores on its way out. Match
+// the bookmark's choice; callers that want a different value should call
+// SetReadTimeout themselves after Drain returns.
+const normalReadTimeout = 2 * time.Second
+
+// drainReadTimeout is the short timeout Drain installs while flushing.
+const drainReadTimeout = 10 * time.Millisecond
+
+// maxResponseBytes bounds how much we'll buffer waiting for "\r\n". Anything
+// larger than this is almost certainly a runaway from a wedged chip.
+const maxResponseBytes = 4096
+
 // ErrFWFormat is to check whether we should upgrade broken device
 var ErrFWFormat = fmt.Errorf("SA53 cannot return FW version, possibly broken image")
+
+// ErrDeviceError is wrapped into the error returned by ParseValue / Get when
+// the SA53 replies with a "[!N]" device error. Use errors.Is to detect.
+var ErrDeviceError = errors.New("SA53 device error")
+
+// SerialReadWriter is the subset of serial.Port the protocol package uses. It
+// lets callers wrap the underlying port with tees (e.g. raw byte logging) or
+// substitute fakes in tests.
+type SerialReadWriter interface {
+	io.ReadWriter
+	SetReadTimeout(time.Duration) error
+}
 
 // Mac represents SA53 MAC object
 type Mac struct {
 	device   string
-	port     serial.Port
+	port     SerialReadWriter
+	closer   io.Closer // nil = caller owns the port
 	fwMajor  int
 	fwMinor  int
 	fwPatch  int
@@ -62,13 +91,114 @@ func Init(device string) (*Mac, error) {
 	m := &Mac{
 		device: device,
 		port:   port,
+		closer: port,
 	}
 	return m, nil
 }
 
 // Close is to close serial port
 func (m *Mac) Close() {
-	m.port.Close()
+	if m.closer != nil {
+		m.closer.Close()
+	}
+}
+
+// SetReadTimeout sets the read timeout on the underlying port.
+func (m *Mac) SetReadTimeout(d time.Duration) error {
+	return m.port.SetReadTimeout(d)
+}
+
+// WrapPort installs a wrapping interceptor around the underlying port. The
+// callback receives the current port and returns a wrapped version that will
+// be used for all subsequent reads and writes. Use this to inject a raw-byte
+// logging tee (rawlog.LoggingPort) without leaking serial-library knowledge
+// into the caller.
+func (m *Mac) WrapPort(wrap func(SerialReadWriter) SerialReadWriter) {
+	m.port = wrap(m.port)
+}
+
+// Drain consumes pending bytes on the port without blocking, then restores
+// the normal read timeout. Call before Cmd / Get to clear stale or
+// asynchronous bytes left over from a previous interaction.
+func (m *Mac) Drain() {
+	if err := m.port.SetReadTimeout(drainReadTimeout); err != nil {
+		return
+	}
+	defer func() { _ = m.port.SetReadTimeout(normalReadTimeout) }()
+	tmp := make([]byte, 256)
+	for {
+		n, err := m.port.Read(tmp)
+		if err != nil || n == 0 {
+			return
+		}
+	}
+}
+
+// ReadResponse reads from the port until it sees a "\r\n" terminator or a
+// read error. Returns the response without the terminator. A read that
+// returns (0, nil) is treated as a timeout and surfaces as an error so
+// callers don't quietly accept truncated responses.
+func (m *Mac) ReadResponse() (string, error) {
+	buf := make([]byte, 0, 256)
+	tmp := make([]byte, 64)
+	for {
+		n, err := m.port.Read(tmp)
+		if err != nil {
+			return "", fmt.Errorf("read: %w", err)
+		}
+		if n == 0 {
+			return "", fmt.Errorf("read timeout, partial response: %q", string(buf))
+		}
+		buf = append(buf, tmp[:n]...)
+		if before, _, ok := bytes.Cut(buf, []byte("\r\n")); ok {
+			return string(before), nil
+		}
+		if len(buf) > maxResponseBytes {
+			return "", fmt.Errorf("response exceeded %d bytes without terminator: %q", maxResponseBytes, string(buf))
+		}
+	}
+}
+
+// Cmd drains pending bytes, writes raw to the port, and returns the
+// response. Use for arbitrary protocol commands like "\{swrev?}" sent from
+// the `--cmd` path.
+func (m *Mac) Cmd(raw string) (string, error) {
+	m.Drain()
+	if _, err := m.port.Write([]byte(raw)); err != nil {
+		return "", fmt.Errorf("write: %w", err)
+	}
+	return m.ReadResponse()
+}
+
+// Get queries a single named parameter via "{get,<param>}" and returns the
+// parsed value. Device errors ("[!N]") are surfaced as errors wrapping
+// ErrDeviceError. Callers should Drain() on non-device-error failures
+// before retrying so a wedged port doesn't stay wedged.
+func (m *Mac) Get(param string) (string, error) {
+	if _, err := m.port.Write([]byte("{get," + param + "}")); err != nil {
+		return "", fmt.Errorf("write: %w", err)
+	}
+	resp, err := m.ReadResponse()
+	if err != nil {
+		return "", err
+	}
+	return ParseValue(resp)
+}
+
+// ParseValue extracts the value from a "[=value]" response. "[!N]" replies
+// are surfaced as errors wrapping ErrDeviceError with the numeric code.
+func ParseValue(resp string) (string, error) {
+	if v, ok := strings.CutPrefix(resp, "[!"); ok {
+		if code, ok := strings.CutSuffix(v, "]"); ok {
+			return "", fmt.Errorf("%w: %s", ErrDeviceError, code)
+		}
+	}
+	if v, ok := strings.CutPrefix(resp, "[="); ok {
+		if val, ok := strings.CutSuffix(v, "]"); ok {
+			return val, nil
+		}
+	}
+	return "", fmt.Errorf("unexpected response: %q", resp)
 }
 
 func (m *Mac) parseMacFirmware(fw string) error {
@@ -107,6 +237,10 @@ func (m *Mac) Version() int {
 	return m.fwMajor*0x10000 + m.fwMinor*0x100 + m.fwPatch
 }
 
+// readResult is the firmware-side reader. Fills a buffer until the last two
+// bytes are "\r\n". Kept distinct from ReadResponse because the firmware
+// upgrade flow has been validated against this exact behavior on real
+// hardware; do not redirect callers without re-validating.
 func (m *Mac) readResult() (string, error) {
 	var r int
 	buff := make([]byte, 4101)
@@ -142,27 +276,15 @@ func (m *Mac) WaitBoot() error {
 	return nil
 }
 
+// cmdResult is the firmware-side write+read helper. Distinct from Cmd so the
+// firmware upgrade flow keeps its validated behavior (no drain, fixed-buffer
+// reader).
 func (m *Mac) cmdResult(cmd string) (string, error) {
 	_, err := m.port.Write([]byte(cmd))
 	if err != nil {
 		return "", err
 	}
 	return m.readResult()
-}
-
-// Cmd writes a raw protocol string to the device and returns the response.
-func (m *Mac) Cmd(raw string) (string, error) {
-	return m.cmdResult(raw)
-}
-
-// ReadResponse reads a single response line from the device.
-func (m *Mac) ReadResponse() (string, error) {
-	return m.readResult()
-}
-
-// Get queries a single named parameter (e.g. "swrev", "Temperature").
-func (m *Mac) Get(param string) (string, error) {
-	return m.Cmd(fmt.Sprintf("\\{%s?}", param))
 }
 
 // Reset is to reset the MAC

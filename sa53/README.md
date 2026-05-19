@@ -20,6 +20,29 @@ sudo sa53fw firmware --fw firmware.hex --upgrade --force
 Old `sa53fw -upgrade` style is gone; cobra requires the subcommand and `--`
 long flags.
 
+### poll
+
+Capture SA53 telemetry to CSV for vendor support handoff.
+
+Canonical vendor handoff invocation:
+
+```
+# stop chef (so it doesn't restart oscillatord), then stop oscillatord
+systemctl stop oscillatord
+sa53fw poll --duration 5m --interval 100ms --out /tmp/sa53.csv --raw /tmp/sa53.raw
+systemctl start oscillatord
+# then start chef again per the standard procedure
+```
+
+One-shot probe: `sudo sa53fw poll --cmd '\{swrev?}'`
+
+`--params` defaults to a conservative V1.1+ set that works on every firmware
+version we ship; operators on V1.5+ firmware can pass extras explicitly
+(e.g. `LaserTempSet,OscTuning,OvenCurrent,DCSignal`).
+
+The tool refuses to run if anything else is holding the serial port, and
+names the holder so you know what to stop.
+
 ## Layout
 
 - `main.go` — 3-line shim → `cmd.Execute()`

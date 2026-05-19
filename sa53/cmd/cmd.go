@@ -34,7 +34,11 @@ var RootCmd = &cobra.Command{
 	Use:   "sa53",
 	Short: "tools for the Microchip SA53 atomic clock on Celestica time cards",
 	PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
-		if serialPort != "" {
+		if verbose {
+			log.SetLevel(log.DebugLevel)
+		}
+		userSetSerial = serialPort != ""
+		if userSetSerial {
 			return nil // user passed --serial explicitly
 		}
 		detected, err := detectMACSerial()
@@ -51,6 +55,14 @@ var RootCmd = &cobra.Command{
 // serialPort is the shared serial device path used by all subcommands.
 var serialPort string
 
+// userSetSerial is true when --serial was passed on the command line.
+// Subcommands key off this to decide whether to run hardware detection
+// (skipped when the operator has already pinned the device).
+var userSetSerial bool
+
+// verbose enables debug-level logging when set via --verbose / -v.
+var verbose bool
+
 func init() {
 	RootCmd.CompletionOptions.DisableDefaultCmd = true
 	RootCmd.PersistentFlags().StringVar(
@@ -59,6 +71,7 @@ func init() {
 		"",
 		"SA53 serial port. If unset, auto-detected from "+ttyMACPath+", falling back to "+ttyMACFallback+".",
 	)
+	RootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug-level logging")
 }
 
 // detectMACSerial reads the MAC serial port device name from sysfs.
@@ -77,7 +90,7 @@ func detectMACSerial() (string, error) {
 
 // Execute runs the root command.
 func Execute() {
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.InfoLevel)
 	if err := RootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
