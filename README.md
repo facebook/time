@@ -47,6 +47,9 @@ Command line tool and library for a Calnex Sentinel device.
 ### Caliper
 Command line tool for parsing Luciol OTDR trace files when measuring system/cable latencies of Huber-Suhner GNSS-over-fiber systems
 
+### sa53
+Command line tool and library for the Microchip SA53 atomic clock on Celestica time cards.
+
 ### fbclock
 Client C library and Go daemon to provide TrueTime API based on PTP time.
 
