@@ -154,13 +154,13 @@ func Recvmsg(a int, b, c []byte, d int) (int, int, int, Sockaddr, error) {
 // Cross-platform constants from golang.org/x/sys/unix
 
 const (
-	AF_INET             = unix.AF_INET  //nolint:revive
-	EAGAIN              = unix.EAGAIN   //nolint:revive
-	EINVAL              = unix.EINVAL   //nolint:revive
-	ENOENT              = unix.ENOENT   //nolint:revive
-	ENOTSUP             = unix.ENOTSUP  //nolint:revive
-	IFNAMSIZ            = unix.IFNAMSIZ //nolint:revive
-	POLLERR             = unix.POLLERR  //nolint:revive
+	AF_INET             = unix.AF_INET //nolint:revive
+	EAGAIN              = unix.EAGAIN
+	EINVAL              = unix.EINVAL
+	ENOENT              = unix.ENOENT
+	ENOTSUP             = unix.ENOTSUP
+	IFNAMSIZ            = unix.IFNAMSIZ
+	POLLERR             = unix.POLLERR
 	POLLIN              = unix.POLLIN
 	POLLPRI             = unix.POLLPRI
 	SizeofPtr           = unix.SizeofPtr

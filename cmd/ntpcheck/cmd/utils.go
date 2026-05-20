@@ -115,7 +115,10 @@ func receiveNTPPacketWithRetries(connFd int, buf, oob []byte, tries int) (*ntp.P
 		return nil, clientReceiveTime, err
 	}
 	response, err := ntp.BytesToPacket(buf[:n])
-	return response, clientReceiveTime, err
+	if err != nil {
+		return nil, clientReceiveTime, err
+	}
+	return response, clientReceiveTime, nil
 }
 
 // ntpDate prints data similar to 'ntptime' command output
