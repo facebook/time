@@ -120,7 +120,7 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 		}
 		sourceData, ok := packet.(*chrony.ReplySourceData)
 		if !ok {
-			return nil, fmt.Errorf("Got wrong 'sourcedata' response %+v", packet)
+			return nil, fmt.Errorf("got wrong 'sourcedata' response %+v", packet)
 		}
 		// get ntpdata when using a unix socket
 		// Skip sources with unresolved addresses (IPADDR_ID family) as they don't have valid IPs
@@ -137,7 +137,7 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 			} else {
 				rpyNTPData2, ok := packet.(*chrony.ReplyNTPData2)
 				if !ok {
-					return nil, fmt.Errorf("Got wrong 'ntpdata' response %+v", packet)
+					return nil, fmt.Errorf("got wrong 'ntpdata' response %+v", packet)
 				}
 				ntpData = &rpyNTPData2.NTPData
 			}
@@ -153,7 +153,7 @@ func (n *ChronyCheck) Run() (*NTPCheckResult, error) {
 			}
 			ntpSourceName, ok = packet.(*chrony.ReplyNTPSourceName)
 			if !ok {
-				return nil, fmt.Errorf("Got wrong 'sourcename' response %+v", packet)
+				return nil, fmt.Errorf("got wrong 'sourcename' response %+v", packet)
 			}
 		}
 		peer, err := NewPeerFromChrony(sourceData, ntpData, ntpSourceName)
@@ -192,7 +192,7 @@ func (n *ChronyCheck) ServerStats() (*ServerStats, error) {
 	case *chrony.ReplyServerStats4:
 		serverStats = NewServerStatsFromChrony4(stats)
 	default:
-		return nil, fmt.Errorf("Got wrong 'serverstats' response %+v", packet)
+		return nil, fmt.Errorf("got wrong 'serverstats' response %+v", packet)
 	}
 	log.Debugf("ServerStats: %v", serverStats)
 	return serverStats, nil

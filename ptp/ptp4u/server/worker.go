@@ -188,7 +188,7 @@ func (s *sendWorker) Start() {
 						txTS = txTS.Add(s.config.UTCOffset)
 					}
 				} else {
-					seqID := uint32(c.Sync().Header.SequenceID)
+					seqID := uint32(c.Sync().SequenceID)
 					log.Debug("Sending sync (SCM_TS_OPT_ID set)")
 					timestamp.SeqIDSocketControlMessage(seqID, soob)
 					err = unix.Sendmsg(eFd, buf[:n], soob, c.eclisa, 0)
@@ -289,7 +289,7 @@ func (s *sendWorker) Start() {
 						txTS = txTS.Add(s.config.UTCOffset)
 					}
 				} else {
-					seqID := uint32(c.Sync().Header.SequenceID)
+					seqID := uint32(c.Sync().SequenceID)
 					log.Debug("Sending sync (SCM_TS_OPT_ID set)")
 					timestamp.SeqIDSocketControlMessage(seqID, soob)
 					err = unix.Sendmsg(eFd, buf[:n], soob, c.eclisa, 0)

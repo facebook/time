@@ -405,8 +405,8 @@ func TestNewPiServoUseMaxFreq(t *testing.T) {
 	servo, err := NewPiServo(time.Duration(1), time.Duration(1), time.Duration(0), mockFrequencyGetter, 2.0)
 
 	require.NoError(t, err)
-	require.Equal(t, int64(1), servo.Servo.FirstStepThreshold)
-	require.Equal(t, true, servo.Servo.FirstUpdate)
+	require.Equal(t, int64(1), servo.FirstStepThreshold)
+	require.Equal(t, true, servo.FirstUpdate)
 	require.Equal(t, -1.0, servo.MeanFreq())
 	require.Equal(t, "INIT", servo.GetState().String())
 	require.Equal(t, 2.0, servo.GetMaxFreq())
@@ -423,12 +423,12 @@ func TestNewPiServoStepth(t *testing.T) {
 	servo, err := NewPiServo(time.Duration(1), time.Duration(1), time.Duration(10), mockFrequencyGetter, 2.0)
 
 	require.NoError(t, err)
-	require.Equal(t, int64(1), servo.Servo.FirstStepThreshold)
-	require.Equal(t, true, servo.Servo.FirstUpdate)
+	require.Equal(t, int64(1), servo.FirstStepThreshold)
+	require.Equal(t, true, servo.FirstUpdate)
 	require.Equal(t, -1.0, servo.MeanFreq())
 	require.Equal(t, "INIT", servo.GetState().String())
 	require.Equal(t, 2.0, servo.GetMaxFreq())
-	require.Equal(t, int64(10), servo.Servo.StepThreshold)
+	require.Equal(t, int64(10), servo.StepThreshold)
 }
 
 func TestNewPiServoNoFirstStep(t *testing.T) {
@@ -442,7 +442,7 @@ func TestNewPiServoNoFirstStep(t *testing.T) {
 	servo, err := NewPiServo(time.Duration(1), time.Duration(0), time.Duration(0), mockFrequencyGetter, 2.0)
 
 	require.NoError(t, err)
-	require.Equal(t, false, servo.Servo.FirstUpdate)
+	require.Equal(t, false, servo.FirstUpdate)
 	require.Equal(t, -1.0, servo.MeanFreq())
 	require.Equal(t, "INIT", servo.GetState().String())
 	require.Equal(t, 2.0, servo.GetMaxFreq())

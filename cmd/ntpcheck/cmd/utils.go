@@ -42,7 +42,7 @@ import (
 // refID converts ip into ReFID format and prints it on stdout
 func refID(ipStr string) error {
 	if ipStr == "" {
-		return fmt.Errorf("Error: no IP provided")
+		return fmt.Errorf("no IP provided")
 	}
 
 	ip := net.ParseIP(ipStr)

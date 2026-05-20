@@ -100,7 +100,7 @@ func TestParseTimeStatusNP(t *testing.T) {
 func TestTimeStatusNPRequest(t *testing.T) {
 	req := TimeStatusNPRequest()
 	// it's normally generated from PID, set to know value
-	req.Header.SourcePortIdentity.PortNumber = 12345
+	req.SourcePortIdentity.PortNumber = 12345
 
 	raw, err := Bytes(req)
 	want := []byte{
@@ -172,7 +172,7 @@ func TestParsePortStatsNP(t *testing.T) {
 func TestPortStatsNPRequest(t *testing.T) {
 	req := PortStatsNPRequest()
 	// it's normally generated from PID, set to know value
-	req.Header.SourcePortIdentity.PortNumber = 12345
+	req.SourcePortIdentity.PortNumber = 12345
 
 	raw, err := Bytes(req)
 	want := []byte{
@@ -252,7 +252,7 @@ func TestParsePortServiceStatsNP(t *testing.T) {
 func TestPortServiceStatsNPRequest(t *testing.T) {
 	req := PortServiceStatsNPRequest()
 	// it's normally generated from PID, set to know value
-	req.ManagementMsgHead.Header.SourcePortIdentity.PortNumber = 12345
+	req.SourcePortIdentity.PortNumber = 12345
 
 	raw, err := Bytes(req)
 	want := []byte{
@@ -319,7 +319,7 @@ func TestParsePortPropertiesNP(t *testing.T) {
 func TestPortPropertiesNPRequest(t *testing.T) {
 	req := PortPropertiesNPRequest()
 	// it's normally generated from PID, set to know value
-	req.ManagementMsgHead.Header.SourcePortIdentity.PortNumber = 12345
+	req.SourcePortIdentity.PortNumber = 12345
 
 	raw, err := Bytes(req)
 	want := []byte{
@@ -528,7 +528,7 @@ func TestParseUnicastMasterTableNP(t *testing.T) {
 func TestUnicastMasterTableNPRequest(t *testing.T) {
 	req := UnicastMasterTableNPRequest()
 	// it's normally generated from PID, set to know value
-	req.ManagementMsgHead.Header.SourcePortIdentity.PortNumber = 12345
+	req.SourcePortIdentity.PortNumber = 12345
 
 	raw, err := Bytes(req)
 	want := []byte{

@@ -51,7 +51,7 @@ func NormalizeData(data []byte) (map[string]string, error) {
 		result[k] = v
 	}
 	if len(result) == 0 {
-		return result, fmt.Errorf("Malformed packet, no k=v pairs decoded")
+		return result, fmt.Errorf("malformed packet, no k=v pairs decoded")
 	}
 	return result, nil
 }

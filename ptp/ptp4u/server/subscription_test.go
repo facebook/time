@@ -111,7 +111,7 @@ func TestSubscriptionStop(t *testing.T) {
 	require.Equal(t, 1, len(w.signalingQueue))
 	s := <-w.signalingQueue
 	require.Equal(t, ptp.TLVCancelUnicastTransmission, s.signaling.TLVs[0].(*ptp.CancelUnicastTransmissionTLV).TLVType)
-	require.Equal(t, uint16(binary.Size(ptp.Header{})+binary.Size(ptp.PortIdentity{})+binary.Size(ptp.CancelUnicastTransmissionTLV{})), s.signaling.Header.MessageLength)
+	require.Equal(t, uint16(binary.Size(ptp.Header{})+binary.Size(ptp.PortIdentity{})+binary.Size(ptp.CancelUnicastTransmissionTLV{})), s.signaling.MessageLength)
 }
 
 func TestSubscriptionEnd(t *testing.T) {
@@ -144,9 +144,9 @@ func TestSubscriptionflags(t *testing.T) {
 	sc.UpdateSync()
 	sc.UpdateFollowup(time.Now())
 	sc.UpdateAnnounce()
-	require.Equal(t, ptp.FlagUnicast|ptp.FlagTwoStep, sc.Sync().Header.FlagField)
-	require.Equal(t, ptp.FlagUnicast, sc.Followup().Header.FlagField)
-	require.Equal(t, ptp.FlagUnicast|ptp.FlagPTPTimescale, sc.Announce().Header.FlagField)
+	require.Equal(t, ptp.FlagUnicast|ptp.FlagTwoStep, sc.Sync().FlagField)
+	require.Equal(t, ptp.FlagUnicast, sc.Followup().FlagField)
+	require.Equal(t, ptp.FlagUnicast|ptp.FlagPTPTimescale, sc.Announce().FlagField)
 }
 
 func TestSyncPacket(t *testing.T) {
@@ -167,9 +167,9 @@ func TestSyncPacket(t *testing.T) {
 	sc.initSync()
 	sc.IncSequenceID()
 	sc.UpdateSync()
-	require.Equal(t, uint16(44), sc.Sync().Header.MessageLength) // check packet length
-	require.Equal(t, sequenceID+1, sc.Sync().Header.SequenceID)
-	require.Equal(t, domainNumber, sc.Sync().Header.DomainNumber)
+	require.Equal(t, uint16(44), sc.Sync().MessageLength) // check packet length
+	require.Equal(t, sequenceID+1, sc.Sync().SequenceID)
+	require.Equal(t, domainNumber, sc.Sync().DomainNumber)
 }
 
 func TestSyncDelayReqPacket(t *testing.T) {
@@ -190,9 +190,9 @@ func TestSyncDelayReqPacket(t *testing.T) {
 
 	sc.initSync()
 	sc.UpdateSyncDelayReq(received, sequenceID)
-	require.Equal(t, uint16(44), sc.Sync().Header.MessageLength) // check packet length
-	require.Equal(t, sequenceID, sc.Sync().Header.SequenceID)
-	require.Equal(t, domainNumber, sc.Sync().Header.DomainNumber)
+	require.Equal(t, uint16(44), sc.Sync().MessageLength) // check packet length
+	require.Equal(t, sequenceID, sc.Sync().SequenceID)
+	require.Equal(t, domainNumber, sc.Sync().DomainNumber)
 	require.Equal(t, ptp.NewTimestamp(received), sc.Sync().OriginTimestamp)
 }
 
@@ -221,11 +221,11 @@ func TestFollowupPacket(t *testing.T) {
 	sc.initFollowup()
 	sc.IncSequenceID()
 	sc.UpdateFollowup(now)
-	require.Equal(t, uint16(44), sc.Followup().Header.MessageLength) // check packet length
-	require.Equal(t, sequenceID+1, sc.Followup().Header.SequenceID)
-	require.Equal(t, i, sc.Followup().Header.LogMessageInterval)
+	require.Equal(t, uint16(44), sc.Followup().MessageLength) // check packet length
+	require.Equal(t, sequenceID+1, sc.Followup().SequenceID)
+	require.Equal(t, i, sc.Followup().LogMessageInterval)
 	require.Equal(t, now.Unix(), sc.Followup().FollowUpBody.PreciseOriginTimestamp.Time().Unix())
-	require.Equal(t, domainNumber, sc.Followup().Header.DomainNumber)
+	require.Equal(t, domainNumber, sc.Followup().DomainNumber)
 }
 
 func TestAnnouncePacket(t *testing.T) {
@@ -264,14 +264,14 @@ func TestAnnouncePacket(t *testing.T) {
 	sc.initAnnounce()
 	sc.IncSequenceID()
 	sc.UpdateAnnounce()
-	require.Equal(t, uint16(64), sc.Announce().Header.MessageLength) // check packet length
-	require.Equal(t, sequenceID+1, sc.Announce().Header.SequenceID)
-	require.Equal(t, sp, sc.Announce().Header.SourcePortIdentity)
-	require.Equal(t, i, sc.Announce().Header.LogMessageInterval)
+	require.Equal(t, uint16(64), sc.Announce().MessageLength) // check packet length
+	require.Equal(t, sequenceID+1, sc.Announce().SequenceID)
+	require.Equal(t, sp, sc.Announce().SourcePortIdentity)
+	require.Equal(t, i, sc.Announce().LogMessageInterval)
 	require.Equal(t, ptp.ClockClass7, sc.Announce().GrandmasterClockQuality.ClockClass)
 	require.Equal(t, ptp.ClockAccuracyMicrosecond1, sc.Announce().GrandmasterClockQuality.ClockAccuracy)
 	require.Equal(t, int16(UTCOffset.Seconds()), sc.Announce().CurrentUTCOffset)
-	require.Equal(t, domainNumber, sc.Announce().Header.DomainNumber)
+	require.Equal(t, domainNumber, sc.Announce().DomainNumber)
 }
 
 func TestAnnounceDelayReqPacket(t *testing.T) {
@@ -308,15 +308,15 @@ func TestAnnounceDelayReqPacket(t *testing.T) {
 	sc.UpdateAnnounceDelayReq(correctionField, sequenceID)
 	sc.UpdateAnnounceFollowUp(now)
 
-	require.Equal(t, uint16(64), sc.Announce().Header.MessageLength) // check packet length
-	require.Equal(t, sequenceID, sc.Announce().Header.SequenceID)
-	require.Equal(t, sp, sc.Announce().Header.SourcePortIdentity)
-	require.Equal(t, ptp.ClockClass7, sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockClass)
-	require.Equal(t, ptp.ClockAccuracyMicrosecond1, sc.Announce().AnnounceBody.GrandmasterClockQuality.ClockAccuracy)
-	require.Equal(t, int16(UTCOffset.Seconds()), sc.Announce().AnnounceBody.CurrentUTCOffset)
-	require.Equal(t, domainNumber, sc.Announce().Header.DomainNumber)
-	require.Equal(t, correctionField, sc.Announce().Header.CorrectionField)
-	require.Equal(t, transmit, sc.Announce().AnnounceBody.OriginTimestamp)
+	require.Equal(t, uint16(64), sc.Announce().MessageLength) // check packet length
+	require.Equal(t, sequenceID, sc.Announce().SequenceID)
+	require.Equal(t, sp, sc.Announce().SourcePortIdentity)
+	require.Equal(t, ptp.ClockClass7, sc.Announce().GrandmasterClockQuality.ClockClass)
+	require.Equal(t, ptp.ClockAccuracyMicrosecond1, sc.Announce().GrandmasterClockQuality.ClockAccuracy)
+	require.Equal(t, int16(UTCOffset.Seconds()), sc.Announce().CurrentUTCOffset)
+	require.Equal(t, domainNumber, sc.Announce().DomainNumber)
+	require.Equal(t, correctionField, sc.Announce().CorrectionField)
+	require.Equal(t, transmit, sc.Announce().OriginTimestamp)
 }
 
 func TestDelayRespPacket(t *testing.T) {
@@ -346,13 +346,13 @@ func TestDelayRespPacket(t *testing.T) {
 
 	sc.initDelayResp()
 	sc.UpdateDelayResp(h, now)
-	require.Equal(t, uint16(54), sc.DelayResp().Header.MessageLength) // check packet length
-	require.Equal(t, sequenceID, sc.DelayResp().Header.SequenceID)
-	require.Equal(t, 100500, int(sc.DelayResp().Header.CorrectionField.Nanoseconds()))
-	require.Equal(t, sp, sc.DelayResp().Header.SourcePortIdentity)
+	require.Equal(t, uint16(54), sc.DelayResp().MessageLength) // check packet length
+	require.Equal(t, sequenceID, sc.DelayResp().SequenceID)
+	require.Equal(t, 100500, int(sc.DelayResp().CorrectionField.Nanoseconds()))
+	require.Equal(t, sp, sc.DelayResp().SourcePortIdentity)
 	require.Equal(t, now.Unix(), sc.DelayResp().DelayRespBody.ReceiveTimestamp.Time().Unix())
-	require.Equal(t, ptp.FlagUnicast, sc.DelayResp().Header.FlagField)
-	require.Equal(t, domainNumber, sc.DelayResp().Header.DomainNumber)
+	require.Equal(t, ptp.FlagUnicast, sc.DelayResp().FlagField)
+	require.Equal(t, domainNumber, sc.DelayResp().DomainNumber)
 }
 
 func TestSignalingGrantPacket(t *testing.T) {
@@ -384,7 +384,7 @@ func TestSignalingGrantPacket(t *testing.T) {
 	sc.initSignaling()
 	sc.UpdateSignalingGrant(sg, mt, i, duration)
 
-	require.Equal(t, uint16(56), sc.Signaling().Header.MessageLength) // check packet length
+	require.Equal(t, uint16(56), sc.Signaling().MessageLength) // check packet length
 	require.Equal(t, tlv, sc.Signaling().TLVs[0])
 }
 
@@ -394,7 +394,7 @@ func TestSignalingCancelPacket(t *testing.T) {
 	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
 	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageAnnounce, c, time.Second, time.Time{})
 
-	sc.signaling.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.CancelUnicastTransmissionTLV{}))
+	sc.signaling.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.CancelUnicastTransmissionTLV{}))
 	tlv := &ptp.CancelUnicastTransmissionTLV{
 		TLVHead:         ptp.TLVHead{TLVType: ptp.TLVCancelUnicastTransmission, LengthField: uint16(binary.Size(ptp.CancelUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{}))},
 		Reserved:        0,
@@ -404,7 +404,7 @@ func TestSignalingCancelPacket(t *testing.T) {
 	sc.initSignaling()
 	sc.UpdateSignalingCancel()
 
-	require.Equal(t, uint16(50), sc.Signaling().Header.MessageLength) // check packet length
+	require.Equal(t, uint16(50), sc.Signaling().MessageLength) // check packet length
 	require.Equal(t, tlv, sc.Signaling().TLVs[0])
 }
 
@@ -428,7 +428,7 @@ func TestSendSignalingGrant(t *testing.T) {
 
 	s := <-w.signalingQueue
 	require.Equal(t, ptp.TLVGrantUnicastTransmission, s.signaling.TLVs[0].(*ptp.GrantUnicastTransmissionTLV).TLVType)
-	require.Equal(t, uint16(binary.Size(ptp.Header{})+binary.Size(ptp.PortIdentity{})+binary.Size(ptp.GrantUnicastTransmissionTLV{})), s.signaling.Header.MessageLength)
+	require.Equal(t, uint16(binary.Size(ptp.Header{})+binary.Size(ptp.PortIdentity{})+binary.Size(ptp.GrantUnicastTransmissionTLV{})), s.signaling.MessageLength)
 }
 
 func TestSendSignalingCancel(t *testing.T) {
@@ -450,6 +450,6 @@ func TestSendSignalingCancel(t *testing.T) {
 	require.Equal(t, 1, len(w.signalingQueue))
 
 	s := <-w.signalingQueue
-	require.Equal(t, ptp.TLVCancelUnicastTransmission, s.signaling.TLVs[0].(*ptp.CancelUnicastTransmissionTLV).TLVHead.TLVType)
-	require.Equal(t, uint16(binary.Size(ptp.Header{})+binary.Size(ptp.PortIdentity{})+binary.Size(ptp.CancelUnicastTransmissionTLV{})), s.signaling.Header.MessageLength)
+	require.Equal(t, ptp.TLVCancelUnicastTransmission, s.signaling.TLVs[0].(*ptp.CancelUnicastTransmissionTLV).TLVType)
+	require.Equal(t, uint16(binary.Size(ptp.Header{})+binary.Size(ptp.PortIdentity{})+binary.Size(ptp.CancelUnicastTransmissionTLV{})), s.signaling.MessageLength)
 }

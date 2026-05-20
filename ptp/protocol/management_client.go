@@ -66,7 +66,7 @@ func (c *MgmtClient) Communicate(packet *Management) (*Management, error) {
 	}
 	errorPacket, ok := res.(*ManagementMsgErrorStatus)
 	if ok {
-		return nil, fmt.Errorf("got Management Error in response: %w", errorPacket.ManagementErrorStatusTLV.ManagementErrorID)
+		return nil, fmt.Errorf("got Management Error in response: %w", errorPacket.ManagementErrorID)
 	}
 	p, ok := res.(*Management)
 	if !ok {
