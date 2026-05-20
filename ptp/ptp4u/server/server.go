@@ -261,7 +261,7 @@ func readPacketBuf(connFd int, buf []byte) (int, unix.Sockaddr, error) {
 		return 0, nil, err
 	}
 
-	return n, saddr, err
+	return n, saddr, nil
 }
 
 func updateSockaddrWithPort(sa unix.Sockaddr, port int) {

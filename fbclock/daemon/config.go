@@ -97,5 +97,8 @@ func ReadConfig(path string) (*Config, error) {
 	}
 	c := Config{}
 	err = yaml.UnmarshalStrict(data, &c)
-	return &c, err
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
