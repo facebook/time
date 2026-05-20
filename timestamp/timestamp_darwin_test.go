@@ -79,7 +79,7 @@ func TestEnableTimestamps(t *testing.T) {
 
 	// HARDWARE
 	err = EnableTimestamps(HW, connFd, &net.Interface{Name: "lo", Index: 1})
-	require.Equal(t, fmt.Errorf("Unrecognized timestamp type: %s", HW), err)
+	require.Equal(t, fmt.Errorf("unrecognized timestamp type: %s", HW), err)
 }
 
 func TestReadPacketWithRXTimestamp(t *testing.T) {

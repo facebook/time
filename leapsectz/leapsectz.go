@@ -30,6 +30,18 @@ import (
 // leapFile is a file containing leap second information
 var leapFile = "/usr/share/zoneinfo/right/UTC"
 
+// LeapFile returns the current default leap second file path
+func LeapFile() string { return leapFile }
+
+// SetLeapFile overrides the default leap second file path. Pass "" to reset.
+func SetLeapFile(path string) {
+	if path == "" {
+		leapFile = "/usr/share/zoneinfo/right/UTC"
+	} else {
+		leapFile = path
+	}
+}
+
 var errBadData = errors.New("malformed time zone information")
 var errUnsupportedVersion = errors.New("unsupported version")
 var errNoLeapSeconds = errors.New("no leap seconds information found")
