@@ -35,8 +35,9 @@ type Timex struct {
 //
 //nolint:revive
 const (
-	TIME_OK        = 0
-	CLOCK_BOOTTIME = 7
+	TIME_OK             = 0
+	CLOCK_BOOTTIME      = 7
+	CLOCK_MONOTONIC_RAW = 4
 )
 
 // FdToClockID is not supported on non-linux.

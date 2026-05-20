@@ -165,10 +165,9 @@ const (
 	POLLPRI             = unix.POLLPRI
 	SizeofPtr           = unix.SizeofPtr
 	SizeofSockaddrInet4 = unix.SizeofSockaddrInet4
-	SOCK_DGRAM          = unix.SOCK_DGRAM          //nolint:revive
-	SOL_SOCKET          = unix.SOL_SOCKET          //nolint:revive
-	SO_RCVTIMEO         = unix.SO_RCVTIMEO         //nolint:revive
-	SO_TIMESTAMP        = unix.SO_TIMESTAMP        //nolint:revive
-	CLOCK_REALTIME      = unix.CLOCK_REALTIME      //nolint:revive
-	CLOCK_MONOTONIC_RAW = unix.CLOCK_MONOTONIC_RAW //nolint:revive
+	SOCK_DGRAM          = unix.SOCK_DGRAM     //nolint:revive
+	SOL_SOCKET          = unix.SOL_SOCKET     //nolint:revive
+	SO_RCVTIMEO         = unix.SO_RCVTIMEO    //nolint:revive
+	SO_TIMESTAMP        = unix.SO_TIMESTAMP   //nolint:revive
+	CLOCK_REALTIME      = unix.CLOCK_REALTIME //nolint:revive
 )

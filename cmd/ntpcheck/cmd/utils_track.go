@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/facebook/time/phc/unix"
 	"github.com/spf13/cobra"
-	"golang.org/x/sys/unix"
 )
 
 func getRawMonotonic() float64 {

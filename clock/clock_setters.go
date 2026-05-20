@@ -1,5 +1,3 @@
-//go:build darwin && !386
-
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
 
@@ -24,11 +22,17 @@ import (
 	"github.com/facebook/time/phc/unix"
 )
 
+type timexInt interface{ ~int32 | ~int64 }
+
+func setTimexField[T timexInt](field *T, val float64) {
+	*field = T(val)
+}
+
 func setFreq(tx *unix.Timex, freqPPB float64) {
-	tx.Freq = int64(freqPPB * PPBToTimexPPM)
+	setTimexField(&tx.Freq, freqPPB*PPBToTimexPPM)
 }
 
 func setTime(tx *unix.Timex, sec, usec time.Duration) {
-	tx.Time.Sec = int64(sec)
-	tx.Time.Usec = int32(usec)
+	setTimexField(&tx.Time.Sec, float64(sec))
+	setTimexField(&tx.Time.Usec, float64(usec))
 }

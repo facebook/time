@@ -1,3 +1,5 @@
+//go:build !linux
+
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
 
@@ -76,7 +78,7 @@ func deleteIfaceIP(iface *net.Interface, addr *net.IP) error {
 }
 
 // PHCOffset periodically checks for PHC-SYS offset and updates it in the config
-// PHC reading is not supported on Darwin
+// PHC reading is not supported on this platform
 func phcOffset(_ string) (time.Duration, error) {
 	return 0, nil
 }

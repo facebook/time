@@ -192,6 +192,7 @@ const (
 	SYS_CLOCK_SETTIME             = unix.SYS_CLOCK_SETTIME             //nolint:revive
 	TIME_OK                       = unix.TIME_OK                       //nolint:revive
 	CLOCK_BOOTTIME                = unix.CLOCK_BOOTTIME                //nolint:revive
+	CLOCK_MONOTONIC_RAW           = unix.CLOCK_MONOTONIC_RAW           //nolint:revive
 )
 
 var (
