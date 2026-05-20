@@ -18,10 +18,9 @@ package clock
 
 import (
 	"testing"
-	"time"
 
+	"github.com/facebook/time/phc/unix"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/sys/unix"
 )
 
 func TestSetFreq(t *testing.T) {
@@ -34,42 +33,6 @@ func TestSetFreq(t *testing.T) {
 
 	setFreq(tx, 0)
 	require.Equal(t, int64(0), tx.Freq)
-}
-
-func TestSetTime(t *testing.T) {
-	tx := &unix.Timex{}
-	setTime(tx, 5*time.Second, 123*time.Nanosecond)
-	require.Equal(t, int64(5*time.Second), tx.Time.Sec)
-	require.Equal(t, int64(123*time.Nanosecond), tx.Time.Usec)
-}
-
-func TestSetTimeNegative(t *testing.T) {
-	tx := &unix.Timex{}
-	setTime(tx, -1*time.Second, -500*time.Nanosecond)
-	require.Equal(t, int64(-1*time.Second), tx.Time.Sec)
-	require.Equal(t, int64(-500*time.Nanosecond), tx.Time.Usec)
-}
-
-func TestFrequencyPPB(t *testing.T) {
-	tx := &unix.Timex{}
-	wantState, err := unix.Adjtimex(tx)
-	require.NoError(t, err)
-
-	freqPPB, state, err := FrequencyPPB(0)
-	require.NoError(t, err)
-	require.Equal(t, wantState, state)
-	require.Equal(t, float64(tx.Freq)/PPBToTimexPPM, freqPPB)
-}
-
-func TestMaxFreqPPB(t *testing.T) {
-	tx := &unix.Timex{}
-	wantState, err := unix.Adjtimex(tx)
-	require.NoError(t, err)
-
-	maxFreq, state, err := MaxFreqPPB(0)
-	require.NoError(t, err)
-	require.Equal(t, wantState, state)
-	require.Equal(t, 500000.0, maxFreq)
 }
 
 func TestFrequencyPPBInvalidClock(t *testing.T) {

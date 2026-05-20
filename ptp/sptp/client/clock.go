@@ -23,8 +23,8 @@ import (
 
 	"github.com/facebook/time/clock"
 	"github.com/facebook/time/phc"
+	"github.com/facebook/time/phc/unix"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 )
 
 // Clock is the iface for clock device controls

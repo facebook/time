@@ -1,3 +1,5 @@
+//go:build linux
+
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
 
@@ -36,12 +38,6 @@ import (
 func strerror(errCode C.int) string {
 	cStr := C.fbclock_strerror(errCode)
 	return C.GoString(cStr)
-}
-
-// TrueTime is a time interval we are confident the clock is right now
-type TrueTime struct {
-	Earliest time.Time
-	Latest   time.Time
 }
 
 // FBClock wraps around fbclock C lib

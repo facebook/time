@@ -1,3 +1,5 @@
+//go:build linux
+
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
 
@@ -17,6 +19,7 @@ limitations under the License.
 package node
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -426,10 +429,35 @@ func rackSwHostnameMonitor(device string, lldpTimeout time.Duration) (string, er
 	}
 }
 
-func getLookUpName(ip string) string {
-	addr, err := net.LookupAddr(ip)
-	if err != nil || len(addr) == 0 {
-		return ip
+func formSignalingPacket(hop int, routeIndex int) *ptp.Signaling {
+	l := binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.RequestUnicastTransmissionTLV{})
+	return &ptp.Signaling{
+		Header: ptp.Header{
+			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageSignaling, 0),
+			Version:         ptp.Version,
+			SequenceID:      uint16(hop),
+			MessageLength:   uint16(l),
+			FlagField:       ptp.FlagUnicast,
+			SourcePortIdentity: ptp.PortIdentity{
+				PortNumber: uint16(routeIndex),
+			},
+			ControlField:       ZiffyHexa,
+			LogMessageInterval: 0x7f,
+		},
+		TargetPortIdentity: ptp.PortIdentity{
+			PortNumber:    0xffff,
+			ClockIdentity: 0xffffffffffffffff,
+		},
+		TLVs: []ptp.TLV{
+			&ptp.RequestUnicastTransmissionTLV{
+				TLVHead: ptp.TLVHead{
+					TLVType:     ptp.TLVRequestUnicastTransmission,
+					LengthField: uint16(binary.Size(ptp.RequestUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{})),
+				},
+				MsgTypeAndReserved:    ptp.NewUnicastMsgTypeAndFlags(ptp.MessageSync, 0),
+				LogInterMessagePeriod: 1,
+				DurationField:         0,
+			},
+		},
 	}
-	return addr[0]
 }

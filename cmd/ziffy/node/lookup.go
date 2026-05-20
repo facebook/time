@@ -1,5 +1,3 @@
-//go:build linux && !386
-
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
 
@@ -16,20 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package clock
+package node
 
 import (
-	"time"
-
-	"golang.org/x/sys/unix"
+	"net"
 )
 
-func setFreq(tx *unix.Timex, freqPPB float64) {
-	// man(2) clock_adjtime, turn ppb to ppm
-	tx.Freq = int64(freqPPB * PPBToTimexPPM)
-}
-
-func setTime(tx *unix.Timex, sec, usec time.Duration) {
-	tx.Time.Sec = int64(sec)
-	tx.Time.Usec = int64(usec)
+func getLookUpName(ip string) string {
+	addr, err := net.LookupAddr(ip)
+	if err != nil || len(addr) == 0 {
+		return ip
+	}
+	return addr[0]
 }

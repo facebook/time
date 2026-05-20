@@ -1,4 +1,4 @@
-//go:build linux && !386
+//go:build darwin && !386
 
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
@@ -21,15 +21,14 @@ package clock
 import (
 	"time"
 
-	"golang.org/x/sys/unix"
+	"github.com/facebook/time/phc/unix"
 )
 
 func setFreq(tx *unix.Timex, freqPPB float64) {
-	// man(2) clock_adjtime, turn ppb to ppm
 	tx.Freq = int64(freqPPB * PPBToTimexPPM)
 }
 
 func setTime(tx *unix.Timex, sec, usec time.Duration) {
 	tx.Time.Sec = int64(sec)
-	tx.Time.Usec = int64(usec)
+	tx.Time.Usec = int32(usec)
 }
