@@ -1,5 +1,3 @@
-//go:build 386 && !darwin
-
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
 
@@ -25,15 +23,6 @@ import (
 )
 
 func setSocketTimeout(connFd int, timeout time.Duration) error {
-	sec := int32(timeout / time.Second)
-	usec := int32(timeout.Microseconds())
-	if timeout > time.Second {
-		usec = int32((timeout - time.Duration(sec)*time.Second).Microseconds())
-	}
-
-	timeoutVal := unix.Timeval{
-		Sec:  sec,
-		Usec: usec,
-	}
-	return unix.SetsockoptTimeval(connFd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &timeoutVal)
+	tv := unix.NsecToTimeval(timeout.Nanoseconds())
+	return unix.SetsockoptTimeval(connFd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &tv)
 }

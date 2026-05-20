@@ -1,5 +1,3 @@
-//go:build !darwin
-
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
 
@@ -20,19 +18,15 @@ package cmd
 
 import (
 	"fmt"
-	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/unix"
 )
 
-// cannot import sys/timex.h
-const clockMonotonic = 4
-
 func getRawMonotonic() float64 {
-	var ts syscall.Timespec
-	_, _, _ = syscall.Syscall(syscall.SYS_CLOCK_GETTIME, clockMonotonic, uintptr(unsafe.Pointer(&ts)), 0)
+	var ts unix.Timespec
+	_ = unix.ClockGettime(unix.CLOCK_MONOTONIC_RAW, &ts)
 	return float64(ts.Sec) + float64(ts.Nsec)/float64(1e9)
 }
 
@@ -73,7 +67,6 @@ func track(interval time.Duration) {
 var trackInterval time.Duration
 
 func init() {
-	// track
 	utilsCmd.AddCommand(trackCmd)
 	trackCmd.Flags().DurationVarP(&trackInterval, "interval", "i", time.Second, "Measurement interval")
 }

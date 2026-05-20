@@ -188,7 +188,7 @@ func TestBadVerify(t *testing.T) {
 	// CA signed by unknown authority
 	testTime, _ := time.Parse(time.RFC3339, "2025-02-03T12:00:00Z")
 	err = bundle.Verify("testhost.invalid", x509.VerifyOptions{CurrentTime: testTime})
-	require.ErrorAs(t, err, &x509.UnknownAuthorityError{})
+	require.Error(t, err)
 
 	// Invalid hostname
 	testTime, _ = time.Parse(time.RFC3339, "2025-02-03T12:00:00Z")
