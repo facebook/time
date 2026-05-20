@@ -548,7 +548,8 @@ func TestPortAddressUint16Overflow(t *testing.T) {
 }
 
 func TestPortAddressUint16OverflowShortBuffer(t *testing.T) {
-	buf := []byte{0x00, 0x01, 0xFF, 0xFF}
+	buf := make([]byte, 0, 1024)
+	buf = append(buf, 0x00, 0x01, 0xFF, 0xFF)
 	buf = append(buf, make([]byte, 1020)...)
 
 	var addr PortAddress

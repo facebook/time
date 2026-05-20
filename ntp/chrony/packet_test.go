@@ -162,21 +162,21 @@ func TestDecodeSourceDataWithIPAddrID(t *testing.T) {
 	// Verify the ID value is correctly stored in the IP field
 	require.Equal(t, uint8(0x00), reply.IPAddr.IP[0])
 	require.Equal(t, uint8(0x00), reply.IPAddr.IP[1])
-	require.Equal(t, uint8(0x00), reply.SourceData.IPAddr.IP[2])
-	require.Equal(t, uint8(0x09), reply.SourceData.IPAddr.IP[3])
+	require.Equal(t, uint8(0x00), reply.IPAddr.IP[2])
+	require.Equal(t, uint8(0x09), reply.IPAddr.IP[3])
 
 	// Verify ToNetIP returns nil for unresolved addresses
-	require.Nil(t, reply.SourceData.IPAddr.ToNetIP())
+	require.Nil(t, reply.IPAddr.ToNetIP())
 
 	// Verify String() returns the correct ID format
-	require.Equal(t, "ID#0000000009", reply.SourceData.IPAddr.String())
+	require.Equal(t, "ID#0000000009", reply.IPAddr.String())
 
 	// Verify other fields are correctly parsed
-	require.Equal(t, int16(10), reply.SourceData.Poll)
-	require.Equal(t, uint16(2), reply.SourceData.Stratum)
-	require.Equal(t, SourceStateType(4), reply.SourceData.State)
-	require.Equal(t, uint16(255), reply.SourceData.Reachability)
-	require.Equal(t, uint32(1705), reply.SourceData.SinceSample)
+	require.Equal(t, int16(10), reply.Poll)
+	require.Equal(t, uint16(2), reply.Stratum)
+	require.Equal(t, SourceStateType(4), reply.State)
+	require.Equal(t, uint16(255), reply.Reachability)
+	require.Equal(t, uint32(1705), reply.SinceSample)
 }
 
 func TestDecodeSourceStats(t *testing.T) {

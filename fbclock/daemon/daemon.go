@@ -366,7 +366,7 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 	// use clock_gettime as the fastest and widely available method
 	phcTime, err := s.getPHCTime()
 	if err != nil {
-		return fmt.Errorf("Failed to get PHC time from %s: %w", s.cfg.Iface, errors.Join(errNoPHC, err))
+		return fmt.Errorf("failed to get PHC time from %s: %w", s.cfg.Iface, errors.Join(errNoPHC, err))
 	}
 
 	if data.IngressTimeNS > 0 {

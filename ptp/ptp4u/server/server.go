@@ -340,11 +340,11 @@ func (s *Server) handleEventMessages(eFD, rworker int) {
 				}
 			}
 
-			worker = s.findWorker(dReq.Header.SourcePortIdentity, workerOffset)
+			worker = s.findWorker(dReq.SourcePortIdentity, workerOffset)
 			if dReq.FlagField == ptp.FlagProfileSpecific1|ptp.FlagUnicast {
 				expire = time.Now().Add(subscriptionDuration)
 				// SYNC DELAY_REQUEST and ANNOUNCE
-				if sc = worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayReq); sc == nil {
+				if sc = worker.FindSubscription(dReq.SourcePortIdentity, ptp.MessageDelayReq); sc == nil {
 					// if the port number is > 10, it's a ptping request which expects announce to come to the same ephemeral port
 					if dReq.SourcePortIdentity.PortNumber > 10 {
 						gclisa = eclisa
@@ -353,7 +353,7 @@ func (s *Server) handleEventMessages(eFD, rworker int) {
 					}
 					// Create a new subscription
 					sc = NewSubscriptionClient(worker.queue, worker.signalingQueue, eclisa, gclisa, ptp.MessageDelayReq, s.Config, subscriptionDuration, expire)
-					worker.RegisterSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayReq, sc)
+					worker.RegisterSubscription(dReq.SourcePortIdentity, ptp.MessageDelayReq, sc)
 					go sc.Start(s.ctx)
 				} else {
 					// bump the subscription
@@ -371,7 +371,7 @@ func (s *Server) handleEventMessages(eFD, rworker int) {
 				sc.UpdateAnnounceDelayReq(dReq.CorrectionField, dReq.SequenceID)
 			} else {
 				// DELAY_RESPONSE
-				if sc = worker.FindSubscription(dReq.Header.SourcePortIdentity, ptp.MessageDelayResp); sc == nil {
+				if sc = worker.FindSubscription(dReq.SourcePortIdentity, ptp.MessageDelayResp); sc == nil {
 					log.Infof("Delay request from %s is not in the subscription list", timestamp.SockaddrToIP(eclisa))
 					continue
 				}

@@ -211,5 +211,5 @@ func isAsymmetric(result *RunResult, asymmetryThreshold time.Duration) bool {
 	if result.Measurement.BadDelay {
 		return false
 	}
-	return result.Measurement.Announce.AnnounceBody.GrandmasterClockQuality.ClockClass == ptp.ClockClass6 && math.Abs(float64(result.Measurement.Offset)) > float64(asymmetryThreshold)
+	return result.Measurement.Announce.GrandmasterClockQuality.ClockClass == ptp.ClockClass6 && math.Abs(float64(result.Measurement.Offset)) > float64(asymmetryThreshold)
 }

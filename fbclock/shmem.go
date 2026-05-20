@@ -1,3 +1,5 @@
+//go:build linux
+
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
 
@@ -32,7 +34,6 @@ import "C"
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"unsafe"
 
@@ -41,13 +42,6 @@ import (
 
 // PTPPath is the path we set for PTP device
 const PTPPath = C.FBCLOCK_PTPPATH
-
-// Shm is POSIX shared memory
-type Shm struct {
-	Path    string
-	File    *os.File
-	Version int
-}
 
 // OpenShm opens POSIX shared memory
 func OpenShm(path string, flags int, permissions os.FileMode) (*Shm, error) {
@@ -63,42 +57,6 @@ func OpenShm(path string, flags int, permissions os.FileMode) (*Shm, error) {
 		return nil, err
 	}
 	return &Shm{File: file, Path: path}, nil
-}
-
-// Close cleans up open POSIX shm resources
-func (s *Shm) Close() error {
-	if err := s.File.Close(); err != nil {
-		return err
-	}
-
-	cPath := C.CString(s.Path)
-	defer C.free(unsafe.Pointer(cPath))
-	return nil
-}
-
-// Data is a Go equivalent of what we want to store in shared memory for fbclock to use
-type Data struct {
-	IngressTimeNS        int64
-	ErrorBoundNS         uint64
-	HoldoverMultiplierNS float64 // float stored as multiplier of 2**16
-	SmearingStartS       uint64  // Smearing starts before the Leap Second Event Time (midnight on June-30 or Dec-31)
-	SmearingEndS         uint64  // Smearing ends after the Leap Second Event Time (midnight on June-30 or Dec-31)
-	UTCOffsetPreS        int32   // UTC Offset before Leap Second Event
-	UTCOffsetPostS       int32   // UTC Offset after Leap Second Event
-}
-
-// DataV2 is a Go equivalent of what we want to store in shared memory for fbclock to use
-type DataV2 struct {
-	IngressTimeNS        int64
-	ErrorBoundNS         uint64
-	HoldoverMultiplierNS float64 // float stored as multiplier of 2**16
-	SmearingStartS       uint64  // Smearing starts before the Leap Second Event Time (midnight on June-30 or Dec-31)
-	UTCOffsetPreS        int16   // UTC Offset before Leap Second Event
-	UTCOffsetPostS       int16   // UTC Offset after Leap Second Event
-	ClockID              uint32  // Clock ID of SysclockTimeNS (MONOTONIC_RAW or REALTIME)
-	PHCTimeNS            int64   // Periodically updated PHC time used to calculate real PHC time
-	SysclockTimeNS       int64   // Periodically updated system clock time (MONOTONIC_RAW or REALTIME) received with PHC time
-	CoefPPB              int64   // Coefficient of the approximation of the PHC time
 }
 
 // OpenFBClockShmCustom returns opened POSIX shared mem used by fbclock,
@@ -138,30 +96,6 @@ func OpenFBClockSHM() (*Shm, error) {
 // OpenFBClockSHMv2 returns opened POSIX shared mem used by fbclock
 func OpenFBClockSHMv2() (*Shm, error) {
 	return OpenFBClockShmCustomVer(C.FBCLOCK_PATH_V2, 2)
-}
-
-// FloatAsUint32 stores float as multiplier of 2**16.
-// Effectively this means we can store max 65k like this.
-func FloatAsUint32(val float64) uint32 {
-	valAsUint := C.FBCLOCK_POW2_16 * val
-	if valAsUint > math.MaxUint32 {
-		valAsUint = math.MaxUint32
-	}
-	return uint32(valAsUint)
-}
-
-// Uint32AsFloat restores float that was stored as a multiplier of 2**16.
-func Uint32AsFloat(val uint32) float64 {
-	return float64(val) / C.FBCLOCK_POW2_16
-}
-
-// Uint64ToUint32 converts uint64 to uint32, handling the overflow.
-// If the uint64 value is more than MaxUint32, result is set to MaxUint32.
-func Uint64ToUint32(val uint64) uint32 {
-	if val > math.MaxUint32 {
-		val = math.MaxUint32
-	}
-	return uint32(val)
 }
 
 // StoreFBClockData will store fbclock data in shared mem,

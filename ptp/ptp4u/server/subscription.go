@@ -382,15 +382,15 @@ func (sc *SubscriptionClient) initSignaling() {
 
 // UpdateSignalingGrant updates ptp Signaling packet granting the requested subscription
 func (sc *SubscriptionClient) UpdateSignalingGrant(sg *ptp.Signaling, mt ptp.UnicastMsgTypeAndFlags, interval ptp.LogInterval, duration uint32) {
-	sc.signaling.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{}))
-	sc.signaling.Header.SdoIDAndMsgType = sg.Header.SdoIDAndMsgType
-	sc.signaling.Header.DomainNumber = sg.Header.DomainNumber
-	sc.signaling.Header.MinorSdoID = sg.Header.MinorSdoID
-	sc.signaling.Header.CorrectionField = sg.Header.CorrectionField
-	sc.signaling.Header.MessageTypeSpecific = sg.Header.MessageTypeSpecific
-	sc.signaling.Header.SequenceID = sg.Header.SequenceID
-	sc.signaling.Header.ControlField = sg.Header.ControlField
-	sc.signaling.Header.LogMessageInterval = sg.Header.LogMessageInterval
+	sc.signaling.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{}))
+	sc.signaling.SdoIDAndMsgType = sg.SdoIDAndMsgType
+	sc.signaling.DomainNumber = sg.DomainNumber
+	sc.signaling.MinorSdoID = sg.MinorSdoID
+	sc.signaling.CorrectionField = sg.CorrectionField
+	sc.signaling.MessageTypeSpecific = sg.MessageTypeSpecific
+	sc.signaling.SequenceID = sg.SequenceID
+	sc.signaling.ControlField = sg.ControlField
+	sc.signaling.LogMessageInterval = sg.LogMessageInterval
 
 	sc.signaling.TargetPortIdentity = sg.SourcePortIdentity
 	sc.signaling.TLVs = []ptp.TLV{
@@ -407,7 +407,7 @@ func (sc *SubscriptionClient) UpdateSignalingGrant(sg *ptp.Signaling, mt ptp.Uni
 
 // UpdateSignalingCancel updates ptp Signaling packet canceling the requested subscription
 func (sc *SubscriptionClient) UpdateSignalingCancel() {
-	sc.signaling.Header.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.CancelUnicastTransmissionTLV{}))
+	sc.signaling.MessageLength = uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.CancelUnicastTransmissionTLV{}))
 	sc.signaling.TLVs = []ptp.TLV{
 		&ptp.CancelUnicastTransmissionTLV{
 			TLVHead:         ptp.TLVHead{TLVType: ptp.TLVCancelUnicastTransmission, LengthField: uint16(binary.Size(ptp.CancelUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{}))},

@@ -51,10 +51,10 @@ type SystemVariables struct {
 // sanityCheckSysVars checks if we parsed enough info from NTPD response
 func sanityCheckSysVars(sysVars *SystemVariables) error {
 	if sysVars == nil {
-		return errors.New("No system variables")
+		return errors.New("no system variables")
 	}
 	if sysVars.Stratum == 0 {
-		return errors.New("Incomplete data, stratum 0 in system variables")
+		return errors.New("incomplete data, stratum 0 in system variables")
 	}
 	return nil
 }

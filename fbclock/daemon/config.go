@@ -21,8 +21,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/facebook/time/phc/unix"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 	yaml "gopkg.in/yaml.v2"
 )
 

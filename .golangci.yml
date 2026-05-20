@@ -1,24 +1,40 @@
+version: "2"
 linters:
-  # extra linters to enable with default set:
-  # https://golangci-lint.run/usage/linters/#enabled-by-default
   enable:
-    - revive # replacement of golint
-    - asciicheck # code does not contain non-ASCII identifiers
-    - contextcheck # check when function use a non-inherited context
-    - errorlint # error wrapping
-    - gofmt # formatting
-    - misspell # commonly misspelled English words in comments
-    - prealloc # slice declarations that could potentially be pre-allocated
-    - nilerr # code that returns nil even if it checks that the error is not nil
-    - predeclared # code that shadows one of Go's predeclared identifiers
-    - reassign # package variables are not reassigned
-    - unconvert # unnecessary type conversions
-    - unparam # unused function parameters
-    - usestdlibvars # possibility to use variables/constants from the Go standard library
-    - whitespace # leading and trailing whitespace
-issues:
-  exclude-rules:
-      # not worth it
-    - path: _test\.go
-      linters:
-        - revive
+    - asciicheck
+    - contextcheck
+    - errorlint
+    - misspell
+    - nilerr
+    - prealloc
+    - predeclared
+    - reassign
+    - revive
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - whitespace
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - revive
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

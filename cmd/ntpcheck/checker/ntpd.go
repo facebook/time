@@ -175,7 +175,7 @@ func (n *NTPCheck) ServerStats() (*ServerStats, error) {
 	log.Debugf("Data string: '%s'", string(serverVars.Data))
 
 	if serverVars.HasError() || (len(serverVars.Data) <= 0) {
-		return nil, fmt.Errorf("Got bad 'server variables' response %+v", serverVars)
+		return nil, fmt.Errorf("got bad 'server variables' response %+v", serverVars)
 	}
 
 	serverStats, err := NewServerStatsFromNTP(serverVars)

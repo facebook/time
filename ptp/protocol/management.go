@@ -187,9 +187,9 @@ func (p *ManagementMsgErrorStatus) UnmarshalBinary(rawBytes []byte) error {
 	// packet can have trailing bytes, let's make sure we don't try to read past given length
 	toRead := int(p.MessageLength)
 	toRead -= binary.Size(p.ManagementMsgHead)
-	toRead -= binary.Size(p.ManagementErrorStatusTLV.TLVHead)
-	toRead -= binary.Size(p.ManagementErrorStatusTLV.ManagementErrorID)
-	toRead -= binary.Size(p.ManagementErrorStatusTLV.ManagementID)
+	toRead -= binary.Size(p.TLVHead)
+	toRead -= binary.Size(p.ManagementErrorID)
+	toRead -= binary.Size(p.ManagementID)
 	toRead -= binary.Size(p.ManagementErrorStatusTLV.Reserved)
 
 	if reader.Len() == 0 || toRead <= 0 {
@@ -212,13 +212,13 @@ func (p *ManagementMsgErrorStatus) MarshalBinaryToBuf(bytes io.Writer) error {
 	if err := binary.Write(bytes, be, &p.ManagementMsgHead); err != nil {
 		return fmt.Errorf("writing ManagementMsgErrorStatus ManagementMsgHead: %w", err)
 	}
-	if err := binary.Write(bytes, be, &p.ManagementErrorStatusTLV.TLVHead); err != nil {
+	if err := binary.Write(bytes, be, &p.TLVHead); err != nil {
 		return fmt.Errorf("writing ManagementMsgErrorStatus TLVHead: %w", err)
 	}
-	if err := binary.Write(bytes, be, &p.ManagementErrorStatusTLV.ManagementErrorID); err != nil {
+	if err := binary.Write(bytes, be, &p.ManagementErrorID); err != nil {
 		return fmt.Errorf("writing ManagementMsgErrorStatus ManagementErrorID: %w", err)
 	}
-	if err := binary.Write(bytes, be, &p.ManagementErrorStatusTLV.ManagementID); err != nil {
+	if err := binary.Write(bytes, be, &p.ManagementID); err != nil {
 		return fmt.Errorf("writing ManagementMsgErrorStatus ManagementID: %w", err)
 	}
 	if err := binary.Write(bytes, be, &p.ManagementErrorStatusTLV.Reserved); err != nil {

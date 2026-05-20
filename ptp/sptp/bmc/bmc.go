@@ -38,14 +38,14 @@ const (
 
 // Dscmp2 finds better Announce based on network topology
 func Dscmp2(a, b *ptp.Announce) ComparisonResult {
-	if a.AnnounceBody.StepsRemoved+1 < b.AnnounceBody.StepsRemoved {
+	if a.StepsRemoved+1 < b.StepsRemoved {
 		return ABetter
 	}
-	if b.AnnounceBody.StepsRemoved+1 < a.AnnounceBody.StepsRemoved {
+	if b.StepsRemoved+1 < a.StepsRemoved {
 		return BBetter
 	}
 
-	p1, p2 := a.Header.SourcePortIdentity, b.Header.SourcePortIdentity
+	p1, p2 := a.SourcePortIdentity, b.SourcePortIdentity
 	switch p1.Compare(p2) {
 	case -1:
 		return ABetterTopo
@@ -58,28 +58,28 @@ func Dscmp2(a, b *ptp.Announce) ComparisonResult {
 
 // Base comparison on all attributes
 func dscmp(a *ptp.Announce, b *ptp.Announce) ComparisonResult {
-	if a.AnnounceBody.GrandmasterClockQuality.ClockClass < b.AnnounceBody.GrandmasterClockQuality.ClockClass {
+	if a.GrandmasterClockQuality.ClockClass < b.GrandmasterClockQuality.ClockClass {
 		return ABetter
 	}
-	if a.AnnounceBody.GrandmasterClockQuality.ClockClass > b.AnnounceBody.GrandmasterClockQuality.ClockClass {
+	if a.GrandmasterClockQuality.ClockClass > b.GrandmasterClockQuality.ClockClass {
 		return BBetter
 	}
-	if a.AnnounceBody.GrandmasterClockQuality.ClockAccuracy < b.AnnounceBody.GrandmasterClockQuality.ClockAccuracy {
+	if a.GrandmasterClockQuality.ClockAccuracy < b.GrandmasterClockQuality.ClockAccuracy {
 		return ABetter
 	}
-	if a.AnnounceBody.GrandmasterClockQuality.ClockAccuracy > b.AnnounceBody.GrandmasterClockQuality.ClockAccuracy {
+	if a.GrandmasterClockQuality.ClockAccuracy > b.GrandmasterClockQuality.ClockAccuracy {
 		return BBetter
 	}
-	if a.AnnounceBody.GrandmasterClockQuality.OffsetScaledLogVariance < b.AnnounceBody.GrandmasterClockQuality.OffsetScaledLogVariance {
+	if a.GrandmasterClockQuality.OffsetScaledLogVariance < b.GrandmasterClockQuality.OffsetScaledLogVariance {
 		return ABetter
 	}
-	if a.AnnounceBody.GrandmasterClockQuality.OffsetScaledLogVariance > b.AnnounceBody.GrandmasterClockQuality.OffsetScaledLogVariance {
+	if a.GrandmasterClockQuality.OffsetScaledLogVariance > b.GrandmasterClockQuality.OffsetScaledLogVariance {
 		return BBetter
 	}
-	if a.AnnounceBody.GrandmasterPriority2 < b.AnnounceBody.GrandmasterPriority2 {
+	if a.GrandmasterPriority2 < b.GrandmasterPriority2 {
 		return ABetter
 	}
-	if a.AnnounceBody.GrandmasterPriority2 > b.AnnounceBody.GrandmasterPriority2 {
+	if a.GrandmasterPriority2 > b.GrandmasterPriority2 {
 		return BBetter
 	}
 
@@ -91,14 +91,14 @@ func Dscmp(a *ptp.Announce, b *ptp.Announce) ComparisonResult {
 	if a.AnnounceBody == b.AnnounceBody {
 		return Unknown
 	}
-	diff := int64(a.AnnounceBody.GrandmasterIdentity) - int64(b.AnnounceBody.GrandmasterIdentity)
+	diff := int64(a.GrandmasterIdentity) - int64(b.GrandmasterIdentity)
 	if diff == 0 {
 		return Dscmp2(a, b)
 	}
-	if a.AnnounceBody.GrandmasterPriority1 < b.AnnounceBody.GrandmasterPriority1 {
+	if a.GrandmasterPriority1 < b.GrandmasterPriority1 {
 		return ABetter
 	}
-	if a.AnnounceBody.GrandmasterPriority1 > b.AnnounceBody.GrandmasterPriority1 {
+	if a.GrandmasterPriority1 > b.GrandmasterPriority1 {
 		return BBetter
 	}
 
@@ -136,10 +136,10 @@ func TelcoDscmp(a *ptp.Announce, b *ptp.Announce, localPrioA int, localPrioB int
 	if localPrioA > localPrioB {
 		return BBetter
 	}
-	if a.AnnounceBody.GrandmasterClockQuality.ClockClass <= 127 {
+	if a.GrandmasterClockQuality.ClockClass <= 127 {
 		return Dscmp2(a, b)
 	}
-	diff := int64(a.AnnounceBody.GrandmasterIdentity) - int64(b.AnnounceBody.GrandmasterIdentity)
+	diff := int64(a.GrandmasterIdentity) - int64(b.GrandmasterIdentity)
 	if diff == 0 {
 		return Dscmp2(a, b)
 	}

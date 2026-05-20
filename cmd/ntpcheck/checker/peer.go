@@ -73,13 +73,13 @@ type Peer struct {
 // sanityCheckPeerVars checks if we parsed enough info from NTPD response
 func sanityCheckPeerVars(p *Peer) error {
 	if p == nil {
-		return errors.New("No peer")
+		return errors.New("no peer")
 	}
 	if p.Stratum == 0 {
-		return errors.New("Incomplete data, stratum 0 in peer variables")
+		return errors.New("incomplete data, stratum 0 in peer variables")
 	}
 	if p.PPoll == 0 || p.HPoll == 0 {
-		return errors.New("Incomplete data, poll 0 in peer variables")
+		return errors.New("incomplete data, poll 0 in peer variables")
 	}
 	return nil
 }

@@ -18,6 +18,7 @@ package timestamp
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -26,10 +27,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// unix.Cmsghdr size differs depending on platform
-var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
-
 var timestamping = unix.SO_TIMESTAMP
+
+var ErrNoTimestamp = errors.New("no timestamp available")
 
 // Here we have basic HW and SW timestamping support
 
@@ -63,7 +63,7 @@ func socketControlMessageTimestamp(b []byte, _ int) (time.Time, error) {
 }
 
 // socketControlMessageDrops is not implemented for darwin
-func socketControlMessageDrops(b []byte, _ int) uint32 {
+func socketControlMessageDrops(_ []byte, _ int) uint32 {
 	return 0
 }
 
@@ -78,15 +78,45 @@ func EnableTimestamps(ts Timestamp, connFd int, _ *net.Interface) error {
 	switch ts {
 	case SW:
 		if err := EnableSWTimestampsRx(connFd); err != nil {
-			return fmt.Errorf("Cannot enable software timestamps: %w", err)
+			return fmt.Errorf("cannot enable software timestamps: %w", err)
 		}
 	default:
-		return fmt.Errorf("Unrecognized timestamp type: %s", ts)
+		return fmt.Errorf("unrecognized timestamp type: %s", ts)
 	}
 	return nil
 }
 
 // EnableRXQueueOverflow is not implemented for darwin
-func EnableRXQueueOverflow(connFd int) error {
-	return err.Errorf("RX queue overflow is not supported on darwin")
+func EnableRXQueueOverflow(_ int) error {
+	return fmt.Errorf("RX queue overflow is not supported on darwin")
+}
+
+// ReadTXtimestamp is not supported on darwin.
+func ReadTXtimestamp(_ int) (time.Time, int, error) {
+	return time.Time{}, 0, errors.New("TX timestamping is not supported on darwin")
+}
+
+// ReadTXtimestampBuf is not supported on darwin.
+func ReadTXtimestampBuf(_ int, _, _ []byte) (time.Time, int, error) {
+	return time.Time{}, 0, errors.New("TX timestamping is unsupported on darwin")
+}
+
+// SeqIDSocketControlMessage is not supported on darwin.
+func SeqIDSocketControlMessage(_ uint32, _ []byte) {
+	// no-op on darwin
+}
+
+// ReadTimeStampSeqIDBuf is not supported on darwin.
+func ReadTimeStampSeqIDBuf(_ int, _ []byte, _ uint32) (time.Time, int, error) {
+	return time.Time{}, 0, errors.New("timestamp sequence ID control messages are unsupported on darwin")
+}
+
+// EnableHWTimestamps is not supported on darwin.
+func EnableHWTimestamps(_ int, _ *net.Interface) error {
+	return errors.New("hardware timestamping is not supported on darwin")
+}
+
+// EnableHWTimestampsRx is not supported on darwin.
+func EnableHWTimestampsRx(_ int, _ *net.Interface) error {
+	return errors.New("hardware RX timestamping is not supported on darwin")
 }

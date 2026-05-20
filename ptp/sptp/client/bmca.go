@@ -39,14 +39,14 @@ func bmca(results map[netip.Addr]*RunResult, prios map[ptp.ClockIdentity]int, cf
 		}
 		a := best
 		b := &result.Measurement.Announce
-		localPrioA := prios[a.AnnounceBody.GrandmasterIdentity]
-		localPrioB := prios[b.AnnounceBody.GrandmasterIdentity]
+		localPrioA := prios[a.GrandmasterIdentity]
+		localPrioB := prios[b.GrandmasterIdentity]
 		if bmc.TelcoDscmp(a, b, localPrioA, localPrioB) < 0 {
 			best = b
 		}
 	}
 	// Never select GM if worse (greater) than MaxClockClass or with clock accuracy worse than MaxClockAccuracy
-	if best == nil || best.AnnounceBody.GrandmasterClockQuality.ClockClass > cfg.MaxClockClass || best.AnnounceBody.GrandmasterClockQuality.ClockAccuracy > cfg.MaxClockAccuracy {
+	if best == nil || best.GrandmasterClockQuality.ClockClass > cfg.MaxClockClass || best.GrandmasterClockQuality.ClockAccuracy > cfg.MaxClockAccuracy {
 		return nil
 	}
 	return best

@@ -58,7 +58,7 @@ type NTPSHM struct {
 
 // Create a segment in SHM and return the ID
 func Create() (uintptr, error) {
-	shmID, _, errno := unix.Syscall(unix.SYS_SHMGET, uintptr(SHMKEY), 0, uintptr(IPCCREAT|0600))
+	shmID, _, errno := unix.Syscall(unix.SYS_SHMGET, uintptr(SHMKEY), 0, uintptr(IPCCREAT|0600)) //nolint:staticcheck
 	if errno != 0 {
 		return 0, fmt.Errorf("failed get shm: %s", unix.ErrnoName(errno))
 	}
@@ -86,7 +86,7 @@ func ptrToNTPSHM(shmptr uintptr) (*NTPSHM, error) {
 
 // ReadID reads SHM segment by ID
 func ReadID(id uintptr) (*NTPSHM, error) {
-	shmptr, _, errno := unix.Syscall(unix.SYS_SHMAT, id, 0, 0)
+	shmptr, _, errno := unix.Syscall(unix.SYS_SHMAT, id, 0, 0) //nolint:staticcheck
 	if errno != 0 {
 		return nil, fmt.Errorf("failed to attach to shm: %s", unix.ErrnoName(errno))
 	}
@@ -96,7 +96,7 @@ func ReadID(id uintptr) (*NTPSHM, error) {
 
 // Read SHM segment
 func Read() (*NTPSHM, error) {
-	shmID, _, errno := unix.Syscall(unix.SYS_SHMGET, uintptr(SHMKEY), 0, uintptr(0400))
+	shmID, _, errno := unix.Syscall(unix.SYS_SHMGET, uintptr(SHMKEY), 0, uintptr(0400)) //nolint:staticcheck
 	if errno != 0 {
 		return nil, fmt.Errorf("failed get shm: %s", unix.ErrnoName(errno))
 	}

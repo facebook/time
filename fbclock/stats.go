@@ -16,30 +16,9 @@ limitations under the License.
 
 package fbclock
 
-import "C"
-
 import (
 	"time"
 )
-
-// Stats aggregate stats for fbclock GetTime results
-type Stats struct {
-	Requests    int64
-	Errors      int64
-	WOUAvg      int64
-	WOUMax      int64
-	WOUlt10us   int64
-	WOUlt100us  int64
-	WOUlt1000us int64
-	WOUge1000us int64
-}
-
-// StatsCollector collects stats based on GetTime results
-type StatsCollector struct {
-	stats Stats
-	// internal stuff
-	wouSum int64
-}
 
 // Update processes result of GetTime call and updates Stats
 func (s *StatsCollector) Update(tt *TrueTime, err error) {
@@ -63,9 +42,4 @@ func (s *StatsCollector) Update(tt *TrueTime, err error) {
 	if int64(wou) > s.stats.WOUMax {
 		s.stats.WOUMax = int64(wou)
 	}
-}
-
-// Stats returns collected stats
-func (s *StatsCollector) Stats() Stats {
-	return s.stats
 }
