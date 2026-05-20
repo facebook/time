@@ -1,6 +1,3 @@
-//go:build !race
-// +build !race
-
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
 

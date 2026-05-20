@@ -1,4 +1,4 @@
-//go:build 386
+//go:build !linux
 
 /*
 Copyright (c) Facebook, Inc. and its affiliates.
@@ -16,20 +16,33 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package clock
+package server
 
 import (
-	"time"
+	"net"
+	"testing"
 
-	"golang.org/x/sys/unix"
+	"github.com/stretchr/testify/require"
 )
 
-func setFreq(tx *unix.Timex, freqPPB float64) {
-	// man(2) clock_adjtime, turn ppb to ppm
-	tx.Freq = int32(freqPPB * PPBToTimexPPM)
+func TestCheckIP(t *testing.T) {
+	iface, err := net.InterfaceByName("lo0")
+	require.NoError(t, err)
+
+	ip := net.ParseIP("127.0.0.1")
+	assigned, err := checkIP(iface, &ip)
+
+	require.NoError(t, err)
+	require.True(t, assigned)
 }
 
-func setTime(tx *unix.Timex, sec, usec time.Duration) {
-	tx.Time.Sec = int32(sec)
-	tx.Time.Usec = int32(usec)
+func TestCheckIPFalse(t *testing.T) {
+	iface, err := net.InterfaceByName("lo0")
+	require.NoError(t, err)
+
+	ip := net.ParseIP("8.8.8.8")
+	assigned, err := checkIP(iface, &ip)
+
+	require.NoError(t, err)
+	require.False(t, assigned)
 }
