@@ -121,11 +121,15 @@ type EthtoolTsInfo struct {
 
 //nolint:revive
 const (
+	PTP_PF_NONE = iota
+	PTP_PF_EXTTS
+	PTP_PF_PEROUT
+	PTP_PF_PHYSYNC
+)
+
+//nolint:revive
+const (
 	PTP_MAX_SAMPLES    = 25
-	PTP_PF_NONE        = iota //nolint:revive
-	PTP_PF_EXTTS              //nolint:revive
-	PTP_PF_PEROUT             //nolint:revive
-	PTP_PF_PHYSYNC            //nolint:revive
 	PTP_ENABLE_FEATURE = 0x1
 	PTP_RISING_EDGE    = 0x2
 )
