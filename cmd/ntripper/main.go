@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/facebook/time/ntrip"
+	"github.com/facebook/time/ntripper/stats"
 	"github.com/facebook/time/rtcm"
 )
 
@@ -52,6 +53,7 @@ type config struct {
 	proxyCert         string
 	proxyKey          string
 	reconnectInterval time.Duration
+	monitoringPort    int
 	logLevel          string
 	dryRun            bool
 }
@@ -79,6 +81,8 @@ func main() {
 		"PEM private key for proxy TLS authentication (defaults to proxy-cert)")
 	flag.DurationVar(&cfg.reconnectInterval, "reconnect-interval", 5*time.Second,
 		"delay between reconnection attempts")
+	flag.IntVar(&cfg.monitoringPort, "monitoring-port", 8891,
+		"port for JSON monitoring HTTP server (0 to disable)")
 	flag.StringVar(&cfg.logLevel, "log-level", "info",
 		"log level (debug, info, warn, error)")
 	flag.BoolVar(&cfg.dryRun, "dry-run", false,
@@ -99,7 +103,12 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
 
-	run(ctx, cfg, logger)
+	st := stats.NewJSONStats()
+	if cfg.monitoringPort > 0 {
+		go st.Start(cfg.monitoringPort)
+	}
+
+	run(ctx, cfg, logger, st)
 }
 
 func setupLogger(level string) *slog.Logger {
@@ -117,9 +126,9 @@ func setupLogger(level string) *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl}))
 }
 
-func run(ctx context.Context, cfg config, logger *slog.Logger) {
+func run(ctx context.Context, cfg config, logger *slog.Logger, st *stats.JSONStats) {
 	for ctx.Err() == nil {
-		err := runOnce(ctx, cfg, logger)
+		err := runOnce(ctx, cfg, logger, st)
 		if err == nil || ctx.Err() != nil {
 			return
 		}
@@ -128,6 +137,9 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) {
 			logger.Error("fatal error", "error", err)
 			os.Exit(1)
 		}
+
+		st.SetConnected(0)
+		st.IncReconnects()
 
 		logger.Warn("connection error, reconnecting",
 			"error", err,
@@ -141,27 +153,26 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) {
 
 // runOnce connects to the socket and caster, then streams data until an error
 // occurs or the context is cancelled.
-func runOnce(ctx context.Context, cfg config, logger *slog.Logger) error {
-	// Connect to oscillatord socket.
+func runOnce(ctx context.Context, cfg config, logger *slog.Logger, st *stats.JSONStats) error {
 	sockConn, err := connectSocket(ctx, cfg, logger)
 	if err != nil {
 		return fmt.Errorf("socket: %w", err)
 	}
 	defer sockConn.Close()
 
+	st.SetConnected(1)
+
 	if cfg.dryRun {
-		return printFrames(ctx, sockConn, logger)
+		return printFrames(ctx, sockConn, logger, st)
 	}
 
-	// Connect to NTRIP caster.
 	client, err := connectCaster(ctx, cfg, logger)
 	if err != nil {
 		return fmt.Errorf("caster: %w", err)
 	}
 	defer client.Close()
 
-	// Stream RTCM frames from socket to caster.
-	return streamFrames(ctx, sockConn, client, logger)
+	return streamFrames(ctx, sockConn, client, logger, st)
 }
 
 func connectSocket(ctx context.Context, cfg config, logger *slog.Logger) (net.Conn, error) {
@@ -211,6 +222,7 @@ func streamFrames(
 	sockConn net.Conn,
 	client *ntrip.Client,
 	logger *slog.Logger,
+	st *stats.JSONStats,
 ) error {
 	scanner := rtcm.NewScanner(sockConn)
 	var frameCount uint64
@@ -221,6 +233,8 @@ func streamFrames(
 		}
 
 		frame := scanner.Frame()
+		st.IncFramesReceived()
+
 		if _, err := client.Write(frame.Raw); err != nil {
 			return fmt.Errorf("writing to caster: %w", err)
 		}
@@ -235,12 +249,10 @@ func streamFrames(
 		return fmt.Errorf("reading from socket: %w", err)
 	}
 
-	// Scanner returned false with nil error — clean EOF from socket.
 	return fmt.Errorf("socket closed (EOF)")
 }
 
-// printFrames reads RTCM frames from the socket and prints their details to stdout.
-func printFrames(ctx context.Context, sockConn net.Conn, logger *slog.Logger) error {
+func printFrames(ctx context.Context, sockConn net.Conn, logger *slog.Logger, st *stats.JSONStats) error {
 	logger.Info("dry-run mode: printing frames to stdout")
 	scanner := rtcm.NewScanner(sockConn)
 	var frameCount uint64
@@ -252,6 +264,8 @@ func printFrames(ctx context.Context, sockConn net.Conn, logger *slog.Logger) er
 
 		frame := scanner.Frame()
 		frameCount++
+		st.IncFramesReceived()
+
 		fmt.Printf("frame=%d type=%d len=%d\n", frameCount, frame.MessageType, len(frame.Raw))
 	}
 
@@ -261,8 +275,6 @@ func printFrames(ctx context.Context, sockConn net.Conn, logger *slog.Logger) er
 	return fmt.Errorf("socket closed (EOF)")
 }
 
-// sleep waits for the specified duration or until the context is cancelled.
-// Returns true if the sleep completed, false if interrupted.
 func sleep(ctx context.Context, d time.Duration) bool {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
