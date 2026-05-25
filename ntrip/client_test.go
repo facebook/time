@@ -18,12 +18,15 @@ package ntrip
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -333,4 +336,82 @@ func TestSourceHandshakeRequestFormat(t *testing.T) {
 
 	_, _ = server.Write([]byte("ICY 200 OK\r\n\r\n"))
 	require.NoError(t, <-errCh)
+}
+
+func TestWithLogger(t *testing.T) {
+	customLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	c := NewClient(Config{
+		Caster:     "localhost:2101",
+		Mountpoint: "/M",
+		Password:   "p",
+	}, WithLogger(customLogger))
+	require.Same(t, customLogger, c.logger)
+}
+
+func TestBufferedConnReadPassesThroughBufferedBytes(t *testing.T) {
+	// Verifies bufferedConn.Read delegates to the embedded bufio.Reader. Does not exercise the underlying net.Conn — see TestConnectHandshakeFailure for the end-to-end path.
+	payload := []byte{0xD3, 0x00, 0x04, 0x3E, 0xD0, 0x00, 0x03}
+
+	client, server := net.Pipe()
+	t.Cleanup(func() {
+		client.Close()
+		server.Close()
+	})
+
+	bc := &bufferedConn{
+		reader: bufio.NewReader(bytes.NewReader(payload)),
+		Conn:   client,
+	}
+
+	buf := make([]byte, len(payload))
+	n, err := io.ReadFull(bc, buf)
+	require.NoError(t, err)
+	require.Equal(t, len(payload), n)
+	require.Equal(t, payload, buf)
+}
+
+func TestConnectHandshakeFailure(t *testing.T) {
+	// Connect should wrap a sourceHandshake error with "NTRIP SOURCE handshake".
+	// Simulates a caster that accepts the TCP connection but returns a
+	// non-ICY 200 response (here, an HTTP-style 401 a misconfigured proxy
+	// might send) and exercises Connect's handshake-error branch.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { listener.Close() })
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		// Consume the SOURCE request.
+		reader := bufio.NewReader(conn)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				return
+			}
+			if strings.TrimSpace(line) == "" {
+				break
+			}
+		}
+		// Respond with a non-ICY-200 line, then close.
+		_, _ = conn.Write([]byte("HTTP/1.1 401 Unauthorized\r\n\r\n"))
+	}()
+
+	c := NewClient(Config{
+		Caster:     listener.Addr().String(),
+		Mountpoint: "/M",
+		Password:   "wrong",
+	})
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	err = c.Connect(ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "NTRIP SOURCE handshake")
+	require.Contains(t, err.Error(), "caster rejected connection")
+	require.Nil(t, c.conn)
 }
