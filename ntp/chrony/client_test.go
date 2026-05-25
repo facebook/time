@@ -19,6 +19,7 @@ package chrony
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"testing"
@@ -26,10 +27,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeConn gives us fake io.ReadWriter interacted implementation for which we can provide fake outputs
+// fakeConn gives us fake io.ReadWriter interacted implementation for which we can provide fake outputs.
+// writeErr/readErr/readZero short-circuit before the outputs queue is consulted.
 type fakeConn struct {
 	readCount int
 	outputs   []*bytes.Buffer
+	// writeErr, when non-nil, is returned from Write instead of (0, nil).
+	writeErr error
+	// readErr, when non-nil, is returned from Read (with n=0) instead of consuming outputs.
+	readErr error
+	// readZero, when true, makes Read return (0, nil) instead of the default EOF fallback.
+	readZero bool
 }
 
 func newConn(outputs []*bytes.Buffer) *fakeConn {
@@ -40,6 +48,12 @@ func newConn(outputs []*bytes.Buffer) *fakeConn {
 }
 
 func (c *fakeConn) Read(p []byte) (n int, err error) {
+	if c.readErr != nil {
+		return 0, c.readErr
+	}
+	if c.readZero {
+		return 0, nil
+	}
 	pos := c.readCount
 	if c.readCount < len(c.outputs) {
 		c.readCount++
@@ -49,6 +63,9 @@ func (c *fakeConn) Read(p []byte) (n int, err error) {
 }
 
 func (c *fakeConn) Write(p []byte) (n int, err error) {
+	if c.writeErr != nil {
+		return 0, c.writeErr
+	}
 	// here we may assert writes
 	return 0, nil
 }
@@ -159,4 +176,38 @@ func TestCommunicateOK(t *testing.T) {
 		},
 	}
 	require.Equal(t, expected, p)
+}
+
+// TestCommunicateWriteError verifies that a Write failure on the underlying
+// connection is wrapped with a descriptive error and preserves the %w chain.
+func TestCommunicateWriteError(t *testing.T) {
+	sentinel := errors.New("network is down")
+	conn := &fakeConn{writeErr: sentinel}
+	client := Client{Sequence: 1, Connection: conn}
+	_, err := client.Communicate(NewTrackingPacket())
+	require.Error(t, err)
+	require.ErrorIs(t, err, sentinel)
+	require.ErrorContains(t, err, "failed to write packet to connection")
+}
+
+// TestCommunicateReadError verifies that a non-EOF Read failure on the underlying
+// connection is wrapped with a descriptive error and preserves the %w chain.
+func TestCommunicateReadError(t *testing.T) {
+	sentinel := errors.New("connection reset by peer")
+	conn := &fakeConn{readErr: sentinel}
+	client := Client{Sequence: 1, Connection: conn}
+	_, err := client.Communicate(NewTrackingPacket())
+	require.Error(t, err)
+	require.ErrorIs(t, err, sentinel)
+	require.ErrorContains(t, err, "connection.Read failed")
+}
+
+// TestCommunicateNoData verifies that a successful read of zero bytes (no error)
+// produces the "no data received" error rather than attempting to decode.
+func TestCommunicateNoData(t *testing.T) {
+	conn := &fakeConn{readZero: true}
+	client := Client{Sequence: 1, Connection: conn}
+	_, err := client.Communicate(NewTrackingPacket())
+	require.Error(t, err)
+	require.ErrorContains(t, err, "no data received")
 }
