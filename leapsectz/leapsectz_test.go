@@ -19,6 +19,7 @@ package leapsectz
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -373,6 +374,161 @@ func TestWriteWrongVersion(t *testing.T) {
 	var b bytes.Buffer
 	err := Write(&b, '4', []LeapSecond{}, "UTC")
 	require.ErrorIs(t, errUnsupportedVersion, err)
+}
+
+// modifies package-level leapFile; do not t.Parallel.
+func TestLeapFileGetSet(t *testing.T) {
+	const defaultPath = "/usr/share/zoneinfo/right/UTC"
+	t.Cleanup(func() { SetLeapFile("") })
+
+	SetLeapFile("")
+	require.Equal(t, defaultPath, LeapFile())
+
+	SetLeapFile("/tmp/custom-leap-file")
+	require.Equal(t, "/tmp/custom-leap-file", LeapFile())
+
+	SetLeapFile("")
+	require.Equal(t, defaultPath, LeapFile())
+}
+
+func TestParseNonExistentFile(t *testing.T) {
+	_, err := Parse("/no/such/leap/seconds/file")
+	require.Error(t, err)
+}
+
+func TestParseVxErrors(t *testing.T) {
+	tzNoLeap := []byte{
+		'T', 'Z', 'i', 'f', // magic
+		'2', 0x00, 0x00, 0x00, // version
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // UTC/local
+		0x00, 0x00, 0x00, 0x00, // standard/wall
+		0x00, 0x00, 0x00, 0x00, // leap (LeapCnt = 0)
+		0x00, 0x00, 0x00, 0x00, // transition
+		0x00, 0x00, 0x00, 0x00, // local tz
+		0x00, 0x00, 0x00, 0x00, // characters
+		'T', 'Z', 'i', 'f', // magic
+		'2', 0x00, 0x00, 0x00, // version
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // pad
+		0x00, 0x00, 0x00, 0x00, // UTC/local
+		0x00, 0x00, 0x00, 0x00, // standard/wall
+		0x00, 0x00, 0x00, 0x00, // leap (LeapCnt = 0)
+		0x00, 0x00, 0x00, 0x00, // transition
+		0x00, 0x00, 0x00, 0x00, // local tz
+		0x00, 0x00, 0x00, 0x00, // characters
+	}
+
+	testCases := []struct {
+		name    string
+		input   []byte
+		wantErr error
+	}{
+		{
+			name: "bad magic",
+			input: []byte{
+				'X', 'X', 'X', 'X', // bogus magic
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
+			},
+			wantErr: errBadData,
+		},
+		{
+			name: "unsupported version byte",
+			input: []byte{
+				'T', 'Z', 'i', 'f', // magic
+				'9', 0x00, 0x00, 0x00, // version '9' is not 0/'2'/'3'
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
+			},
+			wantErr: errUnsupportedVersion,
+		},
+		{
+			name: "truncated padding",
+			input: []byte{
+				'T', 'Z', 'i', 'f', // magic
+				0x00, // only 1 byte of the 16-byte version/padding block
+			},
+			wantErr: errBadData,
+		},
+		{
+			name:    "valid header with no leap seconds",
+			input:   tzNoLeap,
+			wantErr: errNoLeapSeconds,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ls, err := parseVx(bytes.NewReader(tc.input))
+			require.ErrorIs(t, err, tc.wantErr)
+			require.Empty(t, ls)
+		})
+	}
+}
+
+// errWriter returns errFailed on the failOnNthWriteCall-th call to Write
+// (1-indexed) and succeeds on every other call. Used to exercise
+// writer-error branches in Write/writePreData/writePostData.
+type errWriter struct {
+	failOnNthWriteCall int
+	calls              int
+}
+
+var errFailed = errors.New("write failed")
+
+func (w *errWriter) Write(p []byte) (int, error) {
+	w.calls++
+	if w.calls == w.failOnNthWriteCall {
+		return 0, errFailed
+	}
+	return len(p), nil
+}
+
+func TestWriteErrors(t *testing.T) {
+	ls := []LeapSecond{{Tleap: 78796800, Nleap: 1}}
+
+	// note: numbered labels are advisory; binary.Write chunking is stdlib-internal and may shift across Go versions.
+	// Write call order for ver='2', ls of length 1, name="UTC":
+	//   1: outer header
+	//   2: writePreData six-zeros
+	//   3: writePreData timezone string
+	//   4: leap seconds binary.Write
+	//   5: writePostData two-zeros
+	//   6: inner (V2) header
+	//   7: inner writePreData six-zeros
+	//   8: inner writePreData timezone string
+	//   9: inner leap seconds binary.Write
+	//  10: inner writePostData two-zeros
+	//  11: POSIX TZ string
+	testCases := []struct {
+		name               string
+		failOnNthWriteCall int
+	}{
+		{"outer header", 1},
+		{"writePreData six-zeros", 2},
+		{"writePreData timezone string", 3},
+		{"leap seconds binary.Write", 4},
+		{"writePostData two-zeros", 5},
+		{"inner V2 header", 6},
+		{"inner writePreData six-zeros", 7},
+		{"inner writePreData timezone string", 8},
+		{"inner leap seconds binary.Write", 9},
+		{"inner writePostData two-zeros", 10},
+		{"POSIX TZ string", 11},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &errWriter{failOnNthWriteCall: tc.failOnNthWriteCall}
+			err := Write(w, '2', ls, "UTC")
+			require.ErrorIs(t, err, errFailed)
+		})
+	}
 }
 
 func FuzzParse(f *testing.F) {
