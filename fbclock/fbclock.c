@@ -25,6 +25,10 @@ limitations under the License.
 #include <time.h>
 #include <unistd.h> // close
 
+#ifdef __aarch64__
+#include <arm_acle.h>
+#endif
+
 #if defined(__GNUC__) && !defined(__OPTIMIZE__)
 #define fbclock_debug_print(fmt, ...)  \
   do {                                 \
@@ -45,9 +49,7 @@ limitations under the License.
 #endif
 
 #ifdef __aarch64__
-#ifdef __SSE4_2__
-#define fbclock_crc64 _mm_crc32_u64
-#endif
+#define fbclock_crc64 __crc32cd
 #endif
 
 // dumb replacement for platforms we don't fully support
