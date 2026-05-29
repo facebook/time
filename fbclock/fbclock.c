@@ -50,6 +50,9 @@ limitations under the License.
 
 #ifdef __aarch64__
 #define fbclock_crc64 __crc32cd
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC target("+crc")
+#endif
 #endif
 
 // dumb replacement for platforms we don't fully support
