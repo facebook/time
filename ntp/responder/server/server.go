@@ -78,9 +78,6 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 				log.Fatalf("listening error: %v", err)
 			}
 			defer conn.Close()
-			if err != nil {
-				log.Fatalf("failed to start listener: %v", err)
-			}
 			s.startListener(conn)
 			s.Stats.DecListeners()
 		}(ip)
