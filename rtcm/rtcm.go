@@ -58,12 +58,12 @@ var (
 
 // Frame represents a parsed RTCM3 frame.
 type Frame struct {
-	// MessageType is the 12-bit RTCM3 message type ID.
-	MessageType uint16
 	// Payload is the frame payload (without header and CRC).
 	Payload []byte
 	// Raw is the complete frame bytes including header, payload, and CRC.
 	Raw []byte
+	// MessageType is the 12-bit RTCM3 message type ID.
+	MessageType uint16
 }
 
 // PayloadLen extracts the 10-bit payload length from a 3-byte RTCM3 header.
@@ -151,4 +151,51 @@ func CRC24Q(data []byte) uint32 {
 		crc = (crc << 8) ^ crc24qTable[((crc>>16)^uint32(b))&0xFF]
 	}
 	return crc & 0xFFFFFF
+}
+
+// putCRC computes the CRC-24Q over all but the last three bytes of frame and
+// writes the checksum into them.
+func putCRC(frame []byte) {
+	crc := CRC24Q(frame[:len(frame)-CRCSize])
+	frame[len(frame)-3] = byte((crc >> 16) & 0xFF)
+	frame[len(frame)-2] = byte((crc >> 8) & 0xFF)
+	frame[len(frame)-1] = byte(crc & 0xFF)
+}
+
+// PatchStationID sets the 12-bit Reference Station ID (DF003, bits 12-23
+// of the payload) in any RTCM3 frame and recomputes the CRC.
+func PatchStationID(frame []byte, id uint16) []byte {
+	if len(frame) < 6 {
+		return frame
+	}
+	patched := make([]byte, len(frame))
+	copy(patched, frame)
+
+	// DF003 is bits 12-23 of payload. Payload starts at frame[3].
+	// Bits 12-15 are the lower 4 bits of payload byte 1 (frame[4]).
+	// Bits 16-23 are all of payload byte 2 (frame[5]).
+	patched[4] = (patched[4] & 0xF0) | byte((id>>8)&0x0F)
+	patched[5] = byte(id & 0xFF)
+
+	putCRC(patched)
+	return patched
+}
+
+// Patch1005RefStation sets the Reference Station Indicator (DF141) to 1
+// in an RTCM 1005 frame and recomputes the CRC. DF141 is bit 33 of the
+// payload (0-indexed), which is byte 7 bit 6 of the raw frame.
+func Patch1005RefStation(frame []byte) []byte {
+	if len(frame) < 8 {
+		return frame
+	}
+	patched := make([]byte, len(frame))
+	copy(patched, frame)
+
+	// DF141 is at payload bit 33.
+	// Payload starts at frame byte 3.
+	// Bit 33 = byte 4 of payload = byte 7 of frame, bit position 6.
+	patched[7] |= 0x40
+
+	putCRC(patched)
+	return patched
 }

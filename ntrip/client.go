@@ -15,22 +15,25 @@ limitations under the License.
 */
 
 // Package ntrip provides an NTRIP client for pushing RTCM correction data
-// to an NTRIP caster. It implements the NTRIP v1 SOURCE protocol and
-// supports connecting through an HTTP CONNECT proxy with TLS client
-// certificate authentication.
+// to an NTRIP caster. It implements both the NTRIP v1 SOURCE protocol and the
+// NTRIP v2 (HTTP POST) protocol, and supports connecting through an HTTP
+// CONNECT proxy with TLS client certificate authentication.
 package ntrip
 
 import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"strings"
+	"time"
 )
 
-const defaultUserAgent = "NTRIP rtcm/1.0"
+const defaultUserAgent = "NTRIP ntripper/1.0"
 
 // Config holds the NTRIP caster connection parameters.
 type Config struct {
@@ -38,13 +41,19 @@ type Config struct {
 	Caster string
 	// Mountpoint is the caster mountpoint (e.g., "/MOUNT01").
 	Mountpoint string
-	// Password is the NTRIP v1 SOURCE password.
+	// Password is the NTRIP SOURCE / Basic auth password.
 	Password string
-	// Username is an optional username for identification.
+	// Username is the NTRIP username (used for v2 Basic auth).
 	Username string
 	// UserAgent is the source agent string sent to the caster.
-	// Defaults to "NTRIP rtcm/1.0" if empty.
+	// Defaults to "NTRIP ntripper/1.0" if empty.
 	UserAgent string
+	// Version selects the NTRIP protocol version: 1 (SOURCE) or 2 (HTTP POST).
+	// Defaults to 1 if zero.
+	Version int
+	// Chunked, when true (NTRIP v2 only), sends the body using HTTP chunked
+	// transfer encoding, as required by the NTRIP 2.0 NtripServer standard.
+	Chunked bool
 }
 
 // ProxyConfig holds the HTTP CONNECT proxy parameters.
@@ -74,13 +83,21 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
+// WithDump tees every byte sent to the caster into w, for offline inspection
+// of the exact RTCM stream the caster receives.
+func WithDump(w io.Writer) Option {
+	return func(c *Client) {
+		c.dump = w
+	}
+}
+
 // Client is an NTRIP v1 SOURCE client that pushes RTCM data to a caster.
-// It implements io.WriteCloser.
 type Client struct {
-	config Config
 	proxy  *ProxyConfig
 	logger *slog.Logger
 	conn   net.Conn
+	dump   io.Writer
+	config Config
 }
 
 // NewClient creates a new NTRIP client with the given configuration.
@@ -100,33 +117,69 @@ func NewClient(cfg Config, opts ...Option) *Client {
 
 // Connect establishes a connection to the NTRIP caster. If a proxy is
 // configured, it first establishes an HTTP CONNECT tunnel through the proxy
-// with TLS client certificate authentication. Then it performs the NTRIP v1
-// SOURCE handshake.
+// with TLS client certificate authentication. Then it performs the NTRIP
+// handshake (v1 SOURCE or v2 HTTP POST) and waits for the caster's
+// acceptance response before allowing data writes.
 func (c *Client) Connect(ctx context.Context) error {
 	conn, err := c.dial(ctx)
 	if err != nil {
 		return fmt.Errorf("dialing caster: %w", err)
 	}
 
-	if err := c.sourceHandshake(conn); err != nil {
+	if c.config.Version == 2 {
+		err = c.postHandshake(conn)
+	} else {
+		err = c.sourceHandshake(conn)
+	}
+	if err != nil {
 		conn.Close()
-		return fmt.Errorf("NTRIP SOURCE handshake: %w", err)
+		return fmt.Errorf("NTRIP handshake: %w", err)
+	}
+
+	// Wait for caster response before allowing data writes.
+	// v1 casters reply "ICY 200 OK", v2 casters reply "HTTP/1.1 200 OK".
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		conn.Close()
+		return fmt.Errorf("setting read deadline: %w", err)
+	}
+	// TCP may split the response across segments, so read the full status line
+	// rather than relying on whatever a single Read happens to return.
+	reader := bufio.NewReader(conn)
+	statusLine, err := reader.ReadString('\n')
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("reading caster response: %w", err)
+	}
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		conn.Close()
+		return fmt.Errorf("clearing read deadline: %w", err)
+	}
+	resp := strings.TrimSpace(statusLine)
+	c.logger.Info("received from caster", "data", resp)
+	if !strings.Contains(resp, "200") {
+		conn.Close()
+		return fmt.Errorf("caster rejected: %s", resp)
 	}
 
 	c.conn = conn
-	c.logger.Info("connected to NTRIP caster",
-		"caster", c.config.Caster,
-		"mountpoint", c.config.Mountpoint,
-	)
-	return nil
-}
 
-// Write sends RTCM data to the caster. The client must be connected.
-func (c *Client) Write(p []byte) (int, error) {
-	if c.conn == nil {
-		return 0, fmt.Errorf("not connected")
-	}
-	return c.conn.Write(p)
+	// Drain any further responses from the caster in the background, reusing the
+	// reader so bytes buffered past the status line are not lost.
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := reader.Read(buf)
+			if n > 0 {
+				c.logger.Info("received from caster", "data", string(buf[:n]))
+			}
+			if err != nil {
+				c.logger.Debug("caster read closed", "error", err)
+				return
+			}
+		}
+	}()
+
+	return nil
 }
 
 // Close closes the connection to the caster.
@@ -139,17 +192,40 @@ func (c *Client) Close() error {
 	return err
 }
 
+// Write sends raw RTCM data to the caster. In NTRIP v2 chunked mode each call
+// is wrapped in a single HTTP chunk. The dump (if any) always receives the raw
+// RTCM bytes, not the chunk framing, so captures remain valid RTCM3 streams.
+func (c *Client) Write(p []byte) (int, error) {
+	if c.conn == nil {
+		return 0, fmt.Errorf("not connected")
+	}
+	if c.dump != nil {
+		_, _ = c.dump.Write(p)
+	}
+	if c.config.Version == 2 && c.config.Chunked {
+		buf := make([]byte, 0, len(p)+16)
+		buf = append(buf, fmt.Sprintf("%X\r\n", len(p))...)
+		buf = append(buf, p...)
+		buf = append(buf, '\r', '\n')
+		if _, err := c.conn.Write(buf); err != nil {
+			return 0, err
+		}
+		return len(p), nil
+	}
+	return c.conn.Write(p)
+}
+
 // dial establishes a TCP connection to the caster, optionally through a proxy.
 func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 	if c.proxy != nil {
 		return c.dialViaProxy(ctx)
 	}
-	var d net.Dialer
+	d := net.Dialer{KeepAlive: 30 * time.Second}
 	return d.DialContext(ctx, "tcp", c.config.Caster)
 }
 
 // dialViaProxy establishes a connection through an HTTP CONNECT proxy with
-// TLS client certificate authentication.
+// TLS client certificate authentication, creating a raw TCP tunnel.
 func (c *Client) dialViaProxy(ctx context.Context) (net.Conn, error) {
 	cert, err := tls.LoadX509KeyPair(c.proxy.CertFile, c.proxy.KeyFile)
 	if err != nil {
@@ -166,7 +242,7 @@ func (c *Client) dialViaProxy(ctx context.Context) (net.Conn, error) {
 		ServerName:   host,
 	}
 
-	var d net.Dialer
+	d := net.Dialer{KeepAlive: 30 * time.Second}
 	rawConn, err := d.DialContext(ctx, "tcp", c.proxy.Address)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to proxy: %w", err)
@@ -178,7 +254,6 @@ func (c *Client) dialViaProxy(ctx context.Context) (net.Conn, error) {
 		return nil, fmt.Errorf("proxy TLS handshake: %w", err)
 	}
 
-	// Send HTTP CONNECT request.
 	connectReq := fmt.Sprintf(
 		"CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n",
 		c.config.Caster, c.config.Caster,
@@ -188,7 +263,6 @@ func (c *Client) dialViaProxy(ctx context.Context) (net.Conn, error) {
 		return nil, fmt.Errorf("sending CONNECT request: %w", err)
 	}
 
-	// Read proxy response.
 	reader := bufio.NewReader(tlsConn)
 	line, err := reader.ReadString('\n')
 	if err != nil {
@@ -200,7 +274,6 @@ func (c *Client) dialViaProxy(ctx context.Context) (net.Conn, error) {
 		return nil, fmt.Errorf("proxy CONNECT failed: %s", strings.TrimSpace(line))
 	}
 
-	// Consume remaining response headers.
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
@@ -214,59 +287,13 @@ func (c *Client) dialViaProxy(ctx context.Context) (net.Conn, error) {
 
 	c.logger.Debug("proxy tunnel established", "proxy", c.proxy.Address)
 
-	// Return a connection that reads from the buffered reader (which may
-	// have consumed bytes beyond the CONNECT response) and writes directly.
 	return &bufferedConn{
 		reader: reader,
 		Conn:   tlsConn,
 	}, nil
 }
 
-// sourceHandshake performs the NTRIP v1 SOURCE handshake.
-// Protocol:
-//
-//	Client sends:  SOURCE <password> <mountpoint>\r\n
-//	               Source-Agent: <useragent>\r\n
-//	               \r\n
-//	Server sends:  ICY 200 OK\r\n
-//	               \r\n
-func (c *Client) sourceHandshake(conn net.Conn) error {
-	req := fmt.Sprintf(
-		"SOURCE %s %s\r\nSource-Agent: %s\r\n\r\n",
-		c.config.Password, c.config.Mountpoint, c.config.UserAgent,
-	)
-	if _, err := conn.Write([]byte(req)); err != nil {
-		return fmt.Errorf("sending SOURCE request: %w", err)
-	}
-
-	reader := bufio.NewReader(conn)
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("reading caster response: %w", err)
-	}
-
-	line = strings.TrimSpace(line)
-	if !strings.HasPrefix(line, "ICY 200") {
-		return fmt.Errorf("caster rejected connection: %s", line)
-	}
-
-	// Consume remaining response headers until empty line.
-	for {
-		hdr, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("reading caster response headers: %w", err)
-		}
-		if strings.TrimSpace(hdr) == "" {
-			break
-		}
-	}
-
-	return nil
-}
-
 // bufferedConn wraps a net.Conn to use a bufio.Reader for reads.
-// This is needed after proxy CONNECT because the bufio.Reader may have
-// buffered data beyond the HTTP response that we need to read.
 type bufferedConn struct {
 	reader *bufio.Reader
 	net.Conn
@@ -274,4 +301,61 @@ type bufferedConn struct {
 
 func (c *bufferedConn) Read(p []byte) (int, error) {
 	return c.reader.Read(p)
+}
+
+// sourceHandshake sends the NTRIP v1 SOURCE request and streams raw RTCM
+// data after the headers. The request uses a bare mountpoint (no leading
+// slash) plus a STR line, matching the de-facto format produced by RTKLIB's
+// str2str that NTRIP casters accept.
+func (c *Client) sourceHandshake(conn net.Conn) error {
+	mount := strings.TrimPrefix(c.config.Mountpoint, "/")
+	req := fmt.Sprintf(
+		"SOURCE %s %s\r\nSource-Agent: %s\r\nSTR: \r\n\r\n",
+		c.config.Password, mount, c.config.UserAgent,
+	)
+
+	c.logger.Info("sending SOURCE request",
+		"caster", c.config.Caster,
+		"mountpoint", mount,
+	)
+	if _, err := conn.Write([]byte(req)); err != nil {
+		return fmt.Errorf("sending SOURCE request: %w", err)
+	}
+
+	return nil
+}
+
+// postHandshake sends the NTRIP v2 (HTTP POST) server request. The caster keeps
+// the connection open and ingests the request body as an RTCM stream. Some
+// casters that advertise "Ntrip-Version: Ntrip/2.0" require this and do not
+// enter stream-ingestion mode for a bare v1 SOURCE request.
+func (c *Client) postHandshake(conn net.Conn) error {
+	mount := strings.TrimPrefix(c.config.Mountpoint, "/")
+	auth := base64.StdEncoding.EncodeToString(
+		[]byte(c.config.Username + ":" + c.config.Password),
+	)
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "POST /%s HTTP/1.1\r\n", mount)
+	fmt.Fprintf(&b, "Host: %s\r\n", c.config.Caster)
+	fmt.Fprintf(&b, "Ntrip-Version: Ntrip/2.0\r\n")
+	fmt.Fprintf(&b, "User-Agent: %s\r\n", c.config.UserAgent)
+	fmt.Fprintf(&b, "Authorization: Basic %s\r\n", auth)
+	// A streaming source keeps the connection open; do not announce close.
+	fmt.Fprintf(&b, "Connection: keep-alive\r\n")
+	if c.config.Chunked {
+		fmt.Fprintf(&b, "Transfer-Encoding: chunked\r\n")
+	}
+	fmt.Fprintf(&b, "\r\n")
+
+	c.logger.Info("sending NTRIP v2 POST request",
+		"caster", c.config.Caster,
+		"mountpoint", mount,
+		"chunked", c.config.Chunked,
+	)
+	if _, err := conn.Write([]byte(b.String())); err != nil {
+		return fmt.Errorf("sending POST request: %w", err)
+	}
+
+	return nil
 }
