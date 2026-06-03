@@ -66,14 +66,12 @@ func TestDetectGNSSSerialFromEmptyFile(t *testing.T) {
 
 // makeFakeTimecardSysfs creates a sysfs-shaped layout under root mimicking
 // /sys/bus/pci/devices/<bdf>/timecard/<ocp>/tty/ttyGNSS = <ttyName>.
-// Returns the absolute path to the ttyGNSS file it created.
-func makeFakeTimecardSysfs(t *testing.T, root, bdf, ocp, ttyName string) string {
+func makeFakeTimecardSysfs(t *testing.T, root, bdf, ocp, ttyName string) {
 	t.Helper()
 	dir := filepath.Join(root, bdf, "timecard", ocp, "tty")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	file := filepath.Join(dir, "ttyGNSS")
 	require.NoError(t, os.WriteFile(file, []byte(ttyName+"\n"), 0o644))
-	return file
 }
 
 func TestDetectGNSSSerialFromGlobSingleCard(t *testing.T) {
