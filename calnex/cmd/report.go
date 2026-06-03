@@ -35,7 +35,10 @@ func init() {
 }
 
 func report() error {
-	api := api.NewAPI(target, insecureTLS, time.Minute)
+	api, err := api.NewAPI(target, insecureTLS, time.Minute)
+	if err != nil {
+		return err
+	}
 
 	reportFileName, err := api.FetchProblemReport(dir)
 	if err != nil {

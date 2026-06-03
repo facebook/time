@@ -42,7 +42,10 @@ func (m *Module) Name() string {
 
 // Run executes the check
 func (m *Module) Run(target string, insecureTLS bool) error {
-	api := api.NewAPI(target, insecureTLS, 10*time.Second)
+	api, err := api.NewAPI(target, insecureTLS, 10*time.Second)
+	if err != nil {
+		return err
+	}
 
 	ms, err := api.FetchInstrumentStatus()
 	if err != nil {

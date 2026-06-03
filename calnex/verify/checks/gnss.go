@@ -36,7 +36,10 @@ func (p *GNSS) Name() string {
 
 // Run executes the check
 func (p *GNSS) Run(target string, insecureTLS bool) error {
-	api := api.NewAPI(target, insecureTLS, 10*time.Second)
+	api, err := api.NewAPI(target, insecureTLS, 10*time.Second)
+	if err != nil {
+		return err
+	}
 
 	g, err := api.GnssStatus()
 	if err != nil {

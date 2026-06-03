@@ -223,7 +223,10 @@ func (c *config) baseConfig(target string, measure *ini.Section, gnss *ini.Secti
 // Config configures target Calnex with Network/Calnex configs if apply is specified
 func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error {
 	var c config
-	api := api.NewAPI(target, insecureTLS, 4*time.Minute)
+	api, err := api.NewAPI(target, insecureTLS, 4*time.Minute)
+	if err != nil {
+		return err
+	}
 
 	f, err := prepare(&c, api, target, cc)
 	if err != nil {
@@ -273,7 +276,10 @@ func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error
 // Save saves the Network/Calnex configs to file
 func Save(target string, insecureTLS bool, cc *CalnexConfig, saveConfig string) error {
 	var c config
-	calnexAPI := api.NewAPI(target, insecureTLS, time.Minute)
+	calnexAPI, err := api.NewAPI(target, insecureTLS, time.Minute)
+	if err != nil {
+		return err
+	}
 
 	f, err := prepare(&c, calnexAPI, target, cc)
 	if err != nil {

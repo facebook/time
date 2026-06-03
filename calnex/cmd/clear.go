@@ -40,7 +40,10 @@ func clearDevice() error {
 		return nil
 	}
 
-	api := api.NewAPI(target, insecureTLS, time.Minute)
+	api, err := api.NewAPI(target, insecureTLS, time.Minute)
+	if err != nil {
+		return err
+	}
 	if err := api.ClearDevice(); err != nil {
 		return err
 	}

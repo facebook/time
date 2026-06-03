@@ -36,7 +36,10 @@ func (p *PSU) Name() string {
 
 // Run executes the check
 func (p *PSU) Run(target string, insecureTLS bool) error {
-	api := api.NewAPI(target, insecureTLS, 10*time.Second)
+	api, err := api.NewAPI(target, insecureTLS, 10*time.Second)
+	if err != nil {
+		return err
+	}
 
 	pu, err := api.PowerSupplyStatus()
 	if err != nil {

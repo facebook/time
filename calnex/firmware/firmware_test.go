@@ -67,7 +67,8 @@ func TestFirmware(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	up := CalnexUpgrader{}
@@ -110,7 +111,8 @@ func TestFirmwareForce(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	up := CalnexUpgrader{}
@@ -153,7 +155,8 @@ func TestFirmwareInProgress(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	up := CalnexUpgrader{}
@@ -220,7 +223,8 @@ func TestRecoveryMode(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	up := CalnexUpgrader{}
@@ -266,7 +270,8 @@ func TestInternalError(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	up := CalnexUpgrader{}

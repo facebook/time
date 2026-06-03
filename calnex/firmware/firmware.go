@@ -91,7 +91,10 @@ func (up CalnexUpgrader) InProgress(target string, api *calnexAPI.API) (bool, er
 // Firmware checks target Calnex firmware version and upgrades if apply is specified
 // Returns err if there is a failure at any point in the process
 func (up CalnexUpgrader) Firmware(target string, insecureTLS bool, fw FW, apply bool, force bool) error {
-	api := calnexAPI.NewAPI(target, insecureTLS, 4*time.Minute)
+	api, err := calnexAPI.NewAPI(target, insecureTLS, 4*time.Minute)
+	if err != nil {
+		return err
+	}
 
 	shouldUpgrade, err := up.ShouldUpgrade(target, api, fw, force)
 	if err != nil {

@@ -40,7 +40,10 @@ func reboot() error {
 		return nil
 	}
 
-	api := api.NewAPI(target, insecureTLS, time.Minute)
+	api, err := api.NewAPI(target, insecureTLS, time.Minute)
+	if err != nil {
+		return err
+	}
 	if err := api.Reboot(); err != nil {
 		return err
 	}

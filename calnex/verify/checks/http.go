@@ -36,9 +36,12 @@ func (p *HTTP) Name() string {
 
 // Run executes the check
 func (p *HTTP) Run(target string, insecureTLS bool) error {
-	api := api.NewAPI(target, insecureTLS, 10*time.Second)
+	api, err := api.NewAPI(target, insecureTLS, 10*time.Second)
+	if err != nil {
+		return err
+	}
 
-	_, err := api.FetchStatus()
+	_, err = api.FetchStatus()
 	if err != nil {
 		return fmt.Errorf("https: %w", err)
 	}

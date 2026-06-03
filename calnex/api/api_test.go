@@ -129,14 +129,16 @@ func TestCalnexName(t *testing.T) {
 }
 
 func TestTLSSetting(t *testing.T) {
-	calnexAPI := NewAPI("localhost", false, time.Second)
+	calnexAPI, err := NewAPI("localhost", false, time.Second)
+	require.NoError(t, err)
 	// Never ever ever allow insecure over https
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
 	}
 	require.Equal(t, transport, calnexAPI.Client.Transport)
 
-	calnexAPI = NewAPI("localhost", true, time.Second)
+	calnexAPI, err = NewAPI("localhost", true, time.Second)
+	require.NoError(t, err)
 	transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -154,7 +156,8 @@ func TestFetchCsv(t *testing.T) {
 	legitChannelNames := []Channel{ChannelONE, ChannelTWO, ChannelC, ChannelD, ChannelVP22}
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 	for _, channel := range legitChannelNames {
 		lines, err := calnexAPI.FetchCsv(channel, true)
@@ -172,7 +175,8 @@ func TestFetchCsvNoData(t *testing.T) {
 	}))
 	defer ts.Close()
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 	lines, err := calnexAPI.FetchCsv(ChannelVP22, true)
 	require.Error(t, err)
@@ -188,7 +192,8 @@ func TestFetchChannelProtocol_NTP(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	probe, err := calnexAPI.FetchChannelProbe(ChannelVP1)
@@ -205,7 +210,8 @@ func TestFetchChannelProtocol_PTP(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	probe, err := calnexAPI.FetchChannelProbe(ChannelVP2)
@@ -222,7 +228,8 @@ func TestFetchChannelProtocol_PPS(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	probe, err := calnexAPI.FetchChannelProbe(ChannelA)
@@ -239,7 +246,8 @@ func TestFetchChannelTarget_NTP(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	target, err := calnexAPI.FetchChannelTarget(ChannelVP1, ProbeNTP)
@@ -256,7 +264,8 @@ func TestFetchChannelTarget_PTP(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	target, err := calnexAPI.FetchChannelTarget(ChannelVP1, ProbePTP)
@@ -273,7 +282,8 @@ func TestFetchChannelTarget_PPS(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	target, err := calnexAPI.FetchChannelTarget(ChannelA, ProbePPS)
@@ -290,7 +300,8 @@ func TestFetchUsedChannels(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	expected := []Channel{ChannelA, ChannelVP22}
@@ -308,7 +319,8 @@ func TestFetchSettings(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchSettings()
@@ -334,7 +346,8 @@ func TestFetchStatus(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchStatus()
@@ -401,7 +414,8 @@ func TestFetchInstumentStatus(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchInstrumentStatus()
@@ -418,7 +432,8 @@ func TestPushSettings(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	sampleConfig := "[measure]\nch0\\synce_enabled=Off\n"
@@ -442,7 +457,8 @@ func TestFetchVersion(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchVersion()
@@ -481,7 +497,8 @@ func TestPushVersion(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	r, err := calnexAPI.PushVersion(fw.Name())
@@ -516,7 +533,8 @@ func TestPost(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	buf := bytes.NewBuffer(postData)
@@ -539,10 +557,11 @@ func TestGet(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
-	err := calnexAPI.StartMeasure()
+	err = calnexAPI.StartMeasure()
 	require.NoError(t, err)
 
 	err = calnexAPI.StopMeasure()
@@ -563,11 +582,12 @@ func TestHTTPError(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	f := ini.Empty()
-	err := calnexAPI.PushSettings(f)
+	err = calnexAPI.PushSettings(f)
 	require.Error(t, err)
 }
 
@@ -580,7 +600,8 @@ func TestFetchProblemReport(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	dir, err := os.MkdirTemp("/tmp", "calnex")
@@ -621,7 +642,8 @@ func TestPushCert(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	r, err := calnexAPI.PushCert(cert)
@@ -682,7 +704,8 @@ func TestGnssStatus(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	g, err := calnexAPI.GnssStatus()
@@ -721,7 +744,8 @@ func TestPushLicense(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	r, err := calnexAPI.PushLicense(license.Name())
@@ -766,7 +790,8 @@ func TestPushLicenseError(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	r, err := calnexAPI.PushLicense(license.Name())
@@ -807,7 +832,8 @@ func TestPowerSupplyStatus(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	g, err := calnexAPI.PowerSupplyStatus()
@@ -828,7 +854,8 @@ func TestPowerSupplyStatusSentinel(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	g, err := calnexAPI.PowerSupplyStatus()
@@ -849,7 +876,8 @@ func TestFetchUptime(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchUptime()
@@ -874,10 +902,48 @@ func TestFetchSystemMonitor(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	f, err := calnexAPI.FetchSystemMonitor()
 	require.NoError(t, err)
 	require.Equal(t, expected, f)
+}
+
+func TestFormatHost(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "IPv6 full", input: "2401:db00:2715:f002:face:0000:021a:0000", want: "[2401:db00:2715:f002:face:0000:021a:0000]"},
+		{name: "IPv6 loopback short", input: "::1", want: "[::1]"},
+		{name: "IPv6 already bracketed", input: "[2401:db00:2715:f002:face:0000:021a:0000]", want: "[2401:db00:2715:f002:face:0000:021a:0000]"},
+		{name: "IPv4 plain", input: "10.128.64.5", want: "10.128.64.5"},
+		{name: "FQDN", input: "calnex01.dc1.facebook.com", want: "calnex01.dc1.facebook.com"},
+		{name: "localhost", input: "localhost", want: "localhost"},
+
+		{name: "empty", input: "", wantErr: true},
+		{name: "spaces", input: "not valid", wantErr: true},
+		{name: "garbage in brackets", input: "[garbage]", wantErr: true},
+		{name: "IPv4 in brackets", input: "[10.128.64.5]", wantErr: true},
+		{name: "path injection", input: "host/extra", wantErr: true},
+		{name: "userinfo injection", input: "user@host", wantErr: true},
+		{name: "query injection", input: "host?x=1", wantErr: true},
+		{name: "fragment injection", input: "host#frag", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := formatHost(tt.input)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
 }

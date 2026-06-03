@@ -1244,7 +1244,8 @@ func TestConfig(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 	expectedConfig = fmt.Sprintf(expectedConfig, parsed.Host)
 
@@ -1266,7 +1267,7 @@ func TestConfig(t *testing.T) {
 		},
 	}
 
-	err := Config(parsed.Host, true, cc, true)
+	err = Config(parsed.Host, true, cc, true)
 	require.NoError(t, err)
 }
 
@@ -1606,7 +1607,8 @@ func TestSaveConfig(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 	// add rubbish to end of expected config????
 	expectedConfig = fmt.Sprintf(expectedConfig, parsed.Host)
@@ -2043,7 +2045,8 @@ func TestPrepare(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 	cc := &CalnexConfig{
 		AntennaDelayNS: 1042,

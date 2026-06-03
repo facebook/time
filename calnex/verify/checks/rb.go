@@ -36,7 +36,10 @@ func (p *RB) Name() string {
 
 // Run executes the check
 func (p *RB) Run(target string, insecureTLS bool) error {
-	api := api.NewAPI(target, insecureTLS, 10*time.Second)
+	api, err := api.NewAPI(target, insecureTLS, 10*time.Second)
+	if err != nil {
+		return err
+	}
 
 	rb, err := api.RBStatus()
 	if err != nil {

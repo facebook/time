@@ -42,10 +42,11 @@ func TestGNSS(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
-	err := c.Run(parsed.Host, true)
+	err = c.Run(parsed.Host, true)
 	require.NoError(t, err)
 }
 
@@ -62,10 +63,11 @@ func TestGNSSNoSatellites(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
-	err := c.Run(parsed.Host, true)
+	err = c.Run(parsed.Host, true)
 	require.ErrorContains(t, err, "gnss: not enough satellites")
 }
 
@@ -97,10 +99,11 @@ func TestHTTP(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
-	err := c.Run(parsed.Host, true)
+	err = c.Run(parsed.Host, true)
 	require.NoError(t, err)
 }
 
@@ -132,10 +135,11 @@ func TestPSU(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
-	err := c.Run(parsed.Host, true)
+	err = c.Run(parsed.Host, true)
 	require.NoError(t, err)
 }
 
@@ -152,10 +156,11 @@ func TestPSUSingleBad(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
-	err := c.Run(parsed.Host, true)
+	err = c.Run(parsed.Host, true)
 	require.ErrorContains(t, err, "psu: failed power supply #1: PSU_module_B")
 }
 
@@ -172,10 +177,11 @@ func TestPSUBBad(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
-	err := c.Run(parsed.Host, true)
+	err = c.Run(parsed.Host, true)
 	require.ErrorContains(t, err, "psu: failed power supply")
 }
 
@@ -207,10 +213,11 @@ func TestModule(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
-	err := c.Run(parsed.Host, true)
+	err = c.Run(parsed.Host, true)
 	require.NoError(t, err)
 }
 
@@ -227,10 +234,11 @@ func TestModuleBad(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
-	err := c.Run(parsed.Host, true)
+	err = c.Run(parsed.Host, true)
 	require.ErrorContains(t, err, "module: failed module 1: state: Fault")
 }
 

@@ -24,7 +24,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -514,8 +516,65 @@ func parseResponse(response string) (string, error) {
 	return s[1], nil
 }
 
+// formatHost ensures the device address is properly formatted for URL construction.
+// IPv6 addresses are wrapped in brackets per RFC 3986.
+// IPv4 and FQDN addresses pass through unchanged.
+// Invalid addresses return an error.
+func formatHost(source string) (string, error) {
+	if source == "" {
+		return "", errors.New("device address cannot be empty")
+	}
+
+	// Handle already-bracketed input
+	if strings.HasPrefix(source, "[") && strings.HasSuffix(source, "]") {
+		inner := source[1 : len(source)-1]
+		ip := net.ParseIP(inner)
+		if ip == nil {
+			return "", fmt.Errorf("invalid IP address in brackets: %q", inner)
+		}
+		if ip.To4() != nil {
+			// IPv4 in brackets is an RFC 3986 violation
+			return "", fmt.Errorf("IPv4 address must not be bracketed: %q", source)
+		}
+		// IPv6 in brackets — already correctly formatted
+		return source, nil
+	}
+
+	// Try parsing as IP address
+	if ip := net.ParseIP(source); ip != nil {
+		if ip.To4() == nil {
+			// IPv6 — must wrap in brackets for URL use
+			return "[" + source + "]", nil
+		}
+		// IPv4 — use as-is
+		return source, nil
+	}
+
+	// Not an IP — treat as hostname/FQDN.
+	// Build a probe URL and verify the input did not bleed into another URL
+	// component (path, query, fragment, userinfo). The Host and Path must
+	// match exactly what we expect — anything else means the input contained
+	// URL-significant characters (e.g. "/", "?", "#", "@") and could later
+	// corrupt the API endpoint when substituted into request templates.
+	const probePath = "/api/test"
+	testURL := fmt.Sprintf("https://%s%s", source, probePath)
+	u, err := url.Parse(testURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid device address %q: %w", source, err)
+	}
+	if u.Host != source || u.Path != probePath {
+		return "", fmt.Errorf("invalid device address %q", source)
+	}
+
+	return source, nil
+}
+
 // NewAPI returns an pointer of API struct with default values.
-func NewAPI(source string, insecureTLS bool, timeout time.Duration) *API {
+func NewAPI(source string, insecureTLS bool, timeout time.Duration) (*API, error) {
+	host, err := formatHost(source)
+	if err != nil {
+		return nil, err
+	}
 	return &API{
 		Client: &http.Client{
 			Transport: &http.Transport{
@@ -523,8 +582,8 @@ func NewAPI(source string, insecureTLS bool, timeout time.Duration) *API {
 			},
 			Timeout: timeout,
 		},
-		source: source,
-	}
+		source: host,
+	}, nil
 }
 
 // FetchCsv takes channel name (like 1, 2, c, d)
@@ -596,7 +655,7 @@ func (a *API) FetchChannelProbe(channel Channel) (*Probe, error) {
 		return nil, err
 	}
 	p, err := ProbeFromCalnex(probe)
-	return p, err
+	return p, err //nolint:nilnil
 }
 
 // FetchChannelTarget returns the measure target of the server monitored on the channel
@@ -761,7 +820,7 @@ func (a *API) PushVersion(path string) (*Result, error) {
 
 	url := fmt.Sprintf(firmwareURL, a.source)
 	r, err := a.postFile(url, fw)
-	return r, err
+	return r, err //nolint:nilnil
 }
 
 // PushCert uploads a new Certificate to the device
@@ -770,7 +829,7 @@ func (a *API) PushCert(cert []byte) (*Result, error) {
 	buf := bytes.NewBuffer(cert)
 
 	r, err := a.post(url, buf)
-	return r, err
+	return r, err //nolint:nilnil
 }
 
 // PushLicense uploads a new license to the device
@@ -790,7 +849,7 @@ func (a *API) PushLicense(path string) (*Result, error) {
 	}
 
 	r, err := a.post(url, buf)
-	return r, err
+	return r, err //nolint:nilnil
 }
 
 // PushSettings pushes the calnex settings
@@ -867,7 +926,7 @@ func (a *API) post(url string, content *bytes.Buffer) (*Result, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return r, errors.New(http.StatusText(resp.StatusCode))
+		return r, errors.New(http.StatusText(resp.StatusCode)) //nolint:nilnil
 	}
 
 	if !r.Result {

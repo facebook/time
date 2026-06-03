@@ -76,14 +76,15 @@ func TestExport(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
 	calnexAPI.Client = ts.Client()
 
 	expected := []string{
 		fmt.Sprintf("{\"double\":{\"value\":-2.50504e-7},\"int\":{\"time\":1607961194},\"normal\":{\"channel\":\"VP1\",\"target\":\"127.0.0.1\",\"protocol\":\"NTP\",\"source\":\"%s\"}}\n", parsed.Host),
 		fmt.Sprintf("{\"double\":{\"value\":-2.50501e-7},\"int\":{\"time\":1607961193},\"normal\":{\"channel\":\"A\",\"target\":\"127.0.0.1\",\"protocol\":\"PPS\",\"source\":\"%s\"}}\n", parsed.Host),
 	}
-	err := Export(parsed.Host, true, true, []api.Channel{}, l)
+	err = Export(parsed.Host, true, true, []api.Channel{}, l)
 	require.NoError(t, err)
 	require.ElementsMatch(t, expected, w.data)
 }
@@ -104,7 +105,8 @@ func TestExportFail(t *testing.T) {
 	defer ts.Close()
 
 	parsed, _ := url.Parse(ts.URL)
-	calnexAPI := api.NewAPI(parsed.Host, true, time.Second)
+	calnexAPI, err2 := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err2)
 	calnexAPI.Client = ts.Client()
 
 	err = Export(parsed.Host, true, true, []api.Channel{api.ChannelONE}, nil)

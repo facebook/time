@@ -39,8 +39,11 @@ func init() {
 }
 
 func licenseFunc() error {
-	api := api.NewAPI(target, insecureTLS, time.Minute)
-	_, err := api.PushLicense(source)
+	api, err := api.NewAPI(target, insecureTLS, time.Minute)
+	if err != nil {
+		return err
+	}
+	_, err = api.PushLicense(source)
 	return err
 }
 

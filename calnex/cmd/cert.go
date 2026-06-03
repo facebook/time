@@ -44,7 +44,10 @@ func init() {
 }
 
 func certFunc() error {
-	api := api.NewAPI(target, insecureTLS, time.Minute)
+	api, err := api.NewAPI(target, insecureTLS, time.Minute)
+	if err != nil {
+		return err
+	}
 	certData, err := os.ReadFile(source)
 	if err != nil {
 		return err
