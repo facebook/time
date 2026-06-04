@@ -91,7 +91,7 @@ func (s *Shm) Close() error {
 	return nil
 }
 
-const pow2_16 = float64(1 << 16) //nolint:revive
+const pow2_16 = float64(1 << 16) //nolint:revive // underscore in name mirrors the mathematical notation 2^16
 
 // FloatAsUint32 stores float as multiplier of 2**16
 func FloatAsUint32(val float64) uint32 {
