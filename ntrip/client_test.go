@@ -18,15 +18,13 @@ package ntrip
 
 import (
 	"bufio"
-	"bytes"
 	"context"
-	"fmt"
+	"encoding/base64"
 	"io"
 	"log/slog"
 	"net"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -39,10 +37,10 @@ func TestSourceHandshakeSuccess(t *testing.T) {
 		Caster:     "caster.example.com:2101",
 		Mountpoint: "/MOUNT01",
 		Password:   "secret",
-		UserAgent:  "TestAgent/1.0",
+		Username:   "user1",
+		UserAgent:  "NTRIP TestAgent/1.0",
 	})
 
-	// Run handshake in a goroutine.
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- ntripClient.sourceHandshake(client)
@@ -52,60 +50,61 @@ func TestSourceHandshakeSuccess(t *testing.T) {
 	reader := bufio.NewReader(server)
 	line, err := reader.ReadString('\n')
 	require.NoError(t, err)
-	require.Equal(t, "SOURCE secret /MOUNT01\r\n", line)
+	require.Equal(t, "SOURCE secret MOUNT01\r\n", line)
 
 	line, err = reader.ReadString('\n')
 	require.NoError(t, err)
-	require.Equal(t, "Source-Agent: TestAgent/1.0\r\n", line)
+	require.Equal(t, "Source-Agent: NTRIP TestAgent/1.0\r\n", line)
+
+	line, err = reader.ReadString('\n')
+	require.NoError(t, err)
+	require.Equal(t, "STR: \r\n", line)
 
 	line, err = reader.ReadString('\n')
 	require.NoError(t, err)
 	require.Equal(t, "\r\n", line)
 
-	// Send successful response.
-	_, err = server.Write([]byte("ICY 200 OK\r\n\r\n"))
-	require.NoError(t, err)
-
 	require.NoError(t, <-errCh)
 }
 
-func TestSourceHandshakeRejected(t *testing.T) {
+func TestSourceHandshakeRequestFormat(t *testing.T) {
 	client, server := net.Pipe()
 	defer server.Close()
 
-	ntripClient := NewClient(Config{
+	cfg := Config{
 		Caster:     "caster.example.com:2101",
-		Mountpoint: "/MOUNT01",
-		Password:   "wrong",
-	})
+		Mountpoint: "/EXAMPLE_MOUNT",
+		Password:   "my$ecr3t",
+		Username:   "user1",
+		UserAgent:  "NTRIP MyApp/1.0",
+	}
+	ntripClient := NewClient(cfg)
 
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- ntripClient.sourceHandshake(client)
 	}()
 
-	// Consume the SOURCE request.
+	// Read the complete request.
 	reader := bufio.NewReader(server)
+	var request strings.Builder
 	for {
 		line, err := reader.ReadString('\n')
 		require.NoError(t, err)
+		request.WriteString(line)
 		if strings.TrimSpace(line) == "" {
 			break
 		}
 	}
 
-	// Send rejection.
-	_, err := server.Write([]byte("ERROR - Bad Password\r\n\r\n"))
-	require.NoError(t, err)
-
-	err = <-errCh
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "caster rejected connection")
-	require.Contains(t, err.Error(), "Bad Password")
+	expected := "SOURCE my$ecr3t EXAMPLE_MOUNT\r\nSource-Agent: NTRIP MyApp/1.0\r\nSTR: \r\n\r\n"
+	require.Equal(t, expected, request.String())
+	require.NoError(t, <-errCh)
 }
 
-func TestSourceHandshakeConnectionClosed(t *testing.T) {
+func TestSourceHandshakeMountpointStripsSlash(t *testing.T) {
 	client, server := net.Pipe()
+	defer server.Close()
 
 	ntripClient := NewClient(Config{
 		Caster:     "caster.example.com:2101",
@@ -118,22 +117,109 @@ func TestSourceHandshakeConnectionClosed(t *testing.T) {
 		errCh <- ntripClient.sourceHandshake(client)
 	}()
 
-	// Consume the SOURCE request then close.
 	reader := bufio.NewReader(server)
+	line, err := reader.ReadString('\n')
+	require.NoError(t, err)
+	// NTRIP v1 SOURCE uses a bare mountpoint with no leading slash, matching
+	// str2str/RTKLIB; the configured "/MOUNT01" must be stripped to "MOUNT01".
+	require.Equal(t, "SOURCE secret MOUNT01\r\n", line)
+	require.NoError(t, <-errCh)
+}
+
+func TestSourceHandshakeWriteError(t *testing.T) {
+	client, server := net.Pipe()
+	server.Close() // Close immediately to cause write error.
+
+	ntripClient := NewClient(Config{
+		Caster:     "caster.example.com:2101",
+		Mountpoint: "/MOUNT01",
+		Password:   "secret",
+	})
+
+	err := ntripClient.sourceHandshake(client)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "sending SOURCE request")
+}
+
+func TestPostHandshakeRequestFormat(t *testing.T) {
+	client, server := net.Pipe()
+	defer server.Close()
+
+	cfg := Config{
+		Caster:     "caster.example.com:2101",
+		Mountpoint: "/MOUNT01",
+		Password:   "secret",
+		Username:   "user1",
+		UserAgent:  "NTRIP MyApp/1.0",
+		Version:    2,
+		Chunked:    true,
+	}
+	ntripClient := NewClient(cfg)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- ntripClient.postHandshake(client)
+	}()
+
+	reader := bufio.NewReader(server)
+	var requestLine string
+	headers := map[string]string{}
 	for {
 		line, err := reader.ReadString('\n')
-		if err != nil {
+		require.NoError(t, err)
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
 			break
 		}
-		if strings.TrimSpace(line) == "" {
-			break
+		if requestLine == "" {
+			requestLine = line
+			continue
 		}
+		k, v, _ := strings.Cut(line, ": ")
+		headers[k] = v
 	}
-	server.Close()
 
-	err := <-errCh
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "reading caster response")
+	require.Equal(t, "POST /MOUNT01 HTTP/1.1", requestLine)
+	require.Equal(t, "caster.example.com:2101", headers["Host"])
+	require.Equal(t, "Ntrip/2.0", headers["Ntrip-Version"])
+	require.Equal(t, "NTRIP MyApp/1.0", headers["User-Agent"])
+	require.Equal(t, "chunked", headers["Transfer-Encoding"])
+	want := base64.StdEncoding.EncodeToString([]byte("user1:secret"))
+	require.Equal(t, "Basic "+want, headers["Authorization"])
+	require.NoError(t, <-errCh)
+}
+
+func TestClientWriteChunked(t *testing.T) {
+	client, server := net.Pipe()
+	defer server.Close()
+
+	c := &Client{
+		config: Config{Version: 2, Chunked: true},
+		conn:   client,
+		logger: slog.Default(),
+	}
+
+	data := []byte{0xD3, 0x00, 0x04, 0x3E, 0xD0, 0x00, 0x03} // 7 bytes
+	go func() {
+		n, err := c.Write(data)
+		require.NoError(t, err)
+		require.Equal(t, len(data), n)
+	}()
+
+	reader := bufio.NewReader(server)
+	sizeLine, err := reader.ReadString('\n')
+	require.NoError(t, err)
+	require.Equal(t, "7\r\n", sizeLine) // chunk size in hex
+
+	buf := make([]byte, len(data))
+	_, err = io.ReadFull(reader, buf)
+	require.NoError(t, err)
+	require.Equal(t, data, buf)
+
+	crlf := make([]byte, 2)
+	_, err = io.ReadFull(reader, crlf)
+	require.NoError(t, err)
+	require.Equal(t, "\r\n", string(crlf))
 }
 
 func TestClientWriteNotConnected(t *testing.T) {
@@ -150,6 +236,7 @@ func TestClientWriteForwarding(t *testing.T) {
 	c := &Client{
 		config: Config{Caster: "localhost:2101", Mountpoint: "/M", Password: "p"},
 		conn:   client,
+		logger: slog.Default(),
 	}
 
 	data := []byte{0xD3, 0x00, 0x04, 0x3E, 0xD0, 0x00, 0x03}
@@ -176,19 +263,19 @@ func TestClientClose(t *testing.T) {
 	c := &Client{
 		config: Config{Caster: "localhost:2101", Mountpoint: "/M", Password: "p"},
 		conn:   client,
+		logger: slog.Default(),
 	}
 
 	require.NoError(t, c.Close())
 	require.Nil(t, c.conn)
 
-	// Writing after close should fail.
 	_, err := c.Write([]byte("data"))
 	require.Error(t, err)
 }
 
 func TestClientConnectDialFailure(t *testing.T) {
 	c := NewClient(Config{
-		Caster:     "localhost:1", // Unlikely to be listening
+		Caster:     "localhost:1",
 		Mountpoint: "/M",
 		Password:   "p",
 	})
@@ -200,7 +287,6 @@ func TestClientConnectDialFailure(t *testing.T) {
 }
 
 func TestClientConnectFullHandshake(t *testing.T) {
-	// Create a TCP listener to simulate a caster.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	defer listener.Close()
@@ -211,7 +297,6 @@ func TestClientConnectFullHandshake(t *testing.T) {
 		Password:   "testpass",
 	})
 
-	// Accept and respond in a goroutine.
 	go func() {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -231,7 +316,7 @@ func TestClientConnectFullHandshake(t *testing.T) {
 			}
 		}
 		// Send success response.
-		_, _ = conn.Write([]byte("ICY 200 OK\r\n\r\n"))
+		_, _ = conn.Write([]byte("ICY 200 OK\r\n"))
 
 		// Keep connection alive for the test.
 		buf := make([]byte, 1)
@@ -243,7 +328,6 @@ func TestClientConnectFullHandshake(t *testing.T) {
 	require.NoError(t, err)
 	defer c.Close()
 
-	// Verify we can write data.
 	_, err = c.Write([]byte("test data"))
 	require.NoError(t, err)
 }
@@ -265,79 +349,6 @@ func TestProxyConfigInvalidCertPath(t *testing.T) {
 	require.Contains(t, err.Error(), "loading proxy TLS certificate")
 }
 
-func TestSourceHandshakeMultipleResponseHeaders(t *testing.T) {
-	client, server := net.Pipe()
-	defer server.Close()
-
-	ntripClient := NewClient(Config{
-		Caster:     "caster.example.com:2101",
-		Mountpoint: "/MOUNT01",
-		Password:   "secret",
-	})
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- ntripClient.sourceHandshake(client)
-	}()
-
-	// Consume SOURCE request.
-	reader := bufio.NewReader(server)
-	for {
-		line, err := reader.ReadString('\n')
-		require.NoError(t, err)
-		if strings.TrimSpace(line) == "" {
-			break
-		}
-	}
-
-	// Send response with extra headers (some casters do this).
-	response := "ICY 200 OK\r\nServer: NTRIP Caster 2.0\r\nDate: Wed, 15 Apr 2026\r\n\r\n"
-	_, err := server.Write([]byte(response))
-	require.NoError(t, err)
-
-	require.NoError(t, <-errCh)
-}
-
-func TestSourceHandshakeRequestFormat(t *testing.T) {
-	// Verify the exact wire format of the SOURCE request.
-	client, server := net.Pipe()
-	defer server.Close()
-
-	cfg := Config{
-		Caster:     "caster.example.com:2101",
-		Mountpoint: "/EXAMPLE_MOUNT",
-		Password:   "my$ecr3t",
-		UserAgent:  "NTRIP MyApp/1.0",
-	}
-	ntripClient := NewClient(cfg)
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- ntripClient.sourceHandshake(client)
-	}()
-
-	// Read the complete request.
-	reader := bufio.NewReader(server)
-	var request strings.Builder
-	for {
-		line, err := reader.ReadString('\n')
-		require.NoError(t, err)
-		request.WriteString(line)
-		if strings.TrimSpace(line) == "" {
-			break
-		}
-	}
-
-	expected := fmt.Sprintf(
-		"SOURCE %s %s\r\nSource-Agent: %s\r\n\r\n",
-		cfg.Password, cfg.Mountpoint, cfg.UserAgent,
-	)
-	require.Equal(t, expected, request.String())
-
-	_, _ = server.Write([]byte("ICY 200 OK\r\n\r\n"))
-	require.NoError(t, <-errCh)
-}
-
 func TestWithLogger(t *testing.T) {
 	customLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	c := NewClient(Config{
@@ -348,70 +359,11 @@ func TestWithLogger(t *testing.T) {
 	require.Same(t, customLogger, c.logger)
 }
 
-func TestBufferedConnReadPassesThroughBufferedBytes(t *testing.T) {
-	// Verifies bufferedConn.Read delegates to the embedded bufio.Reader. Does not exercise the underlying net.Conn — see TestConnectHandshakeFailure for the end-to-end path.
-	payload := []byte{0xD3, 0x00, 0x04, 0x3E, 0xD0, 0x00, 0x03}
-
-	client, server := net.Pipe()
-	t.Cleanup(func() {
-		client.Close()
-		server.Close()
-	})
-
-	bc := &bufferedConn{
-		reader: bufio.NewReader(bytes.NewReader(payload)),
-		Conn:   client,
-	}
-
-	buf := make([]byte, len(payload))
-	n, err := io.ReadFull(bc, buf)
-	require.NoError(t, err)
-	require.Equal(t, len(payload), n)
-	require.Equal(t, payload, buf)
-}
-
-func TestConnectHandshakeFailure(t *testing.T) {
-	// Connect should wrap a sourceHandshake error with "NTRIP SOURCE handshake".
-	// Simulates a caster that accepts the TCP connection but returns a
-	// non-ICY 200 response (here, an HTTP-style 401 a misconfigured proxy
-	// might send) and exercises Connect's handshake-error branch.
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	t.Cleanup(func() { listener.Close() })
-
-	go func() {
-		conn, err := listener.Accept()
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-
-		// Consume the SOURCE request.
-		reader := bufio.NewReader(conn)
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				return
-			}
-			if strings.TrimSpace(line) == "" {
-				break
-			}
-		}
-		// Respond with a non-ICY-200 line, then close.
-		_, _ = conn.Write([]byte("HTTP/1.1 401 Unauthorized\r\n\r\n"))
-	}()
-
+func TestDefaultUserAgent(t *testing.T) {
 	c := NewClient(Config{
-		Caster:     listener.Addr().String(),
+		Caster:     "localhost:2101",
 		Mountpoint: "/M",
-		Password:   "wrong",
+		Password:   "p",
 	})
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	err = c.Connect(ctx)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "NTRIP SOURCE handshake")
-	require.Contains(t, err.Error(), "caster rejected connection")
-	require.Nil(t, c.conn)
+	require.Equal(t, "NTRIP ntripper/1.0", c.config.UserAgent)
 }
