@@ -280,8 +280,8 @@ func casterWrite(what string, err error) error {
 }
 
 func isWriteError(err error) bool {
-	_, ok := errors.AsType[*casterWriteError](err)
-	return ok
+	var e *casterWriteError
+	return errors.As(err, &e)
 }
 
 func parseStationID(username string) uint16 {
