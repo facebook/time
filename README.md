@@ -62,6 +62,9 @@ Wrapper around CLOCK_ADJTIME syscall
 ### NTRIP
 NTRIP v1 SOURCE client library for pushing RTCM correction data to an NTRIP caster. Supports HTTP CONNECT proxy with TLS client certificate authentication.
 
+### ntripper
+Command line tool that reads RTCM3 and UBX-RXM-RAWX data from an oscillatord Unix socket and pushes RTCM corrections to an NTRIP caster, generating MSM7 messages from raw observations when available.
+
 ### RTCM
 Parser and scanner for RTCM 10403.x (RTCM3) binary frames used for GNSS correction data. Includes CRC-24Q validation and stream synchronization.
 
