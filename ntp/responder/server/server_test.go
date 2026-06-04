@@ -124,7 +124,7 @@ func TestListener(t *testing.T) {
 			ExpectedListeners: 1,
 			ExpectedWorkers:   0,
 		},
-		Config: Config{Workers: 42, TimestampType: timestamp.SW, Iface: "lo"},
+		Config: Config{Workers: 42, TimestampType: timestamp.SWRX, Iface: "lo"},
 	}
 	conn := tryListenUDP(t)
 	defer conn.Close()
@@ -172,7 +172,7 @@ func TestServer(t *testing.T) {
 		},
 		Stats:  &stats.JSONStats{},
 		tasks:  make(chan task, workers),
-		Config: Config{Workers: workers, TimestampType: timestamp.SW, Iface: "lo"},
+		Config: Config{Workers: workers, TimestampType: timestamp.SWRX, Iface: "lo"},
 	}
 	// create workers
 	for range workers {
