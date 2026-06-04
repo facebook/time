@@ -4,8 +4,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: 1.25
       - run: sudo apt-get install libpcap-dev libcap2-bin
@@ -17,6 +17,6 @@ jobs:
       - name: Run coverage
         run: sudo --preserve-env=PATH capsh --inh=cap_net_raw --print -- -c "go test -v -race -coverprofile=coverage.txt -covermode=atomic ./..."
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
