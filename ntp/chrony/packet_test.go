@@ -827,7 +827,7 @@ func TestDecodeClientAccessesByIndex3(t *testing.T) {
 }
 
 func TestDecodeClientAccessesByIndex3Empty(t *testing.T) {
-	raw := []uint8{
+	head := []uint8{
 		// Reply head
 		0x06, 0x02, 0x00, 0x00, 0x00, 0x44, 0x00, 0x15, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xde, 0xad, 0xbe, 0xef,
@@ -837,6 +837,8 @@ func TestDecodeClientAccessesByIndex3Empty(t *testing.T) {
 		0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00,
 	}
+	raw := make([]uint8, 0, len(head)+8*60)
+	raw = append(raw, head...)
 	raw = append(raw, make([]uint8, 8*60)...)
 
 	packet, err := decodePacket(raw)
