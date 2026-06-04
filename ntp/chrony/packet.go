@@ -77,6 +77,8 @@ const (
 	reqNTPData       CommandType = 57
 	reqNTPSourceName CommandType = 65
 	reqSelectData    CommandType = 69
+
+	reqClientAccessesByIndex3 CommandType = 68
 )
 
 // reply types
@@ -94,7 +96,14 @@ const (
 	RpyServerStats3  ReplyType = 24
 	RpyServerStats4  ReplyType = 25
 	RpyNTPData2      ReplyType = 26
+
+	RpyClientAccessesByIndex3 ReplyType = 21
 )
+
+// MaxClientAccessesByIndex is the fixed number of client slots returned per
+// REQ_CLIENT_ACCESSES_BY_INDEX reply (MAX_CLIENT_ACCESSES in chrony's candm.h).
+// Use it to size pagination loops over chronyd's client table.
+const MaxClientAccessesByIndex = 8
 
 // source modes
 const (
@@ -331,6 +340,25 @@ type RequestSelectData struct {
 	EOR   int32
 	// we pass i32 - 4 bytes
 	data [maxDataLen - 4]uint8
+}
+
+// RequestClientAccessesByIndex - packet to request 'clients' data: a page of
+// up to MaxClientAccessesByIndex per-client entries starting at FirstIndex.
+// Mirrors REQ_ClientAccessesByIndex in chrony's candm.h.
+//
+// The trailing padding brings the total request size to 520 bytes, which is
+// the minimum chronyd accepts for this command: chrony's PKL_CommandLength
+// (pktlength.c) adds anti-amplification padding so the request is at least
+// as large as the reply, and the v3 'clients' reply is 520 bytes. Smaller
+// requests are rejected with BADPKTLENGTH.
+type RequestClientAccessesByIndex struct {
+	RequestHead
+	FirstIndex uint32
+	NClients   uint32
+	MinHits    uint32
+	Reset      uint32
+	EOR        int32
+	data       [480]uint8
 }
 
 // ReplyHead is the first (common) part of the reply packet,
@@ -886,6 +914,95 @@ func newSelectData(r *replySelectData) *SelectData {
 	}
 }
 
+// replyClientAccessesByIndexClient is the wire-format per-client entry,
+// matching RPY_ClientAccesses_Client in chrony's candm.h. 60 bytes.
+type replyClientAccessesByIndexClient struct {
+	IPAddr             IPAddr
+	NTPHits            uint32
+	NKEHits            uint32
+	CmdHits            uint32
+	NTPDrops           uint32
+	NKEDrops           uint32
+	CmdDrops           uint32
+	NTPInterval        int8
+	NKEInterval        int8
+	CmdInterval        int8
+	NTPTimeoutInterval int8
+	LastNTPHitAgo      uint32
+	LastNKEHitAgo      uint32
+	LastCmdHitAgo      uint32
+}
+
+// replyClientAccessesByIndexContent is the wire-format reply, matching
+// RPY_ClientAccessesByIndex in chrony's candm.h. The clients array is fixed
+// at MaxClientAccessesByIndex slots; NClients tells you how many are valid.
+type replyClientAccessesByIndexContent struct {
+	NIndices  uint32
+	NextIndex uint32
+	NClients  uint32
+	Clients   [MaxClientAccessesByIndex]replyClientAccessesByIndexClient
+}
+
+// ClientAccess contains parsed per-client statistics from chronyd's
+// 'clients' command. IPAddr is the raw chrony IPAddr; use ToNetIP for a
+// resolved net.IP or String for chronyc-style output (which also handles
+// unresolved entries as "ID#XXXXXXXXXX").
+type ClientAccess struct {
+	IPAddr             *IPAddr
+	NTPHits            uint32
+	NKEHits            uint32
+	CmdHits            uint32
+	NTPDrops           uint32
+	NKEDrops           uint32
+	CmdDrops           uint32
+	NTPInterval        int8
+	NKEInterval        int8
+	CmdInterval        int8
+	NTPTimeoutInterval int8
+	LastNTPHitAgo      uint32
+	LastNKEHitAgo      uint32
+	LastCmdHitAgo      uint32
+}
+
+// ClientAccessesByIndex contains parsed 'clients' reply: chronyd's known
+// index count, the next index to resume pagination from, and up to
+// MaxClientAccessesByIndex per-client entries.
+//
+// Pagination is not atomic: chronyd's internal client table can change
+// between consecutive page requests, so clients may be missed or seen
+// twice when traversing the full table on a busy server.
+type ClientAccessesByIndex struct {
+	NIndices  uint32
+	NextIndex uint32
+	NClients  uint32
+	Clients   []ClientAccess
+}
+
+// ReplyClientAccessesByIndex is a usable version of the 'clients' reply.
+type ReplyClientAccessesByIndex struct {
+	ReplyHead
+	ClientAccessesByIndex
+}
+
+func newClientAccess(r *replyClientAccessesByIndexClient) *ClientAccess {
+	return &ClientAccess{
+		IPAddr:             &r.IPAddr,
+		NTPHits:            r.NTPHits,
+		NKEHits:            r.NKEHits,
+		CmdHits:            r.CmdHits,
+		NTPDrops:           r.NTPDrops,
+		NKEDrops:           r.NKEDrops,
+		CmdDrops:           r.CmdDrops,
+		NTPInterval:        r.NTPInterval,
+		NKEInterval:        r.NKEInterval,
+		CmdInterval:        r.CmdInterval,
+		NTPTimeoutInterval: r.NTPTimeoutInterval,
+		LastNTPHitAgo:      r.LastNTPHitAgo,
+		LastNKEHitAgo:      r.LastNKEHitAgo,
+		LastCmdHitAgo:      r.LastCmdHitAgo,
+	}
+}
+
 // here go request constructors
 
 // NewSourcesPacket creates new packet to request number of sources (peers)
@@ -998,6 +1115,48 @@ func NewSelectDataPacket(sourceID int32) *RequestSelectData {
 		},
 		Index: sourceID,
 		data:  [maxDataLen - 4]uint8{},
+	}
+}
+
+// NewClientAccessesByIndexPacket creates new packet to request 'clients'
+// information: a page of up to MaxClientAccessesByIndex per-client entries
+// starting at firstIndex. minHits filters out clients with fewer hits.
+//
+// This sends REQ_CLIENT_ACCESSES_BY_INDEX3 and expects an
+// RPY_CLIENT_ACCESSES_BY_INDEX3 reply. chronyd versions older than 4.0 do
+// not understand this command and reply with BADPKTVERSION.
+//
+// chronyd restricts this command to the Unix socket by default (see
+// ChronySocketPath); access over UDP port 323 requires an explicit
+// 'cmdallow' rule in chrony.conf, otherwise the reply is ACCESSDENIED.
+//
+// Use NewClientAccessesByIndexResetPacket if you also want chronyd to
+// clear its accounting table after the reply.
+func NewClientAccessesByIndexPacket(firstIndex, nClients, minHits uint32) *RequestClientAccessesByIndex {
+	return newClientAccessesByIndexPacket(firstIndex, nClients, minHits, 0)
+}
+
+// NewClientAccessesByIndexResetPacket is like NewClientAccessesByIndexPacket
+// but additionally instructs chronyd to clear its accounting table after
+// the reply (equivalent to chronyc's `-r` flag). Most polling consumers
+// want the non-resetting form, since clearing the table invalidates rate
+// calculations across scrape intervals.
+func NewClientAccessesByIndexResetPacket(firstIndex, nClients, minHits uint32) *RequestClientAccessesByIndex {
+	return newClientAccessesByIndexPacket(firstIndex, nClients, minHits, 1)
+}
+
+func newClientAccessesByIndexPacket(firstIndex, nClients, minHits, reset uint32) *RequestClientAccessesByIndex {
+	return &RequestClientAccessesByIndex{
+		RequestHead: RequestHead{
+			Version: protoVersionNumber,
+			PKTType: pktTypeCmdRequest,
+			Command: reqClientAccessesByIndex3,
+		},
+		FirstIndex: firstIndex,
+		NClients:   nClients,
+		MinHits:    minHits,
+		Reset:      reset,
+		data:       [480]uint8{},
 	}
 }
 
@@ -1172,6 +1331,26 @@ func decodePacket(response []byte) (ResponsePacket, error) {
 		return &ReplySelectData{
 			ReplyHead:  *head,
 			SelectData: *newSelectData(data),
+		}, nil
+	case RpyClientAccessesByIndex3:
+		data := new(replyClientAccessesByIndexContent)
+		if err = binary.Read(r, binary.BigEndian, data); err != nil {
+			return nil, err
+		}
+		Logger.Printf("response data: %+v", data)
+		n := min(data.NClients, MaxClientAccessesByIndex)
+		clients := make([]ClientAccess, n)
+		for i := range n {
+			clients[i] = *newClientAccess(&data.Clients[i])
+		}
+		return &ReplyClientAccessesByIndex{
+			ReplyHead: *head,
+			ClientAccessesByIndex: ClientAccessesByIndex{
+				NIndices:  data.NIndices,
+				NextIndex: data.NextIndex,
+				NClients:  data.NClients,
+				Clients:   clients,
+			},
 		}, nil
 	default:
 		return nil, fmt.Errorf("not implemented reply type %d from %+v", head.Reply, head)
