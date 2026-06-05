@@ -29,6 +29,14 @@ typedef atomic_uint_fast64_t atomic_uint64;
 #include <stdalign.h> /* for alignas in C; alignas is a keyword in C++ */
 #endif
 
+// _Nonnull is a Clang-only nullability qualifier. The open-source build
+// compiles this header with gcc (via cgo and the fbclock-bin RPM), which
+// doesn't know it, so make it a no-op there. Clang keeps the real keyword for
+// nullsafeclang.
+#if !defined(__clang__)
+#define _Nonnull
+#endif
+
 // error codes
 #define FBCLOCK_E_NO_ERROR 0
 #define FBCLOCK_E_SHMEM_MAP_FAILED -1
