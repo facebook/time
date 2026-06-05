@@ -30,10 +30,11 @@ import (
 
 // Handler is a handler for a metrics endpoint
 type Handler struct {
-	maxOffsetAbs float64
-	lastUpdate   int64
-	offsets      *list.List
-	offsetsLock  sync.Mutex
+	maxOffset   float64
+	lastOffset  float64
+	lastUpdate  int64
+	offsets     *list.List
+	offsetsLock sync.Mutex
 }
 
 // maxSamples is the maximum samples considered for calculating min/max offset
@@ -55,17 +56,23 @@ func RunMetricsServer(monitoringPort uint, handler *Handler) error {
 // ObserveOffset sets the value of the ts2phc offset metrics
 func (h *Handler) ObserveOffset(offset float64) {
 	h.offsetsLock.Lock()
-	tmpMaxOffsetAbs := 0.0
 	if h.offsets.Len() >= maxSamples {
 		for h.offsets.Len() >= maxSamples {
 			h.offsets.Remove(h.offsets.Back())
 		}
 	}
 	h.offsets.PushFront(offset)
+	// maxOffset is the signed value of the largest-magnitude sample in the
+	// window, so a window peaking at -100 reports -100 rather than +100.
+	var maxOffset float64
 	for elem := h.offsets.Front(); elem != nil; elem = elem.Next() {
-		tmpMaxOffsetAbs = max(tmpMaxOffsetAbs, math.Abs(elem.Value.(float64)))
+		v := elem.Value.(float64)
+		if math.Abs(v) > math.Abs(maxOffset) {
+			maxOffset = v
+		}
 	}
-	h.maxOffsetAbs = tmpMaxOffsetAbs
+	h.maxOffset = maxOffset
+	h.lastOffset = offset
 	h.lastUpdate = time.Now().Unix()
 	h.offsetsLock.Unlock()
 }
@@ -84,7 +91,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) getMetrics() map[string]float64 {
 	return map[string]float64{
-		"offset.abs_max": h.maxOffsetAbs,
-		"last_update":    float64(h.lastUpdate),
+		"offset.ns": h.lastOffset,
+		// .60 reflects the maxSamples window the peak is computed over.
+		"offset.max.60": h.maxOffset,
+		"last_update":   float64(h.lastUpdate),
 	}
 }

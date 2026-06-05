@@ -25,46 +25,48 @@ import (
 
 func TestGetMetrics(t *testing.T) {
 	handler := &Handler{
-		maxOffsetAbs: 20.0,
-		lastUpdate:   1710000000,
+		maxOffset:  -20.0,
+		lastOffset: -5.0,
+		lastUpdate: 1710000000,
 	}
 	metrics := handler.getMetrics()
 	require.Equal(t, map[string]float64{
-		"offset.abs_max": 20.0,
-		"last_update":    1710000000.0,
+		"offset.ns":     -5.0,
+		"offset.max.60": -20.0,
+		"last_update":   1710000000.0,
 	}, metrics)
 }
 
 func TestObserveOffset(t *testing.T) {
 	tests := []struct {
-		name              string
-		offsets           []float64
-		observedOffset    float64
-		expectedOffsetAbs float64
+		name           string
+		offsets        []float64
+		observedOffset float64
+		expectedMax    float64
 	}{
 		{
-			name:              "Max absolute offset updated when given negative value",
-			offsets:           []float64{10.0},
-			observedOffset:    -100.0,
-			expectedOffsetAbs: 100.0,
+			name:           "Negative observed value becomes signed max",
+			offsets:        []float64{10.0},
+			observedOffset: -100.0,
+			expectedMax:    -100.0,
 		},
 		{
-			name:              "Max offset updated when given positive value",
-			offsets:           []float64{10.0, 5.0, 15.0, -90.0},
-			observedOffset:    100.0,
-			expectedOffsetAbs: 100.0,
+			name:           "Positive observed value becomes signed max",
+			offsets:        []float64{10.0, 5.0, 15.0, -90.0},
+			observedOffset: 100.0,
+			expectedMax:    100.0,
 		},
 		{
-			name:              "Does not update when |observedOffset| is less than |max| from offsets",
-			offsets:           []float64{10.0, 5.0, 15.0},
-			observedOffset:    7.0,
-			expectedOffsetAbs: 15.0,
+			name:           "Keeps signed value of largest-magnitude sample",
+			offsets:        []float64{10.0, 5.0, -15.0},
+			observedOffset: 7.0,
+			expectedMax:    -15.0,
 		},
 		{
-			name:              "Exceed max samples (60 samples)",
-			offsets:           append([]float64{-1000}, repeatNumber(maxSamples, 10.0)...),
-			observedOffset:    -999.0,
-			expectedOffsetAbs: 999.0,
+			name:           "Exceed max samples (60 samples)",
+			offsets:        append([]float64{-1000}, repeatNumber(maxSamples, 10.0)...),
+			observedOffset: -999.0,
+			expectedMax:    -999.0,
 		},
 	}
 	for _, tt := range tests {
@@ -73,7 +75,8 @@ func TestObserveOffset(t *testing.T) {
 				offsets: listify(tt.offsets),
 			}
 			handler.ObserveOffset(tt.observedOffset)
-			require.Equal(t, tt.expectedOffsetAbs, handler.maxOffsetAbs)
+			require.Equal(t, tt.expectedMax, handler.maxOffset)
+			require.Equal(t, tt.observedOffset, handler.lastOffset)
 		})
 	}
 }
