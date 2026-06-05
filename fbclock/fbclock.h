@@ -25,6 +25,9 @@ typedef atomic_uint_fast64_t atomic_uint64;
 #endif
 
 #include <stdint.h> /* for proper fixed width types */
+#ifndef __cplusplus
+#include <stdalign.h> /* for alignas in C; alignas is a keyword in C++ */
+#endif
 
 // error codes
 #define FBCLOCK_E_NO_ERROR 0
@@ -95,7 +98,6 @@ typedef struct fbclock_clockdata_v2 {
   int64_t sysclock_time_ns;
   // extrapolation coefficient in PPB
   int64_t coef_ppb;
-
 } fbclock_clockdata_v2;
 
 // fbclock shared memory object
@@ -103,10 +105,27 @@ typedef struct fbclock_shmdata {
   atomic_uint64 crc;
   fbclock_clockdata data;
 } fbclock_shmdata;
-// fbclock shared memory object
-typedef struct fbclock_shmdata_v2 {
-  atomic_uint64 seq;
+
+// One seqlock-protected anchor section. The v2 region holds two of these on
+// separate cache lines (forced by alignas) so a write to one never invalidates
+// the other reader's cache line or bumps the other's counter.
+typedef struct fbclock_shmsection {
+  alignas(64) atomic_uint64 seq;
   fbclock_clockdata_v2 data;
+} fbclock_shmsection;
+
+// fbclock v2 shared memory object: two homogeneous anchor sections, each a
+// seqlock-protected fbclock_clockdata_v2 (see fbclock_shmsection).
+//  - primary: the anchor fbclock_gettime reads. MONOTONIC_RAW, or REALTIME on
+//    hosts whose kernel rejects MONOTONIC_RAW in PTP_SYS_OFFSET_EXTENDED.
+//  - realtime: a dedicated REALTIME-domain anchor for fbclock_gettime_past,
+//    written by the daemon only when the primary is MONOTONIC_RAW. When the
+//    primary is already REALTIME it is itself the realtime anchor, so
+//    gettime_past uses it directly and this section stays empty.
+// Each section carries its own clockId; gettime_past selects by clock domain.
+typedef struct fbclock_shmdata_v2 {
+  fbclock_shmsection primary;
+  fbclock_shmsection realtime;
 } fbclock_shmdata_v2;
 
 #define FBCLOCK_SHMDATA_SIZE sizeof(fbclock_shmdata)
@@ -138,9 +157,19 @@ typedef struct fbclock_lib {
 } fbclock_lib;
 
 int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data);
+// Writes the primary anchor section.
 int fbclock_clockdata_store_data_v2(uint32_t fd, fbclock_clockdata_v2* data);
+// Writes the realtime anchor section, used on hosts whose primary is
+// MONOTONIC_RAW. The daemon writes it separately from (and after) the primary
+// section; when the primary is already REALTIME it is skipped.
+int fbclock_clockdata_store_data_realtime(
+    uint32_t fd,
+    fbclock_clockdata_v2* data);
 int fbclock_clockdata_load_data(fbclock_shmdata* shm, fbclock_clockdata* data);
 int fbclock_clockdata_load_data_v2(
+    fbclock_shmdata_v2* shmp,
+    fbclock_clockdata_v2* data);
+int fbclock_clockdata_load_data_realtime(
     fbclock_shmdata_v2* shmp,
     fbclock_clockdata_v2* data);
 uint64_t fbclock_window_of_uncertainty(
@@ -160,6 +189,13 @@ int fbclock_calculate_time_v2(
     fbclock_clockdata_v2* state,
     int64_t sysclock_time_now_ns,
     fbclock_truetime* truetime,
+    int timezone);
+int fbclock_calculate_time_past_v2(
+    uint64_t error_bound_ns,
+    double h_value_ns,
+    fbclock_clockdata_v2* _Nonnull state,
+    int64_t ts_realtime_ns,
+    fbclock_truetime* _Nonnull truetime,
     int timezone);
 uint64_t fbclock_apply_utc_offset(fbclock_clockdata* state, int64_t phctime_ns);
 uint64_t fbclock_apply_utc_offset_v2(
@@ -182,6 +218,18 @@ int fbclock_init(fbclock_lib* lib, const char* shm_path);
 int fbclock_destroy(fbclock_lib* lib);
 int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime);
 int fbclock_gettime_utc(fbclock_lib* lib, fbclock_truetime* truetime);
+// fbclock_gettime_past translates ts (CLOCK_REALTIME ns since epoch) into a
+// TAI [earliest, latest] window in PHC domain. ts must be from the same host
+// the lib is running on, within FBCLOCK_MAX_EXTRAPOLATION_NS of the daemon's
+// most recent REALTIME snapshot (in either direction). v2-only.
+int fbclock_gettime_past(
+    fbclock_lib* _Nonnull lib,
+    int64_t ts_realtime_ns,
+    fbclock_truetime* _Nonnull truetime);
+int fbclock_gettime_past_utc(
+    fbclock_lib* _Nonnull lib,
+    int64_t ts_realtime_ns,
+    fbclock_truetime* _Nonnull truetime);
 
 // turn error code into err msg
 const char* fbclock_strerror(int err_code);

@@ -27,6 +27,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sys/unix"
 
 	"github.com/facebook/time/fbclock"
 	"github.com/facebook/time/fbclock/stats"
@@ -117,7 +118,14 @@ type Daemon struct {
 	getPHCTime func() (time.Time, error)
 	// getPHCAndSysTime returns PHC time, system time, system clock id, and the
 	// PHC↔sys round-trip delay observed during the read (uncertainty bound).
+	// Uses the MONOTONIC_RAW preferred path (existing behavior) for the primary
+	// snapshot that fbclock_gettime consumes.
 	getPHCAndSysTime func() (time.Time, time.Time, uint32, time.Duration, error)
+	// getPHCAndSysTimeRealtime is a parallel snapshot taken with CLOCK_REALTIME.
+	// Populates the realtime anchor used by fbclock_gettime_past so callers can
+	// translate kernel SO_TIMESTAMPING software timestamps (always REALTIME)
+	// without affecting the precision of the primary anchor.
+	getPHCAndSysTimeRealtime func() (time.Time, time.Time, time.Duration, error)
 	// function to get PHC freq from configured PHC device
 	getPHCFreqPPB func() (float64, error)
 }
@@ -219,12 +227,24 @@ func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
 	// function to get time from phc
 	s.getPHCTime = func() (time.Time, error) { return dev.Time() }
 	s.getPHCAndSysTime = func() (time.Time, time.Time, uint32, time.Duration, error) {
+		// Primary anchor: uses the existing MONOTONIC_RAW-preferred path so that
+		// fbclock_gettime behavior is unchanged. Falls back to REALTIME if the
+		// kernel doesn't accept MONO_RAW in the ioctl.
 		data, err := dev.ReadSysoffExtended()
 		if err != nil {
 			return time.Time{}, time.Time{}, 0, 0, err
 		}
 		best := data.BestSample()
 		return best.PHCTime, best.SysTime, uint32(best.SysClockID), best.Delay, nil //nolint:gosec
+	}
+	s.getPHCAndSysTimeRealtime = func() (time.Time, time.Time, time.Duration, error) {
+		// Realtime anchor in CLOCK_REALTIME, only for fbclock_gettime_past.
+		data, err := dev.ReadSysoffExtendedRealTimeClock()
+		if err != nil {
+			return time.Time{}, time.Time{}, 0, err
+		}
+		best := data.BestSample()
+		return best.PHCTime, best.SysTime, best.Delay, nil
 	}
 	s.getPHCFreqPPB = func() (float64, error) { return dev.FreqPPB() }
 	// calculated values
@@ -501,6 +521,8 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 	}
 }
 
+// calcCoeffPPB computes the PHC-vs-sysclock rate ratio in PPB between the prev
+// and cur snapshots of a single anchor section.
 func calcCoeffPPB(prev, cur *fbclock.DataV2) (int64, error) {
 	if prev.SysclockTimeNS == 0 {
 		// first run, no previous data
@@ -522,7 +544,8 @@ func calcCoeffPPB(prev, cur *fbclock.DataV2) (int64, error) {
 
 // populateDataV2 populates fbclock.DataV2 with data from fbclock.Data plus calculated values
 func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
-	prevDataV2 := fbclock.DataV2{}
+	prevPrimary := fbclock.DataV2{}
+	prevRealtime := fbclock.DataV2{}
 
 	fastTicker := time.NewTicker(10 * time.Millisecond)
 	defer fastTicker.Stop()
@@ -537,12 +560,7 @@ func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 				s.stats.UpdateCounterBy("phc_read_error", 1)
 				continue
 			}
-			// Fold the PHC↔sys read delay into ErrorBoundNS. V2 clients don't
-			// read the PHC themselves; they extrapolate from this snapshot, so
-			// the daemon-side read uncertainty must be accounted for here
-			// (mirroring V1's min_phc_delay). Delay is measured between two
-			// CLOCK_MONOTONIC_RAW reads so it's non-negative by construction.
-			dataV2 := fbclock.DataV2{
+			primary := fbclock.DataV2{
 				IngressTimeNS:        curData.IngressTimeNS,
 				ErrorBoundNS:         curData.ErrorBoundNS + uint64(phcReadDelay.Nanoseconds()), //nolint:gosec
 				HoldoverMultiplierNS: curData.HoldoverMultiplierNS,
@@ -552,16 +570,46 @@ func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 				PHCTimeNS:            phcTime.UnixNano(),
 				SysclockTimeNS:       sysTime.UnixNano(),
 				ClockID:              clockID,
-				CoefPPB:              0,
 			}
-			if dataV2.CoefPPB, err = calcCoeffPPB(&prevDataV2, &dataV2); err != nil {
+			if primary.CoefPPB, err = calcCoeffPPB(&prevPrimary, &primary); err != nil {
 				log.Warning(err)
 				s.stats.UpdateCounterBy("monotonictime_error", 1)
 			}
-			if err := fbclock.StoreFBClockDataV2(shmv2.File.Fd(), dataV2); err != nil {
+			prevPrimary = primary
+			// Publish the primary section right away, before the slower REALTIME
+			// read below, so its anchor isn't aged by that read.
+			if err := fbclock.StoreFBClockDataV2(shmv2.File.Fd(), primary); err != nil {
 				log.Errorf("writing dataV2 to shm: %v", err)
 			}
-			prevDataV2 = dataV2
+
+			// The REALTIME anchor section is only needed on hosts whose primary is
+			// MONOTONIC_RAW. When the primary is already REALTIME, gettime_past uses
+			// it directly, so we skip the second ioctl and don't write the section.
+			if clockID != unix.CLOCK_REALTIME {
+				phcTimeRT, sysTimeRT, phcReadDelayRT, errRT := s.getPHCAndSysTimeRealtime()
+				if errRT != nil {
+					// Tolerate failure: the primary section still publishes.
+					log.Warningf("reading PHC time (REALTIME anchor) from %s: %v", s.cfg.Iface, errRT)
+					s.stats.UpdateCounterBy("phc_read_error", 1)
+				} else {
+					// Start from the primary so the host-level fields (ingress,
+					// holdover, utc, smearing) are shared, then override with the
+					// REALTIME anchor and its own independent error bound.
+					rt := primary
+					rt.ClockID = unix.CLOCK_REALTIME
+					rt.PHCTimeNS = phcTimeRT.UnixNano()
+					rt.SysclockTimeNS = sysTimeRT.UnixNano()
+					rt.ErrorBoundNS = curData.ErrorBoundNS + uint64(phcReadDelayRT.Nanoseconds()) //nolint:gosec
+					if rt.CoefPPB, errRT = calcCoeffPPB(&prevRealtime, &rt); errRT != nil {
+						log.Warning(errRT)
+						s.stats.UpdateCounterBy("monotonictime_error", 1)
+					}
+					prevRealtime = rt
+					if err := fbclock.StoreFBClockDataRealtime(shmv2.File.Fd(), rt); err != nil {
+						log.Errorf("writing realtime dataV2 to shm: %v", err)
+					}
+				}
+			}
 		}
 	}
 }

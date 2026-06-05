@@ -152,10 +152,9 @@ func MmapShmpDataV2(fd uintptr) (unsafe.Pointer, error) {
 	return unsafe.Pointer(&data[0]), nil
 }
 
-// StoreFBClockDataV2 will store fbclock data in shared mem,
-// fd param should be open file descriptor of that shared mem.
-func StoreFBClockDataV2(fd uintptr, d DataV2) error {
-	cData := &C.fbclock_clockdata_v2{
+// clockDataV2ToC builds the C clockdata_v2 struct from a DataV2.
+func clockDataV2ToC(d DataV2) *C.fbclock_clockdata_v2 {
+	return &C.fbclock_clockdata_v2{
 		ingress_time_ns:        C.int64_t(d.IngressTimeNS),
 		error_bound_ns:         C.uint32_t(Uint64ToUint32(d.ErrorBoundNS)),
 		holdover_multiplier_ns: C.uint32_t(FloatAsUint32(d.HoldoverMultiplierNS)),
@@ -167,30 +166,65 @@ func StoreFBClockDataV2(fd uintptr, d DataV2) error {
 		sysclock_time_ns:       C.int64_t(d.SysclockTimeNS),
 		coef_ppb:               C.int64_t(d.CoefPPB),
 	}
-	// fbclock_clockdata_store_data comes from fbclock.c
-	res := C.fbclock_clockdata_store_data_v2(C.uint(fd), cData)
+}
+
+// clockDataV2FromC builds a DataV2 from the C clockdata_v2 struct.
+func clockDataV2FromC(c *C.fbclock_clockdata_v2) *DataV2 {
+	return &DataV2{
+		IngressTimeNS:        int64(c.ingress_time_ns),
+		ErrorBoundNS:         uint64(c.error_bound_ns),
+		HoldoverMultiplierNS: Uint32AsFloat(uint32(c.holdover_multiplier_ns)),
+		SmearingStartS:       uint64(c.clock_smearing_start_s),
+		UTCOffsetPreS:        int16(c.utc_offset_pre_s),
+		UTCOffsetPostS:       int16(c.utc_offset_post_s),
+		ClockID:              uint32(c.clockId),
+		PHCTimeNS:            int64(c.phc_time_ns),
+		SysclockTimeNS:       int64(c.sysclock_time_ns),
+		CoefPPB:              int64(c.coef_ppb),
+	}
+}
+
+// StoreFBClockDataV2 stores the primary anchor section.
+// fd param should be open file descriptor of that shared mem.
+func StoreFBClockDataV2(fd uintptr, d DataV2) error {
+	// fbclock_clockdata_store_data_v2 comes from fbclock.c
+	res := C.fbclock_clockdata_store_data_v2(C.uint(fd), clockDataV2ToC(d))
 	if res != 0 {
 		return fmt.Errorf("failed to store data: %s", strerror(res))
 	}
 	return nil
 }
 
-// ReadFBClockDataV2 will read Data from mmaped fbclock shared memory. Used in tests only
+// StoreFBClockDataRealtime stores the realtime anchor section, used on hosts
+// whose primary is MONOTONIC_RAW. It's a separate call from StoreFBClockDataV2
+// so the daemon can publish the primary anchor before the slower REALTIME read.
+func StoreFBClockDataRealtime(fd uintptr, d DataV2) error {
+	// fbclock_clockdata_store_data_realtime comes from fbclock.c
+	res := C.fbclock_clockdata_store_data_realtime(C.uint(fd), clockDataV2ToC(d))
+	if res != 0 {
+		return fmt.Errorf("failed to store realtime data: %s", strerror(res))
+	}
+	return nil
+}
+
+// ReadFBClockDataV2 reads the primary anchor section. Used in tests only.
 func ReadFBClockDataV2(shmp unsafe.Pointer) (*DataV2, error) {
 	cData := &C.fbclock_clockdata_v2{}
 	shmpData := (*C.fbclock_shmdata_v2)(shmp)
-	// fbclock_clockdata_load_data comes from fbclock.c
 	res := C.fbclock_clockdata_load_data_v2(shmpData, cData)
 	if res != 0 {
-		return nil, fmt.Errorf("failed to store data: %s", strerror(res))
+		return nil, fmt.Errorf("failed to load data: %s", strerror(res))
 	}
-	return &DataV2{
-		IngressTimeNS:        int64(cData.ingress_time_ns),
-		ErrorBoundNS:         uint64(cData.error_bound_ns),
-		HoldoverMultiplierNS: Uint32AsFloat(uint32(cData.holdover_multiplier_ns)),
-		PHCTimeNS:            int64(cData.phc_time_ns),
-		SysclockTimeNS:       int64(cData.sysclock_time_ns),
-		ClockID:              uint32(cData.clockId),
-		CoefPPB:              int64(cData.coef_ppb),
-	}, nil
+	return clockDataV2FromC(cData), nil
+}
+
+// ReadFBClockDataRealtime reads the realtime anchor section. Used in tests only.
+func ReadFBClockDataRealtime(shmp unsafe.Pointer) (*DataV2, error) {
+	cData := &C.fbclock_clockdata_v2{}
+	shmpData := (*C.fbclock_shmdata_v2)(shmp)
+	res := C.fbclock_clockdata_load_data_realtime(shmpData, cData)
+	if res != 0 {
+		return nil, fmt.Errorf("failed to load realtime data: %s", strerror(res))
+	}
+	return clockDataV2FromC(cData), nil
 }

@@ -389,6 +389,80 @@ TEST(fbclockTest, test_fbclock_calculate_time_v2_stale_data) {
   EXPECT_EQ(err, FBCLOCK_E_DATA_STALE);
 }
 
+TEST(fbclockTest, test_fbclock_calculate_time_past_v2) {
+  // The REALTIME anchor section is a normal fbclock_clockdata_v2 whose anchor
+  // lives in the standard phc_time_ns / sysclock_time_ns / coef_ppb fields.
+  fbclock_clockdata_v2 state = {
+      .ingress_time_ns = 1647269082943150996,
+      .error_bound_ns = 172,
+      .phc_time_ns = 1647269082944150996, // ingress + 1ms
+      .sysclock_time_ns = 1647269082944000000,
+      .coef_ppb = 12,
+  };
+  double error_bound = state.error_bound_ns;
+  double h_value = 50.5;
+  fbclock_truetime truetime;
+
+  // ts 500us in the past of the anchor.
+  int64_t past_ts = state.sysclock_time_ns - 500000;
+  int err = fbclock_calculate_time_past_v2(
+      error_bound, h_value, &state, past_ts, &truetime, FBCLOCK_TAI);
+  ASSERT_EQ(err, FBCLOCK_E_NO_ERROR);
+  // Expected PHC at past moment: anchor + (-500000) + negligible drift.
+  int64_t expected_phc = 1647269082943650996;
+  EXPECT_GT(truetime.latest_ns, (uint64_t)expected_phc);
+  EXPECT_LT(truetime.earliest_ns, (uint64_t)expected_phc);
+  // Window roughly 2*error_bound wide (holdover is tiny near ingress).
+  EXPECT_LT(truetime.latest_ns - truetime.earliest_ns, 1000ULL);
+
+  // ts within bound, in the future of the snapshot is also allowed.
+  int64_t future_ts = state.sysclock_time_ns + 5000;
+  err = fbclock_calculate_time_past_v2(
+      error_bound, h_value, &state, future_ts, &truetime, FBCLOCK_TAI);
+  EXPECT_EQ(err, FBCLOCK_E_NO_ERROR);
+
+  // ts beyond +cap of the anchor: refuse.
+  int64_t way_future =
+      state.sysclock_time_ns + FBCLOCK_MAX_EXTRAPOLATION_NS + 1;
+  err = fbclock_calculate_time_past_v2(
+      error_bound, h_value, &state, way_future, &truetime, FBCLOCK_TAI);
+  EXPECT_EQ(err, FBCLOCK_E_DATA_STALE);
+
+  // ts beyond -cap of the anchor: refuse.
+  int64_t way_past = state.sysclock_time_ns - FBCLOCK_MAX_EXTRAPOLATION_NS - 1;
+  err = fbclock_calculate_time_past_v2(
+      error_bound, h_value, &state, way_past, &truetime, FBCLOCK_TAI);
+  EXPECT_EQ(err, FBCLOCK_E_DATA_STALE);
+}
+
+TEST(fbclockTest, test_fbclock_calculate_time_past_v2_predates_ingress) {
+  // ingress is in the future of the anchor's PHC value, so any ts at or before
+  // the anchor maps to past_phc < ingress. WOU must collapse to error_bound
+  // only (holdover seconds clamped to 0).
+  fbclock_clockdata_v2 state = {
+      .ingress_time_ns = 2002000000, // > phc anchor
+      .error_bound_ns = 172,
+      .phc_time_ns = 2001000000,
+      .sysclock_time_ns = 1000000,
+      .coef_ppb = 0,
+  };
+  double error_bound = state.error_bound_ns;
+  double h_value = 1000000.0; // huge holdover, would dominate if seconds > 0
+
+  fbclock_truetime truetime;
+  int err = fbclock_calculate_time_past_v2(
+      error_bound,
+      h_value,
+      &state,
+      state.sysclock_time_ns, // diff=0, past_phc = anchor < ingress
+      &truetime,
+      FBCLOCK_TAI);
+  ASSERT_EQ(err, FBCLOCK_E_NO_ERROR);
+  // WOU should be just error_bound (no holdover term).
+  uint64_t window = truetime.latest_ns - truetime.earliest_ns;
+  EXPECT_EQ(window, 2 * (uint64_t)error_bound);
+}
+
 TEST(fbclockTest, test_fbclock_apply_smear_after_2017_leap_second) {
   uint64_t offset_pre_ns = 36e9;
   uint64_t offset_post_ns = 37e9;

@@ -116,7 +116,7 @@ func TestShmemV2WithCoefPPB(t *testing.T) {
 	shm, err := lib.OpenFBClockShmCustomVer(tmpfile.Name(), 2)
 	require.NoError(t, err)
 	defer shm.Close()
-	d := lib.DataV2{
+	primary := lib.DataV2{
 		IngressTimeNS:        1749167822494826022,
 		ErrorBoundNS:         48,
 		HoldoverMultiplierNS: 64.5,
@@ -128,21 +128,45 @@ func TestShmemV2WithCoefPPB(t *testing.T) {
 		ClockID:              4, // CLOCK_MONOTONIC_RAW
 		CoefPPB:              -493,
 	}
-	err = lib.StoreFBClockDataV2(shm.File.Fd(), d)
+	// REALTIME anchor section: its own full clockdata_v2 with clockId = REALTIME
+	// and an independent anchor/error bound.
+	realtime := lib.DataV2{
+		IngressTimeNS:        1749167822494826022,
+		ErrorBoundNS:         50,
+		HoldoverMultiplierNS: 64.5,
+		SmearingStartS:       1483228836,
+		UTCOffsetPreS:        36,
+		UTCOffsetPostS:       37,
+		PHCTimeNS:            1749167859494831100,
+		SysclockTimeNS:       1749167822494826200,
+		ClockID:              0, // CLOCK_REALTIME
+		CoefPPB:              -491,
+	}
+	err = lib.StoreFBClockDataV2(shm.File.Fd(), primary)
+	require.NoError(t, err)
+	err = lib.StoreFBClockDataRealtime(shm.File.Fd(), realtime)
 	require.NoError(t, err)
 
 	shmdata, err := lib.MmapShmpDataV2(shm.File.Fd())
 	require.NoError(t, err)
 
-	readD, err := lib.ReadFBClockDataV2(shmdata)
+	readPrimary, err := lib.ReadFBClockDataV2(shmdata)
 	require.NoError(t, err)
-	require.Equal(t, d.IngressTimeNS, readD.IngressTimeNS)
-	require.Equal(t, d.ErrorBoundNS, readD.ErrorBoundNS)
-	require.InDelta(t, d.HoldoverMultiplierNS, readD.HoldoverMultiplierNS, 0.001)
-	require.Equal(t, d.PHCTimeNS, readD.PHCTimeNS)
-	require.Equal(t, d.SysclockTimeNS, readD.SysclockTimeNS)
-	require.Equal(t, d.ClockID, readD.ClockID)
-	require.Equal(t, d.CoefPPB, readD.CoefPPB)
+	require.Equal(t, primary.IngressTimeNS, readPrimary.IngressTimeNS)
+	require.Equal(t, primary.ErrorBoundNS, readPrimary.ErrorBoundNS)
+	require.InDelta(t, primary.HoldoverMultiplierNS, readPrimary.HoldoverMultiplierNS, 0.001)
+	require.Equal(t, primary.PHCTimeNS, readPrimary.PHCTimeNS)
+	require.Equal(t, primary.SysclockTimeNS, readPrimary.SysclockTimeNS)
+	require.Equal(t, primary.ClockID, readPrimary.ClockID)
+	require.Equal(t, primary.CoefPPB, readPrimary.CoefPPB)
+
+	readRealtime, err := lib.ReadFBClockDataRealtime(shmdata)
+	require.NoError(t, err)
+	require.Equal(t, realtime.PHCTimeNS, readRealtime.PHCTimeNS)
+	require.Equal(t, realtime.SysclockTimeNS, readRealtime.SysclockTimeNS)
+	require.Equal(t, realtime.ClockID, readRealtime.ClockID)
+	require.Equal(t, realtime.CoefPPB, readRealtime.CoefPPB)
+	require.Equal(t, realtime.ErrorBoundNS, readRealtime.ErrorBoundNS)
 }
 
 func TestFloatAsUint32EdgeCases(t *testing.T) {

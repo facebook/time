@@ -97,31 +97,75 @@ int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data) {
   return FBCLOCK_E_NO_ERROR;
 }
 
-int fbclock_clockdata_store_data_v2(uint32_t fd, fbclock_clockdata_v2* data) {
-  uint64_t seq;
-  fbclock_shmdata_v2* shmp = mmap(
-      NULL, FBCLOCK_SHMDATA_V2_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-  if (shmp == MAP_FAILED) {
-    return FBCLOCK_E_SHMEM_MAP_FAILED;
-  }
-  for (int i = 0;
-       i < FBCLOCK_MAX_READ_TRIES && (seq = atomic_load(&shmp->seq)) & 1;
+// fbclock_seq_write_begin marks the seqlock at seqp as "writing" (odd value)
+// and returns the even value to publish once the write completes. A single
+// writer is assumed; concurrent readers detect a torn read via the counter.
+static uint64_t fbclock_seq_write_begin(atomic_uint64* _Nonnull seqp) {
+  uint64_t seq = 0;
+  for (int i = 0; i < FBCLOCK_MAX_READ_TRIES && (seq = atomic_load(seqp)) & 1;
        i++) {
-    // LSB means "in writing mode", but there should be only one writer
-    // so we just wait for other writer to finish (make seq even)
+    // LSB set means another writer is mid-write, but there should be only one
+    // writer so we just wait for it to finish (make seq even)
     usleep(1);
   }
   seq = (seq & ~1) + 1;
-  atomic_store(&shmp->seq, seq);
-  seq++;
-  __sync_synchronize();
-  memcpy(&shmp->data, data, FBCLOCK_CLOCKDATA_V2_SIZE);
-  __sync_synchronize();
+  atomic_store(seqp, seq);
+  return seq + 1;
+}
+
+// fbclock_seq_write_end publishes the post-write (even) seqlock value.
+static void fbclock_seq_write_end(atomic_uint64* _Nonnull seqp, uint64_t seq) {
   if (!seq) {
     seq += 2; // avoid 0 value on wraparound
   }
-  atomic_store(&shmp->seq, seq);
+  atomic_store(seqp, seq);
+}
+
+// fbclock_section_store writes one section's data under its seqlock. A single
+// writer is assumed; concurrent readers detect a torn read via the counter.
+// Each section has its own seqlock on its own cache line, so writing one never
+// bumps the other's counter or disturbs the other reader's cache line.
+static void fbclock_section_store(
+    fbclock_shmsection* _Nonnull section,
+    const fbclock_clockdata_v2* _Nonnull data) {
+  uint64_t seq = fbclock_seq_write_begin(&section->seq);
   __sync_synchronize();
+  section->data = *data;
+  __sync_synchronize();
+  fbclock_seq_write_end(&section->seq, seq);
+  __sync_synchronize();
+}
+
+int fbclock_clockdata_store_data_v2(uint32_t fd, fbclock_clockdata_v2* data) {
+  if (data == NULL) {
+    return FBCLOCK_E_NO_DATA;
+  }
+  fbclock_shmdata_v2* shmp = mmap(
+      NULL, FBCLOCK_SHMDATA_V2_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (shmp == MAP_FAILED || shmp == NULL) {
+    return FBCLOCK_E_SHMEM_MAP_FAILED;
+  }
+  fbclock_section_store(&shmp->primary, data);
+  munmap(shmp, FBCLOCK_SHMDATA_V2_SIZE);
+  return FBCLOCK_E_NO_ERROR;
+}
+
+// Writes the realtime section. The daemon calls this separately from (and
+// after) the primary store so the primary anchor is published without waiting
+// on the slower REALTIME PHC read. Only called on hosts whose primary is
+// MONOTONIC_RAW.
+int fbclock_clockdata_store_data_realtime(
+    uint32_t fd,
+    fbclock_clockdata_v2* data) {
+  if (data == NULL) {
+    return FBCLOCK_E_NO_DATA;
+  }
+  fbclock_shmdata_v2* shmp = mmap(
+      NULL, FBCLOCK_SHMDATA_V2_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (shmp == MAP_FAILED || shmp == NULL) {
+    return FBCLOCK_E_SHMEM_MAP_FAILED;
+  }
+  fbclock_section_store(&shmp->realtime, data);
   munmap(shmp, FBCLOCK_SHMDATA_V2_SIZE);
   return FBCLOCK_E_NO_ERROR;
 }
@@ -145,11 +189,16 @@ int fbclock_clockdata_load_data(
   return FBCLOCK_E_NO_ERROR;
 }
 
-int fbclock_clockdata_load_data_v2(
-    fbclock_shmdata_v2* shmp,
+// Reads one anchor section under its seqlock, retrying on an uninitialized or
+// torn read. Shared by the primary and realtime loaders below.
+static int fbclock_section_load(
+    fbclock_shmsection* section,
     fbclock_clockdata_v2* data) {
+  if (section == NULL || data == NULL) {
+    return FBCLOCK_E_NO_DATA;
+  }
   for (int i = 0; i < FBCLOCK_MAX_READ_TRIES; i++) {
-    uint64_t seq = atomic_load(&shmp->seq);
+    uint64_t seq = atomic_load(&section->seq);
     if (!seq) { // 0 value means uninitialized
       usleep(10);
       __sync_synchronize();
@@ -160,9 +209,9 @@ int fbclock_clockdata_load_data_v2(
       continue;
     }
     __sync_synchronize();
-    memcpy(data, &shmp->data, FBCLOCK_CLOCKDATA_V2_SIZE);
+    *data = section->data;
     __sync_synchronize();
-    if (seq == atomic_load(&shmp->seq)) {
+    if (seq == atomic_load(&section->seq)) {
       fbclock_debug_print("reading clock data took %d tries\n", i + 1);
       return FBCLOCK_E_NO_ERROR;
     }
@@ -170,6 +219,24 @@ int fbclock_clockdata_load_data_v2(
   fbclock_debug_print(
       "failed to read clock data after %d tries\n", FBCLOCK_MAX_READ_TRIES);
   return FBCLOCK_E_CRC_MISMATCH;
+}
+
+int fbclock_clockdata_load_data_v2(
+    fbclock_shmdata_v2* shmp,
+    fbclock_clockdata_v2* data) {
+  if (shmp == NULL) {
+    return FBCLOCK_E_NO_DATA;
+  }
+  return fbclock_section_load(&shmp->primary, data);
+}
+
+int fbclock_clockdata_load_data_realtime(
+    fbclock_shmdata_v2* shmp,
+    fbclock_clockdata_v2* data) {
+  if (shmp == NULL) {
+    return FBCLOCK_E_NO_DATA;
+  }
+  return fbclock_section_load(&shmp->realtime, data);
 }
 
 static inline int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
@@ -363,6 +430,52 @@ int fbclock_calculate_time_v2(
   return FBCLOCK_E_NO_ERROR;
 }
 
+// Like fbclock_calculate_time_v2 but for the REALTIME-domain anchor section,
+// with a caller-provided ts (CLOCK_REALTIME ns). The caller's ts is typically
+// in the past (e.g. a kernel SW TX timestamp captured before sendmsg), so
+// diff_ns may be negative and the bound is symmetric. If the ts predates the
+// last GM sync, the holdover term is dropped (seconds clamped to 0).
+int fbclock_calculate_time_past_v2(
+    uint64_t error_bound_ns,
+    double h_value_ns,
+    fbclock_clockdata_v2* _Nonnull state,
+    int64_t ts_realtime_ns,
+    fbclock_truetime* _Nonnull truetime,
+    int time_standard) {
+  int64_t phc_anchor_ns = state->phc_time_ns;
+
+  int64_t diff_ns = ts_realtime_ns - state->sysclock_time_ns;
+  if (diff_ns > FBCLOCK_MAX_EXTRAPOLATION_NS ||
+      diff_ns < -FBCLOCK_MAX_EXTRAPOLATION_NS) {
+    return FBCLOCK_E_DATA_STALE;
+  }
+
+  // Same signed-arithmetic care as v2: keep the divisor signed so a negative
+  // (coef_ppb * diff_ns) product divides correctly.
+  int64_t phc_at_ts_ns = phc_anchor_ns + diff_ns +
+      diff_ns * state->coef_ppb / (int64_t)NANOSECONDS_IN_SECONDS;
+
+  // Holdover term grows with time since last GM sync. For a past ts, measure
+  // from the past PHC moment, not from "now". If the past moment predates the
+  // last sync (ts older than ingress), clamp seconds to 0 so the WOU collapses
+  // to error_bound_ns alone.
+  double seconds = 0.0;
+  if (phc_at_ts_ns > state->ingress_time_ns) {
+    seconds = (double)(phc_at_ts_ns - state->ingress_time_ns) /
+        NANOSECONDS_IN_SECONDS;
+  }
+
+  if (time_standard == FBCLOCK_UTC) {
+    phc_at_ts_ns = fbclock_apply_utc_offset_v2(state, phc_at_ts_ns);
+  }
+
+  uint64_t wou_ns =
+      fbclock_window_of_uncertainty(seconds, error_bound_ns, h_value_ns);
+  truetime->earliest_ns = phc_at_ts_ns - wou_ns;
+  truetime->latest_ns = phc_at_ts_ns + wou_ns;
+  return FBCLOCK_E_NO_ERROR;
+}
+
 int fbclock_gettime_tz(
     fbclock_lib* lib,
     fbclock_truetime* truetime,
@@ -455,6 +568,65 @@ int fbclock_gettime_utc(fbclock_lib* lib, fbclock_truetime* truetime) {
     return fbclock_gettime_tz_v2(lib, truetime, FBCLOCK_UTC);
   }
   return fbclock_gettime_tz(lib, truetime, FBCLOCK_UTC);
+}
+
+static int fbclock_gettime_past_tz_v2(
+    fbclock_lib* _Nonnull lib,
+    int64_t ts_realtime_ns,
+    fbclock_truetime* _Nonnull truetime,
+    int time_standard) {
+  // Select the REALTIME-domain section. If the primary is already REALTIME
+  // (older hosts) we use it directly; otherwise the primary is MONOTONIC_RAW
+  // and the daemon publishes a dedicated REALTIME section we read instead.
+  fbclock_clockdata_v2 state = {};
+  int rcode = fbclock_clockdata_load_data_v2(lib->shmp_v2, &state);
+  if (rcode != FBCLOCK_E_NO_ERROR) {
+    return rcode;
+  }
+  if (state.clockId != CLOCK_REALTIME) {
+    rcode = fbclock_clockdata_load_data_realtime(lib->shmp_v2, &state);
+    if (rcode != FBCLOCK_E_NO_ERROR) {
+      return rcode;
+    }
+  }
+
+  // The selected section is self-contained; make sure it actually has data.
+  if (state.error_bound_ns == 0 || state.ingress_time_ns == 0 ||
+      state.phc_time_ns == 0 || state.sysclock_time_ns == 0) {
+    return FBCLOCK_E_NO_DATA;
+  }
+
+  if (state.error_bound_ns == UINT32_MAX ||
+      state.holdover_multiplier_ns == UINT32_MAX) {
+    return FBCLOCK_E_WOU_TOO_BIG;
+  }
+
+  uint64_t error_bound = state.error_bound_ns;
+  double h_value = (double)state.holdover_multiplier_ns / FBCLOCK_POW2_16;
+
+  return fbclock_calculate_time_past_v2(
+      error_bound, h_value, &state, ts_realtime_ns, truetime, time_standard);
+}
+
+int fbclock_gettime_past(
+    fbclock_lib* _Nonnull lib,
+    int64_t ts_realtime_ns,
+    fbclock_truetime* _Nonnull truetime) {
+  if (!lib->shmp_v2) {
+    // gettime_past is v2-only: v1 has no sysclock anchor to extrapolate from.
+    return FBCLOCK_E_NO_DATA;
+  }
+  return fbclock_gettime_past_tz_v2(lib, ts_realtime_ns, truetime, FBCLOCK_TAI);
+}
+
+int fbclock_gettime_past_utc(
+    fbclock_lib* _Nonnull lib,
+    int64_t ts_realtime_ns,
+    fbclock_truetime* _Nonnull truetime) {
+  if (!lib->shmp_v2) {
+    return FBCLOCK_E_NO_DATA;
+  }
+  return fbclock_gettime_past_tz_v2(lib, ts_realtime_ns, truetime, FBCLOCK_UTC);
 }
 
 uint64_t fbclock_apply_smear(

@@ -103,3 +103,34 @@ func (f *FBClock) GetTimeUTC() (*TrueTime, error) {
 
 	return &TrueTime{Earliest: earliest, Latest: latest}, nil
 }
+
+// GetTimePast returns the [earliest, latest] PHC-domain window corresponding
+// to a past CLOCK_REALTIME timestamp (e.g. a kernel SO_TIMESTAMPING software
+// TX timestamp). ts must come from the same host. v2-only.
+//
+// If ts is older than the last GM sync, the window is error_bound only (no
+// holdover term), so it can look surprisingly tight for an old ts.
+func (f *FBClock) GetTimePast(ts time.Time) (*TrueTime, error) {
+	tt := &C.fbclock_truetime{}
+	errCode := C.fbclock_gettime_past(f.cFBClock, C.int64_t(ts.UnixNano()), tt)
+	if errCode != 0 {
+		return nil, fmt.Errorf("reading FBClock TrueTime past: %s", strerror(errCode))
+	}
+	return &TrueTime{
+		Earliest: time.Unix(0, int64(tt.earliest_ns)),
+		Latest:   time.Unix(0, int64(tt.latest_ns)),
+	}, nil
+}
+
+// GetTimePastUTC is GetTimePast but returns UTC-adjusted values.
+func (f *FBClock) GetTimePastUTC(ts time.Time) (*TrueTime, error) {
+	tt := &C.fbclock_truetime{}
+	errCode := C.fbclock_gettime_past_utc(f.cFBClock, C.int64_t(ts.UnixNano()), tt)
+	if errCode != 0 {
+		return nil, fmt.Errorf("reading FBClock TrueTime past UTC: %s", strerror(errCode))
+	}
+	return &TrueTime{
+		Earliest: time.Unix(0, int64(tt.earliest_ns)),
+		Latest:   time.Unix(0, int64(tt.latest_ns)),
+	}, nil
+}

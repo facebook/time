@@ -33,11 +33,18 @@ import (
 const PTPPath = "/dev/null"
 
 const (
-	shmDataSize   = 48 // sizeof(fbclock_shmdata): 8 (atomic_uint64) + 40 (fbclock_clockdata)
-	shmDataV2Size = 64 // sizeof(fbclock_shmdata_v2): 8 (atomic_uint64) + 56 (fbclock_clockdata_v2)
+	shmDataSize = 48 // sizeof(fbclock_shmdata):    8 (atomic_uint64) + 40 (fbclock_clockdata)
+	// sizeof(fbclock_shmdata_v2): two cache-line-separated homogeneous sections
+	// (matches the C struct's alignas(64)). Each section is [+0:+8] seq,
+	// [+8:+64] clockdata_v2 (56B). primary at offset 0, realtime at offset 64.
+	shmDataV2Size = 128
 	shmPath       = "/run/fbclock_data_v1"
 	shmPathV2     = "/run/fbclock_data_v2"
 	maxReadTries  = 1000
+	// byte offsets of the two seqlock sections within the v2 region
+	shmV2PrimarySeqOff  = 0
+	shmV2RealtimeSeqOff = 64
+	shmV2SectionDataLen = 56 // sizeof(fbclock_clockdata_v2)
 )
 
 // OpenShm opens a shared memory file
@@ -152,16 +159,11 @@ func ReadFBClockData(shmp unsafe.Pointer) (*Data, error) {
 	return nil, fmt.Errorf("CRC check failed after %d tries", maxReadTries)
 }
 
-// StoreFBClockDataV2 writes fbclock v2 data to shared memory via mmap using seqlock
-func StoreFBClockDataV2(fd uintptr, d DataV2) error {
-	data, err := unix.Mmap(int(fd), 0, shmDataV2Size, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
-	if err != nil {
-		return fmt.Errorf("mmap failed: %w", err)
-	}
-	defer func() { _ = unix.Munmap(data) }()
-
-	seqPtr := (*uint64)(unsafe.Pointer(&data[0]))
-
+// storeSeqlockSection writes a data section guarded by the seqlock at seqOff:
+// bump the counter odd, run write (which gets the section's data slice starting
+// right after the 8-byte counter), bump it even.
+func storeSeqlockSection(data []byte, seqOff int, write func(buf []byte)) error {
+	seqPtr := (*uint64)(unsafe.Pointer(&data[seqOff]))
 	for range maxReadTries {
 		seq := atomic.LoadUint64(seqPtr)
 		if seq&1 != 0 {
@@ -171,19 +173,7 @@ func StoreFBClockDataV2(fd uintptr, d DataV2) error {
 		seq = (seq &^ 1) + 1
 		atomic.StoreUint64(seqPtr, seq)
 		seq++
-
-		buf := data[8:64]
-		binary.LittleEndian.PutUint64(buf[0:8], uint64(d.IngressTimeNS))
-		binary.LittleEndian.PutUint32(buf[8:12], Uint64ToUint32(d.ErrorBoundNS))
-		binary.LittleEndian.PutUint32(buf[12:16], FloatAsUint32(d.HoldoverMultiplierNS))
-		binary.LittleEndian.PutUint64(buf[16:24], d.SmearingStartS)
-		binary.LittleEndian.PutUint16(buf[24:26], uint16(d.UTCOffsetPreS))
-		binary.LittleEndian.PutUint16(buf[26:28], uint16(d.UTCOffsetPostS))
-		binary.LittleEndian.PutUint32(buf[28:32], d.ClockID)
-		binary.LittleEndian.PutUint64(buf[32:40], uint64(d.PHCTimeNS))
-		binary.LittleEndian.PutUint64(buf[40:48], uint64(d.SysclockTimeNS))
-		binary.LittleEndian.PutUint64(buf[48:56], uint64(d.CoefPPB))
-
+		write(data[seqOff+8:])
 		if seq == 0 {
 			seq = 2
 		}
@@ -193,11 +183,10 @@ func StoreFBClockDataV2(fd uintptr, d DataV2) error {
 	return fmt.Errorf("seqlock contention after %d tries", maxReadTries)
 }
 
-// ReadFBClockDataV2 reads DataV2 from mmaped fbclock shared memory using seqlock
-func ReadFBClockDataV2(shmp unsafe.Pointer) (*DataV2, error) {
-	base := (*[shmDataV2Size]byte)(shmp)
-	seqPtr := (*uint64)(unsafe.Pointer(&base[0]))
-
+// loadSeqlockSection returns a fresh copy of dataLen bytes from the section
+// guarded by the seqlock at seqOff, retrying if a write raced the read.
+func loadSeqlockSection(base []byte, seqOff, dataLen int) ([]byte, error) {
+	seqPtr := (*uint64)(unsafe.Pointer(&base[seqOff]))
 	for range maxReadTries {
 		seq := atomic.LoadUint64(seqPtr)
 		if seq == 0 {
@@ -207,21 +196,91 @@ func ReadFBClockDataV2(shmp unsafe.Pointer) (*DataV2, error) {
 		if seq&1 != 0 {
 			continue
 		}
-		var buf [56]byte
-		copy(buf[:], base[8:64])
+		buf := make([]byte, dataLen)
+		copy(buf, base[seqOff+8:seqOff+8+dataLen])
 		if seq == atomic.LoadUint64(seqPtr) {
-			return &DataV2{
-				IngressTimeNS:        int64(binary.LittleEndian.Uint64(buf[0:8])),
-				ErrorBoundNS:         uint64(binary.LittleEndian.Uint32(buf[8:12])),
-				HoldoverMultiplierNS: Uint32AsFloat(binary.LittleEndian.Uint32(buf[12:16])),
-				UTCOffsetPreS:        int16(binary.LittleEndian.Uint16(buf[24:26])),
-				UTCOffsetPostS:       int16(binary.LittleEndian.Uint16(buf[26:28])),
-				ClockID:              binary.LittleEndian.Uint32(buf[28:32]),
-				PHCTimeNS:            int64(binary.LittleEndian.Uint64(buf[32:40])),
-				SysclockTimeNS:       int64(binary.LittleEndian.Uint64(buf[40:48])),
-				CoefPPB:              int64(binary.LittleEndian.Uint64(buf[48:56])),
-			}, nil
+			return buf, nil
 		}
 	}
 	return nil, fmt.Errorf("seqlock read failed after %d tries", maxReadTries)
+}
+
+// writeClockDataV2 serializes a DataV2 into a section's 56-byte data buffer.
+func writeClockDataV2(buf []byte, d DataV2) {
+	binary.LittleEndian.PutUint64(buf[0:8], uint64(d.IngressTimeNS)) //nolint:gosec
+	binary.LittleEndian.PutUint32(buf[8:12], Uint64ToUint32(d.ErrorBoundNS))
+	binary.LittleEndian.PutUint32(buf[12:16], FloatAsUint32(d.HoldoverMultiplierNS))
+	binary.LittleEndian.PutUint64(buf[16:24], d.SmearingStartS)
+	binary.LittleEndian.PutUint16(buf[24:26], uint16(d.UTCOffsetPreS))  //nolint:gosec
+	binary.LittleEndian.PutUint16(buf[26:28], uint16(d.UTCOffsetPostS)) //nolint:gosec
+	binary.LittleEndian.PutUint32(buf[28:32], d.ClockID)
+	binary.LittleEndian.PutUint64(buf[32:40], uint64(d.PHCTimeNS))      //nolint:gosec
+	binary.LittleEndian.PutUint64(buf[40:48], uint64(d.SysclockTimeNS)) //nolint:gosec
+	binary.LittleEndian.PutUint64(buf[48:56], uint64(d.CoefPPB))        //nolint:gosec
+}
+
+// readClockDataV2 deserializes a DataV2 from a section's 56-byte data buffer.
+func readClockDataV2(buf []byte) *DataV2 {
+	return &DataV2{
+		IngressTimeNS:        int64(binary.LittleEndian.Uint64(buf[0:8])), //nolint:gosec
+		ErrorBoundNS:         uint64(binary.LittleEndian.Uint32(buf[8:12])),
+		HoldoverMultiplierNS: Uint32AsFloat(binary.LittleEndian.Uint32(buf[12:16])),
+		SmearingStartS:       binary.LittleEndian.Uint64(buf[16:24]),
+		UTCOffsetPreS:        int16(binary.LittleEndian.Uint16(buf[24:26])), //nolint:gosec
+		UTCOffsetPostS:       int16(binary.LittleEndian.Uint16(buf[26:28])), //nolint:gosec
+		ClockID:              binary.LittleEndian.Uint32(buf[28:32]),
+		PHCTimeNS:            int64(binary.LittleEndian.Uint64(buf[32:40])), //nolint:gosec
+		SysclockTimeNS:       int64(binary.LittleEndian.Uint64(buf[40:48])), //nolint:gosec
+		CoefPPB:              int64(binary.LittleEndian.Uint64(buf[48:56])), //nolint:gosec
+	}
+}
+
+// StoreFBClockDataV2 writes the primary anchor section. The two sections are
+// independent seqlock sections on separate cache lines, mirroring the C
+// fbclock_shmdata_v2 layout, so each is written by its own call.
+func StoreFBClockDataV2(fd uintptr, d DataV2) error {
+	data, err := unix.Mmap(int(fd), 0, shmDataV2Size, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED) //nolint:gosec
+	if err != nil {
+		return fmt.Errorf("mmap failed: %w", err)
+	}
+	defer func() { _ = unix.Munmap(data) }()
+
+	return storeSeqlockSection(data, shmV2PrimarySeqOff, func(buf []byte) {
+		writeClockDataV2(buf, d)
+	})
+}
+
+// StoreFBClockDataRealtime writes the realtime anchor section, used on hosts
+// whose primary is MONOTONIC_RAW. Separate call from StoreFBClockDataV2 so the
+// daemon can publish the primary anchor before the slower REALTIME read.
+func StoreFBClockDataRealtime(fd uintptr, d DataV2) error {
+	data, err := unix.Mmap(int(fd), 0, shmDataV2Size, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED) //nolint:gosec
+	if err != nil {
+		return fmt.Errorf("mmap failed: %w", err)
+	}
+	defer func() { _ = unix.Munmap(data) }()
+
+	return storeSeqlockSection(data, shmV2RealtimeSeqOff, func(buf []byte) {
+		writeClockDataV2(buf, d)
+	})
+}
+
+// ReadFBClockDataV2 reads the primary anchor section. Used in tests only.
+func ReadFBClockDataV2(shmp unsafe.Pointer) (*DataV2, error) {
+	base := (*[shmDataV2Size]byte)(shmp)[:]
+	buf, err := loadSeqlockSection(base, shmV2PrimarySeqOff, shmV2SectionDataLen)
+	if err != nil {
+		return nil, err
+	}
+	return readClockDataV2(buf), nil
+}
+
+// ReadFBClockDataRealtime reads the realtime anchor section. Used in tests only.
+func ReadFBClockDataRealtime(shmp unsafe.Pointer) (*DataV2, error) {
+	base := (*[shmDataV2Size]byte)(shmp)[:]
+	buf, err := loadSeqlockSection(base, shmV2RealtimeSeqOff, shmV2SectionDataLen)
+	if err != nil {
+		return nil, err
+	}
+	return readClockDataV2(buf), nil
 }

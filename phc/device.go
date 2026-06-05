@@ -65,6 +65,12 @@ func (dev *Device) ReadSysoffExtended1() (*PTPSysOffsetExtended, error) {
 	return dev.readSysoffExtended(1)
 }
 
+// ReadSysoffExtendedRealTimeClock reads the precise time from the PHC along with REAL_TIME_CLOCK SYS time to measure the call delay.
+// The nsamples parameter is set to ExtendedNumProbes.
+func (dev *Device) ReadSysoffExtendedRealTimeClock() (*PTPSysOffsetExtended, error) {
+	return dev.readSysoffExtendedClockID(ExtendedNumProbes, unix.CLOCK_REALTIME)
+}
+
 // ReadSysoffExtendedRealTimeClock1 reads the precise time from the PHC along with REAL_TIME_CLOCK SYS time to measure the call delay.
 // The samples parameter is set to 1.
 func (dev *Device) ReadSysoffExtendedRealTimeClock1() (*PTPSysOffsetExtended, error) {
