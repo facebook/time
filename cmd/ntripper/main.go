@@ -46,8 +46,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/facebook/time/cmd/ntripper/stats"
 	"github.com/facebook/time/ntrip"
-	"github.com/facebook/time/ntripper/stats"
 	"github.com/facebook/time/rtcm"
 )
 
