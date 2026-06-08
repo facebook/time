@@ -2,8 +2,8 @@
 
 Tools for the Microchip SA53 atomic clock on Celestica time cards.
 
-Built as a single binary `sa53` (installed to `/usr/local/bin/sa53fw` via the
-`fb-sa53fw` RPM, name kept for chef compatibility) using cobra subcommands.
+Built as a single binary `sa53` (installed to `/usr/local/bin/sa53` via the
+`fb-sa53` RPM) using cobra subcommands.
 
 ## Subcommands
 
@@ -12,12 +12,12 @@ Built as a single binary `sa53` (installed to `/usr/local/bin/sa53fw` via the
 Read or upgrade SA53 firmware.
 
 ```
-sudo sa53fw firmware --check                          # print version as JSON
-sudo sa53fw firmware --fw firmware.hex --upgrade      # apply an upgrade
-sudo sa53fw firmware --fw firmware.hex --upgrade --force
+sudo sa53 firmware --check                       # print version as JSON
+sudo sa53 firmware --fw firmware.hex --upgrade   # apply an upgrade
+sudo sa53 firmware --fw firmware.hex --upgrade --force
 ```
 
-Old `sa53fw -upgrade` style is gone; cobra requires the subcommand and `--`
+Old single-dash flags (`-upgrade`) are gone; cobra requires the subcommand and `--`
 long flags.
 
 ### poll
@@ -29,12 +29,12 @@ Canonical vendor handoff invocation:
 ```
 # stop chef (so it doesn't restart oscillatord), then stop oscillatord
 systemctl stop oscillatord
-sa53fw poll --duration 5m --interval 100ms --out /tmp/sa53.csv --raw /tmp/sa53.raw
+sa53 poll --duration 5m --interval 100ms --out /tmp/sa53.csv --raw /tmp/sa53.raw
 systemctl start oscillatord
 # then start chef again per the standard procedure
 ```
 
-One-shot probe: `sudo sa53fw poll --cmd '\{swrev?}'`
+One-shot probe: `sudo sa53 poll --cmd '\{swrev?}'`
 
 `--params` defaults to a conservative V1.1+ set that works on every firmware
 version we ship; operators on V1.5+ firmware can pass extras explicitly

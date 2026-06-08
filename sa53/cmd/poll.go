@@ -98,7 +98,7 @@ var pollCmd = &cobra.Command{
 		"will scribble on the same wire and produce garbage. Stop chef and\n" +
 		"oscillatord first (chef is stopped via the standard chef-stop\n" +
 		"procedure, oscillatord via `systemctl stop oscillatord`).\n\n" +
-		"\tsa53fw poll --out sa53_capture.csv --interval 100ms --duration 5m\n\n" +
+		"\tsa53 poll --out sa53_capture.csv --interval 100ms --duration 5m\n\n" +
 		"Pass --raw <path> to capture the exact bytes sent and received.",
 	Run: func(_ *cobra.Command, _ []string) {
 		if pollSingleCmd != "" {
