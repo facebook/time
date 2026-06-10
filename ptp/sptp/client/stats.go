@@ -25,7 +25,7 @@ import (
 	"time"
 
 	gmstats "github.com/facebook/time/ptp/sptp/stats"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 // StatsServer is a stats server interface
