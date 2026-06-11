@@ -28,7 +28,7 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/cespare/xxhash"
+	"github.com/cespare/xxhash/v2"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/ptp4u/drain"
 	"github.com/facebook/time/ptp/ptp4u/stats"
@@ -500,7 +500,7 @@ func (s *Server) Drain() {
 	}
 
 	// Wait for drain to complete for up to 10 seconds
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		// Verifying all subscriptions are over
 		for _, w := range s.sw {
 			w.inventoryClients()
