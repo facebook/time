@@ -283,7 +283,7 @@ func (s *Daemon) calcW() (float64, error) {
 		FreqAdjustmentPPB:       params["freq"][0],
 		FreqAdjustmentMeanPPB:   mean(params["freq"]),
 		FreqAdjustmentStddevPPB: stddev(params["freq"]),
-		ClockAccuracyMean:       mean(params["clockaccuracie"]),
+		ClockAccuracyMean:       mean(params["clockaccuracy"]),
 	}
 	mRaw, err := s.cfg.Math.mExpr.Evaluate(mapOfInterface(params))
 	if err != nil {
@@ -297,12 +297,23 @@ func (s *Daemon) calcW() (float64, error) {
 	s.state.pushM(m)
 
 	ms := s.state.takeM(s.cfg.RingSize)
-	if len(ms) != s.cfg.RingSize {
-		return 0, fmt.Errorf("%w getting W: want %d, got %d", errNotEnoughData, s.cfg.RingSize, len(ms))
+	minN := s.cfg.RingSize
+	if s.cfg.GradualWindow {
+		// Publish from n=2 (skip n=1: stddev is 0). len(ms) <= RingSize, so flag-off keeps today's gate.
+		minN = 2
+	}
+	if len(ms) < minN {
+		return 0, fmt.Errorf("%w getting W: want >= %d, got %d", errNotEnoughData, minN, len(ms))
 	}
 
+	n := len(ms)
+	// k is the precomputed factor for this sample count: coverageZP (4.0) at the full ring, so steady
+	// state and the flag-off path stay byte-identical. n and k are always injected; govaluate ignores
+	// vars a formula does not reference.
 	parameters := map[string]any{
 		"m": ms,
+		"n": float64(n),
+		"k": s.cfg.gradualFactor(n),
 	}
 	logSample.MeasurementMeanNS = mean(ms)
 	logSample.MeasurementStddevNS = stddev(ms)
@@ -322,8 +333,14 @@ func (s *Daemon) calcW() (float64, error) {
 
 func (s *Daemon) calcDriftPPB() (float64, error) {
 	lastN := s.state.takeDataPoint(s.cfg.RingSize)
-	if len(lastN) != s.cfg.RingSize {
-		return 0, fmt.Errorf("%w calculating drift: want %d, got %d", errNotEnoughData, s.cfg.RingSize, len(lastN))
+	minN := s.cfg.RingSize
+	if s.cfg.GradualWindow {
+		// Relax with the W gate: drift has no factor, but if it still required a full ring doWork would
+		// swallow the error and publish nothing. At n=2 freqchangeabs has one value.
+		minN = 2
+	}
+	if len(lastN) < minN {
+		return 0, fmt.Errorf("%w calculating drift: want >= %d, got %d", errNotEnoughData, minN, len(lastN))
 	}
 	params := prepareMathParameters(lastN)
 	driftRaw, err := s.cfg.Math.driftExpr.Evaluate(mapOfInterface(params))
