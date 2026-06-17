@@ -19,6 +19,7 @@ package daemon
 import (
 	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/facebook/time/phc/unix"
@@ -38,6 +39,9 @@ type Config struct {
 	LinearizabilityTestMaxGMOffset time.Duration // max offset between GMs before linearizability test considered failed
 	BootDelay                      time.Duration // postpone startup by this time after boot
 	EnableDataV2                   bool          // enable fbclock data v2
+	GradualWindow                  bool          // publish a widened window from the first sample after restart (default off)
+	// kFactors is the precomputed warm-up tolerance-factor table k[2..RingSize], looked up per tick.
+	kFactors []float64
 }
 
 // EvalAndValidate makes sure config is valid and evaluates expressions for further use.
@@ -59,7 +63,27 @@ func (c *Config) EvalAndValidate() error {
 	if c.LinearizabilityTestMaxGMOffset < 0 {
 		return fmt.Errorf("bad config: 'offset' must be positive")
 	}
-	return c.Math.Prepare()
+	if err := c.Math.Prepare(); err != nil {
+		return err
+	}
+	// Fail closed: -gradualwindow relaxes the publish gate to n=2, so a custom -w without k would apply a
+	// flat 4.0 to a 2-sample stddev. Require k in the W expression.
+	if c.GradualWindow && !slices.Contains(c.Math.wExpr.Vars(), "k") {
+		return fmt.Errorf("bad config: 'gradualwindow' requires the W expression to reference 'k' (got %q)", c.Math.W)
+	}
+	// Precompute the data-independent factor table once at parse; only used when GradualWindow is on.
+	c.kFactors = precomputeGradualWindowFactors(c.RingSize, warmupConfidence)
+	return nil
+}
+
+// gradualFactor returns the precomputed warm-up factor for n samples, falling back to coverageZP (4.0)
+// when the table is absent (tests calling Math.Prepare directly) or n is outside [2, RingSize]. The
+// flag-off path only ever hits n == RingSize, where the factor is 4.0, so it stays byte-identical.
+func (c *Config) gradualFactor(n int) float64 {
+	if n >= 2 && n < len(c.kFactors) {
+		return c.kFactors[n]
+	}
+	return coverageZP
 }
 
 // PostponeStart postpones startup by BootDelay

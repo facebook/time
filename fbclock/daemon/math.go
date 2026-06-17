@@ -19,6 +19,7 @@ package daemon
 import (
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/Knetic/govaluate"
 	"github.com/eclesh/welford"
@@ -35,6 +36,8 @@ supported variables:
   clockaccuracy (list of clock accuracy values received from GM)
   freqchange (list of last changes in frequency)
   freqchangeabs (list of last changes in frequency, abs values)
+  n (number of samples currently available; used for warm-up window widening)
+  k (precomputed warm-up tolerance factor for the current n; equals 4.0 at the full ring)
 supported functions:
   abs(value) - absolute value of single float64, for example abs(-1) = 1
   mean(values, number) - mean of list of 'number' values, for example mean(offset, 10) will take 10 elements from array 'offset' and return mean for those values
@@ -44,10 +47,16 @@ supported functions:
 const (
 	// MathDefaultHistory is a default number of samples to keep
 	MathDefaultHistory = 100
-	// MathDefaultM is a default formula to calculate M
+	// MathDefaultM is the default M formula, left unchanged by GradualWindow: the literal 100 is a sample
+	// count, but mean/stddev clamp to "all available", so warm-up uses whatever samples exist (no n wiring
+	// needed) and at the full ring (prod runs RingSize=100) M uses the whole ring.
 	MathDefaultM = "mean(clockaccuracy, 100) + abs(mean(offset, 100)) + 1.0 * stddev(offset, 100)"
-	// MathDefaultW is a default formula to calculate W
-	MathDefaultW = "mean(m, 100) + 4.0 * stddev(m, 100)"
+	// MathDefaultW is the default W formula, the window the daemon publishes. k is the warm-up tolerance
+	// factor for the current sample count n (precomputed by precomputeGradualWindowFactors, injected by
+	// calcW): larger at small n so the window is wide right after a restart, shrinking to 4.0 once the ring
+	// is full. That steady 4 (coverageZP) is our design SLA: a 4-sigma bound, so the window covers
+	// ~99.997% of the clock error (one-sided, Phi(4)).
+	MathDefaultW = "mean(m, n) + k * stddev(m, n)"
 	// MathDefaultDrift is a default formula to calculate default drift
 	MathDefaultDrift = "1.5 * mean(freqchangeabs, 99)"
 )
@@ -139,27 +148,24 @@ var supportedVariables = []string{
 	"clockaccuracy",
 	"freqchange",
 	"freqchangeabs",
+	"n",
+	"k",
 }
 
 func isSupportedVar(varName string) bool {
-	for _, v := range supportedVariables {
-		if v == varName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(supportedVariables, varName)
 }
 
 // all the functions we support in expressions
 var functions = map[string]govaluate.ExpressionFunction{
-	"abs": func(args ...interface{}) (interface{}, error) {
+	"abs": func(args ...any) (any, error) {
 		if len(args) != 1 {
 			return nil, fmt.Errorf("abs: wrong number of arguments: want 1, got %d", len(args))
 		}
 		val := args[0].(float64)
 		return math.Abs(val), nil
 	},
-	"mean": func(args ...interface{}) (interface{}, error) {
+	"mean": func(args ...any) (any, error) {
 		if len(args) != 2 {
 			return nil, fmt.Errorf("mean: wrong number of arguments: want 2, got %d", len(args))
 		}
@@ -170,7 +176,7 @@ var functions = map[string]govaluate.ExpressionFunction{
 		}
 		return mean(vals[:nSamples]), nil
 	},
-	"variance": func(args ...interface{}) (interface{}, error) {
+	"variance": func(args ...any) (any, error) {
 		if len(args) != 2 {
 			return nil, fmt.Errorf("variance: wrong number of arguments: want 2, got %d", len(args))
 		}
@@ -181,7 +187,7 @@ var functions = map[string]govaluate.ExpressionFunction{
 		}
 		return variance(vals[:nSamples]), nil
 	},
-	"stddev": func(args ...interface{}) (interface{}, error) {
+	"stddev": func(args ...any) (any, error) {
 		if len(args) != 2 {
 			return nil, fmt.Errorf("stddev: wrong number of arguments: want 2, got %d", len(args))
 		}
@@ -215,6 +221,19 @@ func prepareExpression(exprStr string) (expr *govaluate.EvaluableExpression, err
 
 func prepareMathParameters(lastN []*DataPoint) map[string][]float64 {
 	size := len(lastN)
+	if size == 0 {
+		// Defensive: no live path calls this with an empty slice (calcW runs after pushDataPoint;
+		// calcDriftPPB runs after its gate). The guard prevents a latent negative-length make below
+		// and a lastN[0] panic.
+		return map[string][]float64{
+			"offset":        {},
+			"delay":         {},
+			"freq":          {},
+			"clockaccuracy": {},
+			"freqchange":    {},
+			"freqchangeabs": {},
+		}
+	}
 	offsets := make([]float64, size)
 	delays := make([]float64, size)
 	freqs := make([]float64, size)
@@ -243,8 +262,8 @@ func prepareMathParameters(lastN []*DataPoint) map[string][]float64 {
 	}
 }
 
-func mapOfInterface(m map[string][]float64) map[string]interface{} {
-	mm := make(map[string]interface{}, len(m))
+func mapOfInterface(m map[string][]float64) map[string]any {
+	mm := make(map[string]any, len(m))
 	for k, v := range m {
 		mm[k] = v
 	}

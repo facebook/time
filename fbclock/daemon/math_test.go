@@ -149,3 +149,36 @@ func FuzzPrepareExpression(f *testing.F) {
 		_, _ = prepareExpression(input)
 	})
 }
+
+// TestGradualWindowByteIdentityAtFullRing locks the invariant that the new k(n) W expression reduces
+// bit-for-bit to the legacy "mean(m, N) + 4.0 * stddev(m, N)" once the ring is full (n == N).
+func TestGradualWindowByteIdentityAtFullRing(t *testing.T) {
+	cases := []struct {
+		n      int
+		legacy string
+	}{
+		{30, "mean(m, 30) + 4.0 * stddev(m, 30)"},
+		{100, "mean(m, 100) + 4.0 * stddev(m, 100)"},
+	}
+	for _, tc := range cases {
+		ms := make([]float64, tc.n)
+		for i := range ms {
+			ms[i] = 100 + float64(i%7) // varied so stddev(m) > 0
+		}
+		newExpr, err := prepareExpression(MathDefaultW)
+		require.NoError(t, err)
+		legacyExpr, err := prepareExpression(tc.legacy)
+		require.NoError(t, err)
+		// At the full ring the precomputed factor is exactly 4.0 (coverageZP), so the new scalar-k
+		// expression must reduce bit-for-bit to the legacy "mean(m,N) + 4.0*stddev(m,N)".
+		gotNew, err := newExpr.Evaluate(map[string]interface{}{
+			"m": ms,
+			"n": float64(tc.n),
+			"k": coverageZP,
+		})
+		require.NoError(t, err)
+		gotLegacy, err := legacyExpr.Evaluate(map[string]interface{}{"m": ms})
+		require.NoError(t, err)
+		require.Equal(t, gotLegacy, gotNew)
+	}
+}

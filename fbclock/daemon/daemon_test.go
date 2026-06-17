@@ -18,6 +18,7 @@ package daemon
 
 import (
 	"context"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -744,4 +745,125 @@ func TestCoeffV2(t *testing.T) {
 	c, err = calcCoeffPPB(&prevDataV2, &curDataV2)
 	require.Equal(t, int64(-493), c)
 	require.NoError(t, err)
+}
+
+// TestDaemonGradualWindowFromN2 verifies that with GradualWindow on the daemon skips n=1 and publishes
+// from n=2 (with the precomputed tolerance factor), and that with the flag off the same formula keeps
+// today's "nothing until the ring is full" behavior.
+func TestDaemonGradualWindowFromN2(t *testing.T) {
+	makeCfg := func(gradual bool) *Config {
+		cfg := &Config{
+			PTPClientAddress: "/tmp/fbclock-test",
+			RingSize:         30,
+			GradualWindow:    gradual,
+			Interval:         time.Second,
+			Math: Math{
+				M:     MathDefaultM,
+				W:     MathDefaultW,
+				Drift: MathDefaultDrift,
+			},
+		}
+		// EvalAndValidate (not Math.Prepare) so the warm-up factor table is precomputed.
+		require.NoError(t, cfg.EvalAndValidate())
+		return cfg
+	}
+	leaps := []leapsectz.LeapSecond{
+		{Tleap: 1435708825, Nleap: 26},
+		{Tleap: 1483228826, Nleap: 27},
+	}
+	startTime := time.Duration(1647359186979431900)
+	// Varying offset so stddev(m) > 0 and the warm-up factor actually widens the window.
+	sample := func(i int) *DataPoint {
+		return &DataPoint{
+			IngressTimeNS:     int64(startTime + time.Duration(i)*time.Second),
+			MasterOffsetNS:    float64(20 + (i%5)*3),
+			PathDelayNS:       213.0,
+			FreqAdjustmentPPB: float64(212131 + i),
+			ClockAccuracyNS:   100.0,
+			ServoState:        2,
+		}
+	}
+
+	// Flag ON: n=1 is skipped; publishes from n=2; window stays under the uint32 sentinel.
+	dOn := newTestDaemon(makeCfg(true), stats.NewStats())
+	for i := range 30 {
+		shmData, err := dOn.calculateSHMData(sample(i), leaps)
+		if i == 0 {
+			require.Error(t, err, "n=1 must be skipped (stddev=0, no margin)")
+			require.Nil(t, shmData)
+			continue
+		}
+		require.NoErrorf(t, err, "gradual window should publish from n=2 (i=%d)", i)
+		require.NotNil(t, shmData)
+		require.Greater(t, shmData.ErrorBoundNS, uint64(0))
+		require.Less(t, shmData.ErrorBoundNS, uint64(math.MaxUint32), "window must never reach the uint32 WOU sentinel")
+	}
+
+	// Flag OFF (same gradual formula): unchanged behavior, nothing until the ring is full.
+	dOff := newTestDaemon(makeCfg(false), stats.NewStats())
+	for i := range 30 {
+		shmData, err := dOff.calculateSHMData(sample(i), leaps)
+		if i < 29 {
+			require.Error(t, err, "flag off must not publish before the ring is full")
+			require.Nil(t, shmData)
+		} else {
+			require.NoError(t, err)
+			require.NotNil(t, shmData)
+		}
+	}
+}
+
+// TestDaemonGradualWindowSteadyStateIdentical locks the core invariant: once the ring is full the
+// GradualWindow flag changes nothing. It drives a flag-on and a flag-off daemon through the SAME ring
+// size and SAME sample sequence, and asserts the published ErrorBoundNS is identical at n == RingSize.
+func TestDaemonGradualWindowSteadyStateIdentical(t *testing.T) {
+	const ringSize = 30
+	makeCfg := func(gradual bool) *Config {
+		cfg := &Config{
+			PTPClientAddress: "/tmp/fbclock-test",
+			RingSize:         ringSize,
+			GradualWindow:    gradual,
+			Interval:         time.Second,
+			Math: Math{
+				M:     MathDefaultM,
+				W:     MathDefaultW,
+				Drift: MathDefaultDrift,
+			},
+		}
+		// EvalAndValidate (not Math.Prepare) so the warm-up factor table is precomputed.
+		require.NoError(t, cfg.EvalAndValidate())
+		return cfg
+	}
+	leaps := []leapsectz.LeapSecond{
+		{Tleap: 1435708825, Nleap: 26},
+		{Tleap: 1483228826, Nleap: 27},
+	}
+	startTime := time.Duration(1647359186979431900)
+	sample := func(i int) *DataPoint {
+		return &DataPoint{
+			IngressTimeNS:     int64(startTime + time.Duration(i)*time.Second),
+			MasterOffsetNS:    float64(20 + (i%5)*3),
+			PathDelayNS:       213.0,
+			FreqAdjustmentPPB: float64(212131 + i),
+			ClockAccuracyNS:   100.0,
+			ServoState:        2,
+		}
+	}
+
+	dOn := newTestDaemon(makeCfg(true), stats.NewStats())
+	dOff := newTestDaemon(makeCfg(false), stats.NewStats())
+	var onFull, offFull *fbclock.Data
+	for i := range ringSize {
+		onData, onErr := dOn.calculateSHMData(sample(i), leaps)
+		offData, offErr := dOff.calculateSHMData(sample(i), leaps)
+		if i == ringSize-1 {
+			require.NoError(t, onErr)
+			require.NoError(t, offErr)
+			onFull, offFull = onData, offData
+		}
+	}
+	require.NotNil(t, onFull)
+	require.NotNil(t, offFull)
+	require.Equal(t, offFull.ErrorBoundNS, onFull.ErrorBoundNS,
+		"with the ring full, GradualWindow must not change the published window")
 }

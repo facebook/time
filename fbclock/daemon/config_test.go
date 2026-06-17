@@ -65,3 +65,45 @@ func TestPostponeStart(t *testing.T) {
 	require.True(t, time.Since(start) >= delay)
 	require.NoError(t, err)
 }
+
+// TestConfigBuildsKFactors checks EvalAndValidate precomputes the warm-up tolerance-factor table
+// (k[2..RingSize]) at parse time, so the per-tick hot path is just a lookup. gamma is no longer a config
+// field -- the warm-up confidence is hardcoded (warmupConfidence), so there is nothing to validate.
+func TestConfigBuildsKFactors(t *testing.T) {
+	cfg := &Config{
+		PTPClientAddress: "/tmp/fbclock-test",
+		RingSize:         30,
+		Interval:         time.Second,
+		Math: Math{
+			M:     MathDefaultM,
+			W:     MathDefaultW,
+			Drift: MathDefaultDrift,
+		},
+	}
+	require.NoError(t, cfg.EvalAndValidate())
+	require.Len(t, cfg.kFactors, cfg.RingSize+1)
+}
+
+// TestConfigGradualWindowRequiresK locks the fail-closed guard: with GradualWindow on, a W formula that
+// never references k is rejected at parse (it would apply a flat 4.0 to a 2-sample stddev); the default W
+// (which uses k) is accepted; and with the flag off the same k-less formula is fine.
+func TestConfigGradualWindowRequiresK(t *testing.T) {
+	const wNoK = "mean(m, 100) + 4.0 * stddev(m, 100)"
+	makeCfg := func(gradual bool, w string) *Config {
+		return &Config{
+			PTPClientAddress: "/tmp/fbclock-test",
+			RingSize:         30,
+			Interval:         time.Second,
+			GradualWindow:    gradual,
+			Math: Math{
+				M:     MathDefaultM,
+				W:     w,
+				Drift: MathDefaultDrift,
+			},
+		}
+	}
+
+	require.Error(t, makeCfg(true, wNoK).EvalAndValidate(), "gradualwindow + W without k must fail closed")
+	require.NoError(t, makeCfg(true, MathDefaultW).EvalAndValidate(), "gradualwindow + default W (has k) must pass")
+	require.NoError(t, makeCfg(false, wNoK).EvalAndValidate(), "flag off + W without k must pass")
+}
