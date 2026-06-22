@@ -21,7 +21,11 @@ typedef struct fbclock_truetime {
 int fbclock_init(fbclock_lib* lib, const char* shm_path);
 int fbclock_destroy(fbclock_lib* lib);
 int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime);
+int fbclock_gettime_past(fbclock_lib* lib, int64_t ts_realtime_ns, fbclock_truetime* truetime);
+int fbclock_gettime_past_utc(fbclock_lib* lib, int64_t ts_realtime_ns, fbclock_truetime* truetime);
 ```
+
+`fbclock_gettime_past` translates a past CLOCK_REALTIME timestamp (e.g. a kernel SO_TIMESTAMPING software TX timestamp) into a PHC-domain [Earliest, Latest] window. The timestamp must be from the same host, within ±1s of the daemon's most recent snapshot. v2-only; returns `FBCLOCK_E_NO_DATA` on v1 hosts.
 
 ## Usage
 
