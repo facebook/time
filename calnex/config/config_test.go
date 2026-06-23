@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -2110,9 +2111,7 @@ func TestConfigComparison(t *testing.T) {
 	cfg2 := &CalnexConfig{}
 	*cfg2 = *cfg1
 	cfg1.Measure = measures
-	for k, v := range measures {
-		cfg2.Measure[k] = v
-	}
+	maps.Copy(cfg2.Measure, measures)
 	cs1 := &Calnexes{"calnex01.zzz1.test.com": cfg1}
 	cs2 := &Calnexes{"calnex01.zzz1.test.com": cfg2}
 	require.True(t, cs1.IsEqual(cs2))
