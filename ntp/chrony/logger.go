@@ -18,12 +18,12 @@ package chrony
 
 // LoggerInterface is an interface for debug logging.
 type LoggerInterface interface {
-	Printf(format string, v ...interface{})
+	Printf(format string, v ...any)
 }
 
 type noopLogger struct{}
 
-func (noopLogger) Printf(_ string, _ ...interface{}) {}
+func (noopLogger) Printf(_ string, _ ...any) {}
 
 // Logger is a default debug logger which simply discards all messages.
 // It can be overridden by setting the global variable to a different implementation, like std log

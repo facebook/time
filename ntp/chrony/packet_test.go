@@ -1120,7 +1120,7 @@ func TestEORFieldInitialization(t *testing.T) {
 	// Test packets that have EOR field
 	packetsWithEOR := []struct {
 		name   string
-		packet interface{}
+		packet any
 	}{
 		{"RequestSourceStats", NewSourceStatsPacket(42)},
 		{"RequestSourceData", NewSourceDataPacket(42)},
@@ -1160,7 +1160,7 @@ func TestEORFieldInitialization(t *testing.T) {
 	// Test packets without EOR field
 	packetsWithoutEOR := []struct {
 		name   string
-		packet interface{}
+		packet any
 	}{
 		{"RequestSources", NewSourcesPacket()},
 		{"RequestActivity", NewActivityPacket()},
