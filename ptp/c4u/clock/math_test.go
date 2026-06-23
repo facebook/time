@@ -56,25 +56,25 @@ func TestMath(t *testing.T) {
 
 	e, err = prepareExpression("mean(phcoffset)")
 	require.NoError(t, err)
-	result, err = e.Evaluate(map[string]interface{}{"phcoffset": []float64{1, 2, 3, 4, 5}})
+	result, err = e.Evaluate(map[string]any{"phcoffset": []float64{1, 2, 3, 4, 5}})
 	require.NoError(t, err)
 	require.Equal(t, 3.0, result.(float64))
 
 	e, err = prepareExpression("stddev(phcoffset)")
 	require.NoError(t, err)
-	result, err = e.Evaluate(map[string]interface{}{"phcoffset": []float64{1, 2, 3, 4, 5}})
+	result, err = e.Evaluate(map[string]any{"phcoffset": []float64{1, 2, 3, 4, 5}})
 	require.NoError(t, err)
 	require.InDelta(t, 1.5811, result.(float64), 0.001)
 
 	e, err = prepareExpression("variance(phcoffset)")
 	require.NoError(t, err)
-	result, err = e.Evaluate(map[string]interface{}{"phcoffset": []float64{1, 2, 3, 4, 5}})
+	result, err = e.Evaluate(map[string]any{"phcoffset": []float64{1, 2, 3, 4, 5}})
 	require.NoError(t, err)
 	require.Equal(t, 2.5, result.(float64))
 
 	e, err = prepareExpression("p99(phcoffset)")
 	require.NoError(t, err)
-	result, err = e.Evaluate(map[string]interface{}{"phcoffset": []float64{1, 2, 3, 4, 5}})
+	result, err = e.Evaluate(map[string]any{"phcoffset": []float64{1, 2, 3, 4, 5}})
 	require.NoError(t, err)
 	require.Equal(t, 5.0, result.(float64))
 }

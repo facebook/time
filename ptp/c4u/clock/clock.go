@@ -104,7 +104,7 @@ func Worst(points []*DataPoint, accuracyExpr, classExpr string) (*ptp.ClockQuali
 	log.Debugf("phcOffsets = %v", phcOffsets)
 	log.Debugf("oscillatorOffsets = %v", oscillatorOffsets)
 
-	offsets := map[string]interface{}{
+	offsets := map[string]any{
 		"phcoffset":        phcOffsets,
 		"oscillatoroffset": oscillatorOffsets,
 	}
@@ -117,7 +117,7 @@ func Worst(points []*DataPoint, accuracyExpr, classExpr string) (*ptp.ClockQuali
 	log.Debugf("result of %q = %v", accuracyExpr, o)
 	log.Debugf("clockAccuracy: %v\n", accFromOffset)
 
-	classes := map[string]interface{}{
+	classes := map[string]any{
 		"oscillatorclass": oscillatorClasses,
 	}
 	cRaw, err := cexpr.Evaluate(classes)
