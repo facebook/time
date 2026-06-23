@@ -168,10 +168,7 @@ func offsetBetweenExtendedReadings(extendedA, extendedB *PTPSysOffsetExtended) (
 		return 0, fmt.Errorf("different system clock ids")
 	}
 	// we expect both probes to have same number of measures
-	numProbes := int(extendedA.Samples)
-	if int(extendedB.Samples) < numProbes {
-		numProbes = int(extendedB.Samples)
-	}
+	numProbes := min(int(extendedB.Samples), int(extendedA.Samples))
 	// calculate sys time midpoint from both samples
 	sysoffA := sysoffFromExtendedTS(extendedA.Ts[0])
 	sysoffB := sysoffFromExtendedTS(extendedB.Ts[0])
