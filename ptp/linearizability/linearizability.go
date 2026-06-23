@@ -32,7 +32,7 @@ type TestResult interface {
 }
 
 // TestConfig is a configuration for Tester
-type TestConfig interface{}
+type TestConfig any
 
 // Tester is basically a half of PTP unicast client
 type Tester interface {
