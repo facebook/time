@@ -455,10 +455,10 @@ func (c *Client) setState(s state) {
 }
 
 // couple of helpers to log nice lines about happening communication
-func (c *Client) logSent(t ptp.MessageType, msg string, v ...interface{}) {
+func (c *Client) logSent(t ptp.MessageType, msg string, v ...any) {
 	log.Info(color.GreenString("client -> %s (%s)", t, fmt.Sprintf(msg, v...)))
 }
-func (c *Client) logReceive(t ptp.MessageType, msg string, v ...interface{}) {
+func (c *Client) logReceive(t ptp.MessageType, msg string, v ...any) {
 	log.Info(color.BlueString("server -> %s (%s)", t, fmt.Sprintf(msg, v...)))
 }
 
