@@ -62,7 +62,7 @@ type Stats struct {
 type clientStats struct {
 	gmsTotal        int64
 	gmsAvailable    int64
-	tickDuration    int64
+	tickDuration    atomic.Int64
 	filtered        int64
 	rxSync          int64
 	rxAnnounce      int64
@@ -106,7 +106,7 @@ func (s *Stats) SetGmsAvailable(gmsAvailable int) {
 
 // SetTickDuration atomically sets the gmsTotal
 func (s *Stats) SetTickDuration(tickDuration time.Duration) {
-	atomic.StoreInt64(&s.tickDuration, tickDuration.Nanoseconds())
+	s.tickDuration.Store(tickDuration.Nanoseconds())
 }
 
 // SetServoState atomically sets the servoState
