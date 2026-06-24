@@ -258,10 +258,7 @@ func recvoob(connFd int, oob []byte) (oobn int, err error) {
 		return 0, e1
 	}
 	// Controllen is bounded by len(oob) we passed to SetControllen
-	n := msg.Controllen
-	if n > uint64(len(oob)) {
-		n = uint64(len(oob))
-	}
+	n := min(msg.Controllen, uint64(len(oob)))
 	return int(n), nil
 }
 
