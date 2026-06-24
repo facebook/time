@@ -73,14 +73,14 @@ func isSupportedVar(varName string) bool {
 
 // all the functions we support in expressions
 var functions = map[string]govaluate.ExpressionFunction{
-	"abs": func(args ...any) (interface{}, error) {
+	"abs": func(args ...any) (any, error) {
 		if len(args) != 1 {
 			return nil, fmt.Errorf("abs: wrong number of arguments: want 1, got %d", len(args))
 		}
 		val := args[0].(float64)
 		return math.Abs(val), nil
 	},
-	"max": func(args ...any) (interface{}, error) {
+	"max": func(args ...any) (any, error) {
 		if len(args) != 2 {
 			return nil, fmt.Errorf("max: wrong number of arguments: want 2, got %d", len(args))
 		}
@@ -88,28 +88,28 @@ var functions = map[string]govaluate.ExpressionFunction{
 		val2 := args[1].(float64)
 		return math.Max(val1, val2), nil
 	},
-	"mean": func(args ...any) (interface{}, error) {
+	"mean": func(args ...any) (any, error) {
 		if len(args) != 1 {
 			return nil, fmt.Errorf("mean: wrong number of arguments: want 1, got %d", len(args))
 		}
 		vals := args[0].([]float64)
 		return mean(vals), nil
 	},
-	"variance": func(args ...any) (interface{}, error) {
+	"variance": func(args ...any) (any, error) {
 		if len(args) != 1 {
 			return nil, fmt.Errorf("variance: wrong number of arguments: want 1, got %d", len(args))
 		}
 		vals := args[0].([]float64)
 		return variance(vals), nil
 	},
-	"stddev": func(args ...any) (interface{}, error) {
+	"stddev": func(args ...any) (any, error) {
 		if len(args) != 1 {
 			return nil, fmt.Errorf("stddev: wrong number of arguments: want 1, got %d", len(args))
 		}
 		vals := args[0].([]float64)
 		return stddev(vals), nil
 	},
-	"p99": func(args ...any) (interface{}, error) {
+	"p99": func(args ...any) (any, error) {
 		if len(args) != 1 {
 			return nil, fmt.Errorf("stddev: wrong number of arguments: want 1, got %d", len(args))
 		}
