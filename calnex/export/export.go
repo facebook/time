@@ -31,12 +31,14 @@ var errNoTarget = errors.New("no target succeeds")
 
 // returns true if the error is a hard failure
 func isHardFailure(err error) bool {
-	if opErr, ok := errors.AsType[*net.OpError](err); ok {
+	var opErr *net.OpError
+	var urlErr *url.Error
+	if errors.As(err, &opErr) {
 		if opErr.Timeout() || !opErr.Temporary() {
 			return true
 		}
 	}
-	if urlErr, ok := errors.AsType[*url.Error](err); ok {
+	if errors.As(err, &urlErr) {
 		if urlErr.Timeout() || !urlErr.Temporary() {
 			return true
 		}
