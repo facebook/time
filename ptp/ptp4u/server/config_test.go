@@ -19,6 +19,7 @@ package server
 import (
 	"net"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -34,11 +35,8 @@ func TestConfigifaceIPs(t *testing.T) {
 
 	found := 0
 	for _, ip := range ips {
-		for _, lo := range los {
-			if ip.Equal(lo) {
-				found++
-				break
-			}
+		if slices.ContainsFunc(los, ip.Equal) {
+			found++
 		}
 	}
 	require.Equal(t, len(los), found)
