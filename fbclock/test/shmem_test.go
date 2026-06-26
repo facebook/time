@@ -47,7 +47,7 @@ func TestUint64ToUint32(t *testing.T) {
 	require.Equal(t, uint32(math.MaxUint32), g)
 }
 
-func TestShmem(t *testing.T) {
+func TestShmemV1(t *testing.T) {
 	tmpfile, err := os.CreateTemp("", "shmemtest")
 	require.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
@@ -59,20 +59,20 @@ func TestShmem(t *testing.T) {
 		ErrorBoundNS:         314000000, // over 65k, our old limit
 		HoldoverMultiplierNS: 1.001,
 	}
-	err = lib.StoreFBClockData(shm.File.Fd(), d)
+	err = lib.StoreFBClockDataV1(shm.File.Fd(), d)
 	require.NoError(t, err)
 
-	shmdata, err := lib.MmapShmpData(shm.File.Fd())
+	shmdata, err := lib.MmapShmpDataV1(shm.File.Fd())
 	require.NoError(t, err)
 
-	readD, err := lib.ReadFBClockData(shmdata)
+	readD, err := lib.ReadFBClockDataV1(shmdata)
 	require.NoError(t, err)
 	require.Equal(t, d.IngressTimeNS, readD.IngressTimeNS)
 	require.Equal(t, d.ErrorBoundNS, readD.ErrorBoundNS)
 	require.InDelta(t, d.HoldoverMultiplierNS, readD.HoldoverMultiplierNS, 0.001)
 }
 
-func TestShmemV2(t *testing.T) {
+func TestShmem(t *testing.T) {
 	tmpfile, err := os.CreateTemp("", "shmemtest_v2")
 	require.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
@@ -203,10 +203,10 @@ func TestShmemMultipleWrites(t *testing.T) {
 			ErrorBoundNS:         uint64(100 + i*10),
 			HoldoverMultiplierNS: 1.0 + float64(i)*0.1,
 		}
-		err = lib.StoreFBClockData(shm.File.Fd(), d)
+		err = lib.StoreFBClockDataV1(shm.File.Fd(), d)
 		require.NoError(t, err)
 
-		readD, err := lib.ReadFBClockData(shmdata)
+		readD, err := lib.ReadFBClockDataV1(shmdata)
 		require.NoError(t, err)
 		require.Equal(t, d.IngressTimeNS, readD.IngressTimeNS)
 		require.Equal(t, d.ErrorBoundNS, readD.ErrorBoundNS)

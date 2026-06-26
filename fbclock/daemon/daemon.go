@@ -431,7 +431,7 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 		return err
 	}
 	s.state.lastStoredData = d
-	if err := fbclock.StoreFBClockData(shm.File.Fd(), *d); err != nil {
+	if err := fbclock.StoreFBClockDataV1(shm.File.Fd(), *d); err != nil {
 		return err
 	}
 	// aggregated stats over 1 minute
@@ -633,7 +633,7 @@ func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 
 // Run a daemon
 func (s *Daemon) Run(ctx context.Context) error {
-	shm, err := fbclock.OpenFBClockSHM()
+	shm, err := fbclock.OpenFBClockSHMv1()
 	if err != nil {
 		return fmt.Errorf("opening fbclock shm: %w", err)
 	}

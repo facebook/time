@@ -522,7 +522,7 @@ func TestDaemonDoWork(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "daemon_test")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
-	shm, err := fbclock.OpenFBClockShmCustom(tmpFile.Name())
+	shm, err := fbclock.OpenFBClockShmCustomVer(tmpFile.Name(), 1)
 	require.NoError(t, err)
 	defer shm.Close()
 
@@ -631,9 +631,9 @@ func TestDaemonDoWork(t *testing.T) {
 		ErrorBoundNS:         48.0,
 		HoldoverMultiplierNS: 64.5,
 	}
-	shmpData, err := fbclock.MmapShmpData(shm.File.Fd())
+	shmpData, err := fbclock.MmapShmpDataV1(shm.File.Fd())
 	require.NoError(t, err)
-	got, err := fbclock.ReadFBClockData(shmpData)
+	got, err := fbclock.ReadFBClockDataV1(shmpData)
 	require.NoError(t, err)
 	require.Equal(t, want.IngressTimeNS, got.IngressTimeNS)
 	require.Equal(t, want.ErrorBoundNS, got.ErrorBoundNS)
@@ -665,7 +665,7 @@ func TestDaemonDoWork(t *testing.T) {
 	require.Equal(t, int64(1), c["data_sanity_check_error"])
 
 	// check that we wrote data correctly (should be the same as before, as new data point was discarded)
-	got, err = fbclock.ReadFBClockData(shmpData)
+	got, err = fbclock.ReadFBClockDataV1(shmpData)
 	require.NoError(t, err)
 	require.Equal(t, want.IngressTimeNS, got.IngressTimeNS)
 	require.Equal(t, want.ErrorBoundNS, got.ErrorBoundNS)

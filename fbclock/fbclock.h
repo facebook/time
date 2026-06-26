@@ -138,8 +138,8 @@ typedef struct fbclock_shmdata_v2 {
 
 #define FBCLOCK_SHMDATA_SIZE sizeof(fbclock_shmdata)
 #define FBCLOCK_SHMDATA_V2_SIZE sizeof(fbclock_shmdata_v2)
-#define FBCLOCK_PATH "/run/fbclock_data_v1"
-#define FBCLOCK_PATH_V2 "/run/fbclock_data_v2"
+#define FBCLOCK_PATH_V1 "/run/fbclock_data_v1"
+#define FBCLOCK_PATH "/run/fbclock_data_v2"
 #define FBCLOCK_POW2_16 ((double)(1ULL << 16))
 #define FBCLOCK_PTPPATH "/dev/fbclock/ptp"
 

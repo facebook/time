@@ -21,7 +21,7 @@ limitations under the License.
 #include "time/fbclock/fbclock.h"
 
 int parseVersion(int argc, char* argv[]) {
-  int c, vval = 1;
+  int c, vval = 2;
   while ((c = getopt(argc, argv, "hV:")) != -1) {
     switch (c) {
       case 'V':
@@ -31,7 +31,7 @@ int parseVersion(int argc, char* argv[]) {
         fprintf(
             stderr,
             "Usage: %s [-V 1|2]\n"
-            "  -V 1|2 will use version 1 or 2 of the shared memory file (default 1)\n",
+            "  -V 1|2 will use version 1 or 2 of the shared memory file (default 2)\n",
             argv[0]);
         exit(EXIT_FAILURE);
     }
@@ -51,9 +51,9 @@ int main(int argc, char* argv[]) {
   time_histogram.resize(1001, 0);
 
   if (version == 2) {
-    res = fbclock_init(&fbclock, FBCLOCK_PATH_V2);
-  } else {
     res = fbclock_init(&fbclock, FBCLOCK_PATH);
+  } else {
+    res = fbclock_init(&fbclock, FBCLOCK_PATH_V1);
   }
   if (res != 0) {
     std::cout << "Failed to init fbclock library: errno " << res << std::endl;

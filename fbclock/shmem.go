@@ -62,7 +62,7 @@ func OpenShm(path string, flags int, permissions os.FileMode) (*Shm, error) {
 // OpenFBClockShmCustom returns opened POSIX shared mem used by fbclock,
 // with custom path and version specified
 func OpenFBClockShmCustom(path string) (*Shm, error) {
-	return OpenFBClockShmCustomVer(path, 1)
+	return OpenFBClockShmCustomVer(path, 2)
 }
 
 // OpenFBClockShmCustomVer returns opened POSIX shared mem used by fbclock,
@@ -76,9 +76,9 @@ func OpenFBClockShmCustomVer(path string, version int) (*Shm, error) {
 	if err != nil {
 		return nil, err
 	}
-	size := int64(C.FBCLOCK_SHMDATA_SIZE)
-	if version == 2 {
-		size = int64(C.FBCLOCK_SHMDATA_V2_SIZE)
+	size := int64(C.FBCLOCK_SHMDATA_V2_SIZE)
+	if version != 2 {
+		size = int64(C.FBCLOCK_SHMDATA_SIZE)
 	}
 	if err := shm.File.Truncate(size); err != nil {
 		shm.Close()
@@ -90,17 +90,28 @@ func OpenFBClockShmCustomVer(path string, version int) (*Shm, error) {
 
 // OpenFBClockSHM returns opened POSIX shared mem used by fbclock
 func OpenFBClockSHM() (*Shm, error) {
-	return OpenFBClockShmCustom(C.FBCLOCK_PATH)
+	return OpenFBClockShmCustomVer(C.FBCLOCK_PATH, 2)
 }
 
 // OpenFBClockSHMv2 returns opened POSIX shared mem used by fbclock
 func OpenFBClockSHMv2() (*Shm, error) {
-	return OpenFBClockShmCustomVer(C.FBCLOCK_PATH_V2, 2)
+	// TODO: remove this once all call sites are updated to use v2
+	return OpenFBClockShmCustomVer(C.FBCLOCK_PATH, 2)
 }
 
-// StoreFBClockData will store fbclock data in shared mem,
+// OpenFBClockSHMv1 returns opened POSIX shared mem used by fbclock
+func OpenFBClockSHMv1() (*Shm, error) {
+	return OpenFBClockShmCustomVer(C.FBCLOCK_PATH_V1, 1)
+}
+
+// StoreFBClockData is a wrapper for StoreFBClockDataV2
+func StoreFBClockData(fd uintptr, d DataV2) error {
+	return StoreFBClockDataV2(fd, d)
+}
+
+// StoreFBClockDataV1 will store fbclock data in shared mem,
 // fd param should be open file descriptor of that shared mem.
-func StoreFBClockData(fd uintptr, d Data) error {
+func StoreFBClockDataV1(fd uintptr, d Data) error {
 	cData := &C.fbclock_clockdata{
 		ingress_time_ns:        C.int64_t(d.IngressTimeNS),
 		error_bound_ns:         C.uint32_t(Uint64ToUint32(d.ErrorBoundNS)),
@@ -120,6 +131,11 @@ func StoreFBClockData(fd uintptr, d Data) error {
 
 // MmapShmpData mmaps open file as fbclock shared memory. Used in tests only.
 func MmapShmpData(fd uintptr) (unsafe.Pointer, error) {
+	return MmapShmpDataV2(fd)
+}
+
+// MmapShmpDataV1 mmaps open file as fbclock shared memory. Used in tests only.
+func MmapShmpDataV1(fd uintptr) (unsafe.Pointer, error) {
 	data, err := unix.Mmap(int(fd), 0, C.FBCLOCK_SHMDATA_SIZE, unix.PROT_READ, unix.MAP_SHARED)
 	if err != nil {
 		return nil, err
@@ -128,7 +144,12 @@ func MmapShmpData(fd uintptr) (unsafe.Pointer, error) {
 }
 
 // ReadFBClockData will read Data from mmaped fbclock shared memory. Used in tests only
-func ReadFBClockData(shmp unsafe.Pointer) (*Data, error) {
+func ReadFBClockData(shmp unsafe.Pointer) (*DataV2, error) {
+	return ReadFBClockDataV2(shmp)
+}
+
+// ReadFBClockDataV1 will read Data from mmaped fbclock shared memory. Used in tests only
+func ReadFBClockDataV1(shmp unsafe.Pointer) (*Data, error) {
 	cData := &C.fbclock_clockdata{}
 	shmpData := (*C.fbclock_shmdata)(shmp)
 	// fbclock_clockdata_load_data comes from fbclock.c

@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
 
   int fflag = 0;
   int uflag = 0;
-  int vval = 1;
+  int vval = 2;
   int c;
 
   while ((c = getopt(argc, argv, "hfuV:")) != -1) {
@@ -64,9 +64,9 @@ int main(int argc, char* argv[]) {
   char* shmem_path = FBCLOCK_PATH;
   switch (vval) {
     case 1:
+      shmem_path = FBCLOCK_PATH_V1;
       break;
     case 2:
-      shmem_path = FBCLOCK_PATH_V2;
       break;
     default:
       fprintf(stderr, "Invalid -v value, supported 1 and 2: %d\n", vval);
