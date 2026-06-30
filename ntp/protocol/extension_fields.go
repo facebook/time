@@ -75,6 +75,12 @@ const (
 	// Bodies larger than this would silently wrap the uint16 length on the
 	// wire even though they pass a naïve `< 0xFFFF` check.
 	ExtensionMaxBodySize = 0xFFFC - ExtensionHeaderSize
+
+	// ExtensionTypeReservedLo is the lower bound (inclusive) of the range the
+	// IANA "NTP Extension Field Types" registry marks "Reserved for Private or
+	// Experimental Use" (RFC 9748). The range runs to 0xFFFF, the maximum
+	// representable type, so no explicit upper bound is needed.
+	ExtensionTypeReservedLo ExtensionFieldType = 0xF000
 )
 
 // NTS extension field types defined by RFC 8915 §5.1.1.
@@ -90,6 +96,7 @@ var (
 	ErrExtensionTruncated     = errors.New("extension field truncated")
 	ErrExtensionLengthInvalid = errors.New("extension field length invalid")
 	ErrExtensionBodyTooLarge  = errors.New("extension field body too large")
+	ErrExtensionTypeReserved  = errors.New("extension field type is IANA-reserved")
 )
 
 // padTo returns the smallest multiple of align >= n. align must be a power of two.
@@ -127,15 +134,34 @@ func (t ExtensionFieldType) String() string {
 	}
 }
 
+// isReserved reports whether t falls in the IANA-reserved range
+// 0xF000–0xFFFF ("Reserved for Private or Experimental Use", RFC 9748).
+func (t ExtensionFieldType) isReserved() bool {
+	return t >= ExtensionTypeReservedLo
+}
+
+// Validate reports whether the extension field can be safely marshalled: the
+// body must not exceed ExtensionMaxBodySize and Type must not fall in the
+// IANA-reserved range (0xF000–0xFFFF, RFC 9748).
+func (ef ExtensionField) Validate() error {
+	if len(ef.Body) > ExtensionMaxBodySize {
+		return fmt.Errorf("%w: type=%#x body=%d max=%d",
+			ErrExtensionBodyTooLarge, ef.Type, len(ef.Body), ExtensionMaxBodySize)
+	}
+	if ef.Type.isReserved() {
+		return fmt.Errorf("%w: type=%#x", ErrExtensionTypeReserved, ef.Type)
+	}
+	return nil
+}
+
 // MarshalExtensionFields encodes a slice of extension fields into the wire
 // format defined by RFC 7822 §7.5. Each field is padded with zeros to a
 // multiple of 4 octets and to at least ExtensionMinSize.
 func MarshalExtensionFields(efs []ExtensionField) ([]byte, error) {
 	totalSize := 0
 	for _, ef := range efs {
-		if len(ef.Body) > ExtensionMaxBodySize {
-			return nil, fmt.Errorf("%w: type=%#x body=%d max=%d",
-				ErrExtensionBodyTooLarge, ef.Type, len(ef.Body), ExtensionMaxBodySize)
+		if err := ef.Validate(); err != nil {
+			return nil, err
 		}
 		totalSize += ef.EncodedSize()
 	}

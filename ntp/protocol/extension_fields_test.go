@@ -204,3 +204,33 @@ func TestExtensionFieldTypeString(t *testing.T) {
 		})
 	}
 }
+
+func TestExtensionFieldValidate(t *testing.T) {
+	cases := []struct {
+		name    string
+		ef      ExtensionField
+		wantErr error
+	}{
+		{"valid nts type", ExtensionField{Type: 0x0104, Body: []byte{1, 2}}, nil},
+		{"body at max", ExtensionField{Type: 0x0104, Body: make([]byte, ExtensionMaxBodySize)}, nil},
+		{"body over max", ExtensionField{Type: 0x0104, Body: make([]byte, ExtensionMaxBodySize+1)}, ErrExtensionBodyTooLarge},
+		{"reserved low bound", ExtensionField{Type: 0xF000}, ErrExtensionTypeReserved},
+		{"reserved high bound", ExtensionField{Type: 0xFFFF}, ErrExtensionTypeReserved},
+		{"just below reserved", ExtensionField{Type: 0xEFFF}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.ef.Validate()
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestMarshalExtensionFieldsRejectsInvalid(t *testing.T) {
+	_, err := MarshalExtensionFields([]ExtensionField{{Type: 0xF000}})
+	require.ErrorIs(t, err, ErrExtensionTypeReserved)
+}
