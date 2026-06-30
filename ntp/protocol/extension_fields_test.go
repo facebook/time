@@ -184,3 +184,23 @@ func TestRoundTripPreservesValueAndPadding(t *testing.T) {
 		}
 	}
 }
+
+func TestExtensionFieldTypeString(t *testing.T) {
+	cases := []struct {
+		name string
+		typ  ExtensionFieldType
+		want string
+	}{
+		{"unique identifier", 0x0104, "Unique Identifier"},
+		{"nts cookie", 0x0204, "NTS Cookie"},
+		{"nts cookie placeholder", 0x0304, "NTS Cookie Placeholder"},
+		{"nts authenticator", 0x0404, "NTS Authenticator and Encrypted Extension Fields"},
+		{"unknown type", 0xABCD, "Unknown(0xabcd)"},
+		{"zero", 0x0000, "Unknown(0x0000)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, tc.typ.String())
+		})
+	}
+}

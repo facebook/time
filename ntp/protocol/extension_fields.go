@@ -77,6 +77,14 @@ const (
 	ExtensionMaxBodySize = 0xFFFC - ExtensionHeaderSize
 )
 
+// NTS extension field types defined by RFC 8915 §5.1.1.
+const (
+	UniqueIdentifier     ExtensionFieldType = 0x0104
+	NTSCookie            ExtensionFieldType = 0x0204
+	NTSCookiePlaceholder ExtensionFieldType = 0x0304
+	NTSAuthenticator     ExtensionFieldType = 0x0404
+)
+
 // Sentinel errors returned by extension-field parsing.
 var (
 	ErrExtensionTruncated     = errors.New("extension field truncated")
@@ -99,6 +107,24 @@ func (ef ExtensionField) EncodedSize() int {
 // Encode returns the wire-format bytes of this extension field, padded per RFC 7822.
 func (ef ExtensionField) Encode() ([]byte, error) {
 	return MarshalExtensionFields([]ExtensionField{ef})
+}
+
+// String returns the IANA-registered name for known NTP extension field
+// types and "Unknown(0xXXXX)" otherwise. See RFC 8915 §5 and the IANA "NTP Extension
+// Field Types" registry.
+func (t ExtensionFieldType) String() string {
+	switch t {
+	case UniqueIdentifier:
+		return "Unique Identifier"
+	case NTSCookie:
+		return "NTS Cookie"
+	case NTSCookiePlaceholder:
+		return "NTS Cookie Placeholder"
+	case NTSAuthenticator:
+		return "NTS Authenticator and Encrypted Extension Fields"
+	default:
+		return fmt.Sprintf("Unknown(0x%04x)", uint16(t))
+	}
 }
 
 // MarshalExtensionFields encodes a slice of extension fields into the wire

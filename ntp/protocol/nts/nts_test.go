@@ -54,9 +54,9 @@ func TestConstructorsRoundTripThroughExtensionFramework(t *testing.T) {
 
 	// Types preserved on the wire — this is the dispatch contract the
 	// responder relies on to route EFs by NTS field type.
-	require.Equal(t, UniqueIdentifier, parsed[0].Type)
-	require.Equal(t, NTSCookie, parsed[1].Type)
-	require.Equal(t, NTSCookiePlaceholder, parsed[2].Type)
+	require.Equal(t, protocol.UniqueIdentifier, parsed[0].Type)
+	require.Equal(t, protocol.NTSCookie, parsed[1].Type)
+	require.Equal(t, protocol.NTSCookiePlaceholder, parsed[2].Type)
 
 	// UID nonce round-trips exactly (32 octets is already 4-aligned, no padding).
 	require.Equal(t, nonce, parsed[0].Body)
@@ -83,7 +83,7 @@ func TestCookiePlaceholderSizeIsTheMessage(t *testing.T) {
 		parsed, err := protocol.ParseExtensionFields(wire)
 		require.NoError(t, err)
 		require.Len(t, parsed, 1)
-		require.Equal(t, NTSCookiePlaceholder, parsed[0].Type)
+		require.Equal(t, protocol.NTSCookiePlaceholder, parsed[0].Type)
 		// Server reads len(parsed[0].Body) to determine the cookie size to
 		// issue. All our supported cookie sizes are 4-aligned so the wire
 		// length is exact (no padding stripping needed).

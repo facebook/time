@@ -90,7 +90,7 @@ func TestSealOpenAuthenticatorEmptyPlaintext(t *testing.T) {
 
 	ef, err := SealAuthenticator(siv, ad, nil)
 	require.NoError(t, err)
-	require.Equal(t, NTSAuthenticator, ef.Type)
+	require.Equal(t, protocol.NTSAuthenticator, ef.Type)
 
 	pt, err := OpenAuthenticator(siv, ad, ef)
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func TestOpenAuthenticatorVerifyChainTerminatesAtSentinel(t *testing.T) {
 
 func TestOpenAuthenticatorRejectsWrongType(t *testing.T) {
 	siv := newTestSIV(t)
-	bogus := protocol.ExtensionField{Type: UniqueIdentifier, Body: make([]byte, 32)}
+	bogus := protocol.ExtensionField{Type: protocol.UniqueIdentifier, Body: make([]byte, 32)}
 	_, err := OpenAuthenticator(siv, []byte("ad"), bogus)
 	require.ErrorIs(t, err, ErrAuthenticatorMalformed)
 }
@@ -176,7 +176,7 @@ func TestOpenAuthenticatorRejectsNonEmptyNonce(t *testing.T) {
 	siv := newTestSIV(t)
 	body, err := MarshalAuthenticatorBody([]byte{1, 2, 3, 4}, []byte{5, 6, 7, 8})
 	require.NoError(t, err)
-	ef := protocol.ExtensionField{Type: NTSAuthenticator, Body: body}
+	ef := protocol.ExtensionField{Type: protocol.NTSAuthenticator, Body: body}
 	_, err = OpenAuthenticator(siv, []byte("ad"), ef)
 	require.ErrorIs(t, err, ErrAuthenticatorMalformed)
 }
@@ -264,7 +264,7 @@ func TestSealAuthenticatorThroughExtensionFramework(t *testing.T) {
 	parsed, err := protocol.ParseExtensionFields(wire)
 	require.NoError(t, err)
 	require.Len(t, parsed, 1)
-	require.Equal(t, NTSAuthenticator, parsed[0].Type)
+	require.Equal(t, protocol.NTSAuthenticator, parsed[0].Type)
 
 	// Body bytes from parse may include trailing zero padding — strip back to
 	// the inner authenticator body length before comparing semantics.

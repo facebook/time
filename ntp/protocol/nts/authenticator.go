@@ -166,16 +166,16 @@ func SealAuthenticator(siv *subtle.AESSIV, ad, plaintext []byte) (protocol.Exten
 	if err != nil {
 		return protocol.ExtensionField{}, err
 	}
-	return protocol.ExtensionField{Type: NTSAuthenticator, Body: body}, nil
+	return protocol.ExtensionField{Type: protocol.NTSAuthenticator, Body: body}, nil
 }
 
 // OpenAuthenticator verifies and decrypts an NTS Authenticator extension
 // field. Returns the encrypted plaintext (zero or more encrypted EFs as a
 // concatenated byte slice) on success.
 func OpenAuthenticator(siv *subtle.AESSIV, ad []byte, ef protocol.ExtensionField) ([]byte, error) {
-	if ef.Type != NTSAuthenticator {
+	if ef.Type != protocol.NTSAuthenticator {
 		return nil, fmt.Errorf("%w: expected type %#x got %#x",
-			ErrAuthenticatorMalformed, NTSAuthenticator, ef.Type)
+			ErrAuthenticatorMalformed, protocol.NTSAuthenticator, ef.Type)
 	}
 	body, err := ParseAuthenticatorBody(ef.Body)
 	if err != nil {
