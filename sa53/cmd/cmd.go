@@ -88,6 +88,13 @@ func detectMACSerial() (string, error) {
 	return filepath.Join("/dev", ttyName), nil
 }
 
+// SerialPort returns the serial device path resolved by PersistentPreRunE
+// (explicit --serial or auto-detection). Internal builds that add their own
+// subcommands use this to reach the same device the root command resolved.
+func SerialPort() string {
+	return serialPort
+}
+
 // Execute runs the root command.
 func Execute() {
 	log.SetLevel(log.InfoLevel)

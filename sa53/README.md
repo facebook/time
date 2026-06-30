@@ -12,9 +12,8 @@ Built as a single binary `sa53` (installed to `/usr/local/bin/sa53` via the
 Read or upgrade SA53 firmware.
 
 ```
-sudo sa53 firmware --check                       # print version as JSON
-sudo sa53 firmware --fw firmware.hex --upgrade   # apply an upgrade
-sudo sa53 firmware --fw firmware.hex --upgrade --force
+sudo sa53 firmware --fw firmware.hex --apply   # apply an upgrade
+sudo sa53 firmware --fw firmware.hex --apply --force
 ```
 
 Old single-dash flags (`-upgrade`) are gone; cobra requires the subcommand and `--`
