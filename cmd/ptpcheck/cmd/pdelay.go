@@ -246,6 +246,18 @@ func runMulticastProbe(cfg ProbeConfig) ([]*pdelay.Result, error) {
 	}
 	defer conn.Close()
 
+	// A host peer-delay-measuring itself is meaningless, and a locally-originated
+	// multicast PDelay_Req is delivered to same-host group members (e.g. the local
+	// sptp) without an RX timestamp, which sptp treats as a fatal error. Disable
+	// multicast loopback so the probe is never delivered back to this host.
+	loopLevel, loopOpt := unix.IPPROTO_IPV6, unix.IPV6_MULTICAST_LOOP
+	if cfg.IPv4 {
+		loopLevel, loopOpt = unix.IPPROTO_IP, unix.IP_MULTICAST_LOOP
+	}
+	if err := unix.SetsockoptInt(conn.ConnFd(), loopLevel, loopOpt, 0); err != nil {
+		return nil, fmt.Errorf("disabling multicast loopback: %w", err)
+	}
+
 	timestamp.AttemptsTXTS = 5
 	timestamp.TimeoutTXTS = 100 * time.Millisecond
 
