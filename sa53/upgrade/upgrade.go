@@ -31,6 +31,7 @@ import (
 
 	"github.com/facebook/time/sa53/detect"
 	"github.com/facebook/time/sa53/firmware"
+	"github.com/facebook/time/sa53/preflight"
 	"github.com/facebook/time/sa53/protocol"
 	"github.com/facebook/time/sa53/xmodem"
 )
@@ -135,6 +136,11 @@ func Apply(serialPort string, src Source, apply, force bool) error {
 			return err
 		}
 		log.Warnf("cannot determine candidate firmware version, continuing due to --force: %v", err)
+	}
+
+	// Refuse if another process already holds the shared tty.
+	if err := preflight.Default.Preflight(serialPort); err != nil {
+		return err
 	}
 
 	sa53, err := protocol.Init(serialPort)
