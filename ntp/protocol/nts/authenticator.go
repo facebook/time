@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"github.com/facebook/time/ntp/protocol"
-	"github.com/tink-crypto/tink-go/v2/daead/subtle"
 )
 
 /*
@@ -142,37 +141,30 @@ func ParseAuthenticatorBody(body []byte) (AuthenticatorBody, error) {
 	return ab, nil
 }
 
-// SealAuthenticator builds an NTS Authenticator extension field over the
-// supplied associated data. The plaintext (typically empty for the common
-// case of no encrypted EFs) is encrypted and authenticated using AES-SIV.
-// The returned extension field is appended after the AD on the wire.
-//
-// Per RFC 8915 §5.6.1, the caller MUST pass `ad` as the NTP packet header
-// (48 octets) followed by every extension field preceding this Authenticator,
-// exactly as those bytes appear on the wire (including any wire padding).
-// This package has no NTP-packet awareness, so it cannot validate the AD
-// shape — that responsibility lives one layer up (the responder request
-// path or the KE-side smoke client). If the caller constructs the wrong AD,
-// the receiver's OpenAuthenticator will fail verification with
-// ErrAuthenticatorVerify; bugs of this kind manifest as "every NTS request
-// rejected" with no other signal, so AD-construction code should be reviewed
-// carefully.
-func SealAuthenticator(siv *subtle.AESSIV, ad, plaintext []byte) (protocol.ExtensionField, error) {
-	ct, err := siv.EncryptDeterministically(plaintext, ad)
+// SealAuthenticator encrypts plaintext under the given AEAD, authenticating ad
+// as associated data, and returns the result as an NTS Authenticator extension
+// field (RFC 8915 §5.6). The AEAD-produced nonce and ciphertext are packed into
+// the EF body via MarshalAuthenticatorBody. A nil or empty plaintext yields an
+// authenticator that protects ad only.
+func SealAuthenticator(aead AEAD, ad, plaintext []byte) (protocol.ExtensionField, error) {
+	nonce, ct, err := aead.Seal(ad, plaintext)
 	if err != nil {
-		return protocol.ExtensionField{}, fmt.Errorf("nts: SIV encrypt: %w", err)
+		return protocol.ExtensionField{}, err
 	}
-	body, err := MarshalAuthenticatorBody(nil, ct)
+	body, err := MarshalAuthenticatorBody(nonce, ct)
 	if err != nil {
 		return protocol.ExtensionField{}, err
 	}
 	return protocol.ExtensionField{Type: protocol.NTSAuthenticator, Body: body}, nil
 }
 
-// OpenAuthenticator verifies and decrypts an NTS Authenticator extension
-// field. Returns the encrypted plaintext (zero or more encrypted EFs as a
-// concatenated byte slice) on success.
-func OpenAuthenticator(siv *subtle.AESSIV, ad []byte, ef protocol.ExtensionField) ([]byte, error) {
+// OpenAuthenticator verifies and decrypts an NTS Authenticator extension field
+// (RFC 8915 §5.6), authenticating ad as associated data, and returns the
+// recovered plaintext. It returns ErrAuthenticatorMalformed if ef is not an
+// authenticator EF, if its body is structurally invalid, or if the nonce length
+// is rejected by the AEAD; it returns ErrAuthenticatorVerify if AEAD
+// verification fails.
+func OpenAuthenticator(aead AEAD, ad []byte, ef protocol.ExtensionField) ([]byte, error) {
 	if ef.Type != protocol.NTSAuthenticator {
 		return nil, fmt.Errorf("%w: expected type %#x got %#x",
 			ErrAuthenticatorMalformed, protocol.NTSAuthenticator, ef.Type)
@@ -181,23 +173,15 @@ func OpenAuthenticator(siv *subtle.AESSIV, ad []byte, ef protocol.ExtensionField
 	if err != nil {
 		return nil, err
 	}
-	if len(body.Nonce) != 0 {
-		// SIV-protected packets carry Nonce Length = 0 on the wire — see the
-		// file-level comment above. Peers that send a non-empty Nonce would
-		// require the bytes to be folded into the SIV S2V input list as a
-		// trailing entry; tink's single-AD EncryptDeterministically/
-		// DecryptDeterministically API doesn't expose that, and chrony (our
-		// primary interop target) sets the Nonce to empty for SIV anyway.
-		return nil, fmt.Errorf("%w: empty Nonce required for SIV, got %d bytes",
-			ErrAuthenticatorMalformed, len(body.Nonce))
-	}
-	pt, err := siv.DecryptDeterministically(body.Ciphertext, ad)
+	pt, err := aead.Open(ad, body.Nonce, body.Ciphertext)
 	if err != nil {
-		// Wrap ErrAuthenticatorVerify (not the tink error) so the tink err
-		// stays out of the errors.Is chain — see the sentinel's godoc.
-		// Pass err.Error() rather than err so errorlint doesn't "helpfully"
-		// rewrite the %s back to %w, which would put the tink err in the
-		// chain and silently break the contract.
+		// A wrong-length nonce is a structural (malformed) fault, not an
+		// authentication failure — surface it as ErrAuthenticatorMalformed.
+		if errors.Is(err, ErrAEADNonceSize) {
+			return nil, fmt.Errorf("%w: %s", ErrAuthenticatorMalformed, err.Error())
+		}
+		// Keep the AEAD err text but not in the errors.Is chain — see the
+		// ErrAuthenticatorVerify godoc. %s (not %w) is deliberate.
 		return nil, fmt.Errorf("%w: %s", ErrAuthenticatorVerify, err.Error())
 	}
 	return pt, nil

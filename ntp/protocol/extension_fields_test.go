@@ -234,3 +234,11 @@ func TestMarshalExtensionFieldsRejectsInvalid(t *testing.T) {
 	_, err := MarshalExtensionFields([]ExtensionField{{Type: 0xF000}})
 	require.ErrorIs(t, err, ErrExtensionTypeReserved)
 }
+
+// TestAEADAlgorithmValues pins the negotiated AEAD identifiers to their IANA
+// "AEAD Algorithms" registry values; drift here would silently break NTS-KE
+// interop with peers.
+func TestAEADAlgorithmValues(t *testing.T) {
+	require.Equal(t, AEADAlgorithm(17), AEADAESSIVCMAC512)
+	require.Equal(t, AEADAlgorithm(30), AEADAES128GCMSIV)
+}
