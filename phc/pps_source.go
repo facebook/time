@@ -57,7 +57,7 @@ const (
 	DefaultTs2PhcSinkIndex = 0
 	defaultPulseWidth      = uint32(500000000)
 	// should default to 0 if config specified. Otherwise -1 (ignore phase)
-	defaultPeroutPhase = int32(-1) //nolint:all
+	defaultPeroutPhase = int32(-1) //nolint:all // reserved default for when peroutPhase becomes configurable
 	// ppsStartDelay is the delay in seconds before the first PPS signal is sent
 	ppsStartDelay         = 2
 	defaultPollerInterval = 1 * time.Second
@@ -124,7 +124,7 @@ func ActivatePPSSource(dev DeviceController, pinIndex uint) (*PPSSource, error) 
 
 	// Initialize the PTPPeroutRequest struct
 	peroutRequest := &PtpPeroutRequest{}
-	peroutRequest.Index = uint32(defaultTs2PhcChannel) // nolint:gosec
+	peroutRequest.Index = uint32(defaultTs2PhcChannel)
 	peroutRequest.Period = PtpClockTime{Sec: 1, Nsec: 0}
 
 	// Set flags and pulse width
@@ -179,7 +179,7 @@ func (ppsSource *PPSSource) Timestamp() (time.Time, error) {
 	}
 
 	sourceTs.Nsec = 0
-	//nolint:unconvert
+	//nolint:unconvert // explicit int64 conversions kept for portability across platforms where Timespec fields may be int32
 	currTime = time.Unix(int64(sourceTs.Sec), int64(sourceTs.Nsec))
 	currTime = currTime.Add(time.Duration(ppsSource.peroutPhase))
 
@@ -277,7 +277,7 @@ func PPSSinkFromDevice(targetDevice DeviceController, pinIndex uint) (*PPSSink, 
 
 	req := &PtpExttsRequest{
 		Flags: unix.PTP_ENABLE_FEATURE | ppsSink.Polarity,
-		Index: uint32(ppsSink.InputPin), //nolint:gosec
+		Index: uint32(ppsSink.InputPin), //nolint:gosec // InputPin is a small pin index that always fits in uint32
 	}
 
 	err := targetDevice.setPinFunc(pinIndex, unix.PTP_PF_EXTTS, defaultTs2PhcChannel)
