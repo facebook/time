@@ -606,6 +606,7 @@ func TestRunListenerGood(t *testing.T) {
 	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).DoAndReturn(func(b, oob []byte) (int, unix.Sockaddr, time.Time, error) {
 		// limit how many we send, so we don't overwhelm the client. packets from uknown IPs will be discarded
 		if sentEvent > 10 {
+			time.Sleep(2 * defaultTestTimeout) // idle socket; no busy-spin, ctx cancels the listener
 			return 0, &unix.SockaddrInet4{}, time.Time{}, nil
 		}
 		addr := "192.168.0.11"
@@ -628,6 +629,7 @@ func TestRunListenerGood(t *testing.T) {
 	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).DoAndReturn(func(b []byte) (int, netip.Addr, error) {
 		// limit how many we send, so we don't overwhelm the client. packets from uknown IPs will be discarded
 		if sentGen > 10 {
+			time.Sleep(2 * defaultTestTimeout) // idle socket; no busy-spin, ctx cancels the listener
 			return 0, netip.MustParseAddr("4.4.4.4"), nil
 		}
 		sentGen++
