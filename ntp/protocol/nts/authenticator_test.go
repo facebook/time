@@ -28,17 +28,20 @@ import (
 	"github.com/tink-crypto/tink-go/v2/daead/subtle"
 )
 
-// newTestSIV returns an AES-SIV-CMAC instance with a deterministic 64-byte key.
-// Tink requires a 64-byte key (CMAC-512 variant).
-func newTestSIV(t *testing.T) *subtle.AESSIV {
+// newTestAEAD returns an AEAD backed by AES-SIV-CMAC-512 for authenticator tests.
+// Delegates to aeadFor defined in aead_test.go to avoid duplicating test helper logic
+// across test files in package nts.
+func newTestAEAD(t *testing.T) AEAD {
 	t.Helper()
-	key := make([]byte, subtle.AESSIVKeySize)
-	for i := range key {
-		key[i] = byte(i + 1)
-	}
-	siv, err := subtle.NewAESSIV(key)
-	require.NoError(t, err)
-	return siv
+	return aeadFor(t, protocol.AEADAESSIVCMAC512)
+}
+
+// newTestAEADWithAlg builds an AEAD for the given algorithm using a deterministic key.
+// Consolidated to use the single aeadFor helper from aead_test.go to keep algorithm
+// support in sync across test files.
+func newTestAEADWithAlg(t *testing.T, alg protocol.AEADAlgorithm) AEAD {
+	t.Helper()
+	return aeadFor(t, alg)
 }
 
 func TestMarshalAuthenticatorBodyEmptyNonce(t *testing.T) {
@@ -85,7 +88,7 @@ func TestParseAuthenticatorBodyRejectsLengthExceedingBuffer(t *testing.T) {
 }
 
 func TestSealOpenAuthenticatorEmptyPlaintext(t *testing.T) {
-	siv := newTestSIV(t)
+	siv := newTestAEAD(t)
 	ad := []byte("some-associated-data-from-the-ntp-packet")
 
 	ef, err := SealAuthenticator(siv, ad, nil)
@@ -98,7 +101,7 @@ func TestSealOpenAuthenticatorEmptyPlaintext(t *testing.T) {
 }
 
 func TestSealOpenAuthenticatorWithPlaintext(t *testing.T) {
-	siv := newTestSIV(t)
+	siv := newTestAEAD(t)
 	ad := []byte("ntp-header-and-leading-extension-fields")
 	plaintext := []byte("encrypted-extension-field-payload")
 
@@ -111,7 +114,7 @@ func TestSealOpenAuthenticatorWithPlaintext(t *testing.T) {
 }
 
 func TestOpenAuthenticatorRejectsTamperedAD(t *testing.T) {
-	siv := newTestSIV(t)
+	siv := newTestAEAD(t)
 	ad := []byte("authentic-associated-data")
 
 	ef, err := SealAuthenticator(siv, ad, nil)
@@ -124,7 +127,7 @@ func TestOpenAuthenticatorRejectsTamperedAD(t *testing.T) {
 }
 
 func TestOpenAuthenticatorRejectsTamperedCiphertext(t *testing.T) {
-	siv := newTestSIV(t)
+	siv := newTestAEAD(t)
 	ad := []byte("ad")
 
 	ef, err := SealAuthenticator(siv, ad, []byte("plaintext"))
@@ -145,7 +148,7 @@ func TestOpenAuthenticatorRejectsTamperedCiphertext(t *testing.T) {
 // linter) changes the wrap from "%w: %s" to "%w: %w" and silently puts
 // tink's err back in the chain.
 func TestOpenAuthenticatorVerifyChainTerminatesAtSentinel(t *testing.T) {
-	siv := newTestSIV(t)
+	siv := newTestAEAD(t)
 	ad := []byte("ad")
 
 	ef, err := SealAuthenticator(siv, ad, []byte("plaintext"))
@@ -166,19 +169,51 @@ func TestOpenAuthenticatorVerifyChainTerminatesAtSentinel(t *testing.T) {
 }
 
 func TestOpenAuthenticatorRejectsWrongType(t *testing.T) {
-	siv := newTestSIV(t)
+	siv := newTestAEAD(t)
 	bogus := protocol.ExtensionField{Type: protocol.UniqueIdentifier, Body: make([]byte, 32)}
 	_, err := OpenAuthenticator(siv, []byte("ad"), bogus)
 	require.ErrorIs(t, err, ErrAuthenticatorMalformed)
 }
 
 func TestOpenAuthenticatorRejectsNonEmptyNonce(t *testing.T) {
-	siv := newTestSIV(t)
+	siv := newTestAEAD(t)
 	body, err := MarshalAuthenticatorBody([]byte{1, 2, 3, 4}, []byte{5, 6, 7, 8})
 	require.NoError(t, err)
 	ef := protocol.ExtensionField{Type: protocol.NTSAuthenticator, Body: body}
 	_, err = OpenAuthenticator(siv, []byte("ad"), ef)
 	require.ErrorIs(t, err, ErrAuthenticatorMalformed)
+}
+
+// TestSealOpenAuthenticatorGCMSIV exercises the non-deterministic GCM-SIV path
+// through the authenticator: unlike SIV, GCM-SIV emits a non-empty nonce that
+// must survive marshalling into and parsing back out of the EF body.
+func TestSealOpenAuthenticatorGCMSIV(t *testing.T) {
+	aead := newTestAEADWithAlg(t, protocol.AEADAES128GCMSIV)
+	ad := []byte("ntp-header-and-leading-extension-fields")
+	plaintext := []byte("encrypted-extension-field-payload")
+
+	ef, err := SealAuthenticator(aead, ad, plaintext)
+	require.NoError(t, err)
+	require.Equal(t, protocol.NTSAuthenticator, ef.Type)
+
+	got, err := OpenAuthenticator(aead, ad, ef)
+	require.NoError(t, err)
+	require.Equal(t, plaintext, got)
+}
+
+// TestOpenAuthenticatorGCMSIVRejectsTamperedAD checks that the GCM-SIV path
+// fails verification when the associated data is altered after sealing.
+func TestOpenAuthenticatorGCMSIVRejectsTamperedAD(t *testing.T) {
+	aead := newTestAEADWithAlg(t, protocol.AEADAES128GCMSIV)
+	ad := []byte("authentic-associated-data")
+
+	ef, err := SealAuthenticator(aead, ad, []byte("plaintext"))
+	require.NoError(t, err)
+
+	tampered := bytes.Clone(ad)
+	tampered[0] ^= 0xff
+	_, err = OpenAuthenticator(aead, tampered, ef)
+	require.ErrorIs(t, err, ErrAuthenticatorVerify)
 }
 
 // TestAESSIVKnownAnswerVectors pins tink's deterministic AES-SIV-CMAC-512
@@ -250,7 +285,7 @@ func TestAESSIVKnownAnswerVectors(t *testing.T) {
 func TestSealAuthenticatorThroughExtensionFramework(t *testing.T) {
 	// Verify the EF can be encoded with MarshalExtensionFields and round-trips
 	// through ParseExtensionFields cleanly.
-	siv := newTestSIV(t)
+	siv := newTestAEAD(t)
 	ad := []byte("packet-up-to-authenticator")
 	plaintext := make([]byte, 16)
 	_, err := rand.Read(plaintext)

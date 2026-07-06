@@ -91,6 +91,21 @@ const (
 	NTSAuthenticator     ExtensionFieldType = 0x0404
 )
 
+// AEADAlgorithm is a 16-bit IANA "AEAD Algorithms" registry identifier
+// negotiated via NTS-KE and used to select the AEAD for the Authenticator
+// extension field (RFC 8915 §5.1).
+type AEADAlgorithm uint16
+
+const (
+	// AEADAESSIVCMAC512 is AEAD_AES_SIV_CMAC_512 (RFC 5297), the RFC 8915 §5.7
+	// mandatory-to-implement algorithm. Deterministic: it carries no separate
+	// nonce and uses a 64-octet key.
+	AEADAESSIVCMAC512 AEADAlgorithm = 17
+	// AEADAES128GCMSIV is AEAD_AES_128_GCM_SIV (RFC 8452). It uses a 16-octet
+	// key and a 12-octet nonce.
+	AEADAES128GCMSIV AEADAlgorithm = 30
+)
+
 // Sentinel errors returned by extension-field parsing.
 var (
 	ErrExtensionTruncated     = errors.New("extension field truncated")
