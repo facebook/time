@@ -44,15 +44,15 @@ type PtpClockTime struct {
 }
 
 type PtpClockCaps struct {
-	Max_adj            int32 //nolint:revive
-	N_alarm            int32 //nolint:revive
-	N_ext_ts           int32 //nolint:revive
-	N_per_out          int32 //nolint:revive
+	Max_adj            int32 //nolint:revive // matches C kernel struct field name
+	N_alarm            int32 //nolint:revive // matches C kernel struct field name
+	N_ext_ts           int32 //nolint:revive // matches C kernel struct field name
+	N_per_out          int32 //nolint:revive // matches C kernel struct field name
 	Pps                int32
-	N_pins             int32 //nolint:revive
-	Cross_timestamping int32 //nolint:revive
-	Adjust_phase       int32 //nolint:revive
-	Max_phase_adj      int32 //nolint:revive
+	N_pins             int32 //nolint:revive // matches C kernel struct field name
+	Cross_timestamping int32 //nolint:revive // matches C kernel struct field name
+	Adjust_phase       int32 //nolint:revive // matches C kernel struct field name
+	Max_phase_adj      int32 //nolint:revive // matches C kernel struct field name
 	Rsv                [11]int32
 }
 
@@ -101,25 +101,25 @@ type PtpExttsRequest struct {
 
 // HwTstampConfig is used in SIOCGHWTSTAMP and SIOCSHWTSTAMP ioctls
 type HwTstampConfig struct {
-	Flags     int32 //nolint:revive
-	Tx_type   int32 //nolint:revive
-	Rx_filter int32 //nolint:revive
+	Flags     int32 //nolint:revive // matches C kernel struct field name
+	Tx_type   int32 //nolint:revive // matches C kernel struct field name
+	Rx_filter int32 //nolint:revive // matches C kernel struct field name
 }
 
 // EthtoolTsInfo is returned by ETHTOOL_GET_TS_INFO function of SIOCETHTOOL ioctl
 type EthtoolTsInfo struct {
 	Cmd             uint32
-	So_timestamping uint32    //nolint:revive
-	Phc_index       int32     //nolint:revive
-	Tx_types        uint32    //nolint:revive
-	Tx_reserved     [3]uint32 //nolint:revive
-	Rx_filters      uint32    //nolint:revive
-	Rx_reserved     [3]uint32 //nolint:revive
+	So_timestamping uint32    //nolint:revive // matches C kernel struct field name
+	Phc_index       int32     //nolint:revive // matches C kernel struct field name
+	Tx_types        uint32    //nolint:revive // matches C kernel struct field name
+	Tx_reserved     [3]uint32 //nolint:revive // matches C kernel struct field name
+	Rx_filters      uint32    //nolint:revive // matches C kernel struct field name
+	Rx_reserved     [3]uint32 //nolint:revive // matches C kernel struct field name
 }
 
 // Constants available on all platforms
 
-//nolint:revive
+//nolint:revive // matches C kernel constant names
 const (
 	PTP_PF_NONE = iota
 	PTP_PF_EXTTS
@@ -127,7 +127,7 @@ const (
 	PTP_PF_PHYSYNC
 )
 
-//nolint:revive
+//nolint:revive // matches C kernel constant names
 const (
 	PTP_MAX_SAMPLES    = 25
 	PTP_ENABLE_FEATURE = 0x1
@@ -158,7 +158,7 @@ func Recvmsg(a int, b, c []byte, d int) (int, int, int, Sockaddr, error) {
 // Cross-platform constants from golang.org/x/sys/unix
 
 const (
-	AF_INET             = unix.AF_INET //nolint:revive
+	AF_INET             = unix.AF_INET //nolint:revive // matches C kernel constant names
 	EAGAIN              = unix.EAGAIN
 	EINVAL              = unix.EINVAL
 	ENOENT              = unix.ENOENT
@@ -169,9 +169,9 @@ const (
 	POLLPRI             = unix.POLLPRI
 	SizeofPtr           = unix.SizeofPtr
 	SizeofSockaddrInet4 = unix.SizeofSockaddrInet4
-	SOCK_DGRAM          = unix.SOCK_DGRAM     //nolint:revive
-	SOL_SOCKET          = unix.SOL_SOCKET     //nolint:revive
-	SO_RCVTIMEO         = unix.SO_RCVTIMEO    //nolint:revive
-	SO_TIMESTAMP        = unix.SO_TIMESTAMP   //nolint:revive
-	CLOCK_REALTIME      = unix.CLOCK_REALTIME //nolint:revive
+	SOCK_DGRAM          = unix.SOCK_DGRAM     //nolint:revive // matches C kernel constant names
+	SOL_SOCKET          = unix.SOL_SOCKET     //nolint:revive // matches C kernel constant names
+	SO_RCVTIMEO         = unix.SO_RCVTIMEO    //nolint:revive // matches C kernel constant names
+	SO_TIMESTAMP        = unix.SO_TIMESTAMP   //nolint:revive // matches C kernel constant names
+	CLOCK_REALTIME      = unix.CLOCK_REALTIME //nolint:revive // matches C kernel constant names
 )
