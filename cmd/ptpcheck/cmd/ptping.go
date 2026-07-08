@@ -97,9 +97,8 @@ func (p *ptping) init() error {
 	timestamp.TimeoutTXTS = 100 * time.Millisecond
 	p.client, err = client.NewClient(p.target, ptp.PortEvent, p.clockID, p.eventConn, &client.Config{}, &client.JSONStats{})
 	go func() {
-		if err := p.runReader(); err != nil {
-			log.Error(err)
-		}
+		err := p.runReader()
+		log.Error(err)
 	}()
 
 	return err
