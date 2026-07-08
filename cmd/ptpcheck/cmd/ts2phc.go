@@ -139,8 +139,7 @@ var ts2phcCmd = &cobra.Command{
 		go func() {
 			log.Fatalf("Metrics server error: %v", metrics.RunMetricsServer(monitoringPort, metricsHandler))
 		}()
-		if err := ts2phcRun(srcDeviceTS2PHCFlag, dstDeviceTS2PHCFlag, intervalTS2PHCFlag, firstStepTS2PHCFlag, stepThresholdTS2PHCFlag, srcPinTS2PHCFlag, metricsHandler); err != nil {
-			log.Fatal(err)
-		}
+		err := ts2phcRun(srcDeviceTS2PHCFlag, dstDeviceTS2PHCFlag, intervalTS2PHCFlag, firstStepTS2PHCFlag, stepThresholdTS2PHCFlag, srcPinTS2PHCFlag, metricsHandler)
+		log.Fatal(err)
 	},
 }
