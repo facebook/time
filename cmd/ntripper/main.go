@@ -247,7 +247,7 @@ func runOnce(ctx context.Context, cfg config, logger *slog.Logger, st *stats.JSO
 		err = streamFrames(ctx, sockConn, client, logger, st, stationID, ephColl)
 		sockConn.Close()
 
-		if err == nil || ctx.Err() != nil {
+		if ctx.Err() != nil {
 			return err
 		}
 
