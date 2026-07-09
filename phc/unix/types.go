@@ -101,7 +101,7 @@ type PtpExttsRequest struct {
 
 // HwTstampConfig is used in SIOCGHWTSTAMP and SIOCSHWTSTAMP ioctls
 type HwTstampConfig struct {
-	Flags     int32 //nolint:revive // matches C kernel struct field name
+	Flags     int32
 	Tx_type   int32 //nolint:revive // matches C kernel struct field name
 	Rx_filter int32 //nolint:revive // matches C kernel struct field name
 }
