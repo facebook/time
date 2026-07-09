@@ -204,7 +204,7 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	}
 	// (5) Validate the request and choose the AEAD algorithm. A protocol-level
 	// failure carries an error code we relay to the client; anything else drops.
-	aeadID, err := s.validateRequest(records)
+	aeadID, compliantExport, err := s.validateRequest(records)
 	if err != nil {
 		var ce *cookieError
 		if errors.As(err, &ce) { //nolint:modernize // Go 1.25 compatibility: avoid errors.AsType which requires Go 1.26
@@ -215,7 +215,7 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		return
 	}
 	// (6) Derive C2S/S2C keys from the TLS session and seal the cookies.
-	response, err := s.buildResponse(cs, aeadID)
+	response, err := s.buildResponse(cs, aeadID, compliantExport)
 	if err != nil {
 		s.writeError(tlsConn, errorInternalServerError)
 		slog.Error("ntske: building response", "remote", conn.RemoteAddr(), "err", err)
@@ -236,14 +236,13 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 // 0. The chosen algorithm is the client's first preference the server supports.
 // Duplicate Next Protocol or AEAD Algorithm records are rejected with BadRequest
 // to avoid silent overwrite and to signal the error back to the client.
-func (s *Server) validateRequest(records []Record) (uint16, error) {
+func (s *Server) validateRequest(records []Record) (aeadID uint16, compliantExport bool, err error) {
 	var (
 		sawNextProto bool
 		sawEOM       bool
 		sawAEAD      bool
 		clientAEAD   []uint16
 		ntpv4        bool
-		err          error
 	)
 	for _, r := range records {
 		switch r.Type {
@@ -251,14 +250,14 @@ func (s *Server) validateRequest(records []Record) (uint16, error) {
 			sawEOM = true
 		case RecordNextProtocol:
 			if sawNextProto {
-				return 0, protocolError(errorBadRequest,
+				return 0, false, protocolError(errorBadRequest,
 					"duplicate Next Protocol Negotiation record")
 			}
 			sawNextProto = true
 			var ids []uint16
 			ids, err = ParseUint16s(r.Body)
 			if err != nil {
-				return 0, protocolError(errorBadRequest, "malformed Next Protocol body: %v", err)
+				return 0, false, protocolError(errorBadRequest, "malformed Next Protocol body: %v", err)
 			}
 			for _, id := range ids {
 				if id == NextProtocolNTPv4 {
@@ -267,34 +266,36 @@ func (s *Server) validateRequest(records []Record) (uint16, error) {
 			}
 		case RecordAEADAlgorithm:
 			if sawAEAD {
-				return 0, protocolError(errorBadRequest,
+				return 0, false, protocolError(errorBadRequest,
 					"duplicate AEAD Algorithm Negotiation record")
 			}
 			sawAEAD = true
 			clientAEAD, err = ParseUint16s(r.Body)
 			if err != nil {
-				return 0, protocolError(errorBadRequest, "malformed AEAD body: %v", err)
+				return 0, false, protocolError(errorBadRequest, "malformed AEAD body: %v", err)
 			}
+		case RecordCompliant128GCMExport:
+			compliantExport = true
 		case RecordError, RecordWarning, RecordNewCookie,
 			RecordServerNegotiation, RecordPortNegotiation:
 			// Records a client may legally send or we simply ignore server-side.
 		default:
 			// Unknown record: only fatal if the Critical Bit is set (RFC 8915 §4).
 			if r.Critical {
-				return 0, protocolError(errorUnrecognizedCriticalRecord,
+				return 0, false, protocolError(errorUnrecognizedCriticalRecord,
 					"unknown critical record type %d", r.Type)
 			}
 		}
 	}
 	switch {
 	case !sawEOM:
-		return 0, protocolError(errorBadRequest, "missing End of Message record")
+		return 0, false, protocolError(errorBadRequest, "missing End of Message record")
 	case !sawNextProto || !ntpv4:
-		return 0, protocolError(errorBadRequest, "no NTPv4 in Next Protocol Negotiation")
+		return 0, false, protocolError(errorBadRequest, "no NTPv4 in Next Protocol Negotiation")
 	case !sawAEAD:
-		return 0, protocolError(errorBadRequest, "missing AEAD Algorithm Negotiation")
+		return 0, false, protocolError(errorBadRequest, "missing AEAD Algorithm Negotiation")
 	case len(clientAEAD) == 0:
-		return 0, protocolError(errorBadRequest, "empty AEAD Algorithm Negotiation body")
+		return 0, false, protocolError(errorBadRequest, "empty AEAD Algorithm Negotiation body")
 	}
 	// Pick the client's first preference that we support. Client order wins, and
 	// we only offer an algorithm we can actually derive keys for (aeadIDToKeyLen
@@ -307,15 +308,17 @@ func (s *Server) validateRequest(records []Record) (uint16, error) {
 		if _, err := aeadIDToKeyLen(protocol.AEADAlgorithm(id)); err != nil {
 			continue
 		}
-		return id, nil
+		return id, compliantExport, nil
 	}
-	return 0, protocolError(errorBadRequest, "no mutually supported AEAD algorithm")
+	return 0, false, protocolError(errorBadRequest, "no mutually supported AEAD algorithm")
 }
 
 // buildResponse derives the directional keys for the negotiated algorithm and
-// assembles the NTS-KE response: Next Protocol, AEAD, optional NTP server/port
-// hints, N cookies, and End of Message.
-func (s *Server) buildResponse(cs tls.ConnectionState, aeadID uint16) ([]Record, error) {
+// assembles the NTS-KE response: Next Protocol, AEAD, an optional
+// Compliant128GCMExport echo, optional NTP server/port hints, N cookies, and
+// End of Message. The compliant-export record is echoed only when the client
+// offered it and the negotiated algorithm is AES-128-GCM-SIV.
+func (s *Server) buildResponse(cs tls.ConnectionState, aeadID uint16, compliantExport bool) ([]Record, error) {
 	// aeadIDToKeyLen lives in keystore.go (same package) — reuse it instead of
 	// a duplicate lookup. It takes protocol.AEADAlgorithm, so convert the wire
 	// uint16 at the boundary.
@@ -323,7 +326,6 @@ func (s *Server) buildResponse(cs tls.ConnectionState, aeadID uint16) ([]Record,
 	if err != nil {
 		return nil, err
 	}
-
 	c2s, err := exportKey(cs, aeadID, directionC2S, keyLen)
 	if err != nil {
 		return nil, err
@@ -336,6 +338,14 @@ func (s *Server) buildResponse(cs tls.ConnectionState, aeadID uint16) ([]Record,
 	records := []Record{
 		NewNextProtocol(NextProtocolNTPv4),
 		NewAEADAlgorithm(aeadID),
+	}
+	// Echo the compliant-export record back so the client knows the server agreed:
+	// the record is a negotiation, not a one-way announcement. Both sides must
+	// independently derive the compliant AES-128-GCM-SIV export context, so the
+	// client only switches to it after seeing our echo. Without the echo the client
+	// falls back to the default context and the two ends disagree on key material.
+	if compliantExport && aeadID == uint16(protocol.AEADAES128GCMSIV) {
+		records = append(records, NewCompliant128GCMExport())
 	}
 	if s.NTPv4Server != "" {
 		records = append(records, NewServerNegotiation(s.NTPv4Server))

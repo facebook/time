@@ -170,7 +170,7 @@ func TestParseZeroLengthBodyMidStream(t *testing.T) {
 	require.Equal(t, rec.Body, got[1].Body)
 }
 
-// TestConstructors covers all eight defined record-type constructor helpers,
+// TestConstructors covers the defined record-type constructor helpers,
 // checking the record type, critical bit, and body encoding of each.
 func TestConstructors(t *testing.T) {
 	cases := []struct {
@@ -188,6 +188,7 @@ func TestConstructors(t *testing.T) {
 		{"new cookie", NewCookie([]byte{0xab, 0xcd}), RecordNewCookie, false, []byte{0xab, 0xcd}},
 		{"server negotiation", NewServerNegotiation("ntp.example"), RecordServerNegotiation, false, []byte("ntp.example")},
 		{"port negotiation", NewPortNegotiation(123), RecordPortNegotiation, false, []byte{0x00, 0x7b}},
+		{"compliant 128 gcm export", NewCompliant128GCMExport(), RecordCompliant128GCMExport, false, []byte{}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

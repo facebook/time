@@ -60,6 +60,9 @@ const (
 	RecordNewCookie         uint16 = 5
 	RecordServerNegotiation uint16 = 6
 	RecordPortNegotiation   uint16 = 7
+	// RecordCompliant128GCMExport  negotiates AES-128-GCM-SIV compliant export. It
+	// is a non-standard (IANA-unassigned) type; non-critical, with an empty body.
+	RecordCompliant128GCMExport uint16 = 1024
 )
 
 const (
@@ -213,6 +216,12 @@ func NewServerNegotiation(server string) Record {
 // port number (RFC 8915 §4.1.8).
 func NewPortNegotiation(port uint16) Record {
 	return Record{Type: RecordPortNegotiation, Body: MarshalUint16s([]uint16{port})}
+}
+
+// NewCompliant128GCMExport returns an AES-128-GCM-SIV compliant-export record.
+// The Critical Bit is not set and the body is empty.
+func NewCompliant128GCMExport() Record {
+	return Record{Type: RecordCompliant128GCMExport, Body: []byte{}}
 }
 
 // MarshalUint16s encodes a sequence of 16-bit integers in network byte order.

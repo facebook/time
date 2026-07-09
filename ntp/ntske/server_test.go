@@ -238,6 +238,66 @@ func TestServerAEADPreferenceOrder(t *testing.T) {
 	require.Equal(t, []uint16{sivCMAC}, parseUint16s(aead[0].Body), "client's first preference wins")
 }
 
+// TestServerCompliant128GCMExport verifies the compliant-export negotiation:
+// the server echoes a Compliant128GCMExport record only when the client offers
+// it AND the negotiated AEAD is AES-128-GCM-SIV. If the client omits the record,
+// or a non-GCM-SIV algorithm is chosen, no such record appears in the response.
+func TestServerCompliant128GCMExport(t *testing.T) {
+	cases := []struct {
+		name    string
+		request []Record
+		want    bool
+	}{
+		{
+			name: "offered and GCM-SIV chosen: echoed",
+			request: []Record{
+				NewNextProtocol(NextProtocolNTPv4),
+				NewAEADAlgorithm(gcmSIV),
+				NewCompliant128GCMExport(),
+				NewEndOfMessage(),
+			},
+			want: true,
+		},
+		{
+			name: "offered but SIV-CMAC chosen: not echoed",
+			request: []Record{
+				NewNextProtocol(NextProtocolNTPv4),
+				NewAEADAlgorithm(sivCMAC),
+				NewCompliant128GCMExport(),
+				NewEndOfMessage(),
+			},
+			want: false,
+		},
+		{
+			name: "not offered, GCM-SIV chosen: not echoed",
+			request: []Record{
+				NewNextProtocol(NextProtocolNTPv4),
+				NewAEADAlgorithm(gcmSIV),
+				NewEndOfMessage(),
+			},
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			serverTLS, clientTLS := newTestTLSConfigs(t)
+			ks, err := NewInMemoryKeystore(InMemoryKeystoreOptions{})
+			require.NoError(t, err)
+			srv := &Server{TLSConfig: serverTLS, Keystore: ks, Cookies: 1}
+
+			_, resp := runExchange(t, srv, clientTLS, tc.request)
+			echoed := recordsByType(resp)[RecordCompliant128GCMExport]
+			if tc.want {
+				require.Len(t, echoed, 1)
+				require.False(t, echoed[0].Critical)
+				require.Empty(t, echoed[0].Body)
+			} else {
+				require.Empty(t, echoed)
+			}
+		})
+	}
+}
+
 // TestServerRejectsWrongALPN checks that a client which completes TLS 1.3 but
 // does not select "ntske/1" is dropped without a response and counted as an
 // error, and that no handshake is credited.
@@ -415,7 +475,7 @@ func TestValidateRequest(t *testing.T) {
 	srv := &Server{} // uses default SupportedAEAD [30, 17]
 
 	t.Run("happy path returns chosen AEAD", func(t *testing.T) {
-		id, err := srv.validateRequest([]Record{
+		id, _, err := srv.validateRequest([]Record{
 			NewNextProtocol(NextProtocolNTPv4),
 			NewAEADAlgorithm(sivCMAC, gcmSIV),
 			NewEndOfMessage(),
@@ -425,13 +485,34 @@ func TestValidateRequest(t *testing.T) {
 	})
 
 	t.Run("unknown non-critical record is ignored", func(t *testing.T) {
-		_, err := srv.validateRequest([]Record{
+		_, _, err := srv.validateRequest([]Record{
 			NewNextProtocol(NextProtocolNTPv4),
 			NewAEADAlgorithm(gcmSIV),
 			{Critical: false, Type: 999},
 			NewEndOfMessage(),
 		})
 		require.NoError(t, err)
+	})
+
+	t.Run("reports compliant-export offer", func(t *testing.T) {
+		_, offered, err := srv.validateRequest([]Record{
+			NewNextProtocol(NextProtocolNTPv4),
+			NewAEADAlgorithm(gcmSIV),
+			NewCompliant128GCMExport(),
+			NewEndOfMessage(),
+		})
+		require.NoError(t, err)
+		require.True(t, offered)
+	})
+
+	t.Run("no compliant-export offer when absent", func(t *testing.T) {
+		_, offered, err := srv.validateRequest([]Record{
+			NewNextProtocol(NextProtocolNTPv4),
+			NewAEADAlgorithm(gcmSIV),
+			NewEndOfMessage(),
+		})
+		require.NoError(t, err)
+		require.False(t, offered)
 	})
 
 	errCases := []struct {
@@ -467,7 +548,7 @@ func TestValidateRequest(t *testing.T) {
 	}
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := srv.validateRequest(tc.records)
+			_, _, err := srv.validateRequest(tc.records)
 			var ce *cookieError
 			require.ErrorAs(t, err, &ce)
 			require.Equal(t, tc.code, ce.code)
