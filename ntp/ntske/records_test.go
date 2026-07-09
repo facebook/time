@@ -206,3 +206,29 @@ func TestConstructors(t *testing.T) {
 		})
 	}
 }
+
+// TestParseUint16s verifies round-trip encoding and odd-length rejection.
+func TestParseUint16s(t *testing.T) {
+	vals, err := ParseUint16s([]byte{0x00, 0x01, 0x00, 0x1e})
+	require.NoError(t, err)
+	require.Equal(t, []uint16{1, 30}, vals)
+
+	vals, err = ParseUint16s([]byte{0x00})
+	require.ErrorIs(t, err, ErrOddLengthBody)
+	require.Nil(t, vals)
+
+	vals, err = ParseUint16s([]byte{0x00, 0x01, 0xFF})
+	require.ErrorIs(t, err, ErrOddLengthBody)
+	require.Nil(t, vals)
+
+	vals, err = ParseUint16s(nil)
+	require.NoError(t, err)
+	require.Empty(t, vals)
+
+	// Round-trip via MarshalUint16s
+	orig := []uint16{0, 1, 30, 65535}
+	wire := MarshalUint16s(orig)
+	decoded, err := ParseUint16s(wire)
+	require.NoError(t, err)
+	require.Equal(t, orig, decoded)
+}
