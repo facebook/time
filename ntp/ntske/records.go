@@ -75,6 +75,7 @@ var (
 	ErrBodyTruncated   = errors.New("ntske: record body truncated")
 	ErrBodyTooLarge    = errors.New("ntske: record body exceeds 16-bit length field")
 	ErrTypeTooLarge    = errors.New("ntske: record type exceeds 15-bit field")
+	ErrOddLengthBody   = errors.New("ntske: odd-length uint16 body")
 )
 
 // Marshal encodes a single record into its wire format (RFC 8915 §4).
@@ -173,26 +174,26 @@ func NewEndOfMessage() Record {
 // NewNextProtocol returns a Next Protocol Negotiation record carrying the given
 // protocol IDs. The Critical Bit MUST be set.
 func NewNextProtocol(protocolIDs ...uint16) Record {
-	return Record{Critical: true, Type: RecordNextProtocol, Body: marshalUint16s(protocolIDs)}
+	return Record{Critical: true, Type: RecordNextProtocol, Body: MarshalUint16s(protocolIDs)}
 }
 
 // NewError returns an Error record carrying the given error code
 // The Critical Bit MUST be set.
 func NewError(code uint16) Record {
-	return Record{Critical: true, Type: RecordError, Body: marshalUint16s([]uint16{code})}
+	return Record{Critical: true, Type: RecordError, Body: MarshalUint16s([]uint16{code})}
 }
 
 // NewWarning returns a Warning record carrying the given warning code
 // The Critical Bit MUST be set.
 func NewWarning(code uint16) Record {
-	return Record{Critical: true, Type: RecordWarning, Body: marshalUint16s([]uint16{code})}
+	return Record{Critical: true, Type: RecordWarning, Body: MarshalUint16s([]uint16{code})}
 }
 
 // NewAEADAlgorithm returns an AEAD Algorithm Negotiation record carrying the
 // given algorithm IDs. The Critical Bit MAY be set; it is
 // left unset here.
 func NewAEADAlgorithm(algorithmIDs ...uint16) Record {
-	return Record{Type: RecordAEADAlgorithm, Body: marshalUint16s(algorithmIDs)}
+	return Record{Type: RecordAEADAlgorithm, Body: MarshalUint16s(algorithmIDs)}
 }
 
 // NewCookie returns a New Cookie for NTPv4 record carrying the opaque cookie
@@ -211,14 +212,27 @@ func NewServerNegotiation(server string) Record {
 // NewPortNegotiation returns an NTPv4 Port Negotiation record carrying the UDP
 // port number (RFC 8915 §4.1.8).
 func NewPortNegotiation(port uint16) Record {
-	return Record{Type: RecordPortNegotiation, Body: marshalUint16s([]uint16{port})}
+	return Record{Type: RecordPortNegotiation, Body: MarshalUint16s([]uint16{port})}
 }
 
-// marshalUint16s encodes a sequence of 16-bit integers in network byte order.
-func marshalUint16s(values []uint16) []byte {
+// MarshalUint16s encodes a sequence of 16-bit integers in network byte order.
+func MarshalUint16s(values []uint16) []byte {
 	out := make([]byte, 2*len(values))
 	for i, v := range values {
-		binary.BigEndian.PutUint16(out[2*i:2*i+2], v)
+		binary.BigEndian.PutUint16(out[2*i:], v)
 	}
 	return out
+}
+
+// ParseUint16s decodes a body of packed 16-bit network-order integers.
+// Returns ErrOddLengthBody if len is odd — faulty NTS-KE body per RFC 8915.
+func ParseUint16s(b []byte) ([]uint16, error) {
+	if len(b)%2 != 0 {
+		return nil, ErrOddLengthBody
+	}
+	out := make([]uint16, len(b)/2)
+	for i := 0; i < len(b); i += 2 {
+		out[i/2] = binary.BigEndian.Uint16(b[i:])
+	}
+	return out, nil
 }
