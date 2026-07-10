@@ -292,8 +292,13 @@ static int fbclock_read_ptp_offset_extended(int fd, struct phc_time_res* res) {
   return 0;
 }
 
-int fbclock_init(fbclock_lib* lib, const char* shm_path) {
+int fbclock_init_with_options(
+    fbclock_lib* lib,
+    const char* shm_path,
+    const fbclock_options* options) {
   lib->ptp_path = FBCLOCK_PTPPATH;
+  lib->max_wou_ns =
+      (options != NULL) ? options->max_wou_ns : FBCLOCK_MAX_WOU_NS_UNSET;
   int sfd = open(shm_path, O_RDONLY, 0);
   if (sfd == -1) {
     perror("open shmem device");
@@ -338,6 +343,10 @@ int fbclock_init(fbclock_lib* lib, const char* shm_path) {
   return FBCLOCK_E_NO_ERROR;
 }
 
+int fbclock_init(fbclock_lib* lib, const char* shm_path) {
+  return fbclock_init_with_options(lib, shm_path, NULL);
+}
+
 int fbclock_destroy(fbclock_lib* lib) {
   munmap(lib->shmp, FBCLOCK_SHMDATA_SIZE);
   munmap(lib->shmp_v2, FBCLOCK_SHMDATA_V2_SIZE);
@@ -359,6 +368,22 @@ uint64_t fbclock_window_of_uncertainty(
   fbclock_debug_print("w = %lu ns\n", w);
   fbclock_debug_print("w = %lu ms\n", w / 1000000);
   return w;
+}
+
+uint64_t fbclock_truetime_midpoint_ns(
+    const fbclock_truetime* _Nonnull truetime) {
+  return truetime->earliest_ns +
+      (truetime->latest_ns - truetime->earliest_ns) / 2;
+}
+
+int fbclock_check_max_wou(
+    uint64_t max_wou_ns,
+    const fbclock_truetime* truetime) {
+  if (max_wou_ns != FBCLOCK_MAX_WOU_NS_UNSET &&
+      (truetime->latest_ns - truetime->earliest_ns) > max_wou_ns) {
+    return FBCLOCK_E_WOU_TOO_BIG;
+  }
+  return FBCLOCK_E_NO_ERROR;
 }
 
 int fbclock_calculate_time(
@@ -508,8 +533,13 @@ int fbclock_gettime_tz(
   uint64_t error_bound = state.error_bound_ns + lib->min_phc_delay;
   double h_value = (double)state.holdover_multiplier_ns / FBCLOCK_POW2_16;
 
-  return fbclock_calculate_time(
+  // Compute the window, then enforce the caller's optional max-WOU policy.
+  rcode = fbclock_calculate_time(
       error_bound, h_value, &state, res.ts, truetime, time_standard);
+  if (rcode != FBCLOCK_E_NO_ERROR) {
+    return rcode;
+  }
+  return fbclock_check_max_wou(lib->max_wou_ns, truetime);
 }
 
 int fbclock_gettime_tz_v2(
@@ -547,13 +577,18 @@ int fbclock_gettime_tz_v2(
   int64_t sysclock_time_now_ns =
       ts.tv_sec * NANOSECONDS_IN_SECONDS + ts.tv_nsec;
 
-  return fbclock_calculate_time_v2(
+  // Compute the window, then enforce the caller's optional max-WOU policy.
+  rcode = fbclock_calculate_time_v2(
       error_bound,
       h_value,
       &state,
       sysclock_time_now_ns,
       truetime,
       time_standard);
+  if (rcode != FBCLOCK_E_NO_ERROR) {
+    return rcode;
+  }
+  return fbclock_check_max_wou(lib->max_wou_ns, truetime);
 }
 
 int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
@@ -604,8 +639,13 @@ static int fbclock_gettime_past_tz_v2(
   uint64_t error_bound = state.error_bound_ns;
   double h_value = (double)state.holdover_multiplier_ns / FBCLOCK_POW2_16;
 
-  return fbclock_calculate_time_past_v2(
+  // Compute the window, then enforce the caller's optional max-WOU policy.
+  rcode = fbclock_calculate_time_past_v2(
       error_bound, h_value, &state, ts_realtime_ns, truetime, time_standard);
+  if (rcode != FBCLOCK_E_NO_ERROR) {
+    return rcode;
+  }
+  return fbclock_check_max_wou(lib->max_wou_ns, truetime);
 }
 
 int fbclock_gettime_past(

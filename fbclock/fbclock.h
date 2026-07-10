@@ -159,12 +159,26 @@ typedef struct fbclock_truetime {
   uint64_t latest_ns;
 } fbclock_truetime;
 
+// Default for fbclock_options.max_wou_ns, and what fbclock_init (or a NULL
+// options) selects: no caller cap, so only fbclock's built-in limit applies
+// (error_bound/holdover saturate at UINT32_MAX, ~4.29s).
+#define FBCLOCK_MAX_WOU_NS_UNSET 0
+
+// Optional configuration passed to fbclock_init_with_options.
+typedef struct fbclock_options {
+  // If non-zero, reject any reading whose window (latest_ns - earliest_ns)
+  // exceeds this many ns with FBCLOCK_E_WOU_TOO_BIG. FBCLOCK_MAX_WOU_NS_UNSET
+  // (0) keeps the default behavior.
+  uint64_t max_wou_ns;
+} fbclock_options;
+
 // fbclock library
 typedef struct fbclock_lib {
   char* ptp_path; // path to PHC clock device
   int shm_fd; // file descriptor of opened shared memory object
   int dev_fd; // file descriptor of opened /dev/ptpN
   int64_t min_phc_delay; // minimal PHC request delay observed
+  uint64_t max_wou_ns; // caller's WOU cap (ns); 0 = none, see fbclock_options
   fbclock_shmdata* shmp; // mmap-ed data
   fbclock_shmdata_v2* shmp_v2; // mmap-ed data
   int (*gettime)(int, struct phc_time_res*); // pointer to gettime function
@@ -190,6 +204,12 @@ uint64_t fbclock_window_of_uncertainty(
     double seconds,
     uint64_t error_bound_ns,
     double holdover_multiplier_ns);
+// Returns FBCLOCK_E_WOU_TOO_BIG when max_wou_ns is set (non-zero) and the
+// window (truetime->latest_ns - truetime->earliest_ns) exceeds it, else
+// FBCLOCK_E_NO_ERROR. Applied by the gettime paths; public for unit testing.
+int fbclock_check_max_wou(
+    uint64_t max_wou_ns,
+    const fbclock_truetime* truetime);
 int fbclock_calculate_time(
     uint64_t error_bound_ns,
     double h_value_ns,
@@ -229,6 +249,12 @@ int fbclock_gettime_tz(
 
 // methods we provide to end users
 int fbclock_init(fbclock_lib* lib, const char* shm_path);
+// Like fbclock_init, but applies caller options (see fbclock_options).
+// options == NULL selects defaults (identical to fbclock_init).
+int fbclock_init_with_options(
+    fbclock_lib* lib,
+    const char* shm_path,
+    const fbclock_options* options);
 int fbclock_destroy(fbclock_lib* lib);
 int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime);
 int fbclock_gettime_utc(fbclock_lib* lib, fbclock_truetime* truetime);
@@ -244,6 +270,36 @@ int fbclock_gettime_past_utc(
     fbclock_lib* _Nonnull lib,
     int64_t ts_realtime_ns,
     fbclock_truetime* _Nonnull truetime);
+
+/*
+ * fbclock_truetime_midpoint_ns: CONVENIENCE ONLY. THIS IS NOT "THE TIME".
+ *
+ * fbclock never returns a single instant. Every fbclock_gettime* call returns a
+ * window [earliest_ns, latest_ns], the Window of Uncertainty (WOU), and
+ * guarantees only (to a very high probability) that the true time lies
+ * somewhere inside that closed interval. It says nothing about where inside.
+ *
+ * This helper returns the arithmetic center of that window,
+ * earliest_ns + (latest_ns - earliest_ns) / 2. fbclock happens to build the
+ * window symmetrically around its own best estimate, so the midpoint equals
+ * that estimate. That does NOT make it the true time, and it does NOT make the
+ * true time any likelier to sit near the midpoint than near either edge: the
+ * WOU is a bound, not a probability distribution. Every point in [earliest_ns,
+ * latest_ns] is equally consistent with the guarantee, so collapsing the window
+ * to its midpoint discards the uncertainty and can be wrong by up to half the
+ * window in either direction.
+ *
+ * Use this ONLY when you need one scalar timestamp for convenience (a log
+ * field, or an API that takes a single number) and can tolerate an error of up
+ * to half the WOU.
+ *
+ * If you care about correctness (ordering two events, establishing
+ * happens-before, any comparison), do NOT use this. Use the full window: event
+ * A provably happens-before event B only when A.latest_ns < B.earliest_ns.
+ * Reason with earliest_ns / latest_ns, not this value.
+ */
+uint64_t fbclock_truetime_midpoint_ns(
+    const fbclock_truetime* _Nonnull truetime);
 
 // turn error code into err msg
 const char* fbclock_strerror(int err_code);

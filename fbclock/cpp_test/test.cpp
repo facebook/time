@@ -622,6 +622,85 @@ TEST(fbclockTest, test_fbclock_apply_smear_during_future_leap_second_negative) {
   }
 }
 
+TEST(fbclockTest, test_fbclock_truetime_midpoint_ns) {
+  // Even window: center is exact.
+  fbclock_truetime even = {.earliest_ns = 100, .latest_ns = 200};
+  EXPECT_EQ(fbclock_truetime_midpoint_ns(&even), 150ULL);
+
+  // Odd window: integer division truncates toward earliest (100 + 101/2).
+  fbclock_truetime odd = {.earliest_ns = 100, .latest_ns = 201};
+  EXPECT_EQ(fbclock_truetime_midpoint_ns(&odd), 150ULL);
+
+  // Zero window (earliest == latest): midpoint is that instant.
+  fbclock_truetime point = {
+      .earliest_ns = 1647269091803102957, .latest_ns = 1647269091803102957};
+  EXPECT_EQ(fbclock_truetime_midpoint_ns(&point), 1647269091803102957ULL);
+
+  // Realistic large values, no overflow: 1647269091803102338 + 1238 / 2.
+  fbclock_truetime wide = {
+      .earliest_ns = 1647269091803102338, .latest_ns = 1647269091803103576};
+  EXPECT_EQ(fbclock_truetime_midpoint_ns(&wide), 1647269091803102957ULL);
+}
+
+TEST(fbclockTest, test_fbclock_check_max_wou) {
+  const uint64_t earliest = 1000;
+
+  // max_wou_ns == FBCLOCK_MAX_WOU_NS_UNSET disables the check: even a 10ms
+  // window passes.
+  fbclock_truetime tenMs = {
+      .earliest_ns = earliest, .latest_ns = earliest + 10000000};
+  EXPECT_EQ(
+      fbclock_check_max_wou(FBCLOCK_MAX_WOU_NS_UNSET, &tenMs),
+      FBCLOCK_E_NO_ERROR);
+
+  // Window narrower than the limit: allowed.
+  fbclock_truetime under = {
+      .earliest_ns = earliest, .latest_ns = earliest + 999};
+  EXPECT_EQ(fbclock_check_max_wou(1000, &under), FBCLOCK_E_NO_ERROR);
+
+  // Window exactly at the limit: allowed (limit is the max acceptable width).
+  fbclock_truetime atLimit = {
+      .earliest_ns = earliest, .latest_ns = earliest + 1000};
+  EXPECT_EQ(fbclock_check_max_wou(1000, &atLimit), FBCLOCK_E_NO_ERROR);
+
+  // One nanosecond over the limit: rejected.
+  fbclock_truetime overByOne = {
+      .earliest_ns = earliest, .latest_ns = earliest + 1001};
+  EXPECT_EQ(fbclock_check_max_wou(1000, &overByOne), FBCLOCK_E_WOU_TOO_BIG);
+
+  // Far over the limit: rejected.
+  EXPECT_EQ(fbclock_check_max_wou(1000, &tenMs), FBCLOCK_E_WOU_TOO_BIG);
+}
+
+TEST(fbclockTest, test_fbclock_max_wou_on_calculated_window) {
+  // Drive the same path the gettime functions use: compute a real window, then
+  // apply the caller's max-WOU policy to it. Also confirms the midpoint of a
+  // TAI window reconstructs the PHC point estimate it was built around.
+  fbclock_clockdata state = {.ingress_time_ns = 1647269082943150996};
+  int64_t phctime_ns = 1647269091803102957;
+  double error_bound = 172.0;
+  double h_value = 50.5;
+
+  fbclock_truetime tt;
+  int err = fbclock_calculate_time(
+      error_bound, h_value, &state, phctime_ns, &tt, FBCLOCK_TAI);
+  ASSERT_EQ(err, FBCLOCK_E_NO_ERROR);
+
+  // TAI window is symmetric around phctime_ns, so the midpoint is that
+  // estimate.
+  EXPECT_EQ(fbclock_truetime_midpoint_ns(&tt), (uint64_t)phctime_ns);
+
+  const uint64_t window = tt.latest_ns - tt.earliest_ns;
+  ASSERT_GT(window, 1ULL);
+
+  // Disabled, at-limit, and generous limits pass; below-window rejects.
+  EXPECT_EQ(
+      fbclock_check_max_wou(FBCLOCK_MAX_WOU_NS_UNSET, &tt), FBCLOCK_E_NO_ERROR);
+  EXPECT_EQ(fbclock_check_max_wou(window, &tt), FBCLOCK_E_NO_ERROR);
+  EXPECT_EQ(fbclock_check_max_wou(window + 1000, &tt), FBCLOCK_E_NO_ERROR);
+  EXPECT_EQ(fbclock_check_max_wou(window - 1, &tt), FBCLOCK_E_WOU_TOO_BIG);
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
