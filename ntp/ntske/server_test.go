@@ -198,10 +198,10 @@ func TestServerDefaultCookieCount(t *testing.T) {
 		NewAEADAlgorithm(gcmSIV),
 		NewEndOfMessage(),
 	})
-	require.Len(t, recordsByType(resp)[RecordNewCookie], defaultCookies)
+	require.Len(t, recordsByType(resp)[RecordNewCookie], 8)
 }
 
-// TestServerClampsCookieCount checks that a Cookies value above the maxCookies
+// TestServerClampsCookieCount checks that a Cookies value above the 32-cookie
 // upper bound is clamped, so a large or misconfigured value cannot be turned
 // into a per-handshake cookie-sealing / response-size amplification vector.
 func TestServerClampsCookieCount(t *testing.T) {
@@ -215,7 +215,7 @@ func TestServerClampsCookieCount(t *testing.T) {
 		NewAEADAlgorithm(gcmSIV),
 		NewEndOfMessage(),
 	})
-	require.Len(t, recordsByType(resp)[RecordNewCookie], maxCookies)
+	require.Len(t, recordsByType(resp)[RecordNewCookie], 32)
 }
 
 // TestServerAEADPreferenceOrder verifies that when the client lists several
