@@ -92,7 +92,7 @@ type Server struct {
 	// Keystore seals NTS cookies returned to clients.
 	Keystore Keystore
 	// Cookies is the number of NewCookie records to issue per exchange.
-	// Defaults to 8 when unset and is capped at maxCookies (32); larger values
+	// Defaults to 8 when unset and is capped at 32; larger values
 	// are clamped to bound per-connection cost.
 	Cookies uint16
 	// SupportedAEAD is the list of AEAD algorithm IDs the server will negotiate.
