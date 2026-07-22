@@ -10,10 +10,15 @@ jobs:
           go-version: 1.26
       - run: sudo apt-get install libpcap-dev libcap2-bin
       - run: go build -v ./...
-      # fuzzing, need to specify each package separately
-      - run: go test -v -fuzz='.*' -fuzztime=10s ./ptp/protocol/
-      - run: go test -v -fuzz='.*' -fuzztime=10s ./ntp/protocol/
-      - run: go test -v -fuzz='.*' -fuzztime=10s ./ntp/chrony/
+      # Fuzzing: `go test -fuzz` runs a single target per invocation, so iterate
+      # over every fuzz function in each package (a package may define several).
+      - name: Fuzz
+        run: |
+          for pkg in ./ptp/protocol/ ./ntp/protocol/ ./ntp/chrony/; do
+            for f in $(go test -list='^Fuzz' "$pkg" | grep '^Fuzz'); do
+              go test -v -fuzz="^${f}$" -fuzztime=10s "$pkg"
+            done
+          done
       - name: Run coverage
         run: sudo --preserve-env=PATH capsh --inh=cap_net_raw --print -- -c "go test -v -race -coverprofile=coverage.txt -covermode=atomic ./..."
       - name: Upload coverage to Codecov

@@ -217,9 +217,14 @@ func TestServer(t *testing.T) {
 		}
 		response := &ntp.Packet{}
 
-		err = binary.Write(sendConn, binary.BigEndian, request)
+		reqBytes, err := request.Bytes()
 		require.Nil(t, err, "sending request should not err")
-		err = binary.Read(sendConn, binary.BigEndian, response)
+		_, err = sendConn.Write(reqBytes)
+		require.Nil(t, err, "sending request should not err")
+		respBuf := make([]byte, ntp.PacketSizeBytes)
+		_, err = sendConn.Read(respBuf)
+		require.Nil(t, err, "receiving response should not err")
+		err = response.UnmarshalBinary(respBuf)
 		require.Nil(t, err, "receiving response should not err")
 		require.Equal(t, sec, response.OrigTimeSec, "response Origin Time seconds should match our TX seconds")
 		require.Equal(t, frac, response.OrigTimeFrac, "response Origin Time fraction should match our TX fraction")

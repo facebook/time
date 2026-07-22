@@ -106,6 +106,26 @@ func TestResponseConversion(t *testing.T) {
 	require.Equal(t, ntpResponseBytes, bytes)
 }
 
+// TestPacketHeaderRoundTrip checks Bytes -> UnmarshalBinary is an exact identity
+// across every header field. The hand-rolled codec has no reflection safety net,
+// so a new field left unwired, or a wrong byte offset, would silently drop or
+// corrupt a value; the whole-struct compare catches it.
+func TestPacketHeaderRoundTrip(t *testing.T) {
+	p := &Packet{
+		Settings: 0x23, Stratum: 2, Poll: 6, Precision: -25,
+		RootDelay: 0x11111111, RootDispersion: 0x22222222, ReferenceID: 0x33333333,
+		RefTimeSec: 0x44444444, RefTimeFrac: 0x55555555,
+		OrigTimeSec: 0x66666666, OrigTimeFrac: 0x77777777,
+		RxTimeSec: 0x88888888, RxTimeFrac: 0x99999999,
+		TxTimeSec: 0xAAAAAAAA, TxTimeFrac: 0xBBBBBBBB,
+	}
+	b, err := p.Bytes()
+	require.NoError(t, err)
+	var got Packet
+	require.NoError(t, got.UnmarshalBinary(b))
+	require.Equal(t, *p, got)
+}
+
 func TestBytesToPacket(t *testing.T) {
 	packet, err := BytesToPacket(ntpResponseBytes)
 	require.NoError(t, err)
@@ -282,6 +302,15 @@ func Benchmark_BytesToPacketConversion(b *testing.B) {
 	}
 }
 
+// TestPacketUnmarshalZeroAlloc locks the header-only unmarshal at zero allocs.
+func TestPacketUnmarshalZeroAlloc(t *testing.T) {
+	p := &Packet{}
+	allocs := testing.AllocsPerRun(100, func() {
+		_ = p.UnmarshalBinary(ntpResponseBytes)
+	})
+	require.Zero(t, allocs, "UnmarshalBinary must not allocate for a header-only packet")
+}
+
 /*
 Benchmark_ServerWithoutKernelTimestamps is a benchmark to determine speed of
 reading NTP packets without kernel timestamps
@@ -396,8 +425,34 @@ func FuzzBytesToPacket(f *testing.F) {
 		packet, err := BytesToPacket(b)
 		if err == nil {
 			bb, err := packet.Bytes()
-			require.NoError(t, err)
+			if err != nil {
+				return // Bytes() strictly rejects IANA-reserved EF types that parsing accepts (RFC 9748)
+			}
 			require.Equal(t, b[:len(bb)], bb)
+		}
+	})
+}
+
+// FuzzPacketAssociatedData exercises the exact NTS verification path (header via
+// putHeader + first-n EFs via encodeExtensionFields) and asserts it equals the
+// same prefix of the input, so the reconstructed authenticated bytes match the
+// wire for every prefix.
+func FuzzPacketAssociatedData(f *testing.F) {
+	f.Add(ntpResponseBytes)
+	f.Add(append(append([]byte{}, ntpRequestBytes...), 0x01, 0x04, 0x00, 0x08, 1, 2, 3, 4))
+	f.Fuzz(func(t *testing.T, b []byte) {
+		var p Packet
+		if err := p.UnmarshalBinary(b); err != nil {
+			return
+		}
+		want := PacketSizeBytes
+		for i := 0; i <= len(p.ExtensionFields); i++ {
+			ad, err := p.AssociatedData(i)
+			require.NoError(t, err)
+			require.Equal(t, b[:want], ad)
+			if i < len(p.ExtensionFields) {
+				want += p.ExtensionFields[i].EncodedSize()
+			}
 		}
 	})
 }
