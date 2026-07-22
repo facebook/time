@@ -155,13 +155,24 @@ func (t ExtensionFieldType) isReserved() bool {
 	return t >= ExtensionTypeReservedLo
 }
 
-// Validate reports whether the extension field can be safely marshalled: the
-// body must not exceed ExtensionMaxBodySize and Type must not fall in the
-// IANA-reserved range (0xF000–0xFFFF, RFC 9748).
-func (ef ExtensionField) Validate() error {
+// checkBodySize guards against a body large enough to wrap the 16-bit wire
+// length field once the 4-octet header and padding are added. It applies to
+// every encode path, including faithful reconstruction of received packets.
+func (ef ExtensionField) checkBodySize() error {
 	if len(ef.Body) > ExtensionMaxBodySize {
 		return fmt.Errorf("%w: type=%#x body=%d max=%d",
 			ErrExtensionBodyTooLarge, ef.Type, len(ef.Body), ExtensionMaxBodySize)
+	}
+	return nil
+}
+
+// validate reports whether the extension field can be safely marshalled: the
+// body must not exceed ExtensionMaxBodySize and Type must not fall in the
+// IANA-reserved range (0xF000–0xFFFF, RFC 9748). It is the single policy source
+// for extension fields we originate (see MarshalExtensionFields).
+func (ef ExtensionField) validate() error {
+	if err := ef.checkBodySize(); err != nil {
+		return err
 	}
 	if ef.Type.isReserved() {
 		return fmt.Errorf("%w: type=%#x", ErrExtensionTypeReserved, ef.Type)
@@ -169,38 +180,75 @@ func (ef ExtensionField) Validate() error {
 	return nil
 }
 
-// MarshalExtensionFields encodes a slice of extension fields into the wire
-// format defined by RFC 7822 §7.5. Each field is padded with zeros to a
-// multiple of 4 octets and to at least ExtensionMinSize.
+// MarshalExtensionFields is the strict, outbound-only encoder: every field must
+// pass Validate (rejecting IANA-reserved types we must never originate) before
+// encoding. Use this for any extension fields we generate. Each field is padded
+// with zeros to a multiple of 4 octets and to at least ExtensionMinSize (RFC 7822 §7.5).
 func MarshalExtensionFields(efs []ExtensionField) ([]byte, error) {
+	for _, ef := range efs {
+		if err := ef.validate(); err != nil {
+			return nil, err
+		}
+	}
+	return encodeExtensionFields(efs)
+}
+
+// writeExtensionFields writes efs into dst (sized by the caller via EncodedSize)
+// and returns bytes written, with no validation. It clear()s each field's
+// padding so output is correct on a reused buffer (RFC 8915 §5.6: padding MUST
+// be zero; stale padding in an authenticator's AD would break verification).
+func writeExtensionFields(dst []byte, efs []ExtensionField) int {
+	offset := 0
+	for _, ef := range efs {
+		flen := ef.EncodedSize()
+		binary.BigEndian.PutUint16(dst[offset:offset+2], uint16(ef.Type))
+		binary.BigEndian.PutUint16(dst[offset+2:offset+4], uint16(flen)) // #nosec G115 -- bounded by checkBodySize
+		bodyEnd := offset + ExtensionHeaderSize + len(ef.Body)
+		copy(dst[offset+ExtensionHeaderSize:], ef.Body)
+		clear(dst[bodyEnd : offset+flen]) // zero padding (reused-buffer safety)
+		offset += flen
+	}
+	return offset
+}
+
+// MarshalExtensionFieldsTo encodes efs into dst without allocating, returning
+// bytes written. Like MarshalExtensionFields it is strict (rejects reserved
+// types) and zeroes padding, so a caller may reuse one buffer across packets.
+// dst must be at least the sum of each field's EncodedSize.
+func MarshalExtensionFieldsTo(efs []ExtensionField, dst []byte) (int, error) {
+	total := 0
+	for _, ef := range efs {
+		if err := ef.validate(); err != nil {
+			return 0, err
+		}
+		total += ef.EncodedSize()
+	}
+	if len(dst) < total {
+		return 0, fmt.Errorf("%w: need %d bytes, have %d", ErrExtensionTruncated, total, len(dst))
+	}
+	return writeExtensionFields(dst, efs), nil
+}
+
+// encodeExtensionFields marshals faithfully: it keeps the length-overflow guard
+// but does NOT reject reserved types, so a parsed packet re-serializes
+// byte-for-byte — required because RFC 8915 §5.2 covers unrecognized EFs in the
+// authenticated portion, even reserved-range ones we would never originate.
+func encodeExtensionFields(efs []ExtensionField) ([]byte, error) {
 	totalSize := 0
 	for _, ef := range efs {
-		if err := ef.Validate(); err != nil {
+		if err := ef.checkBodySize(); err != nil {
 			return nil, err
 		}
 		totalSize += ef.EncodedSize()
 	}
 	out := make([]byte, totalSize)
-	offset := 0
-	for _, ef := range efs {
-		flen := ef.EncodedSize()
-		binary.BigEndian.PutUint16(out[offset:offset+2], uint16(ef.Type))
-		binary.BigEndian.PutUint16(out[offset+2:offset+4], uint16(flen)) // #nosec G115 -- bounded by ExtensionMaxBodySize check above
-		copy(out[offset+ExtensionHeaderSize:], ef.Body)
-		offset += flen
-	}
+	writeExtensionFields(out, efs)
 	return out, nil
 }
 
 // ParseExtensionFields parses a buffer of zero or more concatenated extension
-// fields per RFC 7822 §7.5. The buffer must contain only extension fields;
+// fields per. The buffer must contain only extension fields;
 // any legacy NTPv3/v4 MAC bytes must be stripped before calling.
-//
-// The returned ExtensionField.Body contains the value plus any wire padding;
-// the caller interprets the value boundary based on the field type. Bodies
-// are copied out of the input buffer so the returned EFs remain valid even
-// if the caller mutates or reuses the input (e.g. a UDP read loop that
-// overwrites a single receive buffer per packet).
 func ParseExtensionFields(b []byte) ([]ExtensionField, error) {
 	var efs []ExtensionField
 	for len(b) > 0 {

@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"crypto/md5"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -70,7 +69,7 @@ func fakeSeconds(secondsCount int) {
 
 	// the timestamp in this format is number of seconds from NTP Epoch
 	fmt.Printf("# Generating %d fake leap seconds:\n", secondsCount)
-	for i := 0; i < secondsCount; i++ {
+	for i := range secondsCount {
 		firstOfFakeMonth := firstOfThisMonth.AddDate(0, i+1, 0)
 		delta := int((firstOfFakeMonth.Sub(ntpEpoch)).Seconds())
 		fmt.Printf("%d  XX  # %s\n", delta, firstOfFakeMonth.Format(time.RFC3339))
@@ -101,7 +100,7 @@ func receiveNTPPacketWithRetries(connFd int, buf, oob []byte, tries int) (*ntp.P
 	var err error
 	var n int
 	var clientReceiveTime time.Time
-	for try := 0; try < tries; try++ {
+	for range tries {
 		n, _, clientReceiveTime, err = timestamp.ReadPacketWithRXTimestampBuf(connFd, buf, oob)
 		if errors.Is(err, unix.EINTR) || errors.Is(err, unix.EAGAIN) {
 			log.Debug("got timeout reading response packet, retrying")
@@ -195,7 +194,11 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int, ntp
 			TxTimeFrac: frac,
 		}
 
-		if err := binary.Write(conn, binary.BigEndian, request); err != nil {
+		b, err := request.Bytes()
+		if err != nil {
+			return fmt.Errorf("failed to marshal request, %w", err)
+		}
+		if _, err := conn.Write(b); err != nil {
 			return fmt.Errorf("failed to send request, %w", err)
 		}
 		response, clientReceiveTime, err := receiveNTPPacketWithRetries(connFd, buf, oob, tries)
@@ -283,7 +286,7 @@ func addFakeSecondZoneInfo(srcfile, dstfile string, offsetMonth int) error {
 	fmt.Printf("Fake second added on %s\n", fakeLeap.Format(time.RFC3339))
 	ls = append(ls, leapsectz.LeapSecond{
 		Tleap: uint64(fakeLeap.Sub(ntpEpoch).Seconds()) + uint64(len(ls)),
-		Nleap: int32(len(ls) + 1),
+		Nleap: int32(len(ls) + 1), //#nosec G115
 	})
 
 	o, err := os.Create(dstfile)

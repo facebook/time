@@ -220,7 +220,7 @@ func TestExtensionFieldValidate(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.ef.Validate()
+			err := tc.ef.validate()
 			if tc.wantErr == nil {
 				require.NoError(t, err)
 			} else {
@@ -241,4 +241,24 @@ func TestMarshalExtensionFieldsRejectsInvalid(t *testing.T) {
 func TestAEADAlgorithmValues(t *testing.T) {
 	require.Equal(t, AEADAlgorithm(17), AEADAESSIVCMAC512)
 	require.Equal(t, AEADAlgorithm(30), AEADAES128GCMSIV)
+}
+
+// FuzzEFRoundTrip locks the parse/encode mutual-inverse that NTS request auth
+// relies on: the server reconstructs the signed bytes by re-serializing the
+// parsed EFs (Packet.AssociatedData / encodeExtensionFields), so encode(parse(b))
+// MUST equal b byte-for-byte for every buffer that parses.
+func FuzzEFRoundTrip(f *testing.F) {
+	// Seeds: empty, a single known EF, a reserved-type EF with non-zero body.
+	f.Add([]byte{})
+	f.Add([]byte{0x01, 0x04, 0x00, 0x08, 1, 2, 3, 4})
+	f.Add([]byte{0xF0, 0x01, 0x00, 0x08, 0, 0, 0, 0})
+	f.Fuzz(func(t *testing.T, b []byte) {
+		efs, err := ParseExtensionFields(b)
+		if err != nil {
+			return // only well-formed buffers are subject to the identity
+		}
+		reenc, err := encodeExtensionFields(efs)
+		require.NoError(t, err)
+		require.Equal(t, b, reenc) // NTS verification depends on this identity
+	})
 }
