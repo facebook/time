@@ -48,6 +48,7 @@ typedef atomic_uint_fast64_t atomic_uint64;
 #define FBCLOCK_E_PHC_IN_THE_PAST -7
 #define FBCLOCK_E_CRC_MISMATCH -8
 #define FBCLOCK_E_DATA_STALE -9
+#define FBCLOCK_E_NOTSUP -10
 
 // Fixed UTC-TAI offset - used when data not present in shared memory
 #define UTC_TAI_OFFSET_NS (int64_t)(-37e9)
@@ -255,6 +256,8 @@ int fbclock_init_with_options(
     fbclock_lib* lib,
     const char* shm_path,
     const fbclock_options* options);
+// Returns 1 if this host has a PTP device (FBCLOCK_PTPPATH exists), else 0.
+int fbclock_is_ptp_host(void);
 int fbclock_destroy(fbclock_lib* lib);
 int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime);
 int fbclock_gettime_utc(fbclock_lib* lib, fbclock_truetime* truetime);

@@ -299,19 +299,25 @@ int fbclock_init_with_options(
   lib->ptp_path = FBCLOCK_PTPPATH;
   lib->max_wou_ns =
       (options != NULL) ? options->max_wou_ns : FBCLOCK_MAX_WOU_NS_UNSET;
-  int sfd = open(shm_path, O_RDONLY, 0);
-  if (sfd == -1) {
-    perror("open shmem device");
-    return FBCLOCK_E_SHMEM_OPEN;
+  // No PTP device on this host -> fbclock unsupported here.
+  if (access(lib->ptp_path, F_OK) != 0) {
+    return FBCLOCK_E_NOTSUP;
   }
-  lib->shm_fd = sfd;
-
   int ffd = open(lib->ptp_path, O_RDONLY);
   if (ffd == -1) {
     perror("open PTP device");
     return FBCLOCK_E_PTP_OPEN;
   }
+
+  int sfd = open(shm_path, O_RDONLY, 0);
+  if (sfd == -1) {
+    perror("open shmem device");
+    close(ffd);
+    return FBCLOCK_E_SHMEM_OPEN;
+  }
   lib->dev_fd = ffd;
+  lib->shm_fd = sfd;
+
   lib->min_phc_delay = INT64_MAX;
   struct ptp_sys_offset_extended psoe = {.n_samples = 1};
 
@@ -345,6 +351,10 @@ int fbclock_init_with_options(
 
 int fbclock_init(fbclock_lib* lib, const char* shm_path) {
   return fbclock_init_with_options(lib, shm_path, NULL);
+}
+
+int fbclock_is_ptp_host(void) {
+  return access(FBCLOCK_PTPPATH, F_OK) == 0 ? 1 : 0;
 }
 
 int fbclock_destroy(fbclock_lib* lib) {
@@ -792,6 +802,9 @@ const char* fbclock_strerror(int err_code) {
       break;
     case FBCLOCK_E_DATA_STALE:
       err_info = "shared memory data too old to extrapolate";
+      break;
+    case FBCLOCK_E_NOTSUP:
+      err_info = "PTP not supported on this host (no PTP device)";
       break;
     case FBCLOCK_E_NO_ERROR:
       err_info = "no error";
