@@ -36,15 +36,24 @@ func TestJSONStatsErrors(t *testing.T) {
 	require.Equal(t, int64(1), stats.errors.Load())
 }
 
+func TestJSONStatsCookiesIssued(t *testing.T) {
+	stats := JSONStats{}
+
+	stats.AddCookiesIssued(4)
+	require.Equal(t, int64(4), stats.cookiesIssued.Load())
+}
+
 func TestJSONStatsToMap(t *testing.T) {
 	j := JSONStats{}
 	j.handshakes.Store(3)
 	j.errors.Store(5)
+	j.cookiesIssued.Store(7)
 	result := j.toMap()
 
 	expectedMap := map[string]int64{
-		"nts.ke.handshakes": 3,
-		"nts.ke.errors":     5,
+		"nts.ke.handshakes":  3,
+		"nts.ke.errors":      5,
+		"nts.cookies_issued": 7,
 	}
 
 	require.Equal(t, expectedMap, result)
