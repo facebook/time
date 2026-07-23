@@ -34,15 +34,17 @@ import (
 // Start needs to be called to expose the counters.
 type JSONStats struct {
 	// keep these aligned to 64-bit for sync/atomic
-	handshakes atomic.Int64
-	errors     atomic.Int64
+	handshakes    atomic.Int64
+	errors        atomic.Int64
+	cookiesIssued atomic.Int64
 }
 
 // toMap converts the counters to a map for JSON export.
 func (j *JSONStats) toMap() map[string]int64 {
 	return map[string]int64{
-		"nts.ke.handshakes": j.handshakes.Load(),
-		"nts.ke.errors":     j.errors.Load(),
+		"nts.ke.handshakes":  j.handshakes.Load(),
+		"nts.ke.errors":      j.errors.Load(),
+		"nts.cookies_issued": j.cookiesIssued.Load(),
 	}
 }
 
@@ -79,4 +81,9 @@ func (j *JSONStats) IncHandshakes() {
 // IncErrors atomically adds 1 to the NTS-KE error counter.
 func (j *JSONStats) IncErrors() {
 	j.errors.Add(1)
+}
+
+// AddCookiesIssued atomically adds n to the NTS cookies-issued counter.
+func (j *JSONStats) AddCookiesIssued(n int) {
+	j.cookiesIssued.Add(int64(n))
 }

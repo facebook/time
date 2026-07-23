@@ -45,12 +45,14 @@ const (
 // the -race detector stays quiet when the server calls it from its own
 // goroutine while the test reads the counters.
 type countingStats struct {
-	handshakes atomic.Int64
-	errors     atomic.Int64
+	handshakes    atomic.Int64
+	errors        atomic.Int64
+	cookiesIssued atomic.Int64
 }
 
-func (s *countingStats) IncHandshakes() { s.handshakes.Add(1) }
-func (s *countingStats) IncErrors()     { s.errors.Add(1) }
+func (s *countingStats) IncHandshakes()         { s.handshakes.Add(1) }
+func (s *countingStats) IncErrors()             { s.errors.Add(1) }
+func (s *countingStats) AddCookiesIssued(n int) { s.cookiesIssued.Add(int64(n)) }
 
 // newTestTLSConfigs returns a matched server/client pair backed by a throwaway
 // self-signed Ed25519 certificate, both pinned to TLS 1.3 and ALPN "ntske/1".
@@ -183,6 +185,7 @@ func TestServerIssuesCookies(t *testing.T) {
 
 	require.Equal(t, int64(1), stats.handshakes.Load())
 	require.Equal(t, int64(0), stats.errors.Load())
+	require.Equal(t, int64(4), stats.cookiesIssued.Load())
 }
 
 // TestServerDefaultCookieCount checks that a Server with Cookies unset issues
@@ -324,6 +327,7 @@ func TestServerRejectsWrongALPN(t *testing.T) {
 
 	require.Equal(t, int64(0), stats.handshakes.Load(), "wrong ALPN must not credit a handshake")
 	require.Equal(t, int64(1), stats.errors.Load())
+	require.Equal(t, int64(0), stats.cookiesIssued.Load())
 }
 
 // TestServerErrorResponses exercises the two protocol rejections the client can

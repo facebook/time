@@ -79,8 +79,9 @@ const (
 
 // Stats receives per-connection counters emitted by a Server.
 type Stats interface {
-	IncHandshakes() // a TLS handshake completed with ALPN "ntske/1"
-	IncErrors()     // a connection ended in an NTS-KE Error response or failure
+	IncHandshakes()         // a TLS handshake completed with ALPN "ntske/1"
+	IncErrors()             // a connection ended in an NTS-KE Error response or failure
+	AddCookiesIssued(n int) // n NewCookie records were returned in a response
 }
 
 // Server holds the configuration for an NTS-KE server. The zero value is not
@@ -227,7 +228,9 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	if err := s.writeRecords(tlsConn, response); err != nil {
 		slog.Warn("ntske: writing response", "remote", conn.RemoteAddr(), "err", err)
 		s.incErrors()
+		return
 	}
+	s.addCookiesIssued(int(s.cookieCount()))
 }
 
 // validateRequest checks the client's records against RFC 8915 §4.1 and returns
@@ -468,5 +471,10 @@ func (s *Server) incHandshakes() {
 func (s *Server) incErrors() {
 	if s.Stats != nil {
 		s.Stats.IncErrors()
+	}
+}
+func (s *Server) addCookiesIssued(n int) {
+	if s.Stats != nil {
+		s.Stats.AddCookiesIssued(n)
 	}
 }
