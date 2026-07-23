@@ -243,3 +243,30 @@ func TestConcurrentSealOpen(t *testing.T) {
 		require.NoError(t, err)
 	}
 }
+
+// TestInitialKeyEnablesCrossKeystoreOpen verifies the shared-key bridge: two
+// independent keystores seeded with the same InitialKey can open each other's
+// cookies, which is what lets the standalone NTS-KE server and the NTP
+// responder interoperate.
+func TestInitialKeyEnablesCrossKeystoreOpen(t *testing.T) {
+	sealer, err := NewInMemoryKeystore(InMemoryKeystoreOptions{InitialKey: SharedTestMasterKey})
+	require.NoError(t, err)
+	opener, err := NewInMemoryKeystore(InMemoryKeystoreOptions{InitialKey: SharedTestMasterKey})
+	require.NoError(t, err)
+
+	c2s, s2c := sessionKeys(64)
+	cookie, err := sealer.SealCookie(protocol.AEADAESSIVCMAC512, c2s, s2c)
+	require.NoError(t, err)
+
+	_, gotC2S, gotS2C, err := opener.OpenCookie(cookie)
+	require.NoError(t, err)
+	require.Equal(t, c2s, gotC2S)
+	require.Equal(t, s2c, gotS2C)
+}
+
+// TestInitialKeyWrongLength checks that a master key of the wrong size is
+// rejected rather than silently producing a broken keystore.
+func TestInitialKeyWrongLength(t *testing.T) {
+	_, err := NewInMemoryKeystore(InMemoryKeystoreOptions{InitialKey: make([]byte, masterKeyLen-1)})
+	require.Error(t, err)
+}
