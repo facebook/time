@@ -27,6 +27,7 @@ import (
 	"os/signal"
 	"runtime"
 
+	"github.com/facebook/time/ntp/ntske"
 	"github.com/facebook/time/ntp/responder/announce"
 	"github.com/facebook/time/ntp/responder/checker"
 	"github.com/facebook/time/ntp/responder/server"
@@ -41,8 +42,10 @@ func main() {
 	s := server.Server{}
 
 	var (
-		debugger bool
-		logLevel string
+		debugger        bool
+		logLevel        string
+		enableNTS       bool // master switch for the NTS path
+		ntsKeystoreKeys int  // size of the cookie master-key ring
 	)
 
 	flag.StringVar(&logLevel, "loglevel", "info", "Set a log level. Can be: debug, info, warning, error")
@@ -58,6 +61,8 @@ func main() {
 	flag.DurationVar(&s.Config.ExtraOffset, "extraoffset", 0, "Extra offset to return to clients")
 	flag.BoolVar(&s.Config.ManageLoopback, "manage-loopback", true, "Add/remove IPs. If false, these must be managed elsewhere")
 	flag.TextVar(&s.Config.TimestampType, "timestamptype", timestamp.SWRX, fmt.Sprintf("Timestamp type. Can be: %s, %s", timestamp.HWRX, timestamp.SWRX))
+	flag.BoolVar(&enableNTS, "enable-nts", false, "Enable NTS (Network Time Security) authenticated NTP")
+	flag.IntVar(&ntsKeystoreKeys, "nts-keystore-keys", 2, "Number of NTS cookie master keys kept in the rotating ring")
 
 	flag.Parse()
 	s.Config.IPs.SetDefault()
@@ -77,6 +82,21 @@ func main() {
 
 	if err := s.Config.Validate(); err != nil {
 		log.Fatalf("Config is invalid: %v", err)
+	}
+
+	if enableNTS {
+		if ntsKeystoreKeys < 1 {
+			log.Fatalf("nts-keystore-keys must be >= 1, got %d", ntsKeystoreKeys)
+		}
+		ks, err := ntske.NewInMemoryKeystore(ntske.InMemoryKeystoreOptions{
+			MaxKeys:    uint32(ntsKeystoreKeys), // #nosec G115 -- ntsKeystoreKeys guarded >= 1
+			InitialKey: ntske.SharedTestMasterKey,
+		})
+		if err != nil {
+			log.Fatalf("Failed to set up NTS keystore: %v", err)
+		}
+		s.Config.Keystore = ks
+		log.Info("NTS enabled: NTP requests carrying extension fields will be authenticated")
 	}
 
 	if debugger {
