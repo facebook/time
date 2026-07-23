@@ -19,6 +19,7 @@ package timestamp
 // Here we have basic HW and SW timestamping support
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -143,7 +144,9 @@ func ReadPacketWithRXTimestamp(connFd int) ([]byte, unix.Sockaddr, time.Time, er
 	oob := make([]byte, ControlSizeBytes)
 
 	bbuf, sa, t, err := ReadPacketWithRXTimestampBuf(connFd, buf, oob)
-	if err != nil {
+	if errors.Is(err, ErrNoTimestamp) {
+		return buf[:bbuf], sa, t, err //nolint:nilnil
+	} else if err != nil {
 		return nil, nil, time.Time{}, err
 	}
 	return buf[:bbuf], sa, t, nil
@@ -158,7 +161,9 @@ func ReadPacketWithRXTimestampBuf(connFd int, buf, oob []byte) (int, unix.Sockad
 	}
 
 	timestamp, err := socketControlMessageTimestamp(oob, boob)
-	if err != nil {
+	if errors.Is(err, ErrNoTimestamp) {
+		return bbuf, saddr, timestamp, err //nolint:nilnil
+	} else if err != nil {
 		return 0, nil, time.Time{}, err
 	}
 	return bbuf, saddr, timestamp, nil
