@@ -28,7 +28,7 @@ import (
 // maxResponseCookies caps how many fresh cookies a single response carries. This
 // bounds the amplification factor regardless of how many placeholders a client
 // stuffs into its request.
-const maxResponseCookies = 32 //nolint:unused // used by the NTS request path
+const maxResponseCookies = 32
 
 // Failure classes for the NTS request path. Callers use errors.Is to branch on
 // them (e.g. for stats); the wrapped error carries the detail.
@@ -47,7 +47,7 @@ var (
 // response's extension fields (UniqueID echo + sealed authenticator). req is the
 // parsed request; resp is the response whose header is already set. The caller
 // marshals resp via Bytes(), so both the NTS and plain paths share one marshal.
-func processNTSRequest(ks ntske.Keystore, req, resp *ntp.Packet) error { //nolint:unused // used by the NTS request path
+func processNTSRequest(ks ntske.Keystore, req, resp *ntp.Packet) error {
 	if len(req.ExtensionFields) == 0 {
 		return ErrNoExtensionFields
 	}

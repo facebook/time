@@ -28,11 +28,17 @@ import (
 	"net"
 	"time"
 
+	"github.com/facebook/time/ntp/ntske"
 	ntp "github.com/facebook/time/ntp/protocol"
 	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
+
+// maxPacketSizeBytes bounds a single UDP read. Plain NTP is 48 octets; an NTS
+// request additionally carries a UniqueID, a cookie, optional placeholders and
+// an authenticator, so the buffer is grown to a full 1500-octet MTU to hold it.
+const maxPacketSizeBytes = 1500
 
 // task is a data structure with everything needed to work independently on NTP packet.
 type task struct {
@@ -40,6 +46,7 @@ type task struct {
 	addr     unix.Sockaddr
 	received time.Time
 	request  *ntp.Packet
+	keystore ntske.Keystore
 	stats    Stats
 }
 
@@ -175,7 +182,7 @@ func (s *Server) startListener(conn *net.UDPConn) {
 		log.Fatalf("Failed to set socket to blocking: %s", err)
 	}
 
-	buf := make([]byte, timestamp.PayloadSizeBytes)
+	buf := make([]byte, maxPacketSizeBytes)
 	oob := make([]byte, timestamp.ControlSizeBytes)
 
 	for {
@@ -197,13 +204,21 @@ func (s *Server) startListener(conn *net.UDPConn) {
 			rxTS = rxTS.Add(s.Config.phcOffset)
 		}
 
-		if err := request.UnmarshalBinary(buf[:bbuf]); err != nil {
+		// On a plain-NTP server (no keystore) ignore anything past the 48-octet
+		// header: With NTS enabled, let UnmarshalBinary parse the trailing
+		// bytes as extension fields.
+		parseLen := bbuf
+		if s.Config.Keystore == nil && bbuf > ntp.PacketSizeBytes {
+			parseLen = ntp.PacketSizeBytes
+		}
+
+		if err := request.UnmarshalBinary(buf[:parseLen]); err != nil {
 			log.Errorf("failed to parse ntp packet: %s", err)
 			s.Stats.IncReadError()
 			continue
 		}
 		s.Stats.IncRequests()
-		s.tasks <- task{connFd: connFd, addr: clisa, received: rxTS, request: request, stats: s.Stats}
+		s.tasks <- task{connFd: connFd, addr: clisa, received: rxTS, request: request, keystore: s.Config.Keystore, stats: s.Stats}
 	}
 }
 
@@ -233,13 +248,21 @@ func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 	}
 
 	generateResponse(time.Now().Add(extraoffset), t.received.Add(extraoffset), t.request, response)
+	response.ExtensionFields = nil
+	if t.keystore != nil && len(t.request.ExtensionFields) > 0 {
+		if err := processNTSRequest(t.keystore, t.request, response); err != nil {
+			log.Debugf("NTS request rejected: %v", err)
+			t.stats.IncInvalidFormat()
+			return
+		}
+	}
 	responseBytes, err := response.Bytes()
 	if err != nil {
-		log.Errorf("Failed to convert ntp.%v to bytes %v: %v", response, responseBytes, err)
+		log.Debugf("marshaling response failed: %v", err)
+		t.stats.IncInvalidFormat()
 		return
 	}
-
-	log.Debugf("Writing response: %+v", response)
+	log.Debugf("Writing %d-byte response", len(responseBytes))
 	if err := unix.Sendto(t.connFd, responseBytes, unix.MSG_DONTWAIT, t.addr); err != nil {
 		log.Debugf("Failed to respond to the request: %v", err)
 		return

@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/facebook/time/ntp/ntske"
 	"github.com/facebook/time/timestamp"
 )
 
@@ -41,6 +42,7 @@ type Config struct {
 	Stratum        int
 	TimestampType  timestamp.Timestamp
 	Workers        int
+	Keystore       ntske.Keystore // if non-nil enables NTS auth path.
 	phcOffset      time.Duration
 }
 
