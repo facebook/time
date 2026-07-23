@@ -30,6 +30,7 @@ import (
 	"syscall"
 
 	"github.com/facebook/time/ntp/ntske"
+	"github.com/facebook/time/ntp/ntske/stats"
 )
 
 func main() {
@@ -37,6 +38,7 @@ func main() {
 	certFile := flag.String("cert", "/tmp/ntske_cert.pem", "TLS certificate PEM")
 	keyFile := flag.String("key", "/tmp/ntske_key.pem", "TLS private key PEM")
 	cookies := flag.Uint("cookies", 8, "number of cookies to issue per handshake")
+	monitoringPort := flag.Int("monitoringport", 0, "Port to run the JSON stats server on; 0 disables it")
 	flag.Parse()
 	if *cookies > math.MaxUint16 {
 		slog.Error("invalid --cookies value exceeds uint16 range", "value", *cookies, "max", math.MaxUint16)
@@ -49,16 +51,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	keystore, err := ntske.NewInMemoryKeystore(ntske.InMemoryKeystoreOptions{})
+	keystore, err := ntske.NewInMemoryKeystore(ntske.InMemoryKeystoreOptions{
+		InitialKey: ntske.SharedTestMasterKey,
+	})
 	if err != nil {
 		slog.Error("keystore", "err", err)
 		os.Exit(1)
+	}
+
+	st := &stats.JSONStats{}
+	if *monitoringPort != 0 {
+		go st.Start(*monitoringPort)
 	}
 
 	srv := &ntske.Server{
 		TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
 		Keystore:  keystore,
 		Cookies:   uint16(*cookies), //nolint:gosec // bounded: math.MaxUint16 (65535) guard above exits
+		Stats:     st,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
