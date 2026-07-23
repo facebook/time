@@ -76,6 +76,24 @@ const (
 	// deterministic AEAD whose 16-octet synthetic IV doubles as the auth tag.
 	masterAEADID = protocol.AEADAESSIVCMAC512
 )
+
+// SharedTestMasterKey is a fixed 64-octet cookie master key used ONLY to bridge
+// the gap until a Keychain-backed keystore lets every responder in the fleet
+// share sealing keys. Seeding both the NTP responder and the standalone NTS-KE
+// server with it (via InMemoryKeystoreOptions.InitialKey) lets cookies sealed
+// by one open on the other.
+//
+// NOT for production: anyone holding these bytes can forge cookies. Delete this
+// once the fleet-wide (Keychain) keystore lands.
+var SharedTestMasterKey = []byte{
+	0xad, 0x17, 0x97, 0x8b, 0x12, 0x2b, 0x0c, 0xc1, 0x66, 0x81, 0x04, 0x55,
+	0xb4, 0xbb, 0x9a, 0xca, 0x0e, 0x85, 0x9b, 0xf0, 0x2d, 0x19, 0xe1, 0xdd,
+	0xb8, 0x1a, 0x85, 0xdb, 0x41, 0xd7, 0x48, 0x5f, 0xe4, 0x4a, 0x27, 0x06,
+	0xaa, 0x2d, 0x1b, 0x01, 0x7f, 0xab, 0x86, 0xaa, 0xf9, 0xe9, 0x01, 0xee,
+	0x8b, 0x3c, 0x2d, 0x58, 0x90, 0xdd, 0xa4, 0xc3, 0x46, 0x63, 0xb8, 0xa4,
+	0x2b, 0x55, 0xe5, 0x0c,
+}
+
 const (
 	cookieKeyIDLen = 4  // big-endian master-key identifier
 	cookieNonceLen = 16 // random per-cookie nonce, mixed into the SIV as AD
@@ -131,6 +149,10 @@ var _ Keystore = (*InMemoryKeystore)(nil)
 type InMemoryKeystoreOptions struct {
 	MaxKeys uint32
 	Rand    io.Reader
+	// InitialKey, if set, seeds the ring with this exact master key instead of
+	// generating a random one, letting separate processes share a sealing key.
+	// Must be masterKeyLen octets.
+	InitialKey []byte
 }
 
 // NewInMemoryKeystore returns a keystore seeded with one freshly generated
@@ -148,10 +170,32 @@ func NewInMemoryKeystore(opts InMemoryKeystoreOptions) (*InMemoryKeystore, error
 	if opts.Rand != nil {
 		ks.rand = opts.Rand
 	}
+	if len(opts.InitialKey) > 0 {
+		if err := ks.seedKey(opts.InitialKey); err != nil {
+			return nil, err
+		}
+		return ks, nil
+	}
 	if err := ks.Rotate(); err != nil {
 		return nil, err
 	}
 	return ks, nil
+}
+
+// seedKey installs key as the initial sealing key (Key ID 1). Unlike Rotate it
+// takes a caller-supplied key rather than generating a random one.
+func (ks *InMemoryKeystore) seedKey(key []byte) error {
+	if len(key) != masterKeyLen {
+		return fmt.Errorf("ntske: initial key must be %d octets, got %d", masterKeyLen, len(key))
+	}
+	ks.mu.Lock()
+	defer ks.mu.Unlock()
+	ks.nextID++
+	id := ks.nextID
+	ks.ring[id] = bytes.Clone(key)
+	ks.order = append(ks.order, id)
+	ks.current = id
+	return nil
 }
 
 // Rotate generates a new master key, makes it the sealing key, and ages out the
