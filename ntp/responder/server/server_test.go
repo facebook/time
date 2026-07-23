@@ -24,6 +24,7 @@ import (
 	"time"
 
 	ntp "github.com/facebook/time/ntp/protocol"
+	"github.com/facebook/time/ntp/protocol/nts"
 	"github.com/facebook/time/ntp/responder/checker"
 	"github.com/facebook/time/ntp/responder/stats"
 	"github.com/facebook/time/timestamp"
@@ -247,4 +248,43 @@ func Benchmark_fillStaticHeaders(b *testing.B) {
 		response := &ntp.Packet{}
 		s.fillStaticHeaders(response)
 	}
+}
+
+func TestServerNTS(t *testing.T) {
+	ks := newTestKeystore(t) // reuse helper from nts_test.go
+	s := &Server{
+		Checker: &checker.SimpleChecker{ExpectedListeners: 1, ExpectedWorkers: 1},
+		Stats:   &stats.JSONStats{},
+		tasks:   make(chan task, 1),
+		Config:  Config{Workers: 1, TimestampType: timestamp.SWRX, Iface: "lo", Keystore: ks},
+	}
+	go s.startWorker()
+
+	conn := tryListenUDP(t)
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	go s.startListener(conn)
+	time.Sleep(100 * time.Millisecond)
+
+	// build a real NTS request (helper already in nts_test.go)
+	uid := randBytes(t, nts.MinUniqueIdentifierLen)
+	req, s2c := buildNTSRequest(t, ks, ntp.AEADAESSIVCMAC512, uid, 2)
+
+	addr := net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", localAddr.Port))
+	sendConn, err := net.DialTimeout("udp", addr, time.Second)
+	require.NoError(t, err)
+	defer sendConn.Close()
+
+	_, err = sendConn.Write(req)
+	require.NoError(t, err)
+
+	buf := make([]byte, maxPacketSizeBytes)
+	require.NoError(t, sendConn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	n, err := sendConn.Read(buf)
+	require.NoError(t, err)
+
+	// open the response as the client would — proves the whole wiring works
+	inner, cleartext := openResponse(t, buf[:n], ntp.AEADAESSIVCMAC512, s2c)
+	require.Equal(t, 3, inner) // 1 + 2 placeholders
+	require.Zero(t, cleartext)
 }
