@@ -440,3 +440,42 @@ func TestProcessNTSRequestVerifiesOverRawBytes(t *testing.T) {
 	err = processNTSRequest(ks, req, respHeader(t))
 	require.NoError(t, err, "server must cover unrecognized EFs in the authenticator, reproducing exact received bytes per RFC 8915 §5.4")
 }
+
+// TestProcessNTSRequestWithClientHelpers drives the real server path with the
+// public nts client helpers (what ntsketest uses), covering both AEADs.
+func TestProcessNTSRequestWithClientHelpers(t *testing.T) {
+	cases := []struct {
+		name string
+		aead ntp.AEADAlgorithm
+	}{
+		{"AES-128-GCM-SIV", ntp.AEADAES128GCMSIV},
+		{"AES-SIV-CMAC-512", ntp.AEADAESSIVCMAC512},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ks := newTestKeystore(t)
+			keyLen := keyLenFor(t, tc.aead)
+			c2s := randBytes(t, keyLen)
+			s2c := randBytes(t, keyLen)
+			cookie, err := ks.SealCookie(tc.aead, c2s, s2c)
+			require.NoError(t, err)
+
+			uid := randBytes(t, nts.MinUniqueIdentifierLen)
+			reqBytes, err := nts.BuildNTSRequest(ntp.Packet{Settings: 0x23}, nts.RequestParams{
+				AEAD: tc.aead, C2S: c2s, Cookie: cookie, UniqueID: uid, Placeholders: 2,
+			})
+			require.NoError(t, err)
+
+			req := &ntp.Packet{}
+			require.NoError(t, req.UnmarshalBinary(reqBytes))
+			resp := respHeader(t)
+			require.NoError(t, processNTSRequest(ks, req, resp))
+			respBytes, err := resp.Bytes()
+			require.NoError(t, err)
+
+			_, cookies, err := nts.VerifyNTSResponse(respBytes, tc.aead, s2c, uid)
+			require.NoError(t, err)
+			require.Len(t, cookies, 3) // one spent cookie + two placeholders
+		})
+	}
+}
