@@ -72,12 +72,12 @@ func clientFreePort(t *testing.T) string {
 
 // startTestKEServer spins up an in-process Server on an ephemeral port and
 // returns its address plus the CA PEM the client should trust.
-func startTestKEServer(t *testing.T, cookies uint16) (addr string, caPEM []byte) {
+func startTestKEServer(t *testing.T, cookies uint16) (addr string, ks *InMemoryKeystore, caPEM []byte) {
 	t.Helper()
 	certPEM, keyPEM := clientTestCert(t)
 	cert, err := tls.X509KeyPair(certPEM, keyPEM)
 	require.NoError(t, err)
-	ks, err := NewInMemoryKeystore(InMemoryKeystoreOptions{})
+	ks, err = NewInMemoryKeystore(InMemoryKeystoreOptions{})
 	require.NoError(t, err)
 	srv := &Server{
 		TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
@@ -95,16 +95,16 @@ func startTestKEServer(t *testing.T, cookies uint16) (addr string, caPEM []byte)
 		c, derr := net.DialTimeout("tcp", addr, 200*time.Millisecond)
 		if derr == nil {
 			_ = c.Close()
-			return addr, certPEM
+			return addr, ks, certPEM
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("server at %s never became ready", addr)
-	return "", nil
+	return "", nil, nil
 }
 
 func TestClientHandshake(t *testing.T) {
-	addr, caPEM := startTestKEServer(t, 8)
+	addr, _, caPEM := startTestKEServer(t, 8)
 	caFile := filepath.Join(t.TempDir(), "ca.pem")
 	require.NoError(t, os.WriteFile(caFile, caPEM, 0o600))
 
@@ -118,8 +118,35 @@ func TestClientHandshake(t *testing.T) {
 	require.Len(t, res.Cookies, 8)
 }
 
+func TestClientHandshakeDerivesMatchingKeys(t *testing.T) {
+	addr, ks, caPEM := startTestKEServer(t, 8)
+	caFile := filepath.Join(t.TempDir(), "ca.pem")
+	require.NoError(t, os.WriteFile(caFile, caPEM, 0o600))
+
+	tlsConf, err := ClientTLSConfig(caFile)
+	require.NoError(t, err)
+
+	res, err := (&Client{}).Handshake(context.Background(), addr, tlsConf)
+	require.NoError(t, err)
+
+	// Keys are present, correctly sized, and directional (C2S != S2C).
+	keyLen, err := aeadIDToKeyLen(protocol.AEADAlgorithm(res.AEAD))
+	require.NoError(t, err)
+	require.Len(t, res.C2S, keyLen)
+	require.Len(t, res.S2C, keyLen)
+	require.NotEqual(t, res.C2S, res.S2C)
+
+	// The server sealed its own exporter-derived keys into the cookie; opening it
+	// must yield the same keys the client derived, proving both ends agree.
+	aeadID, srvC2S, srvS2C, err := ks.OpenCookie(res.Cookies[0])
+	require.NoError(t, err)
+	require.Equal(t, protocol.AEADAlgorithm(res.AEAD), aeadID)
+	require.Equal(t, srvC2S, res.C2S)
+	require.Equal(t, srvS2C, res.S2C)
+}
+
 func TestClientHandshakeUntrustedCert(t *testing.T) {
-	addr, _ := startTestKEServer(t, 8)
+	addr, _, _ := startTestKEServer(t, 8)
 	otherPEM, _ := clientTestCert(t) // a CA that does not contain the server's cert
 	caFile := filepath.Join(t.TempDir(), "other.pem")
 	require.NoError(t, os.WriteFile(caFile, otherPEM, 0o600))
