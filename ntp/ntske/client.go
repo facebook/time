@@ -54,6 +54,10 @@ type HandshakeResult struct {
 	// CompliantExport reports whether the server echoed the chrony
 	// compliant-128-GCM-SIV-export record.
 	CompliantExport bool
+	// C2S and S2C are the directional session keys derived from the TLS session
+	// via the RFC 8915 exporter (C2S signs requests, S2C verifies responses).
+	C2S []byte
+	S2C []byte
 }
 
 // ClientTLSConfig builds a TLS 1.3 client config for NTS-KE. When caFile is
@@ -115,7 +119,24 @@ func (c *Client) Handshake(ctx context.Context, addr string, tlsConf *tls.Config
 	if err != nil {
 		return nil, fmt.Errorf("ntske: read response: %w", err)
 	}
-	return c.interpret(records)
+	res, err := c.interpret(records)
+	if err != nil {
+		return nil, err
+	}
+	// Derive the directional session keys from the TLS session using the same
+	// exporter label and context the server uses, so both ends agree on C2S/S2C.
+	keyLen, err := aeadIDToKeyLen(protocol.AEADAlgorithm(res.AEAD))
+	if err != nil {
+		return nil, fmt.Errorf("ntske: key length for aead %d: %w", res.AEAD, err)
+	}
+	cs := tlsConn.ConnectionState()
+	if res.C2S, err = exportKey(cs, res.AEAD, directionC2S, keyLen); err != nil {
+		return nil, fmt.Errorf("ntske: derive C2S: %w", err)
+	}
+	if res.S2C, err = exportKey(cs, res.AEAD, directionS2C, keyLen); err != nil {
+		return nil, fmt.Errorf("ntske: derive S2C: %w", err)
+	}
+	return res, nil
 }
 
 // writeRequest sends the NTS-KE request: Next Protocol NTPv4, the AEAD
