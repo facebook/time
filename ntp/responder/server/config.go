@@ -31,19 +31,21 @@ var DefaultServerIPs = MultiIPs{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}
 
 // Config is a server config structure
 type Config struct {
-	ExtraOffset    time.Duration
-	Iface          string
-	IPs            MultiIPs
-	ManageLoopback bool
-	MonitoringPort int
-	Port           int
-	RefID          string
-	ShouldAnnounce bool
-	Stratum        int
-	TimestampType  timestamp.Timestamp
-	Workers        int
-	Keystore       ntske.Keystore // if non-nil enables NTS auth path.
-	phcOffset      time.Duration
+	ExtraOffset     time.Duration
+	Iface           string
+	IPs             MultiIPs
+	ManageLoopback  bool
+	MonitoringPort  int
+	Port            int
+	RefID           string
+	ShouldAnnounce  bool
+	Stratum         int
+	TimestampType   timestamp.Timestamp
+	Workers         int
+	Keystore        ntske.Keystore // if non-nil enables NTS auth path.
+	EnableNTS       bool           // when set, build an NTS keystore on startup and install it as Keystore
+	NTSKeystoreKeys int            // NTS cookie master-key ring size
+	phcOffset       time.Duration
 }
 
 // MultiIPs is a wrapper allowing to set multiple IPs with flag parser
