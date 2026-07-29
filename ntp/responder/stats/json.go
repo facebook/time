@@ -47,8 +47,8 @@ type JSONStats struct {
 	ntsCookieOpenFailed int64
 }
 
-// toMap converts struct to a map
-func (j *JSONStats) toMap() (export map[string]int64) {
+// ToMap converts struct to a map
+func (j *JSONStats) ToMap() (export map[string]int64) {
 	export = make(map[string]int64)
 
 	export["invalidformat"] = j.invalidFormat
@@ -67,7 +67,7 @@ func (j *JSONStats) toMap() (export map[string]int64) {
 
 // handleRequest is a handler used for all http monitoring requests
 func (j *JSONStats) handleRequest(w http.ResponseWriter, _ *http.Request) {
-	js, err := json.Marshal(j.toMap())
+	js, err := json.Marshal(j.ToMap())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

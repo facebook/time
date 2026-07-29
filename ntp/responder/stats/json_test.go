@@ -114,7 +114,7 @@ func TestJSONStatsToMap(t *testing.T) {
 		ntsAuthFailed:       9,
 		ntsCookieOpenFailed: 10,
 	}
-	result := j.toMap()
+	result := j.ToMap()
 
 	expectedMap := make(map[string]int64)
 	expectedMap["invalidformat"] = 1

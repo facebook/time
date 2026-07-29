@@ -70,7 +70,7 @@ func TestToMap(t *testing.T) {
 	j.IncReadError()
 	j.SetAnnounce()
 
-	m := j.toMap()
+	m := j.ToMap()
 	require.Equal(t, int64(2), m["requests"])
 	require.Equal(t, int64(1), m["responses"])
 	require.Equal(t, int64(1), m["invalidformat"])
@@ -83,10 +83,10 @@ func TestToMap(t *testing.T) {
 func TestResetAnnounce(t *testing.T) {
 	j := &JSONStats{}
 	j.SetAnnounce()
-	m := j.toMap()
+	m := j.ToMap()
 	require.Equal(t, int64(1), m["announce"])
 
 	j.ResetAnnounce()
-	m = j.toMap()
+	m = j.ToMap()
 	require.Equal(t, int64(0), m["announce"])
 }

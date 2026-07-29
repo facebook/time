@@ -19,11 +19,15 @@ package server
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/facebook/time/ntp/ntske"
 	ntp "github.com/facebook/time/ntp/protocol"
 	"github.com/facebook/time/ntp/protocol/nts"
+	"github.com/facebook/time/ntp/responder/stats"
+	"github.com/facebook/time/timestamp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -476,6 +480,110 @@ func TestProcessNTSRequestWithClientHelpers(t *testing.T) {
 			_, cookies, err := nts.VerifyNTSResponse(respBytes, tc.aead, s2c, uid)
 			require.NoError(t, err)
 			require.Len(t, cookies, 3) // one spent cookie + two placeholders
+		})
+	}
+}
+
+// TestServeNTSStatsRouting feeds crafted NTS requests through task.serve and
+// asserts each failure class lands on exactly the right counter (and a valid
+// request lands on nts.auth_ok).
+func TestServeNTSStatsRouting(t *testing.T) {
+	const aead = ntp.AEADAESSIVCMAC512
+
+	conn := tryListenUDP(t)
+	defer conn.Close()
+	connFd, err := timestamp.ConnFd(conn)
+	require.NoError(t, err)
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), localAddr.Port)
+
+	validRequest := func(t *testing.T) (ntske.Keystore, *ntp.Packet) {
+		t.Helper()
+		ks := newTestKeystore(t)
+		uid := randBytes(t, nts.MinUniqueIdentifierLen)
+		reqBytes, _ := buildNTSRequest(t, ks, aead, uid, 0)
+		req := &ntp.Packet{}
+		require.NoError(t, req.UnmarshalBinary(reqBytes))
+		return ks, req
+	}
+
+	// corruptEF flips the trailing byte of the first EF of the given type so the
+	// relevant crypto step (cookie open / authenticator verify) fails.
+	corruptEF := func(t *testing.T, req *ntp.Packet, typ ntp.ExtensionFieldType) {
+		t.Helper()
+		for i := range req.ExtensionFields {
+			if req.ExtensionFields[i].Type == typ {
+				body := req.ExtensionFields[i].Body
+				require.NotEmpty(t, body)
+				body[len(body)-1] ^= 0xff
+				return
+			}
+		}
+		t.Fatalf("extension field %v not found in request", typ)
+	}
+
+	tests := []struct {
+		name        string
+		build       func(t *testing.T) (ntske.Keystore, *ntp.Packet)
+		wantOK      int64
+		wantAuth    int64
+		wantCookie  int64
+		wantInvalid int64
+	}{
+		{
+			name:   "valid",
+			build:  validRequest,
+			wantOK: 1,
+		},
+		{
+			name: "bad cookie",
+			build: func(t *testing.T) (ntske.Keystore, *ntp.Packet) {
+				ks, req := validRequest(t)
+				corruptEF(t, req, ntp.NTSCookie)
+				return ks, req
+			},
+			wantCookie: 1,
+		},
+		{
+			name: "bad auth tag",
+			build: func(t *testing.T) (ntske.Keystore, *ntp.Packet) {
+				ks, req := validRequest(t)
+				corruptEF(t, req, ntp.NTSAuthenticator)
+				return ks, req
+			},
+			wantAuth: 1,
+		},
+		{
+			name: "malformed order",
+			build: func(t *testing.T) (ntske.Keystore, *ntp.Packet) {
+				ks := newTestKeystore(t)
+				uid := randBytes(t, nts.MinUniqueIdentifierLen)
+				// Cookie before UniqueID violates RFC 8915 EF ordering.
+				req := &ntp.Packet{
+					Settings: 0x23,
+					ExtensionFields: []ntp.ExtensionField{
+						nts.NewCookie(randBytes(t, 64)),
+						nts.NewUniqueIdentifier(uid),
+					},
+				}
+				return ks, req
+			},
+			wantInvalid: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ks, req := tc.build(t)
+			js := &stats.JSONStats{}
+			tsk := task{connFd: connFd, addr: sa, received: time.Now(), request: req, keystore: ks, stats: js}
+			tsk.serve(&ntp.Packet{}, 0)
+
+			counters := js.ToMap()
+			require.Equal(t, tc.wantOK, counters["nts.auth_ok"], "nts.auth_ok")
+			require.Equal(t, tc.wantAuth, counters["nts.auth_failed"], "nts.auth_failed")
+			require.Equal(t, tc.wantCookie, counters["nts.cookie_open_failed"], "nts.cookie_open_failed")
+			require.Equal(t, tc.wantInvalid, counters["invalidformat"], "invalidformat")
 		})
 	}
 }

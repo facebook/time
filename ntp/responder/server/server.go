@@ -252,9 +252,17 @@ func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 	if t.keystore != nil && len(t.request.ExtensionFields) > 0 {
 		if err := processNTSRequest(t.keystore, t.request, response); err != nil {
 			log.Debugf("NTS request rejected: %v", err)
-			t.stats.IncInvalidFormat()
+			switch {
+			case errors.Is(err, ErrCookieOpen):
+				t.stats.IncNTSCookieOpenFailed()
+			case errors.Is(err, ErrAuthVerify):
+				t.stats.IncNTSAuthFailed()
+			default:
+				t.stats.IncInvalidFormat()
+			}
 			return
 		}
+		t.stats.IncNTSAuthOK()
 	}
 	responseBytes, err := response.Bytes()
 	if err != nil {
