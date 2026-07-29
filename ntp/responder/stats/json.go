@@ -58,9 +58,9 @@ func (j *JSONStats) ToMap() (export map[string]int64) {
 	export["workers"] = j.workers
 	export["readError"] = j.readError
 	export["announce"] = j.announce
-	export["nts.auth_ok"] = j.ntsAuthOK
-	export["nts.auth_failed"] = j.ntsAuthFailed
-	export["nts.cookie_open_failed"] = j.ntsCookieOpenFailed
+	export["nts_auth_ok"] = j.ntsAuthOK
+	export["nts_auth_failed"] = j.ntsAuthFailed
+	export["nts_cookie_open_failed"] = j.ntsCookieOpenFailed
 
 	return export
 }

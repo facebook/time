@@ -580,9 +580,9 @@ func TestServeNTSStatsRouting(t *testing.T) {
 			tsk.serve(&ntp.Packet{}, 0)
 
 			counters := js.ToMap()
-			require.Equal(t, tc.wantOK, counters["nts.auth_ok"], "nts.auth_ok")
-			require.Equal(t, tc.wantAuth, counters["nts.auth_failed"], "nts.auth_failed")
-			require.Equal(t, tc.wantCookie, counters["nts.cookie_open_failed"], "nts.cookie_open_failed")
+			require.Equal(t, tc.wantOK, counters["nts_auth_ok"], "nts_auth_ok")
+			require.Equal(t, tc.wantAuth, counters["nts_auth_failed"], "nts_auth_failed")
+			require.Equal(t, tc.wantCookie, counters["nts_cookie_open_failed"], "nts_cookie_open_failed")
 			require.Equal(t, tc.wantInvalid, counters["invalidformat"], "invalidformat")
 		})
 	}
