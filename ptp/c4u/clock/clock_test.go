@@ -83,7 +83,7 @@ func TestWorstBig(t *testing.T) {
 	cexpr := "p99(oscillatorclass)"
 	expected := &ptp.ClockQuality{ClockClass: ptp.ClockClass6, ClockAccuracy: ptp.ClockAccuracyNanosecond100}
 
-	clocks := []*DataPoint{}
+	clocks := make([]*DataPoint, 0, 600)
 	for range 594 {
 		clocks = append(clocks, &DataPoint{OscillatorClockClass: ptp.ClockClass6, PHCOffset: 80 * time.Nanosecond})
 	}
