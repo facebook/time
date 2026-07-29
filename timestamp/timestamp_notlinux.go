@@ -31,8 +31,6 @@ import (
 
 var timestamping = unix.SO_TIMESTAMP
 
-var ErrNoTimestamp = errors.New("no timestamp available")
-
 // Here we have basic HW and SW timestamping support
 
 // byteToTime converts bytes into a timestamp
@@ -67,6 +65,11 @@ func socketControlMessageTimestamp(b []byte, _ int) (time.Time, error) {
 // socketControlMessageDrops is not implemented for darwin
 func socketControlMessageDrops(_ []byte, _ int) uint32 {
 	return 0
+}
+
+// socketControlMessageDstAddr parses SocketControlMessage Data to find the Destination Address
+func socketControlMessageDstAddr(_ []byte, _ int) (net.IP, error) {
+	return nil, unix.ENOTSUP
 }
 
 // EnableSWTimestampsRx enables SW RX timestamps on the socket

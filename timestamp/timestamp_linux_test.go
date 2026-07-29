@@ -22,6 +22,7 @@ import (
 	"runtime"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/facebook/time/hostendian"
 	"github.com/stretchr/testify/require"
@@ -231,6 +232,71 @@ func TestEnableTimestamps(t *testing.T) {
 	// Unsupported
 	err = EnableTimestamps(42, connFd, &net.Interface{Name: "lo", Index: 1})
 	require.Equal(t, fmt.Errorf("unrecognized timestamp type: Unsupported"), err)
+}
+
+func pktInfo6Cmsg(addr net.IP) []byte {
+	b := make([]byte, unix.CmsgSpace(unix.SizeofInet6Pktinfo))
+	h := (*unix.Cmsghdr)(unsafe.Pointer(&b[0]))
+	h.Level = unix.IPPROTO_IPV6
+	h.Type = unix.IPV6_PKTINFO
+	h.SetLen(unix.CmsgLen(unix.SizeofInet6Pktinfo))
+	pktInfo := (*unix.Inet6Pktinfo)(unsafe.Pointer(&b[socketControlMessageHeaderOffset]))
+	copy(pktInfo.Addr[:], addr.To16())
+	return b
+}
+
+func pktInfo4Cmsg(addr net.IP) []byte {
+	b := make([]byte, unix.CmsgSpace(unix.SizeofInet4Pktinfo))
+	h := (*unix.Cmsghdr)(unsafe.Pointer(&b[0]))
+	h.Level = unix.IPPROTO_IP
+	h.Type = unix.IP_PKTINFO
+	h.SetLen(unix.CmsgLen(unix.SizeofInet4Pktinfo))
+	pktInfo := (*unix.Inet4Pktinfo)(unsafe.Pointer(&b[socketControlMessageHeaderOffset]))
+	copy(pktInfo.Addr[:], addr.To4())
+	return b
+}
+
+func TestSocketControlMessageDstAddr(t *testing.T) {
+	t.Run("IPv6 multicast", func(t *testing.T) {
+		addr := net.ParseIP("ff0e::181")
+		b := pktInfo6Cmsg(addr)
+		dst, err := socketControlMessageDstAddr(b, len(b))
+		require.NoError(t, err)
+		require.True(t, dst.Equal(addr))
+		require.True(t, dst.IsMulticast())
+	})
+
+	t.Run("IPv6 unicast", func(t *testing.T) {
+		addr := net.ParseIP("2401:db00::1")
+		b := pktInfo6Cmsg(addr)
+		dst, err := socketControlMessageDstAddr(b, len(b))
+		require.NoError(t, err)
+		require.True(t, dst.Equal(addr))
+		require.False(t, dst.IsMulticast())
+	})
+
+	t.Run("IPv4 multicast", func(t *testing.T) {
+		addr := net.ParseIP("224.0.1.129")
+		b := pktInfo4Cmsg(addr)
+		dst, err := socketControlMessageDstAddr(b, len(b))
+		require.NoError(t, err)
+		require.True(t, dst.Equal(addr))
+		require.True(t, dst.IsMulticast())
+	})
+
+	t.Run("IPv4 unicast", func(t *testing.T) {
+		addr := net.ParseIP("10.0.0.1")
+		b := pktInfo4Cmsg(addr)
+		dst, err := socketControlMessageDstAddr(b, len(b))
+		require.NoError(t, err)
+		require.True(t, dst.Equal(addr))
+		require.False(t, dst.IsMulticast())
+	})
+
+	t.Run("no pktinfo", func(t *testing.T) {
+		_, err := socketControlMessageDstAddr(make([]byte, 16), 16)
+		require.Error(t, err)
+	})
 }
 
 func TestSocketControlMessageTimestamp(t *testing.T) {

@@ -89,6 +89,20 @@ type UDPConnTS struct {
 	newerKernel bool
 }
 
+// ConfigPktInfo enables pktinfo on the socket so the destination address of
+// received packets can be recovered. Both the IPv6 and IPv4 options are set;
+// on a single-family socket one of them can legitimately fail (e.g. ENOPROTOOPT
+// on an IPv6-only socket), so we only return an error when neither could be enabled.
+func ConfigPktInfo(fd int) error {
+	err6 := unix.SetsockoptInt(fd, unix.IPPROTO_IPV6, unix.IPV6_RECVPKTINFO, 1)
+	err4 := unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_PKTINFO, 1)
+	if err6 != nil && err4 != nil {
+		return fmt.Errorf("enabling pktinfo (IPv6: %w, IPv4: %w)", err6, err4)
+	}
+
+	return nil
+}
+
 // NewUDPConnTS initialises a new struct UDPConnTS
 func NewUDPConnTS(address net.IP, port int, ts timestamp.Timestamp, iface *net.Interface, dscpValue int) (*UDPConnTS, error) {
 	udpConn, err := NewUDPConn(address, port)

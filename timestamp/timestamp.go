@@ -32,7 +32,7 @@ import (
 const (
 	// ControlSizeBytes is a socket control message containing TX/RX timestamp
 	// If the read fails we may endup with multiple timestamps in the buffer
-	// which is best to read right away
+	// which is best to read right away. Currently we read 104 bytes per packet
 	ControlSizeBytes = 128
 	// PayloadSizeBytes is a size of maximum ptp packet which is usually up to 66 bytes
 	PayloadSizeBytes = 128
@@ -66,6 +66,12 @@ var timestampToString = map[Timestamp]string{
 	HW:   "hardware",
 	HWRX: "hardware_rx",
 }
+
+// ErrNoTimestamp is returned when no timestamp is found in the socket control message
+var ErrNoTimestamp = errors.New("failed to find timestamp in socket control message")
+
+// ErrNoTimestampForMulticastPkt is returned when no timestamp is found in the socket control message and destination address is multicast
+var ErrNoTimestampForMulticastPkt = errors.New("failed to find timestamp in socket control message (multicast packet)")
 
 // MarshalText timestamp to byte slice
 func (t Timestamp) MarshalText() ([]byte, error) {
@@ -144,9 +150,7 @@ func ReadPacketWithRXTimestamp(connFd int) ([]byte, unix.Sockaddr, time.Time, er
 	oob := make([]byte, ControlSizeBytes)
 
 	bbuf, sa, t, err := ReadPacketWithRXTimestampBuf(connFd, buf, oob)
-	if errors.Is(err, ErrNoTimestamp) {
-		return buf[:bbuf], sa, t, err //nolint:nilnil
-	} else if err != nil {
+	if err != nil {
 		return nil, nil, time.Time{}, err
 	}
 	return buf[:bbuf], sa, t, nil
@@ -162,8 +166,12 @@ func ReadPacketWithRXTimestampBuf(connFd int, buf, oob []byte) (int, unix.Sockad
 
 	timestamp, err := socketControlMessageTimestamp(oob, boob)
 	if errors.Is(err, ErrNoTimestamp) {
-		return bbuf, saddr, timestamp, err //nolint:nilnil
-	} else if err != nil {
+		dst, dstErr := socketControlMessageDstAddr(oob, boob)
+		if dstErr == nil && dst.IsMulticast() {
+			return 0, nil, time.Time{}, ErrNoTimestampForMulticastPkt
+		}
+	}
+	if err != nil {
 		return 0, nil, time.Time{}, err
 	}
 	return bbuf, saddr, timestamp, nil

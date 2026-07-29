@@ -33,9 +33,6 @@ var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
 
 var timestamping = unix.SO_TIMESTAMPING_NEW
 
-// ErrNoTimestamp is returned when no timestamp is found in the socket control message
-var ErrNoTimestamp = errors.New("failed to find timestamp in socket control message")
-
 func init() {
 	// if kernel is older than 5, it doesn't support unix.SO_TIMESTAMPING_NEW
 	var uname unix.Utsname
@@ -297,6 +294,28 @@ func socketControlMessageDrops(b []byte, boob int) uint32 {
 		}
 	}
 	return drops
+}
+
+// socketControlMessageDstAddr parses SocketControlMessage Data to find the Destination Address
+func socketControlMessageDstAddr(b []byte, boob int) (net.IP, error) {
+	mlen := 0
+	for i := 0; i < boob; i += unix.CmsgSpace(mlen - unix.SizeofCmsghdr) {
+		h := (*unix.Cmsghdr)(unsafe.Pointer(&b[i]))
+		mlen = int(h.Len) //#nosec G115
+		if mlen == 0 || i+mlen > boob {
+			break
+		}
+		if h.Level == unix.IPPROTO_IPV6 && int(h.Type) == unix.IPV6_PKTINFO {
+			pktInfo6 := (*unix.Inet6Pktinfo)(unsafe.Pointer(&b[i+socketControlMessageHeaderOffset]))
+			return net.IP(pktInfo6.Addr[:]), nil
+		}
+
+		if h.Level == unix.IPPROTO_IP && int(h.Type) == unix.IP_PKTINFO {
+			pktInfo4 := (*unix.Inet4Pktinfo)(unsafe.Pointer(&b[i+socketControlMessageHeaderOffset]))
+			return net.IP(pktInfo4.Addr[:]), nil
+		}
+	}
+	return nil, fmt.Errorf("no destination address")
 }
 
 // socketControlMessageSeqIDTimestamp parses SocketControlMessage Data field into time.Time and returns it

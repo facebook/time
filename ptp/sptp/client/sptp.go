@@ -112,6 +112,9 @@ func (p *SPTP) initClients() error {
 			if err != nil {
 				return err
 			}
+			if err := ConfigPktInfo(econn.ConnFd()); err != nil {
+				log.Warningf("failed to configure pktinfo: %v", err)
+			}
 			// keep track of the event connections
 			p.eventConns = append(p.eventConns, econn)
 		} else {
@@ -179,6 +182,10 @@ func (p *SPTP) init() error {
 		if err != nil {
 			return fmt.Errorf("binding to %d: %w", ptp.PortEvent, err)
 		}
+		if err := ConfigPktInfo(eventConn.ConnFd()); err != nil {
+			log.Warningf("failed to configure pktinfo: %v", err)
+		}
+
 		p.eventConns = append(p.eventConns, eventConn)
 	}
 
@@ -352,17 +359,11 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 				oob := make([]byte, timestamp.ControlSizeBytes)
 				for {
 					bbuf, addr, rxtx, err := econn.ReadPacketWithRXTimestampBuf(buf, oob)
+					if errors.Is(err, timestamp.ErrNoTimestampForMulticastPkt) {
+						log.Warningf("received multicast packet (Pdelay_Req) without timestamp, skipping: %v", err)
+						continue
+					}
 					if err != nil {
-						// If we received packet data but failed to get a timestamp,
-						// check if it's a PDelay_Req we can safely skip.
-						// PDelay is optional monitoring — don't crash the daemon for it.
-						if errors.Is(err, timestamp.ErrNoTimestamp) {
-							if msgType, probeErr := ptp.ProbeMsgType(buf[:bbuf]); probeErr == nil && msgType == ptp.MessagePDelayReq {
-								ip := timestamp.SockaddrToAddr(addr)
-								log.Warningf("[%s] received Pdelay_Req without timestamp, skipping: %v", ip, err)
-								continue
-							}
-						}
 						doneChan <- err
 						return
 					}
