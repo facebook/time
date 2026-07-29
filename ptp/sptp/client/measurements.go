@@ -38,7 +38,8 @@ const (
 
 	// maxCorrectionField is the maximum acceptable CF value.
 	// CF above this indicates a broken Transparent Clock (see S483230).
-	maxCorrectionField = time.Second
+	// align with source/time/monitoring/detectors/ptp_client_correction_field.detector.cconf
+	maxCorrectionField = 10 * time.Second
 )
 
 // mData is a single measured raw data of GM to OC communication

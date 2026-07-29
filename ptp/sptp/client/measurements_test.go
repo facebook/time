@@ -500,13 +500,13 @@ func TestBadCFHigh(t *testing.T) {
 	require.Equal(t, 2*time.Millisecond, m.pathDelay)
 
 	// Valid delay, excessively large CF1 (broken TC) - should be filtered
-	m.lastData.c1 = 2 * time.Second
+	m.lastData.c1 = 2 * maxCorrectionField
 	m.delay(time.Millisecond)
 	require.Equal(t, 2*time.Millisecond, m.pathDelay)
 
 	// Reset CF1, test excessively large CF2 - should be filtered
 	m.lastData.c1 = 0
-	m.lastData.c2 = 2 * time.Second
+	m.lastData.c2 = 2 * maxCorrectionField
 	m.delay(time.Millisecond)
 	require.Equal(t, 2*time.Millisecond, m.pathDelay)
 
