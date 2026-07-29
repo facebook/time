@@ -189,17 +189,21 @@ int fbclock_clockdata_load_data(
   return FBCLOCK_E_NO_ERROR;
 }
 
-// Reads one anchor section under its seqlock, retrying on an uninitialized or
-// torn read. Shared by the primary and realtime loaders below.
+// Reads one anchor section under its seqlock, retrying on torn reads. Primary
+// reads also retry uninitialized data for cold-start compatibility.
 static int fbclock_section_load(
     fbclock_shmsection* section,
-    fbclock_clockdata_v2* data) {
+    fbclock_clockdata_v2* data,
+    int fail_fast_if_uninitialized) {
   if (section == NULL || data == NULL) {
     return FBCLOCK_E_NO_DATA;
   }
   for (int i = 0; i < FBCLOCK_MAX_READ_TRIES; i++) {
     uint64_t seq = atomic_load(&section->seq);
     if (!seq) { // 0 value means uninitialized
+      if (fail_fast_if_uninitialized) {
+        return FBCLOCK_E_NO_DATA;
+      }
       usleep(10);
       __sync_synchronize();
       continue;
@@ -227,7 +231,7 @@ int fbclock_clockdata_load_data_v2(
   if (shmp == NULL) {
     return FBCLOCK_E_NO_DATA;
   }
-  return fbclock_section_load(&shmp->primary, data);
+  return fbclock_section_load(&shmp->primary, data, 0);
 }
 
 int fbclock_clockdata_load_data_realtime(
@@ -236,7 +240,7 @@ int fbclock_clockdata_load_data_realtime(
   if (shmp == NULL) {
     return FBCLOCK_E_NO_DATA;
   }
-  return fbclock_section_load(&shmp->realtime, data);
+  return fbclock_section_load(&shmp->realtime, data, 1);
 }
 
 static inline int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
@@ -292,10 +296,28 @@ static int fbclock_read_ptp_offset_extended(int fd, struct phc_time_res* res) {
   return 0;
 }
 
+static void fbclock_close_fds(fbclock_lib* lib) {
+  if (lib == NULL) {
+    return;
+  }
+  if (lib->dev_fd >= 0) {
+    close(lib->dev_fd);
+    lib->dev_fd = -1;
+  }
+  if (lib->shm_fd >= 0) {
+    close(lib->shm_fd);
+    lib->shm_fd = -1;
+  }
+}
+
 int fbclock_init_with_options(
     fbclock_lib* lib,
     const char* shm_path,
     const fbclock_options* options) {
+  lib->dev_fd = -1;
+  lib->shm_fd = -1;
+  lib->shmp = NULL;
+  lib->shmp_v2 = NULL;
   lib->ptp_path = FBCLOCK_PTPPATH;
   lib->max_wou_ns =
       (options != NULL) ? options->max_wou_ns : FBCLOCK_MAX_WOU_NS_UNSET;
@@ -333,6 +355,7 @@ int fbclock_init_with_options(
     fbclock_shmdata_v2* shmp = mmap(
         NULL, FBCLOCK_SHMDATA_V2_SIZE, PROT_READ, MAP_SHARED, lib->shm_fd, 0);
     if (shmp == MAP_FAILED) {
+      fbclock_close_fds(lib);
       return FBCLOCK_E_SHMEM_MAP_FAILED;
     }
     lib->shmp_v2 = shmp;
@@ -341,6 +364,7 @@ int fbclock_init_with_options(
     fbclock_shmdata* shmp =
         mmap(NULL, FBCLOCK_SHMDATA_SIZE, PROT_READ, MAP_SHARED, lib->shm_fd, 0);
     if (shmp == MAP_FAILED) {
+      fbclock_close_fds(lib);
       return FBCLOCK_E_SHMEM_MAP_FAILED;
     }
     lib->shmp = shmp;
@@ -360,8 +384,7 @@ int fbclock_is_ptp_host(void) {
 int fbclock_destroy(fbclock_lib* lib) {
   munmap(lib->shmp, FBCLOCK_SHMDATA_SIZE);
   munmap(lib->shmp_v2, FBCLOCK_SHMDATA_V2_SIZE);
-  close(lib->dev_fd);
-  close(lib->shm_fd);
+  fbclock_close_fds(lib);
   return FBCLOCK_E_NO_ERROR;
   // we don't want to unlink it, others might still use it
 }
@@ -624,7 +647,10 @@ static int fbclock_gettime_past_tz_v2(
   // (older hosts) we use it directly; otherwise the primary is MONOTONIC_RAW
   // and the daemon publishes a dedicated REALTIME section we read instead.
   fbclock_clockdata_v2 state = {};
-  int rcode = fbclock_clockdata_load_data_v2(lib->shmp_v2, &state);
+  if (lib->shmp_v2 == NULL) {
+    return FBCLOCK_E_NO_DATA;
+  }
+  int rcode = fbclock_section_load(&lib->shmp_v2->primary, &state, 1);
   if (rcode != FBCLOCK_E_NO_ERROR) {
     return rcode;
   }

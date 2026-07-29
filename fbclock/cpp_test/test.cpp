@@ -16,6 +16,7 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <cmath>
 #include <future>
@@ -237,6 +238,46 @@ TEST(fbclockTest, test_concurrent_v2) {
   ASSERT_EQ(err, 0);
   munmap(shmp, FBCLOCK_SHMDATA_V2_SIZE);
   remove(test_shm);
+}
+
+TEST(fbclockTest, test_uninitialized_realtime_section_returns_no_data) {
+  fbclock_shmdata_v2 shmp = {};
+  atomic_store(&shmp.realtime.seq, 0);
+  fbclock_clockdata_v2 data = {};
+
+  EXPECT_EQ(
+      fbclock_clockdata_load_data_realtime(&shmp, &data), FBCLOCK_E_NO_DATA);
+}
+
+TEST(fbclockTest, test_uninitialized_primary_section_returns_crc_mismatch) {
+  fbclock_shmdata_v2 shmp = {};
+  atomic_store(&shmp.primary.seq, 0);
+  fbclock_clockdata_v2 data = {};
+
+  EXPECT_EQ(
+      fbclock_clockdata_load_data_v2(&shmp, &data), FBCLOCK_E_CRC_MISMATCH);
+}
+
+TEST(fbclockTest, test_gettime_past_uninitialized_primary_returns_no_data) {
+  fbclock_shmdata_v2 shmp = {};
+  atomic_store(&shmp.primary.seq, 0);
+  fbclock_lib lib = {};
+  lib.shmp_v2 = &shmp;
+  fbclock_truetime truetime = {};
+
+  EXPECT_EQ(fbclock_gettime_past(&lib, 0, &truetime), FBCLOCK_E_NO_DATA);
+}
+
+TEST(fbclockTest, test_failed_init_leaves_fds_negative_and_destroy_safe) {
+  fbclock_lib lib;
+  memset(&lib, 0xFF, sizeof(lib));
+  int err = fbclock_init(&lib, "/nonexistent/fbclock_shm_v2");
+  ASSERT_NE(err, FBCLOCK_E_NO_ERROR);
+  EXPECT_EQ(lib.dev_fd, -1);
+  EXPECT_EQ(lib.shm_fd, -1);
+  EXPECT_EQ(lib.shmp, nullptr);
+  EXPECT_EQ(lib.shmp_v2, nullptr);
+  EXPECT_EQ(fbclock_destroy(&lib), FBCLOCK_E_NO_ERROR);
 }
 
 TEST(fbclockTest, test_window_of_uncertainty) {
