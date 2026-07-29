@@ -124,9 +124,9 @@ func TestJSONStatsToMap(t *testing.T) {
 	expectedMap["workers"] = 5
 	expectedMap["readError"] = 6
 	expectedMap["announce"] = 7
-	expectedMap["nts.auth_ok"] = 8
-	expectedMap["nts.auth_failed"] = 9
-	expectedMap["nts.cookie_open_failed"] = 10
+	expectedMap["nts_auth_ok"] = 8
+	expectedMap["nts_auth_failed"] = 9
+	expectedMap["nts_cookie_open_failed"] = 10
 
 	require.Equal(t, expectedMap, result)
 }
