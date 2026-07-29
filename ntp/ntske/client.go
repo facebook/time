@@ -58,6 +58,10 @@ type HandshakeResult struct {
 	// via the RFC 8915 exporter (C2S signs requests, S2C verifies responses).
 	C2S []byte
 	S2C []byte
+	// NTPServer is the NTPv4 server from a Server Negotiation record, or "".
+	NTPServer string
+	// NTPPort is the NTPv4 port from a Port Negotiation record, or 0.
+	NTPPort uint16
 }
 
 // ClientTLSConfig builds a TLS 1.3 client config for NTS-KE. When caFile is
@@ -166,6 +170,8 @@ func (c *Client) interpret(records []Record) (*HandshakeResult, error) {
 		res          HandshakeResult
 		sawNextProto bool
 		sawAEAD      bool
+		sawServer    bool
+		sawPort      bool
 	)
 	for _, r := range records {
 		switch r.Type {
@@ -199,6 +205,28 @@ func (c *Client) interpret(records []Record) (*HandshakeResult, error) {
 			res.Cookies = append(res.Cookies, r.Body)
 		case RecordCompliant128GCMExport:
 			res.CompliantExport = true
+		case RecordServerNegotiation:
+			if sawServer {
+				return nil, errors.New("multiple Server Negotiation records")
+			}
+			if len(r.Body) == 0 {
+				return nil, errors.New("empty Server Negotiation record")
+			}
+			res.NTPServer = string(r.Body)
+			sawServer = true
+		case RecordPortNegotiation:
+			if sawPort {
+				return nil, errors.New("multiple Port Negotiation records")
+			}
+			ports, err := ParseUint16s(r.Body)
+			if err != nil {
+				return nil, fmt.Errorf("malformed Port Negotiation body: %w", err)
+			}
+			if len(ports) == 0 {
+				return nil, errors.New("empty Port Negotiation record")
+			}
+			res.NTPPort = ports[0]
+			sawPort = true
 		}
 	}
 
