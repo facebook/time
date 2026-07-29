@@ -70,6 +70,27 @@ func TestJSONStatsReadError(t *testing.T) {
 	require.Equal(t, int64(1), stats.readError)
 }
 
+func TestJSONStatsNTSAuthOK(t *testing.T) {
+	stats := JSONStats{}
+
+	stats.IncNTSAuthOK()
+	require.Equal(t, int64(1), stats.ntsAuthOK)
+}
+
+func TestJSONStatsNTSAuthFailed(t *testing.T) {
+	stats := JSONStats{}
+
+	stats.IncNTSAuthFailed()
+	require.Equal(t, int64(1), stats.ntsAuthFailed)
+}
+
+func TestJSONStatsNTSCookieOpenFailed(t *testing.T) {
+	stats := JSONStats{}
+
+	stats.IncNTSCookieOpenFailed()
+	require.Equal(t, int64(1), stats.ntsCookieOpenFailed)
+}
+
 func TestJSONStatsAnnounce(t *testing.T) {
 	stats := JSONStats{}
 
@@ -82,13 +103,16 @@ func TestJSONStatsAnnounce(t *testing.T) {
 
 func TestJSONStatsToMap(t *testing.T) {
 	j := JSONStats{
-		invalidFormat: 1,
-		requests:      2,
-		responses:     3,
-		listeners:     4,
-		workers:       5,
-		readError:     6,
-		announce:      7,
+		invalidFormat:       1,
+		requests:            2,
+		responses:           3,
+		listeners:           4,
+		workers:             5,
+		readError:           6,
+		announce:            7,
+		ntsAuthOK:           8,
+		ntsAuthFailed:       9,
+		ntsCookieOpenFailed: 10,
 	}
 	result := j.toMap()
 
@@ -100,6 +124,9 @@ func TestJSONStatsToMap(t *testing.T) {
 	expectedMap["workers"] = 5
 	expectedMap["readError"] = 6
 	expectedMap["announce"] = 7
+	expectedMap["nts.auth_ok"] = 8
+	expectedMap["nts.auth_failed"] = 9
+	expectedMap["nts.cookie_open_failed"] = 10
 
 	require.Equal(t, expectedMap, result)
 }

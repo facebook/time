@@ -38,6 +38,12 @@ type Stats interface {
 	IncWorkers()
 	// IncReadError atomically add 1 to the counter
 	IncReadError()
+	// IncNTSAuthOK atomically add 1 to the counter
+	IncNTSAuthOK()
+	// IncNTSAuthFailed atomically add 1 to the counter
+	IncNTSAuthFailed()
+	// IncNTSCookieOpenFailed atomically add 1 to the counter
+	IncNTSCookieOpenFailed()
 
 	// DecListeners atomically removes 1 from the counter
 	DecListeners()

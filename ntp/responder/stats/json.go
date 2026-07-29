@@ -35,13 +35,16 @@ import (
 // This is a passive implementation. Only "Start" needs to be called
 type JSONStats struct {
 	// keep these aligned to 64-bit for sync/atomic
-	invalidFormat int64
-	requests      int64
-	responses     int64
-	listeners     int64
-	workers       int64
-	readError     int64
-	announce      int64
+	invalidFormat       int64
+	requests            int64
+	responses           int64
+	listeners           int64
+	workers             int64
+	readError           int64
+	announce            int64
+	ntsAuthOK           int64
+	ntsAuthFailed       int64
+	ntsCookieOpenFailed int64
 }
 
 // toMap converts struct to a map
@@ -55,6 +58,9 @@ func (j *JSONStats) toMap() (export map[string]int64) {
 	export["workers"] = j.workers
 	export["readError"] = j.readError
 	export["announce"] = j.announce
+	export["nts.auth_ok"] = j.ntsAuthOK
+	export["nts.auth_failed"] = j.ntsAuthFailed
+	export["nts.cookie_open_failed"] = j.ntsCookieOpenFailed
 
 	return export
 }
@@ -111,6 +117,21 @@ func (j *JSONStats) IncWorkers() {
 // IncReadError atomically add 1 to the counter
 func (j *JSONStats) IncReadError() {
 	atomic.AddInt64(&j.readError, 1)
+}
+
+// IncNTSAuthOK atomically add 1 to the counter
+func (j *JSONStats) IncNTSAuthOK() {
+	atomic.AddInt64(&j.ntsAuthOK, 1)
+}
+
+// IncNTSAuthFailed atomically add 1 to the counter
+func (j *JSONStats) IncNTSAuthFailed() {
+	atomic.AddInt64(&j.ntsAuthFailed, 1)
+}
+
+// IncNTSCookieOpenFailed atomically add 1 to the counter
+func (j *JSONStats) IncNTSCookieOpenFailed() {
+	atomic.AddInt64(&j.ntsCookieOpenFailed, 1)
 }
 
 // DecListeners atomically removes 1 from the counter
