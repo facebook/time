@@ -210,6 +210,58 @@ func TestClientInterpret(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, res.CompliantExport)
 	})
+	t.Run("server and port negotiation captured", func(t *testing.T) {
+		wantServer, wantPort := "ntp.example", uint16(4460)
+		res, err := c.interpret([]Record{
+			NewNextProtocol(NextProtocolNTPv4),
+			NewAEADAlgorithm(uint16(protocol.AEADAES128GCMSIV)),
+			NewServerNegotiation(wantServer),
+			NewPortNegotiation(wantPort),
+			cookie(1),
+		})
+		require.NoError(t, err)
+		require.Equal(t, wantServer, res.NTPServer)
+		require.Equal(t, wantPort, res.NTPPort)
+	})
+	t.Run("empty server negotiation rejected", func(t *testing.T) {
+		_, err := c.interpret([]Record{
+			NewNextProtocol(NextProtocolNTPv4),
+			NewAEADAlgorithm(uint16(protocol.AEADAES128GCMSIV)),
+			{Type: RecordServerNegotiation}, // present but empty body
+			cookie(1),
+		})
+		require.Error(t, err)
+	})
+	t.Run("duplicate server negotiation rejected", func(t *testing.T) {
+		_, err := c.interpret([]Record{
+			NewNextProtocol(NextProtocolNTPv4),
+			NewAEADAlgorithm(uint16(protocol.AEADAES128GCMSIV)),
+			NewServerNegotiation("ntp1.example"),
+			NewServerNegotiation("ntp2.example"),
+			cookie(1),
+		})
+		require.Error(t, err)
+	})
+	t.Run("duplicate port negotiation rejected", func(t *testing.T) {
+		_, err := c.interpret([]Record{
+			NewNextProtocol(NextProtocolNTPv4),
+			NewAEADAlgorithm(uint16(protocol.AEADAES128GCMSIV)),
+			NewPortNegotiation(4460),
+			NewPortNegotiation(4461),
+			cookie(1),
+		})
+		require.Error(t, err)
+	})
+	t.Run("no server or port negotiation", func(t *testing.T) {
+		res, err := c.interpret([]Record{
+			NewNextProtocol(NextProtocolNTPv4),
+			NewAEADAlgorithm(uint16(protocol.AEADAES128GCMSIV)),
+			cookie(1),
+		})
+		require.NoError(t, err)
+		require.Empty(t, res.NTPServer)
+		require.Zero(t, res.NTPPort)
+	})
 	t.Run("server error record", func(t *testing.T) {
 		_, err := c.interpret([]Record{NewError(1)})
 		require.Error(t, err)
