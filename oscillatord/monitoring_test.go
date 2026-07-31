@@ -35,7 +35,7 @@ func TestOscillatordRead(t *testing.T) {
 		_, err := server.Read(b)
 		require.Nil(t, err)
 		// write response
-		data := `{ "oscillator": { "model": "sa3x", "fine_ctrl": 0, "coarse_ctrl": 0, "lock": false, "temperature": 45.944000000000003 }, "gnss": { "fix": 5, "fixOk": true, "antenna_power": 1, "antenna_status": 4, "lsChange": 0, "leap_seconds": 18, "satellites_count": 10, "time_accuracy": 13 }, "clock": { "class": "Holdover", "offset": -265095 } }`
+		data := `{ "oscillator": { "model": "sa3x", "fw_version": "V1.6.5.0.669A7202", "fine_ctrl": 0, "coarse_ctrl": 0, "lock": false, "temperature": 45.944000000000003 }, "gnss": { "fix": 5, "fixOk": true, "antenna_power": 1, "antenna_status": 4, "lsChange": 0, "leap_seconds": 18, "satellites_count": 10, "time_accuracy": 13 }, "clock": { "class": "Holdover", "offset": -265095 } }`
 		_, err = server.Write([]byte(data))
 		require.Nil(t, err)
 	}()
@@ -44,6 +44,7 @@ func TestOscillatordRead(t *testing.T) {
 	want := &Status{
 		Oscillator: Oscillator{
 			Model:       "sa3x",
+			FwVersion:   "V1.6.5.0.669A7202",
 			FineCtrl:    0,
 			CoarseCtrl:  0,
 			Lock:        false,
@@ -184,10 +185,11 @@ func TestClockClassUnmarshalText(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	expected := `{"ptp.timecard.clock.class":7,"ptp.timecard.clock.offset_ns":-265095,"ptp.timecard.gnss.antenna_power":1,"ptp.timecard.gnss.antenna_status":4,"ptp.timecard.gnss.fix_num":5,"ptp.timecard.gnss.fix_ok":1,"ptp.timecard.gnss.leap_second_change":0,"ptp.timecard.gnss.leap_seconds":18,"ptp.timecard.gnss.satellites_count":10,"ptp.timecard.gnss.time_accuracy_ns":13,"ptp.timecard.oscillator.coarse_ctrl":42,"ptp.timecard.oscillator.fine_ctrl":4242,"ptp.timecard.oscillator.lock":0,"ptp.timecard.oscillator.temperature":45.944}`
+	expected := `{"ptp.timecard.clock.class":7,"ptp.timecard.clock.offset_ns":-265095,"ptp.timecard.gnss.antenna_power":1,"ptp.timecard.gnss.antenna_status":4,"ptp.timecard.gnss.fix_num":5,"ptp.timecard.gnss.fix_ok":1,"ptp.timecard.gnss.leap_second_change":0,"ptp.timecard.gnss.leap_seconds":18,"ptp.timecard.gnss.satellites_count":10,"ptp.timecard.gnss.time_accuracy_ns":13,"ptp.timecard.oscillator.coarse_ctrl":42,"ptp.timecard.oscillator.fine_ctrl":4242,"ptp.timecard.oscillator.fw_version":10605,"ptp.timecard.oscillator.lock":0,"ptp.timecard.oscillator.temperature":45.944}`
 	s := &Status{
 		Oscillator: Oscillator{
 			Model:       "sa5x",
+			FwVersion:   "V1.6.5.0.669A7202",
 			FineCtrl:    4242,
 			CoarseCtrl:  42,
 			Lock:        false,
@@ -212,6 +214,27 @@ func TestJSON(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, expected, string(j))
+}
+
+func TestFwVersionToInt(t *testing.T) {
+	tests := []struct {
+		version string
+		want    int64
+	}{
+		{"V1.6.5.0.669A7202", 10605},
+		{"V1.1.30.0.635AC374", 10130},
+		{"V1.6.5", 10605},
+		{"V0.0.0", 0},
+		{"V1.6", 0},
+		{"v1.6.5.0.669A7202", 0},
+		{"garbage", 0},
+		{"", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.version, func(t *testing.T) {
+			require.Equal(t, tt.want, fwVersionToInt(tt.version))
+		})
+	}
 }
 
 func TestBool2int(t *testing.T) {

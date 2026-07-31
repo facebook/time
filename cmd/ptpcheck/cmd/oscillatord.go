@@ -45,6 +45,7 @@ func init() {
 func printOscillatord(status *oscillatord.Status) {
 	fmt.Println("Oscillator:")
 	fmt.Printf("\tmodel: %s\n", status.Oscillator.Model)
+	fmt.Printf("\tfw_version: %s\n", status.Oscillator.FwVersion)
 	fmt.Printf("\tfine_ctrl: %d\n", status.Oscillator.FineCtrl)
 	fmt.Printf("\tcoarse_ctrl: %d\n", status.Oscillator.CoarseCtrl)
 	fmt.Printf("\tlock: %v\n", status.Oscillator.Lock)

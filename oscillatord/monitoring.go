@@ -207,6 +207,7 @@ func (c ClockClass) String() string {
 // Oscillator describes structure that oscillatord returns for oscillator
 type Oscillator struct {
 	Model       string  `json:"model"`
+	FwVersion   string  `json:"fw_version"`
 	FineCtrl    int     `json:"fine_ctrl"`
 	CoarseCtrl  int     `json:"coarse_ctrl"`
 	Lock        bool    `json:"lock"`
@@ -249,6 +250,7 @@ func (s *Status) MonitoringJSON(prefix string) ([]byte, error) {
 		fmt.Sprintf("%soscillator.fine_ctrl", prefix):    int64(s.Oscillator.FineCtrl),
 		fmt.Sprintf("%soscillator.coarse_ctrl", prefix):  int64(s.Oscillator.CoarseCtrl),
 		fmt.Sprintf("%soscillator.lock", prefix):         bool2int(s.Oscillator.Lock),
+		fmt.Sprintf("%soscillator.fw_version", prefix):   fwVersionToInt(s.Oscillator.FwVersion),
 		fmt.Sprintf("%sgnss.fix_num", prefix):            int64(s.GNSS.Fix),
 		fmt.Sprintf("%sgnss.fix_ok", prefix):             bool2int(s.GNSS.FixOK),
 		fmt.Sprintf("%sgnss.antenna_power", prefix):      int64(s.GNSS.AntennaPower),
@@ -268,6 +270,20 @@ func bool2int(b bool) int64 {
 		return 1
 	}
 	return 0
+}
+
+// fwVersionToInt encodes an SA5x firmware version as major*10000 + minor*100 +
+// patch, e.g. "V1.6.5.0.669A7202" -> 10605.
+//
+// The version has the format Vx.x.xx.0.XXXXXX, where the trailing ".0" is a
+// constant and XXXXXX is a build/commit id (see time/sa53/protocol). Both are
+// dropped, and each remaining field is assumed to be < 100.
+func fwVersionToInt(version string) int64 {
+	var major, minor, patch int
+	if n, _ := fmt.Sscanf(version, "V%d.%d.%d", &major, &minor, &patch); n != 3 {
+		return 0
+	}
+	return int64(major*10000 + minor*100 + patch)
 }
 
 // ReadStatus talks to oscillatord via monitoring port connection and reads reported Status
