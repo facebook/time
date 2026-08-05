@@ -28,8 +28,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/facebook/time/ntp/ntske"
@@ -45,9 +47,12 @@ func main() {
 	timeout := flag.Duration("timeout", 10*time.Second, "overall timeout for the whole run (KE handshake + NTPv4)")
 	flag.Parse()
 
+	// Route slog at debug level so the [ntp] trace lines are printed.
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
+
 	tlsConf, err := ntske.ClientTLSConfig(*caFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ke] FAIL: %v\n", err)
+		slog.Error("[ke] FAIL", "err", err)
 		os.Exit(1)
 	}
 
@@ -57,7 +62,7 @@ func main() {
 	client := &ntske.Client{RequestCompliantExport: true, Timeout: *timeout}
 	res, err := client.Handshake(ctx, *addr, tlsConf)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ke] FAIL: %v\n", err)
+		slog.Error("[ke] FAIL", "err", err)
 		os.Exit(1)
 	}
 	fmt.Printf("[ke] PASS: next-proto=%s aead=%d cookies=%d\n",
@@ -70,7 +75,7 @@ func main() {
 	}
 
 	if err := runNTPv4(ctx, *addr, *ntpAddr, res); err != nil {
-		fmt.Fprintf(os.Stderr, "[ntp] FAIL: %v\n", err)
+		slog.Error("[ntp] FAIL", "err", err)
 		os.Exit(1)
 	}
 }
@@ -81,6 +86,13 @@ func runNTPv4(ctx context.Context, keAddr, ntpAddr string, res *ntske.HandshakeR
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("no time left after KE handshake: %w", err)
 	}
+	if ntpAddr == "" && res.NTPServer != "" {
+		port := "123"
+		if res.NTPPort != 0 {
+			port = strconv.Itoa(int(res.NTPPort))
+		}
+		ntpAddr = net.JoinHostPort(res.NTPServer, port)
+	}
 	if ntpAddr == "" {
 		host, _, err := net.SplitHostPort(keAddr)
 		if err != nil {
@@ -88,6 +100,8 @@ func runNTPv4(ctx context.Context, keAddr, ntpAddr string, res *ntske.HandshakeR
 		}
 		ntpAddr = net.JoinHostPort(host, "123")
 	}
+	slog.Debug("[ntp] target resolved",
+		"ke", keAddr, "ntp", ntpAddr, "ke_advertised_server", res.NTPServer, "ke_advertised_port", res.NTPPort)
 
 	if len(res.Cookies) == 0 {
 		return errors.New("KE handshake returned no cookies")
@@ -106,6 +120,8 @@ func runNTPv4(ctx context.Context, keAddr, ntpAddr string, res *ntske.HandshakeR
 	if err != nil {
 		return fmt.Errorf("building request: %w", err)
 	}
+	slog.Debug("[ntp] request built",
+		"bytes", len(reqBytes), "aead", res.AEAD, "cookies", len(res.Cookies), "cookie_len", len(res.Cookies[0]))
 
 	conn, err := net.Dial("udp", ntpAddr)
 	if err != nil {
@@ -115,15 +131,18 @@ func runNTPv4(ctx context.Context, keAddr, ntpAddr string, res *ntske.HandshakeR
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(deadline)
 	}
+	slog.Debug("[ntp] dialed", "local", conn.LocalAddr(), "remote", conn.RemoteAddr())
 
 	if _, err := conn.Write(reqBytes); err != nil {
 		return fmt.Errorf("send: %w", err)
 	}
+	slog.Debug("[ntp] request sent", "bytes", len(reqBytes))
 	buf := make([]byte, 1500)
 	n, err := conn.Read(buf)
 	if err != nil {
 		return fmt.Errorf("read: %w", err)
 	}
+	slog.Debug("[ntp] response received", "bytes", n)
 
 	_, fresh, err := nts.VerifyNTSResponse(buf[:n], protocol.AEADAlgorithm(res.AEAD), res.S2C, uid)
 	if err != nil {
