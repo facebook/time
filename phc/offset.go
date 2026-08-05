@@ -73,6 +73,19 @@ func SysoffFromPrecise(pre *PTPSysOffsetPrecise) SysoffResult {
 	}
 }
 
+// SysoffFromPrecise returns SysoffResult from *PTPSysOffsetPrecise . Code based on sysoff_precise from ptp4l sysoff.c
+func SysRToffFromPrecise(pre *PTPSysOffsetPrecise) SysoffResult {
+	tp := time.Unix(pre.Device.Sec, int64(pre.Device.Nsec))
+	tr := time.Unix(pre.Realtime.Sec, int64(pre.Realtime.Nsec))
+	return SysoffResult{
+		SysTime:    tr,
+		SysClockID: unix.CLOCK_REALTIME,
+		PHCTime:    tp,
+		Delay:      0, // They are measured at the same time
+		Offset:     tr.Sub(tp),
+	}
+}
+
 // SysoffEstimateBasic logic based on calculate_offset from ptp4l phc_ctl.c
 func SysoffEstimateBasic(ts1, rt, ts2 time.Time) SysoffResult {
 	interval := ts2.Sub(ts1)
@@ -139,6 +152,12 @@ func TimeAndOffsetFromDevice(device string, method TimeMethod) (SysoffResult, er
 			return SysoffResult{}, err
 		}
 		return SysoffFromPrecise(precise), nil
+	case MethodIoctlSysOffsetPreciseRealTimeClock:
+		precise, err := dev.ReadSysoffPrecise()
+		if err != nil {
+			return SysoffResult{}, err
+		}
+		return SysRToffFromPrecise(precise), nil
 	}
 	return SysoffResult{}, fmt.Errorf("unknown method to get PHC time %q", method)
 }

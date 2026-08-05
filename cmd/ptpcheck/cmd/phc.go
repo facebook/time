@@ -128,7 +128,7 @@ func tunePHC(device string, freq float64) error {
 }
 
 func printPHC(device string) error {
-	timeAndOffset, err := phc.TimeAndOffsetFromDevice(device, phc.MethodIoctlSysOffsetPrecise)
+	timeAndOffset, err := phc.TimeAndOffsetFromDevice(device, phc.MethodIoctlSysOffsetPreciseRealTimeClock)
 	if err != nil {
 		timeAndOffset, err = phc.TimeAndOffsetFromDevice(device, phc.MethodIoctlSysOffsetExtendedRealTimeClock)
 	}

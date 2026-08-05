@@ -36,6 +36,7 @@ const (
 	MethodIoctlSysOffsetExtended              TimeMethod = "ioctl_PTP_SYS_OFFSET_EXTENDED"
 	MethodIoctlSysOffsetPrecise               TimeMethod = "ioctl_PTP_SYS_OFFSET_PRECISE"
 	MethodIoctlSysOffsetExtendedRealTimeClock TimeMethod = "ioctl_PTP_SYS_OFFSET_EXTENDED_REALTIMECLOCK"
+	MethodIoctlSysOffsetPreciseRealTimeClock  TimeMethod = "ioctl_PTP_SYS_OFFSET_PRECISE_REALTIMECLOCK"
 )
 
 type (
@@ -102,6 +103,8 @@ func Time(iface string, method TimeMethod) (time.Time, error) {
 		tp := latest[1]
 		return time.Unix(tp.Sec, int64(tp.Nsec)), nil
 	case MethodIoctlSysOffsetPrecise:
+		fallthrough
+	case MethodIoctlSysOffsetPreciseRealTimeClock:
 		precise, err := dev.ReadSysoffPrecise()
 		if err != nil {
 			return time.Time{}, err
