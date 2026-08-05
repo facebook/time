@@ -30,7 +30,7 @@ import (
 )
 
 /*
-Cookie keystore (RFC 8915 §6).
+Cookie keystore (RFC 8915 section 6).
 An NTS cookie is server-opaque state: the client stores it verbatim and echoes
 it back, and only the server can open it. It carries the two session keys
 (C2S and S2C) negotiated during the NTS-KE handshake so the server does not
@@ -46,7 +46,7 @@ Wire format (chrony-compatible; see chrony's nts_ke_server.c):
 	|                                                               |
 	+---------------------------------------------------------------+
 	|                                                               |
-	~          AES-SIV ciphertext  =  tag(16) ‖ (C2S ‖ S2C)         ~
+	~          AES-SIV ciphertext  =  tag(16) || (C2S || S2C)       ~
 	|                                                               |
 	+---------------------------------------------------------------+
 - Key ID: big-endian identifier of the master key that sealed this cookie.
@@ -58,8 +58,8 @@ Wire format (chrony-compatible; see chrony's nts_ke_server.c):
   we fold this random nonce into the SIV as associated data, so identical key
   material produces distinct cookies. This matches chrony, which passes the
   nonce as the SIV nonce component.
-- Ciphertext: tink's AES-SIV output — the 16-octet synthetic IV (tag) followed
-  by the encrypted C2S ‖ S2C key material.
+- Ciphertext: tink's AES-SIV output - the 16-octet synthetic IV (tag) followed
+  by the encrypted C2S || S2C key material.
 The *session* AEAD algorithm (the one the client will use for NTP, negotiated
 via NTS-KE) is NOT stored in the cookie. It is inferred from the total cookie
 length, because the C2S/S2C key length is fixed per algorithm:
@@ -224,10 +224,34 @@ func (ks *InMemoryKeystore) Rotate() error {
 	return nil
 }
 
-// SealCookie encrypts c2s ‖ s2c under the current master key. c2s and s2c must
-// both have the key length required by aeadID.
+// SealCookie encrypts c2s || s2c under the current master key via the shared
+// envelope (see sealEnvelope). c2s and s2c must both have the key length required
+// by aeadID.
 func (ks *InMemoryKeystore) SealCookie(aeadID protocol.AEADAlgorithm, c2s, s2c []byte) ([]byte, error) {
-	// validate aeadID and keyLen
+	ks.mu.RLock()
+	keyID := ks.current
+	master := ks.ring[keyID]
+	ks.mu.RUnlock()
+	return sealEnvelope(ks.rand, keyID, master, aeadID, c2s, s2c)
+}
+
+// OpenCookie decrypts a cookie via the shared envelope (see openEnvelope),
+// resolving the master by Key ID from the ring.
+func (ks *InMemoryKeystore) OpenCookie(cookie []byte) (protocol.AEADAlgorithm, []byte, []byte, error) {
+	return openEnvelope(cookie, func(keyID uint32) ([]byte, error) {
+		ks.mu.RLock()
+		master, ok := ks.ring[keyID]
+		ks.mu.RUnlock()
+		if !ok {
+			return nil, fmt.Errorf("%w: keyID=%d", ErrUnknownKeyID, keyID)
+		}
+		return master, nil
+	})
+}
+
+// sealEnvelope seals c2s || s2c under sealingKey and assembles the cookie
+// [Key ID][Nonce][AES-SIV ciphertext]; nonce bytes are read from rnd.
+func sealEnvelope(rnd io.Reader, keyID uint32, sealingKey []byte, aeadID protocol.AEADAlgorithm, c2s, s2c []byte) ([]byte, error) {
 	keyLen, err := aeadIDToKeyLen(aeadID)
 	if err != nil {
 		return nil, err
@@ -237,21 +261,16 @@ func (ks *InMemoryKeystore) SealCookie(aeadID protocol.AEADAlgorithm, c2s, s2c [
 			ErrKeyLength, aeadID, keyLen, len(c2s), len(s2c))
 	}
 	nonce := make([]byte, cookieNonceLen)
-	if _, err := io.ReadFull(ks.rand, nonce); err != nil {
+	if _, err := io.ReadFull(rnd, nonce); err != nil {
 		return nil, fmt.Errorf("ntske: read nonce: %w", err)
 	}
-	ks.mu.RLock()
-	keyID := ks.current
-	master := ks.ring[keyID]
-	ks.mu.RUnlock()
-	aead, err := nts.NewAEAD(masterAEADID, master)
+	aead, err := nts.NewAEAD(masterAEADID, sealingKey)
 	if err != nil {
 		return nil, fmt.Errorf("ntske: master aead: %w", err)
 	}
 	plaintext := make([]byte, 0, 2*keyLen)
 	plaintext = append(plaintext, c2s...)
 	plaintext = append(plaintext, s2c...)
-
 	_, ct, err := aead.Seal(nonce, plaintext)
 	if err != nil {
 		return nil, fmt.Errorf("ntske: seal cookie: %w", err)
@@ -263,9 +282,9 @@ func (ks *InMemoryKeystore) SealCookie(aeadID protocol.AEADAlgorithm, c2s, s2c [
 	return out, nil
 }
 
-// OpenCookie decrypts a cookie and returns the negotiated session aeadID with
-// the C2S and S2C keys.
-func (ks *InMemoryKeystore) OpenCookie(cookie []byte) (protocol.AEADAlgorithm, []byte, []byte, error) {
+// openEnvelope validates a cookie, resolves its sealing key via sealingKeyFor,
+// and decrypts it, returning the session aeadID and the C2S/S2C keys.
+func openEnvelope(cookie []byte, sealingKeyFor func(keyID uint32) ([]byte, error)) (protocol.AEADAlgorithm, []byte, []byte, error) {
 	aeadID, err := CookieAEADID(cookie)
 	if err != nil {
 		return 0, nil, nil, err
@@ -275,15 +294,13 @@ func (ks *InMemoryKeystore) OpenCookie(cookie []byte) (protocol.AEADAlgorithm, [
 		return 0, nil, nil, err
 	}
 	keyID := binary.BigEndian.Uint32(cookie[0:cookieKeyIDLen])
+	sealingKey, err := sealingKeyFor(keyID)
+	if err != nil {
+		return 0, nil, nil, err
+	}
 	nonce := cookie[cookieKeyIDLen : cookieKeyIDLen+cookieNonceLen]
 	ct := cookie[cookieKeyIDLen+cookieNonceLen:]
-	ks.mu.RLock()
-	master, ok := ks.ring[keyID]
-	ks.mu.RUnlock()
-	if !ok {
-		return 0, nil, nil, fmt.Errorf("%w: keyID=%d", ErrUnknownKeyID, keyID)
-	}
-	aead, err := nts.NewAEAD(masterAEADID, master)
+	aead, err := nts.NewAEAD(masterAEADID, sealingKey)
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("ntske: master aead: %w", err)
 	}
@@ -295,9 +312,7 @@ func (ks *InMemoryKeystore) OpenCookie(cookie []byte) (protocol.AEADAlgorithm, [
 		return 0, nil, nil, fmt.Errorf("%w: decrypted %d octets, want %d",
 			ErrCookieMalformed, len(pt), 2*keyLen)
 	}
-	c2s := bytes.Clone(pt[:keyLen])
-	s2c := bytes.Clone(pt[keyLen:])
-	return aeadID, c2s, s2c, nil
+	return aeadID, bytes.Clone(pt[:keyLen]), bytes.Clone(pt[keyLen:]), nil
 }
 
 // CookieAEADID reports the negotiated session AEAD algorithm ID encoded by a
