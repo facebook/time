@@ -450,12 +450,12 @@ func ReqPDelay(clockID ClockIdentity, portID uint16, seq uint16) *PDelayReq {
 }
 
 // RespPDelay builds a Pdelay_Resp packet
-func RespPDelay(clockID ClockIdentity, portID uint16, seq uint16, reqReceiptTS Timestamp, reqPortID PortIdentity) *PDelayResp {
+func RespPDelay(clockID ClockIdentity, portID uint16, reqReceiptTS Timestamp, req *PDelayReq) *PDelayResp {
 	return &PDelayResp{
 		Header: Header{
 			SdoIDAndMsgType: NewSdoIDAndMsgType(MessagePDelayResp, 0),
 			Version:         Version,
-			SequenceID:      seq,
+			SequenceID:      req.SequenceID,
 			MessageLength:   headerSize + uint16(binary.Size(PDelayRespBody{})), //#nosec G115
 			FlagField:       FlagTwoStep,
 			SourcePortIdentity: PortIdentity{
@@ -466,29 +466,30 @@ func RespPDelay(clockID ClockIdentity, portID uint16, seq uint16, reqReceiptTS T
 		},
 		PDelayRespBody: PDelayRespBody{
 			RequestReceiptTimestamp: reqReceiptTS,
-			RequestingPortIdentity:  reqPortID,
+			RequestingPortIdentity:  req.SourcePortIdentity,
 		},
 	}
 }
 
 // RespFollowUpPDelay builds a Pdelay_Resp_Follow_Up packet
-func RespFollowUpPDelay(clockID ClockIdentity, portID uint16, seq uint16, respOriginTS Timestamp, reqPortID PortIdentity) *PDelayRespFollowUp {
+func RespFollowUpPDelay(clockID ClockIdentity, portID uint16, respOriginTS Timestamp, req *PDelayReq) *PDelayRespFollowUp {
 	return &PDelayRespFollowUp{
 		Header: Header{
 			SdoIDAndMsgType: NewSdoIDAndMsgType(MessagePDelayRespFollowUp, 0),
 			Version:         Version,
-			SequenceID:      seq,
+			SequenceID:      req.SequenceID,
 			MessageLength:   headerSize + uint16(binary.Size(PDelayRespFollowUpBody{})), //#nosec G115
 			FlagField:       0,
 			SourcePortIdentity: PortIdentity{
 				PortNumber:    portID,
 				ClockIdentity: clockID,
 			},
+			CorrectionField:    req.CorrectionField,
 			LogMessageInterval: 0x7f,
 		},
 		PDelayRespFollowUpBody: PDelayRespFollowUpBody{
 			ResponseOriginTimestamp: respOriginTS,
-			RequestingPortIdentity:  reqPortID,
+			RequestingPortIdentity:  req.SourcePortIdentity,
 		},
 	}
 }

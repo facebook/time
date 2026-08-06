@@ -267,12 +267,10 @@ func (p *SPTP) handlePDelayReq(econn UDPConnWithTS, buf []byte, addr unix.Sockad
 	}
 
 	seq := req.SequenceID
-	t2 := rxts
-
-	log.Debugf("[pdelay-responder] received Pdelay_Req seq=%d, T2=%v", seq, t2)
+	log.Debugf("[pdelay-responder] received Pdelay_Req seq=%d, T2=%v", seq, rxts)
 
 	// Build and send Pdelay_Resp with T2 (request receipt timestamp)
-	resp := ptp.RespPDelay(p.clockID, 1, seq, ptp.NewTimestamp(t2), req.SourcePortIdentity)
+	resp := ptp.RespPDelay(p.clockID, 1, ptp.NewTimestamp(rxts), req)
 	respBytes, err := ptp.Bytes(resp)
 	if err != nil {
 		return fmt.Errorf("marshaling Pdelay_Resp: %w", err)
@@ -286,7 +284,7 @@ func (p *SPTP) handlePDelayReq(econn UDPConnWithTS, buf []byte, addr unix.Sockad
 	log.Debugf("[pdelay-responder] sent Pdelay_Resp seq=%d, T3=%v", seq, t3)
 
 	// Build and send Pdelay_Resp_Follow_Up with T3 (response origin timestamp)
-	followUp := ptp.RespFollowUpPDelay(p.clockID, 1, seq, ptp.NewTimestamp(t3), req.SourcePortIdentity)
+	followUp := ptp.RespFollowUpPDelay(p.clockID, 1, ptp.NewTimestamp(t3), req)
 	followUpBytes, err := ptp.Bytes(followUp)
 	if err != nil {
 		return fmt.Errorf("marshaling Pdelay_Resp_Follow_Up: %w", err)

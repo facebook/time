@@ -536,16 +536,16 @@ func TestReqPDelayMarshalUnmarshal(t *testing.T) {
 }
 
 func TestRespPDelayMarshalUnmarshal(t *testing.T) {
+	reqClockID := ClockIdentity(0xfedcba9876543210)
+	reqPortID := uint16(2)
+	seq := uint16(42)
+	req := ReqPDelay(reqClockID, reqPortID, seq)
+
 	clockID := ClockIdentity(0x123456789abcdef0)
 	portID := uint16(1)
-	seq := uint16(42)
 	reqReceiptTS := NewTimestamp(time.Unix(1000, 500000))
-	reqPortID := PortIdentity{
-		ClockIdentity: ClockIdentity(0xfedcba9876543210),
-		PortNumber:    2,
-	}
 
-	resp := RespPDelay(clockID, portID, seq, reqReceiptTS, reqPortID)
+	resp := RespPDelay(clockID, portID, reqReceiptTS, req)
 	require.NotNil(t, resp)
 	require.Equal(t, uint16(54), resp.MessageLength)
 
@@ -561,7 +561,7 @@ func TestRespPDelayMarshalUnmarshal(t *testing.T) {
 	require.Equal(t, seq, decoded.SequenceID)
 	require.Equal(t, clockID, decoded.SourcePortIdentity.ClockIdentity)
 	require.Equal(t, portID, decoded.SourcePortIdentity.PortNumber)
-	require.Equal(t, reqPortID, decoded.RequestingPortIdentity)
+	require.Equal(t, req.SourcePortIdentity, decoded.RequestingPortIdentity)
 	require.Equal(t, FlagTwoStep, decoded.FlagField)
 	require.Equal(t, reqReceiptTS, decoded.RequestReceiptTimestamp)
 
@@ -571,16 +571,18 @@ func TestRespPDelayMarshalUnmarshal(t *testing.T) {
 }
 
 func TestRespFollowUpPDelayMarshalUnmarshal(t *testing.T) {
+	reqClockID := ClockIdentity(0xfedcba9876543210)
+	reqPortID := uint16(2)
+	seq := uint16(42)
+	req := ReqPDelay(reqClockID, reqPortID, seq)
+	cf := NewCorrection(968)
+	req.CorrectionField = cf
+
 	clockID := ClockIdentity(0x123456789abcdef0)
 	portID := uint16(1)
-	seq := uint16(42)
 	respOriginTS := NewTimestamp(time.Unix(1000, 1000000))
-	reqPortID := PortIdentity{
-		ClockIdentity: ClockIdentity(0xfedcba9876543210),
-		PortNumber:    2,
-	}
 
-	followUp := RespFollowUpPDelay(clockID, portID, seq, respOriginTS, reqPortID)
+	followUp := RespFollowUpPDelay(clockID, portID, respOriginTS, req)
 	require.NotNil(t, followUp)
 	require.Equal(t, uint16(54), followUp.MessageLength)
 
@@ -596,8 +598,9 @@ func TestRespFollowUpPDelayMarshalUnmarshal(t *testing.T) {
 	require.Equal(t, seq, decoded.SequenceID)
 	require.Equal(t, clockID, decoded.SourcePortIdentity.ClockIdentity)
 	require.Equal(t, portID, decoded.SourcePortIdentity.PortNumber)
-	require.Equal(t, reqPortID, decoded.RequestingPortIdentity)
+	require.Equal(t, req.SourcePortIdentity, decoded.RequestingPortIdentity)
 	require.Equal(t, respOriginTS, decoded.ResponseOriginTimestamp)
+	require.Equal(t, cf, decoded.CorrectionField)
 
 	pp, err := DecodePacket(b)
 	require.NoError(t, err)
