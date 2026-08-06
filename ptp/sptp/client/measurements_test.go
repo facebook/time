@@ -238,7 +238,7 @@ func TestMeasurementsPathDelayFilter(t *testing.T) {
 	require.Equal(t, want, got, "initial measurements check")
 
 	// now let's add more data so we see filtering work
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		seq++
 		if i%2 == 0 {
 			netDelay = 200 * time.Millisecond
