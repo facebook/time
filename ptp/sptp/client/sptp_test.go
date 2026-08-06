@@ -874,10 +874,12 @@ func TestHandlePDelayReqSuccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockGeneralConn := NewMockUDPConnNoTS(ctrl)
 
 	clockID := ptp.ClockIdentity(0x123456789abcdef0)
 	p := &SPTP{
 		clockID: clockID,
+		genConn: mockGeneralConn,
 	}
 
 	// Build a valid PDelayReq
@@ -892,8 +894,8 @@ func TestHandlePDelayReqSuccess(t *testing.T) {
 
 	// Expect Pdelay_Resp to be sent and return TX timestamp
 	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(txts, nil)
-	// Expect Pdelay_Resp_Follow_Up to be sent
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(time.Time{}, nil)
+	// Expect Pdelay_Resp_Follow_Up to be sent via general msg port
+	mockGeneralConn.EXPECT().WriteTo(gomock.Any(), addr).Return(0, nil)
 
 	err = p.handlePDelayReq(mockEventConn, reqBytes, addr, rxts)
 	require.NoError(t, err)
@@ -930,10 +932,12 @@ func TestHandlePDelayReqFollowUpSendError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockGeneralConn := NewMockUDPConnNoTS(ctrl)
 
 	clockID := ptp.ClockIdentity(0x123456789abcdef0)
 	p := &SPTP{
 		clockID: clockID,
+		genConn: mockGeneralConn,
 	}
 
 	// Build a valid PDelayReq
@@ -949,7 +953,7 @@ func TestHandlePDelayReqFollowUpSendError(t *testing.T) {
 	// Pdelay_Resp sent successfully
 	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(txts, nil)
 	// Pdelay_Resp_Follow_Up send fails
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(time.Time{}, fmt.Errorf("send error"))
+	mockGeneralConn.EXPECT().WriteTo(gomock.Any(), addr).Return(0, fmt.Errorf("send error"))
 
 	err = p.handlePDelayReq(mockEventConn, reqBytes, addr, rxts)
 	require.Error(t, err)

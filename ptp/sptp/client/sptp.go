@@ -290,7 +290,7 @@ func (p *SPTP) handlePDelayReq(econn UDPConnWithTS, buf []byte, addr unix.Sockad
 		return fmt.Errorf("marshaling Pdelay_Resp_Follow_Up: %w", err)
 	}
 
-	if _, err := econn.WriteToWithTS(followUpBytes, addr, seq); err != nil {
+	if _, err := p.genConn.WriteTo(followUpBytes, addr); err != nil {
 		return fmt.Errorf("sending Pdelay_Resp_Follow_Up: %w", err)
 	}
 
