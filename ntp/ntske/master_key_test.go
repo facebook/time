@@ -18,12 +18,20 @@ package ntske
 
 import (
 	"bytes"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// hexKeyFile writes key hex-encoded (as the Keychain secret is stored) and returns
+// the path.
+func hexKeyFile(t *testing.T, key []byte) string {
+	t.Helper()
+	return writeKeyFile(t, []byte(hex.EncodeToString(key)))
+}
 
 func writeKeyFile(t *testing.T, data []byte) string {
 	t.Helper()
@@ -32,21 +40,27 @@ func writeKeyFile(t *testing.T, data []byte) string {
 	return path
 }
 
-// a valid-length key file loads verbatim.
+// a hex-encoded key file decodes to the raw key.
 func TestLoadMasterKeyFromFileValid(t *testing.T) {
 	want := bytes.Repeat([]byte{0x2a}, masterKeyLen)
-	got, err := LoadMasterKeyFromFile(writeKeyFile(t, want))
+	got, err := LoadMasterKeyFromFile(hexKeyFile(t, want))
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }
 
-// bytes are read verbatim: a trailing newline is not stripped.
-func TestLoadMasterKeyFromFileVerbatim(t *testing.T) {
-	want := append(bytes.Repeat([]byte{0x2a}, masterKeyLen), '\n')
-	got, err := LoadMasterKeyFromFile(writeKeyFile(t, want))
+// surrounding whitespace (e.g. a trailing newline from secrets_tool) is trimmed
+// before decoding.
+func TestLoadMasterKeyFromFileTrimsWhitespace(t *testing.T) {
+	want := bytes.Repeat([]byte{0x2a}, masterKeyLen)
+	got, err := LoadMasterKeyFromFile(writeKeyFile(t, []byte(hex.EncodeToString(want)+"\n")))
 	require.NoError(t, err)
 	require.Equal(t, want, got)
-	require.Len(t, got, masterKeyLen+1)
+}
+
+// non-hex contents are rejected (fail closed).
+func TestLoadMasterKeyFromFileInvalidHex(t *testing.T) {
+	_, err := LoadMasterKeyFromFile(writeKeyFile(t, []byte("nothexZZ")))
+	require.Error(t, err)
 }
 
 // a missing file is a distinct not-exist error.
@@ -55,9 +69,9 @@ func TestLoadMasterKeyFromFileMissing(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
-// an under-length key is rejected (fail closed).
+// an under-length key (after decoding) is rejected (fail closed).
 func TestLoadMasterKeyFromFileTooShort(t *testing.T) {
-	_, err := LoadMasterKeyFromFile(writeKeyFile(t, bytes.Repeat([]byte{1}, masterKeyMinLength-1)))
+	_, err := LoadMasterKeyFromFile(hexKeyFile(t, bytes.Repeat([]byte{1}, masterKeyMinLength-1)))
 	require.ErrorIs(t, err, ErrMasterKeyTooShort)
 }
 
@@ -91,7 +105,7 @@ func TestNewKeystoreInMemoryFallback(t *testing.T) {
 
 // a master-key path selects the DerivedKeystore.
 func TestNewKeystoreDerived(t *testing.T) {
-	path := writeKeyFile(t, bytes.Repeat([]byte{0x2a}, masterKeyLen))
+	path := hexKeyFile(t, bytes.Repeat([]byte{0x2a}, masterKeyLen))
 	ks, err := NewKeystore(KeystoreConfig{MasterKeyPath: path})
 	require.NoError(t, err)
 	_, ok := ks.(*DerivedKeystore)

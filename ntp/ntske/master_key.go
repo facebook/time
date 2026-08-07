@@ -18,21 +18,29 @@ package ntske
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 )
 
-// LoadMasterKeyFromFile reads and length-validates the cookie master key. Bytes
-// are read verbatim (no trimming) so KE and NTP agree on the key; a read error or
-// under-length key is returned (fail closed) rather than starting with a bad key.
+// LoadMasterKeyFromFile reads the hex-encoded cookie master key and decodes it to
+// raw bytes. Surrounding whitespace (e.g. a trailing newline from secrets_tool) is
+// trimmed before decoding. A read error, malformed hex, or under-length key is
+// returned (fail closed) so a bad key never starts the server. KE and NTP decode
+// identically, so they agree on the raw key.
 func LoadMasterKeyFromFile(path string) ([]byte, error) {
-	master, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("ntske: read master key %q: %w", path, err)
 	}
+	master, err := hex.DecodeString(strings.TrimSpace(string(raw)))
+	if err != nil {
+		return nil, fmt.Errorf("ntske: decode hex master key %q: %w", path, err)
+	}
 	if len(master) < masterKeyMinLength {
-		return nil, fmt.Errorf("%w: file %q has %d octets, need >= %d",
+		return nil, fmt.Errorf("%w: file %q decodes to %d octets, need >= %d",
 			ErrMasterKeyTooShort, path, len(master), masterKeyMinLength)
 	}
 	return master, nil
