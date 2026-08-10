@@ -18,11 +18,20 @@ package stats
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	// Registers the profiling endpoints on http.DefaultServeMux, exactly as the
+	// ntpresponder binary's own blank import does. Without it the process the
+	// test runs in would not have the exposure the test is looking for.
+	_ "net/http/pprof" //nolint:gosec // G108 is the bug under test, reproduced on purpose
 
 	"github.com/stretchr/testify/require"
 )
@@ -49,6 +58,52 @@ func TestHandleRequest(t *testing.T) {
 	require.Equal(t, int64(42), result["requests"])
 	require.Equal(t, int64(10), result["responses"])
 	require.Equal(t, int64(0), result["invalidformat"])
+}
+
+func TestMonitoringPortDoesNotServePprof(t *testing.T) {
+	_, pprofPattern := http.DefaultServeMux.Handler(
+		httptest.NewRequest(http.MethodGet, "/debug/pprof/cmdline", nil),
+	)
+	require.NotEmpty(t, pprofPattern, "net/http/pprof is no longer linked, this test proves nothing")
+
+	j := &JSONStats{}
+	j.requests.Add(7)
+
+	port := freePort(t)
+	base := fmt.Sprintf("http://127.0.0.1:%d", port)
+	go j.Start(port)
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(base + "/")
+		if err != nil {
+			return false
+		}
+		return resp.Body.Close() == nil
+	}, 30*time.Second, 10*time.Millisecond, "monitoring server never came up on %s", base)
+
+	for _, path := range []string{"/", "/debug/pprof/", "/debug/pprof/cmdline", "/debug/pprof/symbol"} {
+		resp, err := http.Get(base + path)
+		require.NoError(t, err, path)
+		body, readErr := io.ReadAll(resp.Body)
+		require.NoError(t, readErr, path)
+		require.NoError(t, resp.Body.Close(), path)
+
+		require.Equal(t, http.StatusOK, resp.StatusCode, path)
+		require.Equal(t, "application/json", resp.Header.Get("Content-Type"), path)
+
+		var counters map[string]int64
+		require.NoError(t, json.Unmarshal(body, &counters), path)
+		require.Equal(t, int64(7), counters["requests"], path)
+	}
+}
+
+// freePort returns a port nothing is listening on, for Start to bind.
+func freePort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := l.Addr().(*net.TCPAddr).Port
+	require.NoError(t, l.Close())
+	return port
 }
 
 func TestToMapDuringCounterUpdates(t *testing.T) {

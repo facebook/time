@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync/atomic"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -77,13 +78,20 @@ func (j *JSONStats) handleRequest(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-// Start with launch 303 thrift and report ODS metrics periodically
+// Start serves the counters over http on the monitoring port. The mux must not
+// be http.DefaultServeMux: the responder binary links net/http/pprof, whose
+// init registers the profiling endpoints there.
 func (j *JSONStats) Start(port int) {
-	http.HandleFunc("/", j.handleRequest)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", j.handleRequest)
 	addr := fmt.Sprintf(":%d", port)
 	log.Debugf("Starting http json server on %s", addr)
-	err := http.ListenAndServe(addr, nil)
-	if err != nil {
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: time.Second,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Errorf("Failed to start listener: %v", err)
 	}
 }
