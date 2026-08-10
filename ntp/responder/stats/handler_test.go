@@ -20,16 +20,21 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
+// toMapReads is how many times each reader in TestToMapDuringCounterUpdates
+// calls ToMap.
+const toMapReads = 2000
+
 func TestHandleRequest(t *testing.T) {
 	j := &JSONStats{}
-	atomic.AddInt64(&j.requests, 42)
-	atomic.AddInt64(&j.responses, 10)
+	j.requests.Add(42)
+	j.responses.Add(10)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
@@ -44,6 +49,61 @@ func TestHandleRequest(t *testing.T) {
 	require.Equal(t, int64(42), result["requests"])
 	require.Equal(t, int64(10), result["responses"])
 	require.Equal(t, int64(0), result["invalidformat"])
+}
+
+func TestToMapDuringCounterUpdates(t *testing.T) {
+	j := &JSONStats{}
+
+	stop := make(chan struct{})
+	counted := make(chan struct{})
+	var writer sync.WaitGroup
+	writer.Go(func() {
+		for i := 0; ; i++ {
+			j.IncRequests()
+			j.IncListeners()
+			j.SetAnnounce()
+			if i == 0 {
+				close(counted)
+			}
+			select {
+			case <-stop:
+				return
+			default:
+			}
+		}
+	})
+	// Wait for the first update so the readers below overlap the writer
+	// instead of racing it to start.
+	<-counted
+
+	var negative atomic.Bool
+	var readers sync.WaitGroup
+	for range 4 {
+		readers.Go(func() {
+			for range toMapReads {
+				for _, v := range j.ToMap() {
+					if v < 0 {
+						negative.Store(true)
+					}
+				}
+			}
+		})
+	}
+	readers.Wait()
+	close(stop)
+	writer.Wait()
+
+	require.False(t, negative.Load())
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	j.handleRequest(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var result map[string]int64
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	require.Positive(t, result["requests"])
+	require.Equal(t, int64(1), result["announce"])
 }
 
 func TestHandleRequestEmpty(t *testing.T) {

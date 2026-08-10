@@ -34,33 +34,32 @@ import (
 // This implementation reports JSON metrics via http interface
 // This is a passive implementation. Only "Start" needs to be called
 type JSONStats struct {
-	// keep these aligned to 64-bit for sync/atomic
-	invalidFormat       int64
-	requests            int64
-	responses           int64
-	listeners           int64
-	workers             int64
-	readError           int64
-	announce            int64
-	ntsAuthOK           int64
-	ntsAuthFailed       int64
-	ntsCookieOpenFailed int64
+	invalidFormat       atomic.Int64
+	requests            atomic.Int64
+	responses           atomic.Int64
+	listeners           atomic.Int64
+	workers             atomic.Int64
+	readError           atomic.Int64
+	announce            atomic.Int64
+	ntsAuthOK           atomic.Int64
+	ntsAuthFailed       atomic.Int64
+	ntsCookieOpenFailed atomic.Int64
 }
 
 // ToMap converts struct to a map
 func (j *JSONStats) ToMap() (export map[string]int64) {
 	export = make(map[string]int64)
 
-	export["invalidformat"] = j.invalidFormat
-	export["requests"] = j.requests
-	export["responses"] = j.responses
-	export["listeners"] = j.listeners
-	export["workers"] = j.workers
-	export["readError"] = j.readError
-	export["announce"] = j.announce
-	export["nts_auth_ok"] = j.ntsAuthOK
-	export["nts_auth_failed"] = j.ntsAuthFailed
-	export["nts_cookie_open_failed"] = j.ntsCookieOpenFailed
+	export["invalidformat"] = j.invalidFormat.Load()
+	export["requests"] = j.requests.Load()
+	export["responses"] = j.responses.Load()
+	export["listeners"] = j.listeners.Load()
+	export["workers"] = j.workers.Load()
+	export["readError"] = j.readError.Load()
+	export["announce"] = j.announce.Load()
+	export["nts_auth_ok"] = j.ntsAuthOK.Load()
+	export["nts_auth_failed"] = j.ntsAuthFailed.Load()
+	export["nts_cookie_open_failed"] = j.ntsCookieOpenFailed.Load()
 
 	return export
 }
@@ -91,65 +90,65 @@ func (j *JSONStats) Start(port int) {
 
 // IncInvalidFormat atomically add 1 to the counter
 func (j *JSONStats) IncInvalidFormat() {
-	atomic.AddInt64(&j.invalidFormat, 1)
+	j.invalidFormat.Add(1)
 }
 
 // IncRequests atomically add 1 to the counter
 func (j *JSONStats) IncRequests() {
-	atomic.AddInt64(&j.requests, 1)
+	j.requests.Add(1)
 }
 
 // IncResponses atomically add 1 to the counter
 func (j *JSONStats) IncResponses() {
-	atomic.AddInt64(&j.responses, 1)
+	j.responses.Add(1)
 }
 
 // IncListeners atomically add 1 to the counter
 func (j *JSONStats) IncListeners() {
-	atomic.AddInt64(&j.listeners, 1)
+	j.listeners.Add(1)
 }
 
 // IncWorkers atomically add 1 to the counter
 func (j *JSONStats) IncWorkers() {
-	atomic.AddInt64(&j.workers, 1)
+	j.workers.Add(1)
 }
 
 // IncReadError atomically add 1 to the counter
 func (j *JSONStats) IncReadError() {
-	atomic.AddInt64(&j.readError, 1)
+	j.readError.Add(1)
 }
 
 // IncNTSAuthOK atomically add 1 to the counter
 func (j *JSONStats) IncNTSAuthOK() {
-	atomic.AddInt64(&j.ntsAuthOK, 1)
+	j.ntsAuthOK.Add(1)
 }
 
 // IncNTSAuthFailed atomically add 1 to the counter
 func (j *JSONStats) IncNTSAuthFailed() {
-	atomic.AddInt64(&j.ntsAuthFailed, 1)
+	j.ntsAuthFailed.Add(1)
 }
 
 // IncNTSCookieOpenFailed atomically add 1 to the counter
 func (j *JSONStats) IncNTSCookieOpenFailed() {
-	atomic.AddInt64(&j.ntsCookieOpenFailed, 1)
+	j.ntsCookieOpenFailed.Add(1)
 }
 
 // DecListeners atomically removes 1 from the counter
 func (j *JSONStats) DecListeners() {
-	atomic.AddInt64(&j.listeners, -1)
+	j.listeners.Add(-1)
 }
 
 // DecWorkers atomically removes 1 from the counter
 func (j *JSONStats) DecWorkers() {
-	atomic.AddInt64(&j.workers, -1)
+	j.workers.Add(-1)
 }
 
 // SetAnnounce atomically sets counter to 1
 func (j *JSONStats) SetAnnounce() {
-	atomic.StoreInt64(&j.announce, 1)
+	j.announce.Store(1)
 }
 
 // ResetAnnounce atomically sets counter to 0
 func (j *JSONStats) ResetAnnounce() {
-	atomic.StoreInt64(&j.announce, 0)
+	j.announce.Store(0)
 }
