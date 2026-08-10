@@ -40,6 +40,6 @@ func (m *MockCalnexUpgrader) InProgress(target string, api *api.API) (bool, erro
 
 // ShouldUpgrade mock
 func (m *MockCalnexUpgrader) ShouldUpgrade(target string, api *api.API, fw FW, force bool) (bool, error) {
-	args := m.Called(target, api, fw, fw, force)
+	args := m.Called(target, api, fw, force)
 	return args.Bool(0), args.Error(1)
 }
