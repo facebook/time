@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"sync/atomic"
 
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -28,7 +29,11 @@ import (
 
 // JSONStats is what we want to report as stats via http
 type JSONStats struct {
-	report counters
+	// reportLock guards report, which Snapshot writes from the metric
+	// reporting goroutine while handleRequest reads it from the http server's.
+	// It cannot be an RWMutex: toMap also writes, because it drains rxDrops.
+	reportLock sync.Mutex
+	report     counters
 
 	counters
 }
@@ -57,6 +62,8 @@ func (s *JSONStats) Start(monitoringport int) {
 
 // Snapshot the values so they can be reported atomically
 func (s *JSONStats) Snapshot() {
+	s.reportLock.Lock()
+	defer s.reportLock.Unlock()
 	s.subscriptions.copyAndClear(&s.report.subscriptions)
 	s.rx.copyAndClear(&s.report.rx)
 	s.tx.copyAndClear(&s.report.tx)
@@ -79,9 +86,17 @@ func (s *JSONStats) Snapshot() {
 	}
 }
 
+// reportSnapshot returns the last report Snapshot published, without holding
+// reportLock over the marshalling and writing that follow.
+func (s *JSONStats) reportSnapshot() map[string]int64 {
+	s.reportLock.Lock()
+	defer s.reportLock.Unlock()
+	return s.report.toMap()
+}
+
 // handleRequest is a handler used for all http monitoring requests
 func (s *JSONStats) handleRequest(w http.ResponseWriter, _ *http.Request) {
-	js, err := json.Marshal(s.report.toMap())
+	js, err := json.Marshal(s.reportSnapshot())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
