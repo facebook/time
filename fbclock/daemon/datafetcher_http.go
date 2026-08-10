@@ -18,6 +18,7 @@ package daemon
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/facebook/time/ptp/sptp/stats"
 
@@ -72,5 +73,16 @@ func (hf *HTTPFetcher) FetchStats(cfg *Config) (*DataPoint, error) {
 			}, nil
 		}
 	}
-	return nil, fmt.Errorf("no selected grandmaster")
+	return nil, fmt.Errorf("no selected grandmaster out of %d reported by sptp: [%s]", len(sm), describeGMs(sm))
+}
+
+// describeGMs prints what bmca rejects a grandmaster on: an error, a negative correction field, or its clock quality.
+func describeGMs(sm stats.Stats) string {
+	gms := make([]string, 0, len(sm))
+	for _, s := range sm {
+		gms = append(gms, fmt.Sprintf("%s error=%q cf_rx=%d cf_tx=%d clock_class=%d clock_accuracy=%d",
+			s.GMAddress, s.Error, s.CorrectionFieldRX, s.CorrectionFieldTX,
+			s.ClockQuality.ClockClass, s.ClockQuality.ClockAccuracy))
+	}
+	return strings.Join(gms, ", ")
 }

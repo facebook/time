@@ -116,6 +116,51 @@ func TestFetchStatsNoSelectedGM(t *testing.T) {
 	require.Contains(t, err.Error(), "no selected grandmaster")
 }
 
+func TestFetchStatsNoSelectedGMDescribesEachGM(t *testing.T) {
+	sampleResp := `
+[
+	{"gm_address": "127.0.0.1", "selected": false, "gm_present": 0, "error": "timed out waiting for response"},
+	{"gm_address": "127.0.0.2", "selected": false, "gm_present": 1, "error": "", "cf_rx": -250, "cf_tx": 100,
+		"clock_quality": {"clock_class": 6, "clock_accuracy": 33}},
+	{"gm_address": "127.0.0.3", "selected": false, "gm_present": 1, "error": "",
+		"clock_quality": {"clock_class": 248, "clock_accuracy": 254}},
+	{"gm_address": "127.0.0.4", "selected": false, "gm_present": 1, "error": "",
+		"clock_quality": {"clock_class": 248, "clock_accuracy": 49}}
+]
+`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+	surl, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cfg := &Config{PTPClientAddress: fmt.Sprintf("%s:%s", surl.Hostname(), surl.Port())}
+	fetcher := &HTTPFetcher{}
+	_, err = fetcher.FetchStats(cfg)
+	require.EqualError(
+		t,
+		err,
+		`no selected grandmaster out of 4 reported by sptp: [`+
+			`127.0.0.1 error="timed out waiting for response" cf_rx=0 cf_tx=0 clock_class=0 clock_accuracy=0, `+
+			`127.0.0.2 error="" cf_rx=-250 cf_tx=100 clock_class=6 clock_accuracy=33, `+
+			`127.0.0.3 error="" cf_rx=0 cf_tx=0 clock_class=248 clock_accuracy=254, `+
+			`127.0.0.4 error="" cf_rx=0 cf_tx=0 clock_class=248 clock_accuracy=49]`,
+	)
+}
+
+func TestFetchStatsNoGMsReported(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintln(w, `[]`)
+	}))
+	defer ts.Close()
+	surl, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cfg := &Config{PTPClientAddress: fmt.Sprintf("%s:%s", surl.Hostname(), surl.Port())}
+	fetcher := &HTTPFetcher{}
+	_, err = fetcher.FetchStats(cfg)
+	require.EqualError(t, err, "no selected grandmaster out of 0 reported by sptp: []")
+}
+
 func TestFetchStatsGMNotPresent(t *testing.T) {
 	sampleResp := `
 [
