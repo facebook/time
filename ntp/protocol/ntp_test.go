@@ -440,13 +440,22 @@ func FuzzBytesToPacket(f *testing.F) {
 func FuzzPacketAssociatedData(f *testing.F) {
 	f.Add(ntpResponseBytes)
 	f.Add(append(append([]byte{}, ntpRequestBytes...), 0x01, 0x04, 0x00, 0x08, 1, 2, 3, 4))
+	// One field past the cap below, so normal `go test` covers the bounded branch.
+	overCap := append([]byte{}, ntpResponseBytes...)
+	for range maxUDPPacketSizeBytes/ExtensionMinSize + 1 {
+		overCap = append(overCap, 0x01, 0x04, 0x00, 0x04)
+	}
+	f.Add(overCap)
 	f.Fuzz(func(t *testing.T, b []byte) {
 		var p Packet
 		if err := p.UnmarshalBinary(b); err != nil {
 			return
 		}
+		// AssociatedData is O(n) in the field count, so every prefix costs O(n^2):
+		// 256KB of 4-octet fields needs 15s, past the 10s limit for a single exec.
+		maxEFs := maxUDPPacketSizeBytes / ExtensionMinSize
 		want := PacketSizeBytes
-		for i := 0; i <= len(p.ExtensionFields); i++ {
+		for i := 0; i <= min(len(p.ExtensionFields), maxEFs); i++ {
 			ad, err := p.AssociatedData(i)
 			require.NoError(t, err)
 			require.Equal(t, b[:want], ad)
