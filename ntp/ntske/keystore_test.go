@@ -267,6 +267,11 @@ func TestInitialKeyEnablesCrossKeystoreOpen(t *testing.T) {
 // TestInitialKeyWrongLength checks that a master key of the wrong size is
 // rejected rather than silently producing a broken keystore.
 func TestInitialKeyWrongLength(t *testing.T) {
-	_, err := NewInMemoryKeystore(InMemoryKeystoreOptions{InitialKey: make([]byte, masterKeyLen-1)})
+	_, err := NewInMemoryKeystore(InMemoryKeystoreOptions{InitialKey: make([]byte, MasterKeyLen()-1)})
 	require.Error(t, err)
+}
+
+// MasterKeyLen must equal the AES-SIV-CMAC-512 key length (guards the fail-loud accessor).
+func TestMasterKeyLen(t *testing.T) {
+	require.Equal(t, 64, MasterKeyLen())
 }

@@ -98,7 +98,6 @@ const (
 	cookieKeyIDLen = 4  // big-endian master-key identifier
 	cookieNonceLen = 16 // random per-cookie nonce, mixed into the SIV as AD
 	sivTagLen      = 16 // AES-SIV synthetic IV prepended to the ciphertext
-	masterKeyLen   = 64 // AES-SIV-CMAC-512 master key
 	// cookieOverhead is everything in a cookie that is not session key material:
 	// Key ID + Nonce + SIV tag.
 	cookieOverhead = cookieKeyIDLen + cookieNonceLen + sivTagLen
@@ -107,6 +106,15 @@ const (
 	// remain openable until they age out.
 	defaultMaxKeys uint32 = 3
 )
+
+// MasterKeyLen returns the AES-SIV-CMAC-512 cookie master-key length.
+func MasterKeyLen() int {
+	n, err := aeadIDToKeyLen(masterAEADID)
+	if err != nil {
+		panic(fmt.Sprintf("ntske: master AEAD %d has no key length: %v", masterAEADID, err))
+	}
+	return n
+}
 
 // Sentinel errors. Compare with errors.Is. As in the nts package, the
 // underlying tink verification error is surfaced as text on ErrCookieVerify but
@@ -185,8 +193,8 @@ func NewInMemoryKeystore(opts InMemoryKeystoreOptions) (*InMemoryKeystore, error
 // seedKey installs key as the initial sealing key (Key ID 1). Unlike Rotate it
 // takes a caller-supplied key rather than generating a random one.
 func (ks *InMemoryKeystore) seedKey(key []byte) error {
-	if len(key) != masterKeyLen {
-		return fmt.Errorf("ntske: initial key must be %d octets, got %d", masterKeyLen, len(key))
+	if len(key) != MasterKeyLen() {
+		return fmt.Errorf("ntske: initial key must be %d octets, got %d", MasterKeyLen(), len(key))
 	}
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
@@ -203,7 +211,7 @@ func (ks *InMemoryKeystore) seedKey(key []byte) error {
 // key remain openable.
 func (ks *InMemoryKeystore) Rotate() error {
 	// generate 64 byte random master key
-	key := make([]byte, masterKeyLen)
+	key := make([]byte, MasterKeyLen())
 	if _, err := io.ReadFull(ks.rand, key); err != nil {
 		return fmt.Errorf("ntske: generate master key: %w", err)
 	}
@@ -225,20 +233,20 @@ func (ks *InMemoryKeystore) Rotate() error {
 }
 
 // SealCookie encrypts c2s || s2c under the current master key via the shared
-// envelope (see sealEnvelope). c2s and s2c must both have the key length required
+// envelope (see SealEnvelope). c2s and s2c must both have the key length required
 // by aeadID.
 func (ks *InMemoryKeystore) SealCookie(aeadID protocol.AEADAlgorithm, c2s, s2c []byte) ([]byte, error) {
 	ks.mu.RLock()
 	keyID := ks.current
 	master := ks.ring[keyID]
 	ks.mu.RUnlock()
-	return sealEnvelope(ks.rand, keyID, master, aeadID, c2s, s2c)
+	return SealEnvelope(ks.rand, keyID, master, aeadID, c2s, s2c)
 }
 
-// OpenCookie decrypts a cookie via the shared envelope (see openEnvelope),
+// OpenCookie decrypts a cookie via the shared envelope (see OpenEnvelope),
 // resolving the master by Key ID from the ring.
 func (ks *InMemoryKeystore) OpenCookie(cookie []byte) (protocol.AEADAlgorithm, []byte, []byte, error) {
-	return openEnvelope(cookie, func(keyID uint32) ([]byte, error) {
+	return OpenEnvelope(cookie, func(keyID uint32) ([]byte, error) {
 		ks.mu.RLock()
 		master, ok := ks.ring[keyID]
 		ks.mu.RUnlock()
@@ -249,9 +257,9 @@ func (ks *InMemoryKeystore) OpenCookie(cookie []byte) (protocol.AEADAlgorithm, [
 	})
 }
 
-// sealEnvelope seals c2s || s2c under sealingKey and assembles the cookie
+// SealEnvelope seals c2s || s2c under sealingKey and assembles the cookie
 // [Key ID][Nonce][AES-SIV ciphertext]; nonce bytes are read from rnd.
-func sealEnvelope(rnd io.Reader, keyID uint32, sealingKey []byte, aeadID protocol.AEADAlgorithm, c2s, s2c []byte) ([]byte, error) {
+func SealEnvelope(rnd io.Reader, keyID uint32, sealingKey []byte, aeadID protocol.AEADAlgorithm, c2s, s2c []byte) ([]byte, error) {
 	keyLen, err := aeadIDToKeyLen(aeadID)
 	if err != nil {
 		return nil, err
@@ -282,9 +290,9 @@ func sealEnvelope(rnd io.Reader, keyID uint32, sealingKey []byte, aeadID protoco
 	return out, nil
 }
 
-// openEnvelope validates a cookie, resolves its sealing key via sealingKeyFor,
-// and decrypts it, returning the session aeadID and the C2S/S2C keys.
-func openEnvelope(cookie []byte, sealingKeyFor func(keyID uint32) ([]byte, error)) (protocol.AEADAlgorithm, []byte, []byte, error) {
+// OpenEnvelope validates a cookie, resolves its sealing key via sealingKeyFor, and
+// decrypts it, returning the session aeadID and the C2S/S2C keys.
+func OpenEnvelope(cookie []byte, sealingKeyFor func(keyID uint32) ([]byte, error)) (protocol.AEADAlgorithm, []byte, []byte, error) {
 	aeadID, err := CookieAEADID(cookie)
 	if err != nil {
 		return 0, nil, nil, err
