@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -119,13 +120,11 @@ func TestConcurrentAccess(t *testing.T) {
 	s := NewStats()
 	var wg sync.WaitGroup
 	for i := range 100 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			s.SetCounter("concurrent", int64(i))
 			s.UpdateCounterBy("incr", 1)
 			s.Get()
-		}()
+		})
 	}
 	wg.Wait()
 	got := s.Get()
@@ -155,6 +154,46 @@ func TestHandleRequest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(42), result["requests"])
 	require.Equal(t, int64(3), result["errors"])
+}
+
+func TestHandleRequestDuringCounterUpdates(t *testing.T) {
+	js := NewJSONStats()
+
+	stop := make(chan struct{})
+	started := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := 0; ; i++ {
+			js.UpdateCounterBy("data_error", 1)
+			js.SetCounter("processing_error", int64(i))
+			if i == 0 {
+				close(started)
+			}
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			runtime.Gosched()
+		}
+	})
+	t.Cleanup(func() {
+		close(stop)
+		wg.Wait()
+	})
+	<-started
+
+	for range 200 {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		w := httptest.NewRecorder()
+		js.handleRequest(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var result map[string]int64
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+		require.GreaterOrEqual(t, result["data_error"], int64(1))
+		require.Contains(t, result, "processing_error")
+	}
 }
 
 func TestHandleRequestEmpty(t *testing.T) {

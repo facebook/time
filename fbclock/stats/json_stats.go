@@ -48,7 +48,7 @@ func (s *JSONStats) Start(monitoringport int) {
 
 // handleRequest is a handler used for all http monitoring requests
 func (s *JSONStats) handleRequest(w http.ResponseWriter, _ *http.Request) {
-	js, err := json.Marshal(s.counters)
+	js, err := json.Marshal(s.Get())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

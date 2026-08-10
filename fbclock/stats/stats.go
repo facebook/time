@@ -33,6 +33,7 @@ type Server interface {
 
 // Stats is an implementation of
 type Stats struct {
+	// guarded by mux; read it through Get, never directly
 	counters map[string]int64
 }
 
