@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net/netip"
+	"sync"
 	"testing"
 	"time"
 
@@ -130,24 +131,24 @@ func TestSetGMStats(t *testing.T) {
 func TestInc(t *testing.T) {
 	s, err := NewStats()
 	require.NoError(t, err)
-	s.rxAnnounce = 42
-	s.rxSync = 43
-	s.rxDelayReq = 44
-	s.txDelayReq = 45
-	s.unsupported = 46
-	s.filtered = 47
+	s.rxAnnounce.Store(42)
+	s.rxSync.Store(43)
+	s.rxDelayReq.Store(44)
+	s.txDelayReq.Store(45)
+	s.unsupported.Store(46)
+	s.filtered.Store(47)
 	s.IncRXAnnounce()
 	s.IncRXSync()
 	s.IncRXDelayReq()
 	s.IncTXDelayReq()
 	s.IncUnsupported()
 	s.IncFiltered()
-	require.Equal(t, int64(43), s.rxAnnounce)
-	require.Equal(t, int64(44), s.rxSync)
-	require.Equal(t, int64(45), s.rxDelayReq)
-	require.Equal(t, int64(46), s.txDelayReq)
-	require.Equal(t, int64(47), s.unsupported)
-	require.Equal(t, int64(48), s.filtered)
+	require.Equal(t, int64(43), s.rxAnnounce.Load())
+	require.Equal(t, int64(44), s.rxSync.Load())
+	require.Equal(t, int64(45), s.rxDelayReq.Load())
+	require.Equal(t, int64(46), s.txDelayReq.Load())
+	require.Equal(t, int64(47), s.unsupported.Load())
+	require.Equal(t, int64(48), s.filtered.Load())
 }
 
 func TestSysStats(t *testing.T) {
@@ -179,4 +180,58 @@ func TestGetCounters(t *testing.T) {
 	require.Contains(t, m, "ptp.sptp.process.rss")
 	require.Contains(t, m, "ptp.sptp.process.cpu_pct.avg.60")
 	require.Contains(t, m, "ptp.sptp.process.uptime")
+}
+
+func TestGetCountersDuringCounterUpdates(t *testing.T) {
+	s, err := NewStats()
+	require.NoError(t, err)
+
+	const updates = 2000
+	const sysCollections = 5
+	writersDone := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		defer close(writersDone)
+		for i := range updates {
+			s.SetGmsTotal(i)
+			s.SetGmsAvailable(i)
+			s.SetServoState(i)
+			s.IncFiltered()
+			s.IncRXSync()
+			s.IncRXAnnounce()
+			s.IncRXDelayReq()
+			s.IncTXDelayReq()
+			s.IncUnsupported()
+			s.IncPortChangeCount(1)
+		}
+	})
+	wg.Go(func() {
+		for range sysCollections {
+			s.CollectSysStats()
+		}
+	})
+	// Read for as long as the writers run, so the overlap does not depend on scheduling.
+	wg.Go(func() {
+		for {
+			s.GetCounters()
+			select {
+			case <-writersDone:
+				return
+			default:
+			}
+		}
+	})
+	wg.Wait()
+
+	got := s.GetCounters()
+	require.Equal(t, int64(updates-1), got["ptp.sptp.gms.total"])
+	require.Equal(t, int64(updates-1), got["ptp.sptp.gms.available_pct"])
+	require.Equal(t, int64(updates-1), got["ptp.sptp.servo.state"])
+	require.Equal(t, int64(updates), got["ptp.sptp.filtered"])
+	require.Equal(t, int64(updates), got["ptp.sptp.portstats.rx.sync"])
+	require.Equal(t, int64(updates), got["ptp.sptp.portstats.rx.announce"])
+	require.Equal(t, int64(updates), got["ptp.sptp.portstats.rx.delay_req"])
+	require.Equal(t, int64(updates), got["ptp.sptp.portstats.tx.delay_req"])
+	require.Equal(t, int64(updates), got["ptp.sptp.portstats.rx.unsupported"])
+	require.Equal(t, int64(updates), got["ptp.sptp.port_change_count"])
 }

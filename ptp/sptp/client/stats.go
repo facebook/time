@@ -58,19 +58,20 @@ type Stats struct {
 	proc          *process.Process
 }
 
-// clientStats is just a grouping, don't use directly
+// clientStats is just a grouping, don't use directly.
+// These are written without holding the Stats mutex, so they must stay atomic on both sides.
 type clientStats struct {
-	gmsTotal        int64
-	gmsAvailable    int64
+	gmsTotal        atomic.Int64
+	gmsAvailable    atomic.Int64
 	tickDuration    atomic.Int64
-	filtered        int64
-	rxSync          int64
-	rxAnnounce      int64
-	rxDelayReq      int64
-	txDelayReq      int64
-	unsupported     int64
-	servoState      int64
-	portChangeCount int64
+	filtered        atomic.Int64
+	rxSync          atomic.Int64
+	rxAnnounce      atomic.Int64
+	rxDelayReq      atomic.Int64
+	txDelayReq      atomic.Int64
+	unsupported     atomic.Int64
+	servoState      atomic.Int64
+	portChangeCount atomic.Int64
 }
 
 // sysStats is just a grouping, don't use directly
@@ -96,12 +97,12 @@ func NewStats() (*Stats, error) {
 
 // SetGmsTotal atomically sets the gmsTotal
 func (s *Stats) SetGmsTotal(gmsTotal int) {
-	atomic.StoreInt64(&s.gmsTotal, int64(gmsTotal))
+	s.gmsTotal.Store(int64(gmsTotal))
 }
 
 // SetGmsAvailable atomically sets the gmsTotal
 func (s *Stats) SetGmsAvailable(gmsAvailable int) {
-	atomic.StoreInt64(&s.gmsAvailable, int64(gmsAvailable))
+	s.gmsAvailable.Store(int64(gmsAvailable))
 }
 
 // SetTickDuration atomically sets the gmsTotal
@@ -111,42 +112,42 @@ func (s *Stats) SetTickDuration(tickDuration time.Duration) {
 
 // SetServoState atomically sets the servoState
 func (s *Stats) SetServoState(state int) {
-	atomic.StoreInt64(&s.servoState, int64(state))
+	s.servoState.Store(int64(state))
 }
 
 // IncFiltered atomically adds 1 to the rxsync
 func (s *Stats) IncFiltered() {
-	atomic.AddInt64(&s.filtered, 1)
+	s.filtered.Add(1)
 }
 
 // IncRXSync atomically adds 1 to the rxsync
 func (s *Stats) IncRXSync() {
-	atomic.AddInt64(&s.rxSync, 1)
+	s.rxSync.Add(1)
 }
 
 // IncRXAnnounce atomically adds 1 to the rxAnnounce
 func (s *Stats) IncRXAnnounce() {
-	atomic.AddInt64(&s.rxAnnounce, 1)
+	s.rxAnnounce.Add(1)
 }
 
 // IncRXDelayReq atomically adds 1 to the rxDelayReq
 func (s *Stats) IncRXDelayReq() {
-	atomic.AddInt64(&s.rxDelayReq, 1)
+	s.rxDelayReq.Add(1)
 }
 
 // IncTXDelayReq atomically adds 1 to the txDelayReq
 func (s *Stats) IncTXDelayReq() {
-	atomic.AddInt64(&s.txDelayReq, 1)
+	s.txDelayReq.Add(1)
 }
 
 // IncUnsupported atomically adds 1 to the unsupported
 func (s *Stats) IncUnsupported() {
-	atomic.AddInt64(&s.unsupported, 1)
+	s.unsupported.Add(1)
 }
 
 // IncPortChangeCount increases number port changes performed
 func (s *Stats) IncPortChangeCount(count int) {
-	atomic.AddInt64(&s.portChangeCount, int64(count))
+	s.portChangeCount.Add(int64(count))
 }
 
 // GetCounters returns an map of counters
@@ -156,16 +157,16 @@ func (s *Stats) GetCounters() map[string]int64 {
 
 	return map[string]int64{
 		// clientStats
-		"ptp.sptp.gms.total":                s.gmsTotal,
-		"ptp.sptp.gms.available_pct":        s.gmsAvailable,
-		"ptp.sptp.filtered":                 s.filtered,
-		"ptp.sptp.portstats.rx.sync":        s.rxSync,
-		"ptp.sptp.portstats.rx.announce":    s.rxAnnounce,
-		"ptp.sptp.portstats.rx.delay_req":   s.rxDelayReq,
-		"ptp.sptp.portstats.tx.delay_req":   s.txDelayReq,
-		"ptp.sptp.portstats.rx.unsupported": s.unsupported,
-		"ptp.sptp.servo.state":              s.servoState,
-		"ptp.sptp.port_change_count":        s.portChangeCount,
+		"ptp.sptp.gms.total":                s.gmsTotal.Load(),
+		"ptp.sptp.gms.available_pct":        s.gmsAvailable.Load(),
+		"ptp.sptp.filtered":                 s.filtered.Load(),
+		"ptp.sptp.portstats.rx.sync":        s.rxSync.Load(),
+		"ptp.sptp.portstats.rx.announce":    s.rxAnnounce.Load(),
+		"ptp.sptp.portstats.rx.delay_req":   s.rxDelayReq.Load(),
+		"ptp.sptp.portstats.tx.delay_req":   s.txDelayReq.Load(),
+		"ptp.sptp.portstats.rx.unsupported": s.unsupported.Load(),
+		"ptp.sptp.servo.state":              s.servoState.Load(),
+		"ptp.sptp.port_change_count":        s.portChangeCount.Load(),
 		// sysStats
 		"ptp.sptp.runtime.gc.pause_ns.sum.60":    s.gcPauseNs,
 		"ptp.sptp.runtime.mem.gc.pause_total_ns": s.gcPauseTotalNs,
