@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"sync/atomic"
 
 	log "github.com/sirupsen/logrus"
@@ -27,7 +28,10 @@ import (
 
 // JSONStats is what we want to report as stats via http
 type JSONStats struct {
-	report counters
+	// reportLock guards report, which Snapshot writes from the caller's
+	// goroutine while handleRequest reads it from the http server's.
+	reportLock sync.Mutex
+	report     counters
 
 	counters
 }
@@ -53,19 +57,25 @@ func (s *JSONStats) Start(monitoringport int) {
 
 // Snapshot the values so they can be reported atomically
 func (s *JSONStats) Snapshot() {
-	s.report.utcOffsetSec = s.utcOffsetSec
-	s.report.phcOffsetNS = s.phcOffsetNS
-	s.report.oscillatorOffsetNS = s.oscillatorOffsetNS
-	s.report.clockAccuracy = s.clockAccuracy
-	s.report.clockAccuracyWorst = s.clockAccuracyWorst
-	s.report.clockClass = s.clockClass
-	s.report.reload = s.reload
-	s.report.dataError = s.dataError
+	s.reportLock.Lock()
+	defer s.reportLock.Unlock()
+	s.report.utcOffsetSec = atomic.LoadInt64(&s.utcOffsetSec)
+	s.report.phcOffsetNS = atomic.LoadInt64(&s.phcOffsetNS)
+	s.report.oscillatorOffsetNS = atomic.LoadInt64(&s.oscillatorOffsetNS)
+	s.report.clockAccuracy = atomic.LoadInt64(&s.clockAccuracy)
+	s.report.clockAccuracyWorst = atomic.LoadInt64(&s.clockAccuracyWorst)
+	s.report.clockClass = atomic.LoadInt64(&s.clockClass)
+	s.report.reload = atomic.LoadInt64(&s.reload)
+	s.report.dataError = atomic.LoadInt64(&s.dataError)
 }
 
 // handleRequest is a handler used for all http monitoring requests
 func (s *JSONStats) handleRequest(w http.ResponseWriter, _ *http.Request) {
-	js, err := json.Marshal(s.report.toMap())
+	s.reportLock.Lock()
+	report := s.report.toMap()
+	s.reportLock.Unlock()
+
+	js, err := json.Marshal(report)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

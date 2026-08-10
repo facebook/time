@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -76,6 +78,54 @@ func TestSnapshotIsolation(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &result)
 	require.NoError(t, err)
 	require.Equal(t, int64(100), result["phc_offset_ns"])
+}
+
+func TestSnapshotDuringHandleRequest(t *testing.T) {
+	js := NewJSONStats()
+	const iterations = 20000
+
+	// After the Nth Snapshot every published report satisfies
+	// data_error == clock_class+1; the all-zero state before the first
+	// Snapshot is the only exception. Any other pairing means the handler
+	// observed a report that two Snapshot calls were interleaved into.
+	var mixed atomic.Int64
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := range iterations {
+			js.SetClockClass(int64(i))
+			js.IncDataError()
+			js.Snapshot()
+		}
+	})
+	for range 4 {
+		wg.Go(func() {
+			for range iterations {
+				w := httptest.NewRecorder()
+				js.handleRequest(w, httptest.NewRequest(http.MethodGet, "/", nil))
+				var served map[string]int64
+				if err := json.Unmarshal(w.Body.Bytes(), &served); err != nil {
+					mixed.Add(1)
+					continue
+				}
+				if served["data_error"] != 0 && served["data_error"] != served["clock_class"]+1 {
+					mixed.Add(1)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	require.Zero(t, mixed.Load(), "handler served a report mixing two Snapshot calls")
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	js.handleRequest(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var result map[string]int64
+	err := json.Unmarshal(w.Body.Bytes(), &result)
+	require.NoError(t, err)
+	require.Equal(t, int64(iterations-1), result["clock_class"])
+	require.Equal(t, int64(iterations), result["data_error"])
 }
 
 func TestResetCounters(t *testing.T) {
