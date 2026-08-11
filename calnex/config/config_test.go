@@ -996,7 +996,7 @@ func TestConfig(t *testing.T) {
 		"ch30\\ptp_synce\\ptp\\domain=0\n" +
 		"ch2\\cable_compensation=0 s\n" +
 		"ch2\\calibration_date=\n" +
-		"ch2\\channel_name=\n" +
+		"ch2\\channel_name=timeserver01.example.com\n" +
 		"ch2\\file_name=channelC\n" +
 		"ch2\\filter=Off\n" +
 		"ch2\\freq=1 Hz\n" +
@@ -1256,6 +1256,7 @@ func TestConfig(t *testing.T) {
 			api.ChannelC: {
 				Target: "fd00:3226:301b::1f",
 				Probe:  api.ProbePPS,
+				Name:   "timeserver01.example.com",
 			},
 			api.ChannelVP1: {
 				Target: "fd00:3226:301b::3f",

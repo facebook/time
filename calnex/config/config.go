@@ -149,6 +149,7 @@ func (c *config) measureConfig(target string, s *ini.Section, mc map[api.Channel
 		// enable NTP/PTP/PPS channels
 		c.set(target, s, fmt.Sprintf("%s\\used", ch.CalnexAPI()), api.YES)
 		c.set(target, s, probe, m.Probe.CalnexName())
+		c.set(target, s, fmt.Sprintf("%s\\channel_name", ch.CalnexAPI()), m.Name)
 	}
 
 	// Disable unused channels
