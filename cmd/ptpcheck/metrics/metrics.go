@@ -49,13 +49,15 @@ func RunMetricsServer(monitoringPort uint, handler *Handler) error {
 		WriteTimeout: time.Second,
 	}
 	http.Handle("/metrics", handler)
-	handler.offsets = list.New()
 	return server.ListenAndServe()
 }
 
 // ObserveOffset sets the value of the ts2phc offset metrics
 func (h *Handler) ObserveOffset(offset float64) {
 	h.offsetsLock.Lock()
+	if h.offsets == nil {
+		h.offsets = list.New()
+	}
 	if h.offsets.Len() >= maxSamples {
 		for h.offsets.Len() >= maxSamples {
 			h.offsets.Remove(h.offsets.Back())
@@ -90,6 +92,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *Handler) getMetrics() map[string]float64 {
+	h.offsetsLock.Lock()
+	defer h.offsetsLock.Unlock()
 	return map[string]float64{
 		"offset.ns": h.lastOffset,
 		// .60 reflects the maxSamples window the peak is computed over.

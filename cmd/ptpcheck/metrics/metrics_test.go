@@ -18,10 +18,17 @@ package metrics
 
 import (
 	"container/list"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+const concurrentScrapes = 20000
 
 func TestGetMetrics(t *testing.T) {
 	handler := &Handler{
@@ -79,6 +86,73 @@ func TestObserveOffset(t *testing.T) {
 			require.Equal(t, tt.observedOffset, handler.lastOffset)
 		})
 	}
+}
+
+func TestObserveOffsetOnZeroValueHandler(t *testing.T) {
+	handler := &Handler{}
+	require.NotPanics(t, func() { handler.ObserveOffset(42.0) })
+	require.Equal(t, 42.0, handler.getMetrics()["offset.ns"])
+}
+
+func TestServeHTTPDuringObserveOffset(t *testing.T) {
+	handler := &Handler{}
+
+	// Each offset outgrows the whole window before it, so ObserveOffset always leaves maxOffset == lastOffset.
+	var torn, malformed, observed atomic.Int64
+	var overlapped atomic.Bool
+	var scrapers, observer sync.WaitGroup
+	start, stop := make(chan struct{}), make(chan struct{})
+	observer.Go(func() {
+		<-start
+		for i := int64(1); ; i++ {
+			handler.ObserveOffset(float64(i))
+			observed.Store(i)
+			select {
+			case <-stop:
+				return
+			default:
+			}
+		}
+	})
+	for range 4 {
+		scrapers.Go(func() {
+			<-start
+			var prev float64
+			for range concurrentScrapes {
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+				var served map[string]float64
+				if err := json.Unmarshal(w.Body.Bytes(), &served); err != nil {
+					malformed.Add(1)
+					continue
+				}
+				if served["offset.ns"] != served["offset.max.60"] {
+					torn.Add(1)
+				}
+				if prev != 0 && served["offset.ns"] != prev {
+					overlapped.Store(true)
+				}
+				prev = served["offset.ns"]
+			}
+		})
+	}
+	close(start)
+	scrapers.Wait()
+	close(stop)
+	observer.Wait()
+
+	require.Zero(t, malformed.Load(), "handler served a body that is not valid JSON")
+	require.Zero(t, torn.Load(), "served offset.ns and offset.max.60 from different updates")
+	require.True(t, overlapped.Load(), "no scrape saw the offset change, so ServeHTTP never overlapped ObserveOffset")
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	var result map[string]float64
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	require.Equal(t, float64(observed.Load()), result["offset.ns"])
+	require.Equal(t, float64(observed.Load()), result["offset.max.60"])
+	require.Positive(t, result["last_update"])
 }
 
 // repeatNumber creates a slice with the given number repeated repetitionCount times
