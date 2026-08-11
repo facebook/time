@@ -414,7 +414,9 @@ func (s *PiServo) Unlock() {
 	s.count = 0
 	s.cfg.makePiFast()
 	s.resyncInterval()
-	s.filter.Reset()
+	if s.filter != nil {
+		s.filter.Reset()
+	}
 }
 
 // Reset - cleanup and restart filter

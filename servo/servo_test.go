@@ -57,7 +57,7 @@ func TestGetState(t *testing.T) {
 func TestUnlock(t *testing.T) {
 	pi := NewPiServo(DefaultServoConfig(), DefaultPiServoCfg(), -100000.0)
 	pi.SyncInterval(1)
-	// Unlock requires a filter attached to the servo
+	// the filtered servo, as sptp builds it
 	filterCfg := DefaultPiServoFilterCfg()
 	NewPiServoFilter(pi, filterCfg)
 
@@ -66,6 +66,21 @@ func TestUnlock(t *testing.T) {
 	require.Equal(t, StateLocked, pi.GetState())
 
 	pi.Unlock()
+	require.Equal(t, StateInit, pi.GetState())
+}
+
+// TestUnlockWithoutFilter covers the servo phc.NewPiServo builds for ts2phc,
+// which never attaches a filter.
+func TestUnlockWithoutFilter(t *testing.T) {
+	pi := NewPiServo(DefaultServoConfig(), DefaultPiServoCfg(), -100000.0)
+	pi.SyncInterval(1)
+	require.Nil(t, pi.filter)
+
+	pi.Sample(100, 1674148530000000000)
+	pi.Sample(50, 1674148531000000000)
+	require.Equal(t, StateLocked, pi.GetState())
+
+	require.NotPanics(t, pi.Unlock)
 	require.Equal(t, StateInit, pi.GetState())
 }
 
