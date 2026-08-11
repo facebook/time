@@ -542,8 +542,14 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 	if best == nil {
 		log.Warning("no Best Master selected")
 		p.bestGM = netip.Addr{}
+		if p.pi.GetState() == servo.StateLocked {
+			state = servo.StateHoldover
+		} else {
+			state = servo.StateInit
+		}
 		freqAdj, err := p.setMeanFreq()
-		log.Infof("[no GM] offset Unknown s%d freq %+7.0f path delay Unknown", servo.StateHoldover, -freqAdj)
+		p.stats.SetServoState(int(state))
+		log.Infof("[no GM] offset Unknown s%d freq %+7.0f path delay Unknown", state, -freqAdj)
 		return err
 	}
 	bestAddr := idsToClients[best.GrandmasterIdentity]

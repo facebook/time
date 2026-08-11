@@ -54,11 +54,13 @@ func TestProcessResultsNoResults(t *testing.T) {
 		eventConns: []UDPConnWithTS{nil},
 	}
 	results := map[netip.Addr]*RunResult{}
+	mockServo.EXPECT().GetState().Return(servo.StateLocked)
 	mockServo.EXPECT().MeanFreq()
 	mockServo.EXPECT().SetLastFreq(float64(0))
 	mockClock.EXPECT().AdjFreqPPB(gomock.Any())
 	mockStatsServer.EXPECT().SetGmsTotal(0)
 	mockStatsServer.EXPECT().SetGmsAvailable(0)
+	mockStatsServer.EXPECT().SetServoState(int(servo.StateHoldover))
 	_ = p.processResults(results)
 
 	require.Equal(t, netip.Addr{}, p.bestGM)
@@ -91,16 +93,57 @@ func TestProcessResultsEmptyResult(t *testing.T) {
 		netip.MustParseAddr("192.168.0.10"): {},
 	}
 	meanFreq := 10.2
+	mockServo.EXPECT().GetState().Return(servo.StateLocked)
 	mockServo.EXPECT().MeanFreq().Return(meanFreq)
 	mockServo.EXPECT().SetLastFreq(float64(10.2))
 	mockClock.EXPECT().AdjFreqPPB(-1 * meanFreq)
 	mockStatsServer.EXPECT().SetGmsTotal(1)
 	mockStatsServer.EXPECT().SetGmsAvailable(0)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+	mockStatsServer.EXPECT().SetServoState(int(servo.StateHoldover))
 	err = p.processResults(results)
 	// as we no interface down error, we expect no error
 	require.NoError(t, err)
 	require.Equal(t, netip.Addr{}, p.bestGM)
+}
+
+func TestProcessResultsNoGMPublishesServoState(t *testing.T) {
+	testCases := []struct {
+		name      string
+		servoWas  servo.State
+		wantState servo.State
+	}{
+		{name: "disciplined then lost every GM", servoWas: servo.StateLocked, wantState: servo.StateHoldover},
+		{name: "never locked", servoWas: servo.StateInit, wantState: servo.StateInit},
+		{name: "one sample in", servoWas: servo.StateJump, wantState: servo.StateInit},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockClock := NewMockClock(ctrl)
+			mockServo := NewMockServo(ctrl)
+			mockServo.EXPECT().GetState().Return(tc.servoWas)
+			mockServo.EXPECT().MeanFreq()
+			mockServo.EXPECT().SetLastFreq(float64(0))
+			mockClock.EXPECT().AdjFreqPPB(gomock.Any())
+
+			statsServer, err := NewStats()
+			require.NoError(t, err)
+			statsServer.SetServoState(int(servo.StateLocked))
+
+			p := &SPTP{
+				clock:      mockClock,
+				pi:         mockServo,
+				stats:      statsServer,
+				eventConns: []UDPConnWithTS{nil},
+			}
+			require.NoError(t, p.processResults(map[netip.Addr]*RunResult{}))
+
+			require.Equal(t, netip.Addr{}, p.bestGM)
+			require.Equal(t, int64(tc.wantState), statsServer.GetCounters()["ptp.sptp.servo.state"])
+		})
+	}
 }
 
 func TestProcessResultsSingle(t *testing.T) {
@@ -323,6 +366,7 @@ func TestProcessResultsFilteredDelay(t *testing.T) {
 	defer ctrl.Finish()
 	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
+	mockServo.EXPECT().GetState().Return(servo.StateLocked)
 	mockServo.EXPECT().MeanFreq().Times(1)
 	mockServo.EXPECT().SetLastFreq(float64(0)).Times(1)
 	mockClock.EXPECT().AdjFreqPPB(gomock.Any())
@@ -331,6 +375,7 @@ func TestProcessResultsFilteredDelay(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
 	mockStatsServer.EXPECT().IncFiltered()
+	mockStatsServer.EXPECT().SetServoState(int(servo.StateHoldover))
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 	mockEventConn.EXPECT().ConnFd().Return(0)
 
@@ -372,6 +417,7 @@ func TestRunInternalAllDead(t *testing.T) {
 	mockClock.EXPECT().AdjFreqPPB((float64(0))).Times(3)
 	mockServo := NewMockServo(ctrl)
 	mockServo.EXPECT().SyncInterval(float64(1))
+	mockServo.EXPECT().GetState().Return(servo.StateLocked).Times(2)
 	mockServo.EXPECT().MeanFreq().Times(3)
 	mockServo.EXPECT().SetLastFreq(float64(0)).Times(2)
 	mockStatsServer := NewMockStatsServer(ctrl)
@@ -381,6 +427,7 @@ func TestRunInternalAllDead(t *testing.T) {
 	mockStatsServer.EXPECT().IncTXDelayReq().Times(4)
 	mockStatsServer.EXPECT().SetGMStats(&gmstats.Stat{GMAddress: "192.168.0.10", Error: context.DeadlineExceeded.Error(), Priority3: 1}).Times(2)
 	mockStatsServer.EXPECT().SetGMStats(&gmstats.Stat{GMAddress: "192.168.0.11", Error: context.DeadlineExceeded.Error(), Priority3: 2}).Times(2)
+	mockStatsServer.EXPECT().SetServoState(int(servo.StateHoldover)).Times(2)
 
 	p := &SPTP{
 		clock: mockClock,
@@ -469,6 +516,7 @@ func TestRunStalled(t *testing.T) {
 	mockClock.EXPECT().Step(time.Duration(200002000))
 	mockServo := NewMockServo(ctrl)
 	mockServo.EXPECT().IsSpike(int64(-200002000)).Return(true)
+	mockServo.EXPECT().GetState().Return(servo.StateLocked)
 	mockServo.EXPECT().MeanFreq().Times(2)
 	mockServo.EXPECT().SetLastFreq(float64(0)).Times(2)
 
@@ -478,7 +526,10 @@ func TestRunStalled(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsTotal(1)
 	mockStatsServer.EXPECT().SetGmsAvailable(100)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
-	mockStatsServer.EXPECT().SetServoState(gomock.Any())
+	gomock.InOrder(
+		mockStatsServer.EXPECT().SetServoState(int(servo.StateHoldover)),
+		mockStatsServer.EXPECT().SetServoState(int(servo.StateJump)),
+	)
 	mockStatsServer.EXPECT().SetTickDuration(gomock.Any()).Times(2)
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 	mockEventConn.EXPECT().ConnFd().Return(0)
@@ -816,6 +867,8 @@ func TestProcessResultsInterfaceDown(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsTotal(1)
 	mockStatsServer.EXPECT().SetGmsAvailable(0)
 	mockStatsServer.EXPECT().SetGMStats(gomock.Any())
+	mockStatsServer.EXPECT().SetServoState(int(servo.StateHoldover))
+	mockServo.EXPECT().GetState().Return(servo.StateLocked)
 	mockServo.EXPECT().MeanFreq().Return(meanFreq)
 	mockServo.EXPECT().SetLastFreq(meanFreq)
 	mockClock.EXPECT().AdjFreqPPB(-1 * meanFreq)
