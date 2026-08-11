@@ -296,3 +296,190 @@ func mustEncodeAll(t *testing.T, obs []RawxObservation) []byte {
 	require.NotNil(t, frame)
 	return frame
 }
+
+func sigObs(gnss, sv, sigID uint8, pr, cp float64) RawxObservation {
+	return RawxObservation{
+		PrMes: pr, CpMes: cp, DoMes: -1500, GnssID: gnss, SvID: sv, SigID: sigID,
+		Locktime: 63000, CNO: 44, PrValid: true, CpValid: true, HalfCyc: true,
+	}
+}
+
+// A dual-band receiver reports one satellite on two signals.
+func TestEncodeMSM7DualBandGPS(t *testing.T) {
+	obs := []RawxObservation{
+		sigObs(GnssGPS, 4, 0, 20960834.6, 110135576.123), // L1C/A
+		sigObs(GnssGPS, 4, 3, 20960834.9, 85820011.456),  // L2CL
+		sigObs(GnssGPS, 8, 0, 18864369.0, 99121456.789),  // L1C/A
+	}
+
+	d := decodeMSM7(t, mustEncodeAll(t, obs))
+	require.Equal(t, []int{4, 8}, d.sats)
+	require.Equal(t, []int{2, 16}, d.sigs, "GPS L1C/A is signal 2, L2CL is signal 16")
+	require.Equal(t, []bool{true, true, true, false}, d.cells, "SV8 has no L2")
+	require.Len(t, d.finePR, 3)
+	require.Len(t, d.cnr, 3)
+}
+
+func TestEncodeMSM7SignalMaskPerConstellation(t *testing.T) {
+	tests := []struct {
+		name string
+		gnss uint8
+		sigs []uint8
+		want []int
+	}{
+		{"GPSL1L2", GnssGPS, []uint8{0, 3, 4}, []int{2, 15, 16}},
+		{"GPSL5", GnssGPS, []uint8{0, 6, 7}, []int{2, 22, 23}},
+		{"GalileoE1E5b", GnssGalileo, []uint8{0, 1, 5, 6}, []int{2, 4, 14, 15}},
+		{"GalileoE5a", GnssGalileo, []uint8{3, 4}, []int{22, 23}},
+		{"GlonassL1L2", GnssGLONASS, []uint8{0, 2}, []int{2, 8}},
+		{"BeidouB1B2", GnssBeiDou, []uint8{0, 2}, []int{2, 14}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var obs []RawxObservation
+			for i, sig := range tt.sigs {
+				obs = append(obs, sigObs(tt.gnss, uint8(i+1), sig, 21000000, 110000000))
+			}
+			frame, err := EncodeMSM7(1, tt.gnss, 100000, obs)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, decodeMSM7(t, frame).sigs)
+		})
+	}
+}
+
+// BeiDou D1/D2 are separate u-blox sigIDs for one RTCM signal.
+func TestEncodeMSM7BeidouD1D2ShareSignal(t *testing.T) {
+	obs := []RawxObservation{
+		sigObs(GnssBeiDou, 6, 0, 22000000, 114000000),  // B1I D1
+		sigObs(GnssBeiDou, 20, 1, 23000000, 119000000), // B1I D2
+	}
+
+	d := decodeMSM7(t, mustEncodeAllGNSS(t, GnssBeiDou, obs))
+	require.Equal(t, []int{2}, d.sigs, "D1 and D2 share RTCM signal 2")
+	require.Equal(t, []int{6, 20}, d.sats)
+	require.Equal(t, []bool{true, true}, d.cells)
+}
+
+func TestEncodeMSM7UnmappedSignalSkipped(t *testing.T) {
+	obs := []RawxObservation{
+		sigObs(GnssGPS, 4, 0, 20960834.6, 110135576.123),
+		sigObs(GnssGPS, 4, 9, 20960834.9, 85820011.456), // not a mapped signal
+	}
+
+	d := decodeMSM7(t, mustEncodeAll(t, obs))
+	require.Equal(t, []int{2}, d.sigs)
+	require.Len(t, d.finePR, 1)
+}
+
+// GLONASS rows carry a u-blox freqID (slot k plus 7) and expect FDMA spacing of
+// 562.5 kHz on L1 and 437.5 kHz on L2.
+func TestSignalWavelengths(t *testing.T) {
+	tests := []struct {
+		name    string
+		gnss    uint8
+		sigID   uint8
+		freqID  uint8
+		freqMHz float64
+	}{
+		{"GPSL1", GnssGPS, 0, 0, 1575.42},
+		{"GPSL2CL", GnssGPS, 3, 0, 1227.60},
+		{"GPSL5", GnssGPS, 6, 0, 1176.45},
+		{"GalileoE1", GnssGalileo, 0, 0, 1575.42},
+		{"GalileoE5aI", GnssGalileo, 3, 0, 1176.45},
+		{"GalileoE5bI", GnssGalileo, 5, 0, 1207.14},
+		{"GalileoE5bQ", GnssGalileo, 6, 0, 1207.14},
+		{"BeidouB1ID1", GnssBeiDou, 0, 0, 1561.098},
+		{"BeidouB2ID2", GnssBeiDou, 3, 0, 1207.14},
+		{"GlonassL1Slot0", GnssGLONASS, 0, 7, 1602.0},
+		{"GlonassL1SlotMinus7", GnssGLONASS, 0, 0, 1598.0625},
+		{"GlonassL1SlotPlus6", GnssGLONASS, 0, 13, 1605.375},
+		{"GlonassL2Slot0", GnssGLONASS, 2, 7, 1246.0},
+		{"GlonassL2SlotMinus7", GnssGLONASS, 2, 0, 1242.9375},
+		{"GlonassL2SlotPlus6", GnssGLONASS, 2, 13, 1248.625},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.InDelta(t, speedOfLight/(tt.freqMHz*1e6), getWavelength(tt.gnss, tt.sigID, tt.freqID), 1e-12)
+		})
+	}
+}
+
+func mustEncodeAllGNSS(t *testing.T, gnss uint8, obs []RawxObservation) []byte {
+	t.Helper()
+	frame, err := EncodeMSM7(1, gnss, 100000, obs)
+	require.NoError(t, err)
+	require.NotNil(t, frame)
+	return frame
+}
+
+// A dense multi-band epoch must stay within the 10-bit length field rather
+// than wrapping it.
+func TestEncodeMSM7CapsOversizedEpoch(t *testing.T) {
+	var obs []RawxObservation
+	for sv := uint8(1); sv <= 32; sv++ {
+		for _, sig := range []uint8{0, 3, 4} {
+			o := sigObs(GnssGPS, sv, sig, 21000000, 110000000)
+			o.CNO = 20 + sv // SV1 weakest
+			obs = append(obs, o)
+		}
+	}
+
+	before := DroppedSats()
+	frame, err := EncodeMSM7(1, GnssGPS, 100000, obs)
+	require.NoError(t, err)
+	require.LessOrEqual(t, len(frame)-FrameOverhead, MaxPayloadLen)
+	require.Greater(t, DroppedSats(), before, "dropped satellites are counted")
+
+	d := decodeMSM7(t, frame) // validates declared length and CRC
+	require.Equal(t, []int{2, 15, 16}, d.sigs)
+	require.NotContains(t, d.sats, 1, "weakest satellite dropped first")
+	require.Contains(t, d.sats, 32, "strongest satellite retained")
+}
+
+// A frame carrying more than 64 MSM cells is rejected by compliant decoders, so
+// the cap binds on cell count as well as payload length.
+func TestEncodeMSM7CapsCellCount(t *testing.T) {
+	tests := []struct {
+		name string
+		sigs []uint8
+		sats int
+	}{
+		{"TwoSignals", []uint8{0, 3}, 32},
+		{"ThreeSignals", []uint8{0, 3, 4}, 21},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var obs []RawxObservation
+			for sv := uint8(1); sv <= 40; sv++ {
+				for _, sig := range tt.sigs {
+					o := sigObs(GnssGPS, sv, sig, 21000000, 110000000)
+					o.CNO = 20 + sv
+					obs = append(obs, o)
+				}
+			}
+
+			d := decodeMSM7(t, mustEncodeAll(t, obs))
+			require.Len(t, d.sats, tt.sats)
+			require.Len(t, d.cells, tt.sats*len(tt.sigs))
+			require.LessOrEqual(t, len(d.cells), msmMaxCellMaskBits)
+		})
+	}
+}
+
+func TestMaxSatsFitsLengthFieldAndCellCap(t *testing.T) {
+	for nsig := 1; nsig <= 6; nsig++ {
+		n := maxSats(nsig)
+		require.True(t, msm7Fits(n, nsig), "nsig=%d n=%d", nsig, n)
+		if n < msmMaxSatellite {
+			require.False(t, msm7Fits(n+1, nsig), "nsig=%d is not tight", nsig)
+		}
+	}
+}
+
+func msm7Fits(nsat, nsig int) bool {
+	return msm7PayloadBytes(nsat, nsig) <= MaxPayloadLen && nsat*nsig <= msmMaxCellMaskBits
+}
+
+func msm7PayloadBytes(nsat, nsig int) int {
+	return (169 + nsat*nsig + nsat*36 + nsat*nsig*80 + 7) / 8
+}

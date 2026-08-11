@@ -17,20 +17,34 @@ limitations under the License.
 package rtcm
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
+	"sync/atomic"
 )
 
 const speedOfLight = 299792458.0 // m/s
 
-// GNSS signal wavelengths in meters.
+// MSM7 bit layout, used to size a frame against the 10-bit RTCM3 length field.
+const (
+	msmHeaderBits      = 73
+	msmSatMaskBits     = 64
+	msmSigMaskBits     = 32
+	msmPerSatBits      = 36
+	msmPerCellBits     = 80
+	msmMaxSatellite    = 64
+	msmMaxCellMaskBits = 64
+)
+
+// GNSS signal wavelengths in meters, keyed by u-blox sigID.
 var signalWavelength = map[uint8]map[uint8]float64{
 	GnssGPS:     {0: speedOfLight / 1575.42e6, 3: speedOfLight / 1227.60e6, 4: speedOfLight / 1227.60e6, 6: speedOfLight / 1176.45e6, 7: speedOfLight / 1176.45e6},
-	GnssGalileo: {0: speedOfLight / 1575.42e6, 1: speedOfLight / 1575.42e6, 5: speedOfLight / 1176.45e6, 6: speedOfLight / 1176.45e6},
+	GnssGalileo: {0: speedOfLight / 1575.42e6, 1: speedOfLight / 1575.42e6, 3: speedOfLight / 1176.45e6, 4: speedOfLight / 1176.45e6, 5: speedOfLight / 1207.14e6, 6: speedOfLight / 1207.14e6},
 	GnssGLONASS: {0: speedOfLight / 1602.0e6, 2: speedOfLight / 1246.0e6},
-	GnssBeiDou:  {0: speedOfLight / 1561.098e6, 2: speedOfLight / 1207.14e6},
+	GnssBeiDou:  {0: speedOfLight / 1561.098e6, 1: speedOfLight / 1561.098e6, 2: speedOfLight / 1207.14e6, 3: speedOfLight / 1207.14e6},
 }
 
 // MSM7 message types per constellation.
@@ -43,12 +57,30 @@ var msm7MsgType = map[uint8]uint16{
 
 // Signal ID to MSM signal mask bit index mapping (DF395).
 // Bit position is 0-based from MSB (bit 0 = signal 1, bit 1 = signal 2, etc.)
-// Only include primary signals to ensure single-signal frames.
+// Values are the RTCM signal number minus one, per RTCM 10403.x tables 3.5-91
+// (GPS), 3.5-97 (GLONASS), 3.5-100 (Galileo), 3.5-106 (BeiDou).
 var signalMaskBit = map[uint8]map[uint8]int{
-	GnssGPS:     {0: 1}, // L1C/A only
-	GnssGalileo: {0: 1}, // E1C only
-	GnssGLONASS: {0: 1}, // L1OF only
-	GnssBeiDou:  {0: 1}, // B1I only
+	GnssGPS:     {0: 1, 3: 15, 4: 14, 6: 21, 7: 22},       // 1C, 2L, 2S, 5I, 5Q
+	GnssGalileo: {0: 1, 1: 3, 3: 21, 4: 22, 5: 13, 6: 14}, // 1C, 1B, 5I, 5Q, 7I, 7Q
+	GnssGLONASS: {0: 1, 2: 7},                             // 1C, 2C
+	GnssBeiDou:  {0: 1, 1: 1, 2: 13, 3: 13},               // 1I, 7I; D1/D2 share a signal
+}
+
+// satSig keys an observation by satellite and signal mask bit.
+type satSig struct {
+	sv  uint8
+	bit int
+}
+
+// droppedSats counts satellites discarded to keep a frame within the RTCM3
+// length field and the 64-bit cell mask. Non-zero means the caster is
+// receiving fewer observations than the receiver tracked.
+var droppedSats atomic.Uint64
+
+// DroppedSats returns the cumulative number of satellites dropped to fit the
+// RTCM3 length field and the 64-bit cell mask.
+func DroppedSats() uint64 {
+	return droppedSats.Load()
 }
 
 // ErrNoObservations indicates a constellation had no usable observations to
@@ -68,6 +100,10 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 	}
 
 	// Filter observations for this constellation with valid signal mapping.
+	bits, ok := signalMaskBit[gnssID]
+	if !ok {
+		return nil, fmt.Errorf("no signal mapping for constellation: %d", gnssID)
+	}
 	var filtered []RawxObservation
 	for i := range obs {
 		if obs[i].GnssID != gnssID {
@@ -83,10 +119,8 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 			continue
 		}
 		// Only include observations with a known signal mask bit mapping.
-		if bits, ok := signalMaskBit[gnssID]; ok {
-			if _, ok := bits[obs[i].SigID]; !ok {
-				continue // unmapped signal ID, skip
-			}
+		if _, ok := bits[obs[i].SigID]; !ok {
+			continue // unmapped signal ID, skip
 		}
 		filtered = append(filtered, obs[i])
 	}
@@ -94,16 +128,30 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 		return nil, ErrNoObservations
 	}
 
-	// Determine unique satellites and signals.
+	// Keyed by mask bit so sigIDs sharing one RTCM signal collapse.
 	satSet := map[uint8]bool{}
-	sigSet := map[uint8]bool{}
+	sigSet := map[int]bool{}
+	obsMap := map[satSig]RawxObservation{}
 	for _, o := range filtered {
+		bit := bits[o.SigID]
 		satSet[o.SvID] = true
-		sigSet[o.SigID] = true
+		sigSet[bit] = true
+		obsMap[satSig{o.SvID, bit}] = o
 	}
 
 	sats := sortedKeys(satSet)
-	sigs := sortedKeys(sigSet)
+	sigs := slices.Sorted(maps.Keys(sigSet))
+
+	// A dense multi-band epoch can overflow the 10-bit length field or the
+	// 64-bit cell mask; drop the weakest satellites rather than the whole
+	// constellation.
+	if over := len(sats) - maxSats(len(sigs)); over > 0 {
+		sats = dropWeakestSats(sats, sigs, obsMap, over)
+		maps.DeleteFunc(obsMap, func(k satSig, _ RawxObservation) bool {
+			return !slices.Contains(sats, k.sv)
+		})
+		droppedSats.Add(uint64(over))
+	}
 
 	// Build satellite mask (64 bits).
 	var satMaskHi, satMaskLo uint32
@@ -118,12 +166,8 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 
 	// Build signal mask (32 bits).
 	var sigMask uint32
-	for _, sig := range sigs {
-		if bits, ok := signalMaskBit[gnssID]; ok {
-			if bit, ok := bits[sig]; ok {
-				sigMask |= 1 << (31 - bit)
-			}
-		}
+	for _, bit := range sigs {
+		sigMask |= 1 << (31 - bit)
 	}
 
 	// Build cell mask and cell list.
@@ -136,25 +180,19 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 	var cells []cell
 	var cellMaskBits []bool
 
-	// Map svID → satIdx, sigID → sigIdx
 	satIdx := map[uint8]int{}
 	for i, sv := range sats {
 		satIdx[sv] = i
 	}
-	sigIdx := map[uint8]int{}
+	sigIdx := map[int]int{}
 	for i, sig := range sigs {
 		sigIdx[sig] = i
 	}
 
 	// Build cell mask row by row (sat-major)
-	obsMap := map[[2]uint8]RawxObservation{}
-	for _, o := range filtered {
-		obsMap[[2]uint8{o.SvID, o.SigID}] = o
-	}
-
 	for _, sv := range sats {
 		for _, sig := range sigs {
-			if o, exists := obsMap[[2]uint8{sv, sig}]; exists {
+			if o, exists := obsMap[satSig{sv, sig}]; exists {
 				cellMaskBits = append(cellMaskBits, true)
 				cells = append(cells, cell{satIdx: satIdx[sv], sigIdx: sigIdx[sig], obs: o})
 			} else {
@@ -334,6 +372,10 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 
 	// Build complete frame.
 	payload := w.Bytes()
+	if len(payload) > MaxPayloadLen {
+		return nil, fmt.Errorf("%w: %d > %d (%d sats x %d signals)",
+			ErrPayloadTooLarge, len(payload), MaxPayloadLen, numSat, len(sigs))
+	}
 	frameLen := HeaderSize + len(payload) + CRCSize
 	frame := make([]byte, frameLen)
 	frame[0] = Preamble
@@ -344,6 +386,39 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 	putCRC(frame)
 
 	return frame, nil
+}
+
+// maxSats returns the largest satellite count that fits both the 10-bit length
+// field and the cell mask. DF396 is nsat*nsig bits wide however sparse the
+// epoch, so sparsity does not relax the bound.
+func maxSats(nsig int) int {
+	fixed := msmHeaderBits + msmSatMaskBits + msmSigMaskBits
+	// Each satellite costs its own bits plus, per signal, one cell-mask bit and
+	// (when the cell is present) a full cell.
+	perSat := msmPerSatBits + nsig*(1+msmPerCellBits)
+	return min((MaxPayloadLen*8-fixed)/perSat, msmMaxCellMaskBits/nsig, msmMaxSatellite)
+}
+
+// dropWeakestSats removes n satellites, lowest total CNO first.
+func dropWeakestSats(sats []uint8, sigs []int, obsMap map[satSig]RawxObservation, n int) []uint8 {
+	cno := make(map[uint8]int, len(sats))
+	for _, sv := range sats {
+		for _, sig := range sigs {
+			if o, ok := obsMap[satSig{sv, sig}]; ok {
+				cno[sv] += int(o.CNO)
+			}
+		}
+	}
+	ranked := slices.Clone(sats)
+	slices.SortFunc(ranked, func(a, b uint8) int {
+		if cno[a] != cno[b] {
+			return cmp.Compare(cno[a], cno[b])
+		}
+		return cmp.Compare(b, a)
+	})
+	keep := ranked[n:]
+	slices.Sort(keep)
+	return keep
 }
 
 // getWavelength returns the signal wavelength for a given GNSS/signal combination.

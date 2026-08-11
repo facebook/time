@@ -46,8 +46,9 @@ type MixedScanner struct {
 
 // NewMixedScanner creates a scanner that reads both RTCM3 and UBX frames.
 func NewMixedScanner(r io.Reader) *MixedScanner {
+	// Both scan paths Peek a whole frame; bufio cannot Peek beyond its buffer.
 	return &MixedScanner{
-		reader: bufio.NewReaderSize(r, MaxFrameSize*2),
+		reader: bufio.NewReaderSize(r, max(MaxFrameSize, MaxUBXFrameSize)),
 	}
 }
 
@@ -56,9 +57,7 @@ func (s *MixedScanner) Scan() bool {
 	for {
 		b, err := s.reader.ReadByte()
 		if err != nil {
-			if !errors.Is(err, io.EOF) {
-				s.err = fmt.Errorf("reading preamble: %w", err)
-			}
+			s.setReadErr("reading preamble", err)
 			return false
 		}
 
@@ -79,9 +78,7 @@ func (s *MixedScanner) Scan() bool {
 func (s *MixedScanner) scanRTCM() bool {
 	headerRest, err := s.reader.Peek(2)
 	if err != nil {
-		if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-			s.err = fmt.Errorf("reading RTCM header: %w", err)
-		}
+		s.setReadErr("reading RTCM header", err)
 		return false
 	}
 
@@ -94,12 +91,7 @@ func (s *MixedScanner) scanRTCM() bool {
 
 	body, err := s.reader.Peek(remaining)
 	if err != nil {
-		if errors.Is(err, bufio.ErrBufferFull) {
-			return false
-		}
-		if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-			s.err = fmt.Errorf("reading RTCM body: %w", err)
-		}
+		s.setReadErr("reading RTCM body", err)
 		return false
 	}
 
@@ -127,6 +119,7 @@ func (s *MixedScanner) scanUBX() bool {
 	// Need sync2 + class + id + len(2) = 5 more bytes to determine frame size.
 	header, err := s.reader.Peek(5)
 	if err != nil {
+		s.setReadErr("reading UBX header", err)
 		return false
 	}
 
@@ -141,6 +134,7 @@ func (s *MixedScanner) scanUBX() bool {
 
 	frameBody, err := s.reader.Peek(remaining)
 	if err != nil {
+		s.setReadErr("reading UBX body", err)
 		return false
 	}
 
@@ -198,4 +192,15 @@ func (s *MixedScanner) UBXMsgID() byte {
 // Err returns the first non-EOF error.
 func (s *MixedScanner) Err() error {
 	return s.err
+}
+
+// setReadErr records a Peek failure unless it is a truncated frame at end of
+// stream. A silent ErrBufferFull would drop every frame of that size.
+func (s *MixedScanner) setReadErr(what string, err error) {
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return
+	}
+	if s.err == nil {
+		s.err = fmt.Errorf("%s: %w", what, err)
+	}
 }

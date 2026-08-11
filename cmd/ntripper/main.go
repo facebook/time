@@ -422,6 +422,7 @@ func streamFrames(
 					"obs", len(epoch.Observations),
 					"gpsTowMs", gpsTowMs,
 					"frames_sent", frameCount,
+					"dropped_sats", rtcm.DroppedSats(),
 					"age_s", time.Now().Unix()-(int64(315964800)+int64(epoch.Week)*604800-int64(epoch.LeapS)+int64(gpsTowMs/1000)),
 				)
 			}
@@ -436,7 +437,7 @@ func streamFrames(
 			gloMs := (utcMs + 3*3600*1000) % 604800000
 			gloEpoch := (gloMs/86400000)<<27 | (gloMs % 86400000)
 
-			// Generate MSM7 for all constellations the F9T provides (L1). Collect
+			// Generate MSM7 for all constellations the receiver provides. Collect
 			// first so the MSM multiple-message bit (DF393) can be set on all but
 			// the last message of the epoch, as the MSM spec requires.
 			gens := []struct {

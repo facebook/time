@@ -33,6 +33,11 @@ const (
 
 	UBXHeaderSize  = 6 // sync(2) + class(1) + id(1) + len(2)
 	UBXChecksumLen = 2
+
+	// MaxUBXPayloadLen is the largest payload the 16-bit UBX length field can express.
+	MaxUBXPayloadLen = 65535
+	// MaxUBXFrameSize is the largest possible UBX frame.
+	MaxUBXFrameSize = UBXHeaderSize + MaxUBXPayloadLen + UBXChecksumLen
 )
 
 // GNSS system identifiers from UBX protocol.
