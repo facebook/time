@@ -91,6 +91,20 @@ func TestJSONStatsNTSCookieOpenFailed(t *testing.T) {
 	require.Equal(t, int64(1), stats.ntsCookieOpenFailed.Load())
 }
 
+func TestJSONStatsNTSCookieExpired(t *testing.T) {
+	stats := JSONStats{}
+
+	stats.IncNTSCookieExpired()
+	require.Equal(t, int64(1), stats.ntsCookieExpired.Load())
+}
+
+func TestJSONStatsNTSCookieFuture(t *testing.T) {
+	stats := JSONStats{}
+
+	stats.IncNTSCookieFuture()
+	require.Equal(t, int64(1), stats.ntsCookieFuture.Load())
+}
+
 func TestJSONStatsAnnounce(t *testing.T) {
 	stats := JSONStats{}
 
@@ -113,6 +127,8 @@ func TestJSONStatsToMap(t *testing.T) {
 	j.ntsAuthOK.Store(8)
 	j.ntsAuthFailed.Store(9)
 	j.ntsCookieOpenFailed.Store(10)
+	j.ntsCookieExpired.Store(11)
+	j.ntsCookieFuture.Store(12)
 	result := j.ToMap()
 
 	expectedMap := make(map[string]int64)
@@ -126,6 +142,8 @@ func TestJSONStatsToMap(t *testing.T) {
 	expectedMap["nts_auth_ok"] = 8
 	expectedMap["nts_auth_failed"] = 9
 	expectedMap["nts_cookie_open_failed"] = 10
+	expectedMap["nts_cookie_expired"] = 11
+	expectedMap["nts_cookie_future"] = 12
 
 	require.Equal(t, expectedMap, result)
 }

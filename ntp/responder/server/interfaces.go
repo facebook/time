@@ -44,6 +44,10 @@ type Stats interface {
 	IncNTSAuthFailed()
 	// IncNTSCookieOpenFailed atomically add 1 to the counter
 	IncNTSCookieOpenFailed()
+	// IncNTSCookieExpired atomically add 1 to the counter
+	IncNTSCookieExpired()
+	// IncNTSCookieFuture atomically add 1 to the counter
+	IncNTSCookieFuture()
 
 	// DecListeners atomically removes 1 from the counter
 	DecListeners()

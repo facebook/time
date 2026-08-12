@@ -255,6 +255,15 @@ func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 			switch {
 			case errors.Is(err, ErrCookieOpen):
 				t.stats.IncNTSCookieOpenFailed()
+				// Expired and future are subsets of the open failure: bump the
+				// specific reason on top of the total so oncall can distinguish
+				// rotation-window rejections from genuine verification failures.
+				switch {
+				case errors.Is(err, ntske.ErrCookieExpired):
+					t.stats.IncNTSCookieExpired()
+				case errors.Is(err, ntske.ErrCookieFuture):
+					t.stats.IncNTSCookieFuture()
+				}
 			case errors.Is(err, ErrAuthVerify):
 				t.stats.IncNTSAuthFailed()
 			default:

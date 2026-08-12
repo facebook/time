@@ -45,6 +45,8 @@ type JSONStats struct {
 	ntsAuthOK           atomic.Int64
 	ntsAuthFailed       atomic.Int64
 	ntsCookieOpenFailed atomic.Int64
+	ntsCookieExpired    atomic.Int64
+	ntsCookieFuture     atomic.Int64
 }
 
 // ToMap converts struct to a map
@@ -61,6 +63,8 @@ func (j *JSONStats) ToMap() (export map[string]int64) {
 	export["nts_auth_ok"] = j.ntsAuthOK.Load()
 	export["nts_auth_failed"] = j.ntsAuthFailed.Load()
 	export["nts_cookie_open_failed"] = j.ntsCookieOpenFailed.Load()
+	export["nts_cookie_expired"] = j.ntsCookieExpired.Load()
+	export["nts_cookie_future"] = j.ntsCookieFuture.Load()
 
 	return export
 }
@@ -139,6 +143,16 @@ func (j *JSONStats) IncNTSAuthFailed() {
 // IncNTSCookieOpenFailed atomically add 1 to the counter
 func (j *JSONStats) IncNTSCookieOpenFailed() {
 	j.ntsCookieOpenFailed.Add(1)
+}
+
+// IncNTSCookieExpired atomically add 1 to the counter
+func (j *JSONStats) IncNTSCookieExpired() {
+	j.ntsCookieExpired.Add(1)
+}
+
+// IncNTSCookieFuture atomically add 1 to the counter
+func (j *JSONStats) IncNTSCookieFuture() {
+	j.ntsCookieFuture.Add(1)
 }
 
 // DecListeners atomically removes 1 from the counter

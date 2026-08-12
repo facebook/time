@@ -19,6 +19,8 @@ package server
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -484,9 +486,20 @@ func TestProcessNTSRequestWithClientHelpers(t *testing.T) {
 	}
 }
 
+// stubKeystore returns a fixed error from OpenCookie so server-path tests can drive
+// each cookie-rejection reason without depending on a concrete keystore implementation.
+type stubKeystore struct{ openErr error }
+
+func (stubKeystore) SealCookie(ntp.AEADAlgorithm, []byte, []byte) ([]byte, error) {
+	return nil, errors.New("stubKeystore: SealCookie unused")
+}
+
+func (s stubKeystore) OpenCookie([]byte) (ntp.AEADAlgorithm, []byte, []byte, error) {
+	return 0, nil, nil, s.openErr
+}
+
 // TestServeNTSStatsRouting feeds crafted NTS requests through task.serve and
-// asserts each failure class lands on exactly the right counter (and a valid
-// request lands on nts.auth_ok).
+// asserts each failure class lands on exactly the right counter.
 func TestServeNTSStatsRouting(t *testing.T) {
 	const aead = ntp.AEADAESSIVCMAC512
 
@@ -528,6 +541,8 @@ func TestServeNTSStatsRouting(t *testing.T) {
 		wantOK      int64
 		wantAuth    int64
 		wantCookie  int64
+		wantExpired int64
+		wantFuture  int64
 		wantInvalid int64
 	}{
 		{
@@ -542,7 +557,26 @@ func TestServeNTSStatsRouting(t *testing.T) {
 				corruptEF(t, req, ntp.NTSCookie)
 				return ks, req
 			},
+			// A generic open failure (verification) bumps only the total, not a subset.
 			wantCookie: 1,
+		},
+		{
+			name: "expired cookie",
+			build: func(t *testing.T) (ntske.Keystore, *ntp.Packet) {
+				_, req := validRequest(t)
+				return stubKeystore{openErr: fmt.Errorf("window behind: %w", ntske.ErrCookieExpired)}, req
+			},
+			wantCookie:  1,
+			wantExpired: 1,
+		},
+		{
+			name: "future cookie",
+			build: func(t *testing.T) (ntske.Keystore, *ntp.Packet) {
+				_, req := validRequest(t)
+				return stubKeystore{openErr: fmt.Errorf("window ahead: %w", ntske.ErrCookieFuture)}, req
+			},
+			wantCookie: 1,
+			wantFuture: 1,
 		},
 		{
 			name: "bad auth tag",
@@ -583,6 +617,8 @@ func TestServeNTSStatsRouting(t *testing.T) {
 			require.Equal(t, tc.wantOK, counters["nts_auth_ok"], "nts_auth_ok")
 			require.Equal(t, tc.wantAuth, counters["nts_auth_failed"], "nts_auth_failed")
 			require.Equal(t, tc.wantCookie, counters["nts_cookie_open_failed"], "nts_cookie_open_failed")
+			require.Equal(t, tc.wantExpired, counters["nts_cookie_expired"], "nts_cookie_expired")
+			require.Equal(t, tc.wantFuture, counters["nts_cookie_future"], "nts_cookie_future")
 			require.Equal(t, tc.wantInvalid, counters["invalidformat"], "invalidformat")
 		})
 	}
