@@ -242,6 +242,7 @@ func PPSClockSync(pi ServoController, srcTimestamp time.Time, dstEventTimestamp 
 	switch servoState {
 	case servo.StateJump:
 		if err := dstDevice.AdjFreq(-freqAdj); err != nil {
+			pi.Unlock()
 			return fmt.Errorf("failed to adjust freq to %v: %w", -freqAdj, err)
 		}
 		if err := dstDevice.Step(-phcOffset); err != nil {
