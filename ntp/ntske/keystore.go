@@ -127,6 +127,8 @@ var (
 	ErrUnsupportedAlgorithm = errors.New("ntske: unsupported aead algorithm")
 	ErrKeyLength            = errors.New("ntske: session key length mismatch")
 	ErrCookieVerify         = errors.New("ntske: cookie verification failed")
+	ErrCookieExpired        = errors.New("ntske: cookie key expired")
+	ErrCookieFuture         = errors.New("ntske: cookie key in the future")
 )
 
 // Keystore seals session keys into opaque cookies and opens them again. A
