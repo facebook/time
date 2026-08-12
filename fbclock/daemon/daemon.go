@@ -66,6 +66,10 @@ type DataPoint struct {
 	ClockAccuracyNS float64
 	// ServoState represents the servo state from the PTP client
 	ServoState int
+	// ServoStateUnavailable marks a PTP client that reports no servo state (ptp4l).
+	// Negative sense: an unset flag keeps the locked check on, so a fetcher that
+	// forgets it fails closed.
+	ServoStateUnavailable bool
 }
 
 // SanityCheck checks datapoint for correctness
@@ -88,7 +92,7 @@ func (d *DataPoint) SanityCheck() error {
 	if time.Duration(d.ClockAccuracyNS) >= ptp.ClockAccuracyUnknown.Duration() {
 		return fmt.Errorf("clock accuracy is unknown")
 	}
-	if d.ServoState != 2 { // servo.StateLocked
+	if !d.ServoStateUnavailable && d.ServoState != 2 { // servo.StateLocked
 		return fmt.Errorf("servo state is %d, not locked", d.ServoState)
 	}
 	return nil

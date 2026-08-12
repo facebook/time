@@ -274,6 +274,7 @@ func TestDataPointSanityCheck(t *testing.T) {
 		name    string
 		in      *DataPoint
 		wantErr bool
+		errMsg  string
 	}{
 		{
 			name: "no ingress time",
@@ -342,6 +343,31 @@ func TestDataPointSanityCheck(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "servo not locked",
+			in: &DataPoint{
+				IngressTimeNS:     1647359186979431900,
+				MasterOffsetNS:    123,
+				PathDelayNS:       213.0,
+				FreqAdjustmentPPB: 212131,
+				ClockAccuracyNS:   25.0,
+				ServoState:        1,
+			},
+			wantErr: true,
+			errMsg:  "servo state is 1, not locked",
+		},
+		{
+			name: "no servo state to report",
+			in: &DataPoint{
+				IngressTimeNS:         1647359186979431900,
+				MasterOffsetNS:        123,
+				PathDelayNS:           213.0,
+				FreqAdjustmentPPB:     212131,
+				ClockAccuracyNS:       25.0,
+				ServoStateUnavailable: true,
+			},
+			wantErr: false,
+		},
+		{
 			name: "all good",
 			in: &DataPoint{
 				IngressTimeNS:     1647359186979431900,
@@ -362,6 +388,9 @@ func TestDataPointSanityCheck(t *testing.T) {
 				require.Error(t, got)
 			} else {
 				require.NoError(t, got)
+			}
+			if tc.errMsg != "" {
+				require.EqualError(t, got, tc.errMsg)
 			}
 		})
 	}

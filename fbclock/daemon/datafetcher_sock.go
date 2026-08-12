@@ -110,14 +110,22 @@ func (sf *SockFetcher) FetchStats(cfg *Config) (*DataPoint, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CURRENT_DATA_SET: %w", err)
 	}
+	return sockDataPoint(status, pds, cds), nil
+}
+
+// sockDataPoint assembles a DataPoint from the ptp4l management TLVs fbclock
+// fetches. None of them carries a servo state, so the point is marked as
+// carrying none.
+func sockDataPoint(status *ptp.TimeStatusNPTLV, pds *ptp.ParentDataSetTLV, cds *ptp.CurrentDataSetTLV) *DataPoint {
 	accuracyNS := pds.GrandmasterClockQuality.ClockAccuracy.Duration().Nanoseconds()
 
 	return &DataPoint{
-		IngressTimeNS:   status.IngressTimeNS,
-		MasterOffsetNS:  float64(status.MasterOffsetNS),
-		PathDelayNS:     cds.MeanPathDelay.Nanoseconds(),
-		ClockAccuracyNS: float64(int64(status.GMPresent) * accuracyNS),
-	}, nil
+		IngressTimeNS:         status.IngressTimeNS,
+		MasterOffsetNS:        float64(status.MasterOffsetNS),
+		PathDelayNS:           cds.MeanPathDelay.Nanoseconds(),
+		ClockAccuracyNS:       float64(int64(status.GMPresent) * accuracyNS),
+		ServoStateUnavailable: true,
+	}
 }
 
 // connect creates connection to unix socket in unixgram mode
