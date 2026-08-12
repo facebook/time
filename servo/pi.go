@@ -404,7 +404,7 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 			v := val.(*PiServoFilterSample)
 			freqSigmaSq += (v.freq - f.freqMean) * (v.freq - f.freqMean)
 		})
-		f.freqStdev = math.Sqrt(freqSigmaSq / float64(f.offsetSamplesCount))
+		f.freqStdev = math.Sqrt(freqSigmaSq / float64(f.freqSamplesCount))
 		log.Debugf("Filter.Sample: freq stdev %f, meanFreq = %f", f.freqStdev, f.freqMean)
 	}
 }

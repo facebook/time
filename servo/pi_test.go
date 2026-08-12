@@ -18,6 +18,7 @@ package servo
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -647,4 +648,24 @@ func TestPiServoIsStable(t *testing.T) {
 			require.Equal(t, tt.expectedStable, pi.IsStable(tt.currentOffset))
 		})
 	}
+}
+
+func TestPiServoFilterFreqStdevOverAdmittedSamples(t *testing.T) {
+	pi := NewPiServo(DefaultServoConfig(), DefaultPiServoCfg(), 0)
+	piFilterCfg := DefaultPiServoFilterCfg()
+	piFilterCfg.ringSize = 4
+	f := NewPiServoFilter(pi, piFilterCfg)
+
+	// Offsets outside offsetRange fail the IsStable gate, so they advance
+	// offsetSamplesCount without contributing a frequency sample.
+	f.Sample(&PiServoFilterSample{offset: 10, freq: 100})
+	f.Sample(&PiServoFilterSample{offset: 500, freq: 200})
+	f.Sample(&PiServoFilterSample{offset: 600, freq: 220})
+	f.Sample(&PiServoFilterSample{offset: 20, freq: 110})
+
+	require.Equal(t, 4, f.offsetSamplesCount)
+	require.Equal(t, 2, f.freqSamplesCount)
+	require.Equal(t, float64(0), f.freqMean)
+
+	require.InEpsilon(t, math.Sqrt((100*100+110*110)/2.0), f.freqStdev, 1e-9)
 }
