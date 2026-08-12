@@ -19,8 +19,12 @@ package control
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 )
+
+// headSizeBytes is the wire size of NTPControlMsgHead, which the Data section follows.
+const headSizeBytes = 12
 
 // NTPClient is our client to talk to network. The main reason it exists is keeping track of Sequence number.
 type NTPClient struct {
@@ -58,17 +62,21 @@ func (n *NTPClient) CommunicateWithData(packet *NTPControlMsgHead, data []uint8)
 	for {
 		response := make([]uint8, 1024)
 		head := new(NTPControlMsgHead)
-		_, err := n.Connection.Read(response)
+		read, err := n.Connection.Read(response)
 		if err != nil {
 			return nil, err
 		}
-		r := bytes.NewReader(response[:12])
+		if read < headSizeBytes {
+			return nil, fmt.Errorf("truncated response: got %d bytes, want at least %d", read, headSizeBytes)
+		}
+		r := bytes.NewReader(response[:headSizeBytes])
 		if err = binary.Read(r, binary.BigEndian, head); err != nil {
 			return nil, err
 		}
-		data := make([]uint8, head.Count)
-		copy(data, response[12:12+head.Count])
-		resultData = append(resultData, data...)
+		if int(head.Count) > read-headSizeBytes {
+			return nil, fmt.Errorf("response declares %d data octets, but only %d were received", head.Count, read-headSizeBytes)
+		}
+		resultData = append(resultData, response[headSizeBytes:headSizeBytes+int(head.Count)]...)
 		if !head.HasMore() {
 			resultHead = head
 			break

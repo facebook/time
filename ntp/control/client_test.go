@@ -18,6 +18,7 @@ package control
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"testing"
 
@@ -122,4 +123,113 @@ func TestCommunicateMulti(t *testing.T) {
 		[]byte{0x74, 0x69, 0x6d, 0x65},
 	}
 	require.Equal(t, expected, p)
+}
+
+// Test that a response whose Count field exceeds the octets we actually
+// received is rejected, instead of being padded out or read past the buffer
+func TestCommunicateBadCount(t *testing.T) {
+	tests := []struct {
+		name      string
+		responses [][]byte
+		wantErr   string
+	}{
+		{
+			name: "count larger than the read buffer",
+			responses: [][]byte{{
+				0x1e, 0x81, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x07, 0xd0, // count set to 2000
+			}},
+			wantErr: "response declares 2000 data octets, but only 0 were received",
+		},
+		{
+			name: "count that wraps once the header size is added",
+			responses: [][]byte{{
+				0x1e, 0x81, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0xff, 0xff, // count set to 65535
+			}},
+			wantErr: "response declares 65535 data octets, but only 0 were received",
+		},
+		{
+			name: "count larger than the data sent",
+			responses: [][]byte{{
+				0x1e, 0x81, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x04, // count set to 4
+				0x74, 0x69, // only 2 octets of data
+			}},
+			wantErr: "response declares 4 data octets, but only 2 were received",
+		},
+		{
+			name: "truncated header",
+			responses: [][]byte{{
+				0x1e, 0x81, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
+			}},
+			wantErr: "truncated response: got 8 bytes, want at least 12",
+		},
+		{
+			name: "bad count in the second half of a split response",
+			responses: [][]byte{
+				{
+					0x1e, 0xa1, 0x00, 0x00, // more bit set to 1
+					0x00, 0x00, 0x00, 0x00,
+					0x00, 0x00, 0x00, 0x02, // count set to 2
+					0x74, 0x69, // 2 octets of data
+				},
+				{
+					0x1e, 0x81, 0x00, 0x00, // more bit set to 0
+					0x00, 0x00, 0x00, 0x00,
+					0x00, 0x00, 0x00, 0x04, // count set to 4
+					0x6d, 0x65, // only 2 octets of data
+				},
+			},
+			wantErr: "response declares 4 data octets, but only 2 were received",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			outputs := make([]*bytes.Buffer, 0, len(tt.responses))
+			for _, response := range tt.responses {
+				outputs = append(outputs, bytes.NewBuffer(response))
+			}
+			client := NTPClient{Sequence: 1, Connection: newConn(outputs)}
+			_, err := client.Communicate(&NTPControlMsgHead{
+				VnMode: vnMode,
+				REMOp:  OpReadStatus,
+			})
+			require.EqualError(t, err, tt.wantErr)
+		})
+	}
+}
+
+// Test that the octets ntpd pads the data section with, and the authenticator
+// that can follow it, do not make a well-formed Count look too large
+func TestCommunicatePaddedResponse(t *testing.T) {
+	response := []byte{
+		0x1e, 0x81, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x05, // count set to 5
+		0x74, 0x69, 0x6d, 0x65, 0x73, // 5 octets of data
+		0x00, 0x00, 0x00, // padded up to a 4 octet boundary
+		0x00, 0x00, 0x00, 0x01, // key id
+		0x93, 0xdf, 0x1f, 0xf4, // 16 octet message digest
+		0x81, 0x2b, 0x0e, 0x36,
+		0x39, 0x4b, 0xd1, 0x4c,
+		0x7f, 0xa8, 0x62, 0x05,
+	}
+	client := NTPClient{Sequence: 1, Connection: newConn([]*bytes.Buffer{bytes.NewBuffer(response)})}
+	p, err := client.Communicate(&NTPControlMsgHead{
+		VnMode: vnMode,
+		REMOp:  OpReadStatus,
+	})
+	require.NoError(t, err)
+	require.Equal(t, []byte{0x74, 0x69, 0x6d, 0x65, 0x73}, p.Data)
+}
+
+// headSizeBytes slices the header off the wire, so it has to keep matching the
+// struct binary.Read fills from those same bytes
+func TestHeadSizeBytes(t *testing.T) {
+	require.Equal(t, headSizeBytes, binary.Size(NTPControlMsgHead{}))
 }
