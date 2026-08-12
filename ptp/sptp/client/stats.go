@@ -233,6 +233,13 @@ func runResultToGMStats(address netip.Addr, r *RunResult, p3 int, selected bool,
 		return s
 	}
 
+	// bmca chose this master and the servo reported its state earlier in the
+	// tick, before the spike filter dropped the measurement, so both outlive it.
+	if selected {
+		s.Selected = true
+		s.ServoState = servoState
+	}
+
 	if r.Measurement == nil {
 		s.Error = "Measurement is missing on RunResult"
 		return s
@@ -250,9 +257,5 @@ func runResultToGMStats(address netip.Addr, r *RunResult, p3 int, selected bool,
 	s.CorrectionFieldTX = r.Measurement.CorrectionFieldTX.Nanoseconds()
 	s.C2SDelay = r.Measurement.C2SDelay.Nanoseconds()
 	s.S2CDelay = r.Measurement.S2CDelay.Nanoseconds()
-	if selected {
-		s.Selected = true
-		s.ServoState = servoState
-	}
 	return s
 }

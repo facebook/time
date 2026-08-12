@@ -21,8 +21,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
+	"time"
 
+	"github.com/facebook/time/fbclock"
+	"github.com/facebook/time/fbclock/stats"
 	"github.com/stretchr/testify/require"
 )
 
@@ -181,6 +185,72 @@ func TestFetchStatsGMNotPresent(t *testing.T) {
 	require.Equal(t, float64(0), dp.ClockAccuracyNS)
 	require.Equal(t, -50.5, dp.MasterOffsetNS)
 	require.Equal(t, 100.0, dp.PathDelayNS)
+}
+
+func TestFetchStatsSpikeFilteredGM(t *testing.T) {
+	// What sptp publishes while its servo filters an offset spike: the
+	// grandmaster it steers to, with this tick's measurement withheld.
+	sampleResp := `
+[
+	{"gm_address": "::1", "selected": true, "priority3": 1, "gm_present": 0, "servo_state": 3, "error": "Measurement is missing on RunResult"}
+]
+`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+	surl, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cfg := &Config{PTPClientAddress: fmt.Sprintf("%s:%s", surl.Hostname(), surl.Port())}
+	fetcher := &HTTPFetcher{}
+	dp, err := fetcher.FetchStats(cfg)
+	require.NoError(t, err)
+
+	require.Equal(t, 3, dp.ServoState) // servo.StateFilter, carried across the missing measurement
+
+	dp.FreqAdjustmentPPB = 212131 // Run() fills this in before doWork
+	// Rejected by a check older than the servo-state gate, so the tick costs a
+	// processing_error on any fbclock, not just one that reads servo_state.
+	require.EqualError(t, dp.SanityCheck(), "ingress time is 0")
+
+	// The filtered master must stay out of the linearizability targets: a test
+	// against it fails and feeds the alarmed linearizability.failed counter.
+	gms, err := fetcher.FetchGMs(cfg)
+	require.NoError(t, err)
+	require.Empty(t, gms)
+
+	spikeTickCounters(t, dp)
+}
+
+// spikeTickCounters pins what a spike-filtered tick costs once Run() stops
+// short-circuiting on the fetch error and hands the point to doWork.
+func spikeTickCounters(t *testing.T, dp *DataPoint) {
+	t.Helper()
+	cfg := &Config{Interval: time.Second, RingSize: 30}
+	st := stats.NewStats()
+	s := newTestDaemon(cfg, st)
+	s.getPHCTime = func() (time.Time, error) { return time.Unix(0, 1647359186979431900), nil }
+
+	tmpFile, err := os.CreateTemp("", "datafetcher_http_test")
+	require.NoError(t, err)
+	defer os.Remove(tmpFile.Name())
+	shm, err := fbclock.OpenFBClockShmCustomVer(tmpFile.Name(), 1)
+	require.NoError(t, err)
+	defer shm.Close()
+
+	require.ErrorIs(t, s.doWork(shm, dp), errCorrectness)
+
+	c := st.Get()
+	require.Equal(t, int64(1), c["data_sanity_check_error"])
+	require.Equal(t, int64(212131), c["freq_adj_ppb"])
+	// Same contract TestDaemonDoWork pins for a ptp4l hiccup: a rejected point
+	// still zeroes the raw gauges. Nothing derived from the ring buffer moves.
+	for _, k := range []string{"master_offset_ns", "path_delay_ns", "ingress_time_ns", "clock_accuracy_ns"} {
+		require.Equal(t, int64(0), c[k], k)
+	}
+	for _, k := range []string{"m_ns", "w_ns", "drift_ppb", "master_offset_ns.60.abs_max"} {
+		require.Zero(t, c[k], k)
+	}
 }
 
 func TestFetchStatsWithIngressTime(t *testing.T) {

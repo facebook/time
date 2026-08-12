@@ -506,6 +506,90 @@ func TestRunFiltered(t *testing.T) {
 	require.Nil(t, nil, results[netip.MustParseAddr("192.168.0.10")])
 }
 
+func TestProcessResultsSpikePublishesSelectedGMWithoutTheSpike(t *testing.T) {
+	testCases := []struct {
+		name           string
+		servoState     servo.State
+		wantServoState servo.State
+	}{
+		{name: "servo locked", servoState: servo.StateLocked, wantServoState: servo.StateFilter},
+		{name: "servo not locked", servoState: servo.StateInit, wantServoState: servo.StateInit},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ts, err := time.Parse(time.RFC3339, "2021-05-21T13:32:05+01:00")
+			require.NoError(t, err)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockClock := NewMockClock(ctrl)
+			mockClock.EXPECT().AdjFreqPPB(float64(0))
+			mockServo := NewMockServo(ctrl)
+			mockServo.EXPECT().IsSpike(int64(-200002000)).Return(true)
+			mockServo.EXPECT().GetState().Return(tc.servoState)
+			mockServo.EXPECT().MeanFreq()
+			mockServo.EXPECT().SetLastFreq(float64(0))
+			mockEventConn := NewMockUDPConnWithTS(ctrl)
+			mockEventConn.EXPECT().ConnFd().Return(0)
+
+			statsServer, err := NewStats()
+			require.NoError(t, err)
+
+			cfg := DefaultConfig()
+			cfg.Iface = "lo"
+			cfg.Servers = map[string]int{
+				"192.168.0.10": 1,
+			}
+			p := &SPTP{
+				clock:      mockClock,
+				pi:         mockServo,
+				stats:      statsServer,
+				cfg:        cfg,
+				eventConns: []UDPConnWithTS{mockEventConn},
+			}
+			require.NoError(t, p.initClients())
+
+			announce := announcePkt(0)
+			announce.GrandmasterIdentity = ptp.ClockIdentity(0x001)
+			announce.GrandmasterClockQuality = ptp.ClockQuality{
+				ClockClass:    ptp.ClockClass6,
+				ClockAccuracy: ptp.ClockAccuracyMicrosecond10,
+			}
+			results := map[netip.Addr]*RunResult{
+				netip.MustParseAddr("192.168.0.10"): {
+					Server: netip.MustParseAddr("192.168.0.10"),
+					Measurement: &MeasurementResult{
+						Delay:     299995 * time.Microsecond,
+						S2CDelay:  100,
+						C2SDelay:  110,
+						Offset:    -200002 * time.Microsecond,
+						Timestamp: ts,
+						Announce:  *announce,
+					},
+				},
+			}
+			require.NoError(t, p.processResults(results))
+			require.Equal(t, netip.MustParseAddr("192.168.0.10"), p.bestGM)
+
+			published := statsServer.GetGMStats()
+			require.Len(t, published, 1)
+
+			var selected *gmstats.Stat
+			for _, s := range published {
+				if s.Selected {
+					selected = s
+					break
+				}
+			}
+			require.NotNil(t, selected, "a spike-filtered tick must still name the grandmaster sptp steers to")
+			require.Equal(t, int(tc.wantServoState), selected.ServoState)
+			require.Zero(t, selected.GMPresent)
+			require.Zero(t, selected.Offset)
+			require.Zero(t, selected.IngressTime)
+			require.Equal(t, "Measurement is missing on RunResult", selected.Error)
+		})
+	}
+}
+
 func TestRunStalled(t *testing.T) {
 	ts, err := time.Parse(time.RFC3339, "2021-05-21T13:32:05+01:00")
 	require.Nil(t, err)

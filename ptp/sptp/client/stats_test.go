@@ -26,6 +26,7 @@ import (
 
 	ptp "github.com/facebook/time/ptp/protocol"
 	gmstats "github.com/facebook/time/ptp/sptp/stats"
+	"github.com/facebook/time/servo"
 
 	"github.com/stretchr/testify/require"
 )
@@ -35,13 +36,44 @@ func TestRunResultToStatsError(t *testing.T) {
 		Server: netip.MustParseAddr("192.168.0.10"),
 		Error:  fmt.Errorf("ooops"),
 	}
-	got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, false, 0)
 	want := &gmstats.Stat{
 		GMAddress: "192.168.0.10",
 		Priority3: 1,
 		Error:     "ooops",
 	}
-	require.Equal(t, want, got)
+
+	t.Run("not selected", func(t *testing.T) {
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, false, 0)
+		require.Equal(t, want, got)
+	})
+
+	// A grandmaster we could not reach must never be published as selected,
+	// whatever the caller passes.
+	t.Run("selected", func(t *testing.T) {
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, true, int(servo.StateFilter))
+		require.Equal(t, want, got)
+	})
+}
+
+func TestRunResultToStatsNoMeasurement(t *testing.T) {
+	r := &RunResult{Server: netip.MustParseAddr("192.168.0.10")}
+	want := &gmstats.Stat{
+		GMAddress: "192.168.0.10",
+		Priority3: 3,
+		Error:     "Measurement is missing on RunResult",
+	}
+
+	t.Run("not selected", func(t *testing.T) {
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false, int(servo.StateFilter))
+		require.Equal(t, want, got)
+	})
+
+	want.Selected = true
+	want.ServoState = int(servo.StateFilter)
+	t.Run("selected", func(t *testing.T) {
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true, int(servo.StateFilter))
+		require.Equal(t, want, got)
+	})
 }
 
 func TestRunResultToStats(t *testing.T) {
