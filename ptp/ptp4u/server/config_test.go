@@ -17,9 +17,14 @@ limitations under the License.
 package server
 
 import (
+	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -162,6 +167,109 @@ utcoffset: 37s
 	rl, err := os.ReadFile(cfg.Name())
 	require.NoError(t, err)
 	require.Equal(t, expected, string(rl))
+}
+
+func TestWriteDynamicConfigIsAtomic(t *testing.T) {
+	if runtime.GOMAXPROCS(0) < 2 {
+		t.Skip("catching a torn read needs a reader and the writer running in parallel")
+	}
+	path := filepath.Join(t.TempDir(), "ptp4u.yaml")
+	dc := &DynamicConfig{
+		ClockAccuracy:  0,
+		ClockClass:     1,
+		DrainInterval:  2 * time.Second,
+		MaxSubDuration: 3 * time.Hour,
+		MetricInterval: 4 * time.Minute,
+		MinSubInterval: 5 * time.Second,
+		UTCOffset:      37 * time.Second,
+	}
+
+	// The writer alternates between these two, and readers compare against the
+	// whole struct: a truncated file that still parses matches neither, so the
+	// check does not rely on which field yaml happens to emit last.
+	want := []DynamicConfig{*dc, *dc}
+	want[0].MinSubInterval = time.Second
+	want[1].MinSubInterval = 2 * time.Second
+
+	dc.MinSubInterval = want[0].MinSubInterval
+	require.NoError(t, dc.Write(path))
+
+	done := make(chan struct{})
+	readErr := make(chan error, 1)
+	var reads atomic.Int64
+	var readers sync.WaitGroup
+	for range 2 {
+		readers.Go(func() {
+			for {
+				select {
+				case <-done:
+					return
+				default:
+				}
+				got, err := ReadDynamicConfig(path)
+				if err == nil && !slices.Contains(want, *got) {
+					err = fmt.Errorf("config was never written in this form: %+v", *got)
+				}
+				if err != nil {
+					select {
+					case readErr <- err:
+					default:
+					}
+					return
+				}
+				reads.Add(1)
+			}
+		})
+	}
+
+	var stopOnce sync.Once
+	stop := func() {
+		stopOnce.Do(func() {
+			close(done)
+			readers.Wait()
+		})
+	}
+	defer stop()
+
+	for i := range 300 {
+		dc.MinSubInterval = want[i%2].MinSubInterval
+		require.NoError(t, dc.Write(path))
+	}
+	stop()
+
+	select {
+	case err := <-readErr:
+		require.NoError(t, err, "a concurrent reader saw a partially written config")
+	default:
+	}
+	require.NotZero(t, reads.Load(), "no read completed alongside the writes, so nothing was proven")
+}
+
+func TestWriteDynamicConfigKeepsMode(t *testing.T) {
+	dc := &DynamicConfig{
+		ClockAccuracy:  0,
+		ClockClass:     1,
+		DrainInterval:  2 * time.Second,
+		MaxSubDuration: 3 * time.Hour,
+		MetricInterval: 4 * time.Minute,
+		MinSubInterval: 5 * time.Second,
+		UTCOffset:      37 * time.Second,
+	}
+	dir := t.TempDir()
+
+	fresh := filepath.Join(dir, "fresh.yaml")
+	require.NoError(t, dc.Write(fresh))
+	fi, err := os.Stat(fresh)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0644), fi.Mode().Perm())
+
+	tightened := filepath.Join(dir, "tightened.yaml")
+	require.NoError(t, dc.Write(tightened))
+	require.NoError(t, os.Chmod(tightened, 0600))
+	require.NoError(t, dc.Write(tightened))
+	fi, err = os.Stat(tightened)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0600), fi.Mode().Perm(), "an existing config keeps the mode it had")
 }
 
 func TestUTCOffsetSanity(t *testing.T) {

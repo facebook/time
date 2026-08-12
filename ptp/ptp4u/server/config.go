@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -114,14 +115,45 @@ func ReadDynamicConfig(path string) (*DynamicConfig, error) {
 	return dc, nil
 }
 
-// Write dynamic config to a file
+// Write dynamic config to a file. The file is replaced atomically, so ptp4u,
+// which reads it from another process, never parses a half-written config.
 func (dc *DynamicConfig) Write(path string) error {
 	d, err := yaml.Marshal(&dc)
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, d, 0644)
+	return writeFileAtomic(path, d)
+}
+
+// writeFileAtomic replaces path with data via a temporary file in the same
+// directory and a rename, so a reader in another process sees either the old
+// contents or the new ones and never a mix. An existing file keeps its mode.
+func writeFileAtomic(path string, data []byte) error {
+	mode := os.FileMode(0644)
+	if fi, err := os.Stat(path); err == nil {
+		mode = fi.Mode().Perm()
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmp.Name(), path)
 }
 
 // IfaceHasIP checks if selected IP is on interface
@@ -140,9 +172,11 @@ func (c *Config) IfaceHasIP() (bool, error) {
 	return false, nil
 }
 
-// CreatePidFile creates a pid file in a defined location
+// CreatePidFile creates a pid file in a defined location. c4u reads this file
+// from another process to find out who to SIGHUP, so it is replaced atomically
+// too: a torn read there costs ptp4u the config reload it was about to get.
 func (c *Config) CreatePidFile() error {
-	return os.WriteFile(c.PidFile, []byte(fmt.Sprintf("%d\n", unix.Getpid())), 0644)
+	return writeFileAtomic(c.PidFile, []byte(fmt.Sprintf("%d\n", unix.Getpid())))
 }
 
 // DeletePidFile deletes a pid file from a defined location
