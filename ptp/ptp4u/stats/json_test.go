@@ -22,6 +22,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -426,4 +427,39 @@ func TestJSONStatsSetMinMaxCF_EdgeCases(t *testing.T) {
 	atomic.StoreInt64(&stats.minMaxCF, 0)
 	stats.SetMinMaxCF(-9223372036854775808) // Min int64
 	require.Equal(t, int64(-9223372036854775808), atomic.LoadInt64(&stats.minMaxCF))
+}
+
+// A worker id that has never been seen inserts a new map key under the mutex,
+// which is what races Snapshot's unlocked len(s.m) in syncMapInt64.keys.
+func TestJSONStatsSnapshotConcurrentWithNewCounterKeys(t *testing.T) {
+	const iterations = 2000
+	const maxIterations = iterations * 100
+
+	stats := NewJSONStats(1)
+	var snapshots atomic.Int64
+	var wg sync.WaitGroup
+	done := make(chan struct{})
+
+	wg.Go(func() {
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				stats.Snapshot()
+				snapshots.Add(1)
+			}
+		}
+	})
+
+	wg.Go(func() {
+		defer close(done)
+		for i := 0; i < iterations || (snapshots.Load() == 0 && i < maxIterations); i++ {
+			stats.IncSubscription(ptp.MessageType(i))
+			stats.SetMaxWorkerQueue(i, int64(i))
+		}
+	})
+
+	wg.Wait()
+	require.Positive(t, snapshots.Load())
 }

@@ -166,8 +166,8 @@ func (s *syncMapInt64) init() {
 
 // keys returns slice of keys of the underlying map
 func (s *syncMapInt64) keys() []int {
-	keys := make([]int, 0, len(s.m))
 	s.Lock()
+	keys := make([]int, 0, len(s.m))
 	for k := range s.m {
 		keys = append(keys, k)
 	}
