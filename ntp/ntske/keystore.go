@@ -243,18 +243,20 @@ func (ks *InMemoryKeystore) SealCookie(aeadID protocol.AEADAlgorithm, c2s, s2c [
 	return SealEnvelope(ks.rand, keyID, master, aeadID, c2s, s2c)
 }
 
-// OpenCookie decrypts a cookie via the shared envelope (see OpenEnvelope),
-// resolving the master by Key ID from the ring.
+// OpenCookie parses the cookie, resolves the master key by the cookie's Key ID
+// from the ring, and decrypts it.
 func (ks *InMemoryKeystore) OpenCookie(cookie []byte) (protocol.AEADAlgorithm, []byte, []byte, error) {
-	return OpenEnvelope(cookie, func(keyID uint32) ([]byte, error) {
-		ks.mu.RLock()
-		master, ok := ks.ring[keyID]
-		ks.mu.RUnlock()
-		if !ok {
-			return nil, fmt.Errorf("%w: keyID=%d", ErrUnknownKeyID, keyID)
-		}
-		return master, nil
-	})
+	c, err := ParseCookie(cookie)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	ks.mu.RLock()
+	master, ok := ks.ring[c.KeyID]
+	ks.mu.RUnlock()
+	if !ok {
+		return 0, nil, nil, fmt.Errorf("%w: keyID=%d", ErrUnknownKeyID, c.KeyID)
+	}
+	return c.Open(master)
 }
 
 // SealEnvelope seals c2s || s2c under sealingKey and assembles the cookie
@@ -290,29 +292,52 @@ func SealEnvelope(rnd io.Reader, keyID uint32, sealingKey []byte, aeadID protoco
 	return out, nil
 }
 
-// OpenEnvelope validates a cookie, resolves its sealing key via sealingKeyFor, and
-// decrypts it, returning the session aeadID and the C2S/S2C keys.
-func OpenEnvelope(cookie []byte, sealingKeyFor func(keyID uint32) ([]byte, error)) (protocol.AEADAlgorithm, []byte, []byte, error) {
-	aeadID, err := CookieAEADID(cookie)
+// Cookie is a parsed cookie envelope: [Key ID][Nonce][AES-SIV ciphertext], its
+// framing validated once at parse time. The nonce and ciphertext alias the input
+// slice, so callers must not mutate the cookie while a Cookie references it.
+type Cookie struct {
+	KeyID  uint32                 // master-key identifier stamped in the clear
+	AEADID protocol.AEADAlgorithm // session AEAD, inferred from the total length
+	nonce  []byte
+	ct     []byte
+}
+
+// ParseCookie validates a cookie's framing and splits it into its fields without
+// decrypting it. The Key ID and the session AEAD (inferred from the total length)
+// are read here, so both are available before the sealing key is resolved.
+func ParseCookie(cookie []byte) (*Cookie, error) {
+	if len(cookie) < cookieOverhead {
+		return nil, fmt.Errorf("%w: len=%d, need at least %d", ErrCookieTooShort, len(cookie), cookieOverhead)
+	}
+	ptLen := len(cookie) - cookieOverhead
+	if ptLen == 0 || ptLen%2 != 0 {
+		return nil, fmt.Errorf("%w: key material length %d is not a positive even number",
+			ErrCookieMalformed, ptLen)
+	}
+	aeadID, err := keyLenToAEADID(ptLen / 2)
+	if err != nil {
+		return nil, err
+	}
+	return &Cookie{
+		KeyID:  binary.BigEndian.Uint32(cookie[:cookieKeyIDLen]),
+		AEADID: aeadID,
+		nonce:  cookie[cookieKeyIDLen : cookieKeyIDLen+cookieNonceLen],
+		ct:     cookie[cookieKeyIDLen+cookieNonceLen:],
+	}, nil
+}
+
+// Open decrypts the cookie with an already-resolved sealing key, returning the
+// session AEAD and the C2S/S2C keys. The returned key slices are freshly allocated.
+func (c *Cookie) Open(sealingKey []byte) (protocol.AEADAlgorithm, []byte, []byte, error) {
+	keyLen, err := aeadIDToKeyLen(c.AEADID)
 	if err != nil {
 		return 0, nil, nil, err
 	}
-	keyLen, err := aeadIDToKeyLen(aeadID)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-	keyID := binary.BigEndian.Uint32(cookie[0:cookieKeyIDLen])
-	sealingKey, err := sealingKeyFor(keyID)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-	nonce := cookie[cookieKeyIDLen : cookieKeyIDLen+cookieNonceLen]
-	ct := cookie[cookieKeyIDLen+cookieNonceLen:]
 	aead, err := nts.NewAEAD(masterAEADID, sealingKey)
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("ntske: master aead: %w", err)
 	}
-	pt, err := aead.Open(nonce, nil, ct)
+	pt, err := aead.Open(c.nonce, nil, c.ct)
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("%w: %s", ErrCookieVerify, err.Error())
 	}
@@ -320,21 +345,7 @@ func OpenEnvelope(cookie []byte, sealingKeyFor func(keyID uint32) ([]byte, error
 		return 0, nil, nil, fmt.Errorf("%w: decrypted %d octets, want %d",
 			ErrCookieMalformed, len(pt), 2*keyLen)
 	}
-	return aeadID, bytes.Clone(pt[:keyLen]), bytes.Clone(pt[keyLen:]), nil
-}
-
-// CookieAEADID reports the negotiated session AEAD algorithm ID encoded by a
-// cookie's total length, without decrypting it.
-func CookieAEADID(cookie []byte) (protocol.AEADAlgorithm, error) {
-	if len(cookie) < cookieOverhead {
-		return 0, fmt.Errorf("%w: len=%d, need at least %d", ErrCookieTooShort, len(cookie), cookieOverhead)
-	}
-	ptLen := len(cookie) - cookieOverhead
-	if ptLen == 0 || ptLen%2 != 0 {
-		return 0, fmt.Errorf("%w: key material length %d is not a positive even number",
-			ErrCookieMalformed, ptLen)
-	}
-	return keyLenToAEADID(ptLen / 2)
+	return c.AEADID, bytes.Clone(pt[:keyLen]), bytes.Clone(pt[keyLen:]), nil
 }
 
 // keyLenToAEADID maps a per-direction session key length to its AEAD algorithm ID.

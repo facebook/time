@@ -18,6 +18,7 @@ package ntske
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"sync"
 	"testing"
@@ -39,7 +40,7 @@ func sessionKeys(keyLen int) (c2s, s2c []byte) {
 }
 
 // TestSealOpenRoundTrip verifies that a cookie sealed for each supported AEAD
-// has the expected wire length, that CookieAEADID recovers the algorithm from
+// has the expected wire length, that ParseCookie recovers the algorithm from
 // length alone, and that OpenCookie returns the exact C2S and S2C keys.
 func TestSealOpenRoundTrip(t *testing.T) {
 	cases := []struct {
@@ -62,9 +63,9 @@ func TestSealOpenRoundTrip(t *testing.T) {
 			require.Len(t, cookie, tc.wantLen, "cookie must be exactly %d octets", tc.wantLen)
 
 			// Length alone must reveal the negotiated algorithm.
-			gotID, err := CookieAEADID(cookie)
+			parsed, err := ParseCookie(cookie)
 			require.NoError(t, err)
-			require.Equal(t, tc.aeadID, gotID)
+			require.Equal(t, tc.aeadID, parsed.AEADID)
 
 			openID, gotC2S, gotS2C, err := ks.OpenCookie(cookie)
 			require.NoError(t, err)
@@ -274,4 +275,98 @@ func TestInitialKeyWrongLength(t *testing.T) {
 // MasterKeyLen must equal the AES-SIV-CMAC-512 key length (guards the fail-loud accessor).
 func TestMasterKeyLen(t *testing.T) {
 	require.Equal(t, 64, MasterKeyLen())
+}
+
+// TestParseCookie verifies ParseCookie reads the Key ID and infers the session AEAD
+// from length without decrypting, and rejects malformed framing before any sealing
+// key is resolved (a rejected cookie yields no *Cookie, so Open can never run on it).
+func TestParseCookie(t *testing.T) {
+	t.Run("valid key id and aead", func(t *testing.T) {
+		sealingKey := bytes.Repeat([]byte{0x5a}, MasterKeyLen())
+		c2s, s2c := sessionKeys(16)
+		cookie, err := SealEnvelope(rand.Reader, 7, sealingKey, protocol.AEADAES128GCMSIV, c2s, s2c)
+		require.NoError(t, err)
+
+		c, err := ParseCookie(cookie)
+		require.NoError(t, err)
+		require.Equal(t, uint32(7), c.KeyID)
+		require.Equal(t, protocol.AEADAES128GCMSIV, c.AEADID)
+	})
+
+	t.Run("short cookie", func(t *testing.T) {
+		c, err := ParseCookie(make([]byte, cookieOverhead-1))
+		require.ErrorIs(t, err, ErrCookieTooShort)
+		require.Nil(t, c)
+	})
+
+	t.Run("malformed rejected before open", func(t *testing.T) {
+		// Odd key-material length fails framing, so no *Cookie is returned and
+		// there is nothing to resolve a key for or Open.
+		c, err := ParseCookie(make([]byte, cookieOverhead+1))
+		require.ErrorIs(t, err, ErrCookieMalformed)
+		require.Nil(t, c)
+	})
+
+	t.Run("exact overhead has no key material", func(t *testing.T) {
+		// A cookie of exactly the overhead length carries zero key material.
+		c, err := ParseCookie(make([]byte, cookieOverhead))
+		require.ErrorIs(t, err, ErrCookieMalformed)
+		require.Nil(t, c)
+	})
+
+	t.Run("unsupported key length", func(t *testing.T) {
+		// cookieOverhead+2 => 1-octet per-direction key, which no AEAD uses.
+		c, err := ParseCookie(make([]byte, cookieOverhead+2))
+		require.ErrorIs(t, err, ErrUnsupportedAlgorithm)
+		require.Nil(t, c)
+	})
+}
+
+// TestCookieOpen verifies decrypting a parsed cookie with an already-resolved key
+// returns the exact session keys and fails closed under a wrong key. Framing is
+// validated at parse time, so Open never sees a malformed cookie.
+func TestCookieOpen(t *testing.T) {
+	sealingKey := bytes.Repeat([]byte{0x5a}, MasterKeyLen())
+	c2s, s2c := sessionKeys(64)
+	cookie, err := SealEnvelope(rand.Reader, 3, sealingKey, protocol.AEADAESSIVCMAC512, c2s, s2c)
+	require.NoError(t, err)
+
+	t.Run("round trip", func(t *testing.T) {
+		c, err := ParseCookie(cookie)
+		require.NoError(t, err)
+
+		aeadID, gotC2S, gotS2C, err := c.Open(sealingKey)
+		require.NoError(t, err)
+		require.Equal(t, protocol.AEADAESSIVCMAC512, aeadID)
+		require.Equal(t, c2s, gotC2S)
+		require.Equal(t, s2c, gotS2C)
+	})
+
+	t.Run("wrong key", func(t *testing.T) {
+		c, err := ParseCookie(cookie)
+		require.NoError(t, err)
+
+		wrongKey := bytes.Repeat([]byte{0x99}, MasterKeyLen())
+		_, _, _, err = c.Open(wrongKey)
+		require.ErrorIs(t, err, ErrCookieVerify)
+	})
+}
+
+// TestOpenCookieValidatesFramingBeforeKeyLookup proves framing is checked before the
+// key lookup: a malformed cookie fails with the framing sentinel, not ErrUnknownKeyID.
+func TestOpenCookieValidatesFramingBeforeKeyLookup(t *testing.T) {
+	ks, err := NewInMemoryKeystore(InMemoryKeystoreOptions{})
+	require.NoError(t, err)
+
+	t.Run("too short", func(t *testing.T) {
+		_, _, _, err := ks.OpenCookie(make([]byte, cookieOverhead-1))
+		require.ErrorIs(t, err, ErrCookieTooShort)
+		require.NotErrorIs(t, err, ErrUnknownKeyID)
+	})
+
+	t.Run("odd key material", func(t *testing.T) {
+		_, _, _, err := ks.OpenCookie(make([]byte, cookieOverhead+1))
+		require.ErrorIs(t, err, ErrCookieMalformed)
+		require.NotErrorIs(t, err, ErrUnknownKeyID)
+	})
 }
