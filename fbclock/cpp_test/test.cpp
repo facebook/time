@@ -20,6 +20,7 @@ limitations under the License.
 #include <sys/mman.h>
 #include <cmath>
 #include <future>
+#include <iterator>
 #include <thread>
 
 #include "../fbclock.h"
@@ -615,7 +616,8 @@ TEST(fbclockTest, test_fbclock_apply_smear_during_2017_leap_second_params) {
       1483293800000000000, // Sun, 01 Jan 2017 18:03:20:000:000:000 UTC
   };
 
-  for (int i = 0; i < 11; ++i) {
+  ASSERT_EQ(std::size(input_times), std::size(output_times));
+  for (size_t i = 0; i < std::size(input_times); ++i) {
     EXPECT_EQ(
         fbclock_apply_smear(
             input_times[i],
@@ -650,7 +652,8 @@ TEST(fbclockTest, test_fbclock_apply_smear_during_future_leap_second_negative) {
       1893521001000000000, // Wed, 01 Jan 2030 18:03:21:000:000:000 UTC (end)
   };
 
-  for (int i = 0; i < 3; ++i) {
+  ASSERT_EQ(std::size(input_times), std::size(output_times));
+  for (size_t i = 0; i < std::size(input_times); ++i) {
     EXPECT_EQ(
         fbclock_apply_smear(
             input_times[i],
@@ -660,6 +663,96 @@ TEST(fbclockTest, test_fbclock_apply_smear_during_future_leap_second_negative) {
             smear_end_ns,
             multiplier),
         output_times[i]);
+  }
+}
+
+// The windows above are 65000s wide. The daemon publishes a 62500s one
+// (fbclock/daemon/daemon.go: leapDurationS), so these pin the smear against
+// the width production actually gets.
+TEST(fbclockTest, test_fbclock_apply_smear_over_daemon_window) {
+  const uint64_t offset_pre_ns = 36e9;
+  const uint64_t offset_post_ns = 37e9;
+  const uint64_t smear_start_ns = 1483228836e9; // Sun, 01 Jan 2017 00:00:36 TAI
+  const uint64_t smear_end_ns = 1483291336e9; // 62500s later
+  const auto smear = [&](uint64_t time) {
+    return fbclock_apply_smear(
+        time,
+        offset_pre_ns,
+        offset_post_ns,
+        smear_start_ns,
+        smear_end_ns,
+        /*multiplier=*/1);
+  };
+
+  // Nothing is smeared yet at the start, and all of it is by the end.
+  EXPECT_EQ(smear(smear_start_ns), smear_start_ns - offset_pre_ns);
+  EXPECT_EQ(smear(smear_end_ns), smear_end_ns - offset_post_ns);
+
+  // The last nanosecond of the window and the first one after it are one
+  // nanosecond of UTC apart: no step where the ramp hands over.
+  EXPECT_EQ(smear(smear_end_ns + 1), smear(smear_end_ns) + 1);
+
+  // Half the window in, half the leap second has been smeared.
+  const uint64_t midpoint_ns =
+      smear_start_ns + (smear_end_ns - smear_start_ns) / 2;
+  EXPECT_EQ(
+      smear(midpoint_ns),
+      midpoint_ns - offset_pre_ns - (offset_post_ns - offset_pre_ns) / 2);
+}
+
+TEST(fbclockTest, test_fbclock_apply_smear_over_daemon_window_negative) {
+  const uint64_t offset_pre_ns = 37e9;
+  const uint64_t offset_post_ns = 36e9;
+  const uint64_t smear_start_ns = 1893456037e9; // Wed, 01 Jan 2030 00:00:37 TAI
+  const uint64_t smear_end_ns = 1893518537e9; // 62500s later
+  const auto smear = [&](uint64_t time) {
+    return fbclock_apply_smear(
+        time,
+        offset_pre_ns,
+        offset_post_ns,
+        smear_start_ns,
+        smear_end_ns,
+        /*multiplier=*/-1);
+  };
+
+  EXPECT_EQ(smear(smear_start_ns), smear_start_ns - offset_pre_ns);
+  EXPECT_EQ(smear(smear_end_ns), smear_end_ns - offset_post_ns);
+  EXPECT_EQ(smear(smear_end_ns + 1), smear(smear_end_ns) + 1);
+
+  const uint64_t midpoint_ns =
+      smear_start_ns + (smear_end_ns - smear_start_ns) / 2;
+  EXPECT_EQ(
+      smear(midpoint_ns),
+      midpoint_ns - offset_pre_ns + (offset_pre_ns - offset_post_ns) / 2);
+}
+
+// fbclock_apply_smear is exported, so pin the short windows no daemon produces.
+TEST(fbclockTest, test_fbclock_apply_smear_over_short_windows) {
+  const uint64_t offset_pre_ns = 36e9;
+  const uint64_t offset_post_ns = 37e9;
+  const uint64_t smear_start_ns = 1483228836e9; // Sun, 01 Jan 2017 00:00:36 TAI
+
+  for (const uint64_t window_ns :
+       {0ULL, 1ULL, 500000000ULL, 1000000000ULL, 1500000000ULL}) {
+    const uint64_t smear_end_ns = smear_start_ns + window_ns;
+    const auto smear = [&](uint64_t time) {
+      return fbclock_apply_smear(
+          time,
+          offset_pre_ns,
+          offset_post_ns,
+          smear_start_ns,
+          smear_end_ns,
+          /*multiplier=*/1);
+    };
+
+    EXPECT_EQ(smear(smear_end_ns), smear_end_ns - offset_post_ns)
+        << "window_ns=" << window_ns;
+    EXPECT_EQ(smear(smear_end_ns + 1), smear(smear_end_ns) + 1)
+        << "window_ns=" << window_ns;
+    if (window_ns == 1500000000ULL) {
+      const uint64_t midpoint_ns = smear_start_ns + 750000000ULL;
+      EXPECT_EQ(smear(midpoint_ns), midpoint_ns - offset_pre_ns - 500000000ULL);
+    }
   }
 }
 

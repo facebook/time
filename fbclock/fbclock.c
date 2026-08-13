@@ -42,6 +42,9 @@ limitations under the License.
 #define FBCLOCK_CLOCKDATA_V2_SIZE sizeof(fbclock_clockdata_v2)
 #define FBCLOCK_MAX_READ_TRIES 1000
 #define NANOSECONDS_IN_SECONDS 1000000000ULL
+// Smear window in seconds. v2 shared memory carries only the start, so the
+// client rebuilds the end from this; keep it equal to leapDurationS in
+// fbclock/daemon/daemon.go, which is what v1 publishes directly.
 #define SMEAR_DURATION 62500
 
 #ifdef __x86_64__
@@ -716,9 +719,18 @@ uint64_t fbclock_apply_smear(
     time -= offset_post_ns;
   } else if (time < smear_start_ns) {
     time -= offset_pre_ns;
-  } else if (smear_start_ns <= time && time <= smear_end_ns) {
-    uint64_t smear = multiplier * ((time - smear_start_ns) / SMEAR_STEP_NS);
-    time -= (offset_pre_ns + smear);
+  } else {
+    // Spread the whole leap second across the window the daemon published, so
+    // the ramp reaches offset_post_ns exactly at smear_end_ns. A window of N
+    // seconds smears 1ns every N ns.
+    uint64_t window_ns = smear_end_ns - smear_start_ns;
+    uint64_t elapsed_ns = time - smear_start_ns;
+    uint64_t ramp_ns = window_ns
+        ? (uint64_t)(((__uint128_t)elapsed_ns * NANOSECONDS_IN_SECONDS) /
+                     window_ns)
+        : NANOSECONDS_IN_SECONDS;
+    time -= (uint64_t)((int64_t)offset_pre_ns +
+                       (int64_t)multiplier * (int64_t)ramp_ns);
   }
   return time;
 }

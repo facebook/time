@@ -52,8 +52,6 @@ typedef atomic_uint_fast64_t atomic_uint64;
 
 // Fixed UTC-TAI offset - used when data not present in shared memory
 #define UTC_TAI_OFFSET_NS (int64_t)(-37e9)
-// Smear step size - smear clock by 1ns every 65us
-#define SMEAR_STEP_NS (int64_t)(65e3)
 // Maximum gap (ns) between cached daemon sysclock sample and current sysclock
 // before the V2 client refuses to extrapolate. Daemon updates every 10 ms; this
 // is a 1000x failsafe — if the daemon is dead or the snapshot is corrupt,
@@ -236,6 +234,9 @@ uint64_t fbclock_apply_utc_offset(fbclock_clockdata* state, int64_t phctime_ns);
 uint64_t fbclock_apply_utc_offset_v2(
     fbclock_clockdata_v2* state,
     int64_t phctime_ns);
+// Spreads one leap second over [smear_start_ns, smear_end_ns] so the result is
+// continuous at both ends. multiplier is the signed leap in seconds:
+// (offset_post_ns - offset_pre_ns) / 1e9.
 uint64_t fbclock_apply_smear(
     uint64_t time,
     uint64_t offset_pre_ns,

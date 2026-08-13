@@ -179,7 +179,7 @@ func leapSecondSmearing(leaps []leapsectz.LeapSecond) *clockSmearing {
 	// this is the leap second adjustment time which is either 23:59:60 UTC or 00:00:00 UTC of following day
 	// if we don't render a timestamp of 23:59:60 UTC
 	leapSecondEventTimeS := latestLeap.Tleap - uint64(latestLeap.Nleap) + 1
-	// smearing starts at leap second event time and ends 18.06 hours after
+	// smearing starts at leap second event time and ends leapDurationS after
 	smearingStartS := leapSecondEventTimeS + uint64(utcOffsetPreS)
 	smearingEndS := leapSecondEventTimeS + leapDurationS + uint64(utcOffsetPreS)
 
