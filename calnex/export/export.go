@@ -65,7 +65,6 @@ func Export(source string, insecureTLS bool, allData bool, channels []api.Channe
 		probe, err := calnexAPI.FetchChannelProbe(channel)
 		if err != nil {
 			log.Warnf("%s: failed to fetch protocol from channel %s: %v", source, channel, err)
-			success = success || false
 			if isHardFailure(err) {
 				return err
 			}
@@ -74,7 +73,6 @@ func Export(source string, insecureTLS bool, allData bool, channels []api.Channe
 		target, err := calnexAPI.FetchChannelTarget(channel, *probe)
 		if err != nil {
 			log.Warnf("%s: failed to fetch target from channel %s: %v", source, channel, err)
-			success = success || false
 			if isHardFailure(err) {
 				return err
 			}
@@ -83,7 +81,6 @@ func Export(source string, insecureTLS bool, allData bool, channels []api.Channe
 		csvLines, err := calnexAPI.FetchCsv(channel, allData)
 		if err != nil {
 			log.Warnf("%s: failed to fetch data from channel %s: %v", source, channel, err)
-			success = success || false
 			if isHardFailure(err) {
 				return err
 			}
@@ -94,7 +91,6 @@ func Export(source string, insecureTLS bool, allData bool, channels []api.Channe
 			entry, err := entryFromCSV(csvLine, string(channel), target, string(*probe), source)
 			if err != nil {
 				printSuccess = false
-				success = success || printSuccess
 				log.Warnf("%s failed to generate scribe line for channel %s: %v", source, channel, err)
 				break
 			}
