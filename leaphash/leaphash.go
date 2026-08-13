@@ -34,7 +34,7 @@ func Compute(data string) string {
 
 	var filtered string
 	filterBlanks := func(r rune) rune {
-		if r == ' ' || r == '\t' {
+		if r == ' ' || r == '\t' || r == '\r' {
 			return -1
 		}
 		return r
@@ -47,13 +47,7 @@ func Compute(data string) string {
 			filtered += strings.Map(filterBlanks, lines[i][2:len(lines[i])])
 		} else if !strings.HasPrefix(lines[i], "#") {
 			// leap second lines, without comments and without any blank characters
-			line := lines[i]
-
-			commentPos := strings.Index(line, "#")
-			if commentPos != -1 {
-				line = line[0 : commentPos-1]
-			}
-
+			line, _, _ := strings.Cut(lines[i], "#")
 			filtered += strings.Map(filterBlanks, line)
 		}
 	}
