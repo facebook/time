@@ -163,6 +163,14 @@ func main() {
 	run(ctx, cfg, logger, st)
 }
 
+// towToMs converts a RAWX receiver time of week to the millisecond MSM epoch
+// field. RcvTow is a float64, so a measurement on an exact second lands a
+// fraction below it (230022.0 becomes 230021999.999999); truncating stamps
+// every epoch 1 ms early and pushes it into the previous second.
+func towToMs(rcvTow float64) uint32 {
+	return uint32(math.Mod(math.Round(rcvTow*1000.0), 604800000.0))
+}
+
 func setupLogger(level string) *slog.Logger {
 	var lvl slog.Level
 	switch level {
@@ -414,7 +422,7 @@ func streamFrames(
 			}
 
 			rawxCount++
-			gpsTowMs := uint32(math.Mod(epoch.RcvTow*1000.0, 604800000.0))
+			gpsTowMs := towToMs(epoch.RcvTow)
 
 			if rawxCount <= 5 || rawxCount%60 == 0 {
 				logger.Info("RAWX epoch",

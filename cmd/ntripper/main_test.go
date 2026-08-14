@@ -98,3 +98,33 @@ func TestParseStreamCleanFile(t *testing.T) {
 func TestParseStreamMissingFile(t *testing.T) {
 	require.Error(t, parseStream(filepath.Join(t.TempDir(), "does-not-exist")))
 }
+
+func TestTowToMs(t *testing.T) {
+	tests := []struct {
+		name   string
+		rcvTow float64
+		want   uint32
+	}{
+		{"ExactSecond", 230022.0, 230022000},
+		{"FloatShortOfSecond", 230021.999999999, 230022000},
+		{"FloatPastSecond", 230022.000000001, 230022000},
+		{"GenuineMidSecond", 230022.009, 230022009},
+		{"HalfMillisecondRoundsUp", 230022.0005, 230022001},
+		{"WeekStart", 0.0, 0},
+		{"WeekRollover", 604799.9999999, 0},
+		{"LastMillisecondOfWeek", 604799.999, 604799999},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, towToMs(tt.rcvTow))
+		})
+	}
+}
+
+// An epoch measured on the second must not be stamped into the previous one.
+func TestTowToMsKeepsEpochOnTheSecond(t *testing.T) {
+	for sec := 230020; sec < 230030; sec++ {
+		got := towToMs(float64(sec))
+		require.Zero(t, got%1000, "tow=%d stamped %d ms off the second", sec, got%1000)
+	}
+}
