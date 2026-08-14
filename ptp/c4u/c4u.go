@@ -127,12 +127,10 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 	q := evaluateClockQuality(config, w)
 
 	// UTC data
-	u, err := utcoffset.Run()
-	if err != nil {
-		log.Errorf("Failed to collect UTC offset data: %v", err)
+	u, utcErr := utcoffset.Run()
+	if utcErr != nil {
+		log.Errorf("Failed to collect UTC offset data: %v", utcErr)
 		dataError = true
-		// Keep going. UTC offset will be 0.
-		// Clock data needs to be updated anyway as higher priority
 	}
 
 	if dataError {
@@ -151,11 +149,18 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 
 	pending.ClockClass = q.ClockClass
 	pending.ClockAccuracy = q.ClockAccuracy
-	pending.UTCOffset = u
+	if utcErr == nil {
+		pending.UTCOffset = u
+	}
 
 	st.SetClockClass(int64(pending.ClockClass))
 	st.SetClockAccuracy(int64(pending.ClockAccuracy))
 	st.SetUTCOffsetSec(int64(pending.UTCOffset.Seconds()))
+
+	if err := pending.UTCOffsetSanity(); err != nil {
+		log.Errorf("Refusing to write a ptp4u config with UTC offset %v: %v", pending.UTCOffset, err)
+		return nil
+	}
 
 	if *current != *pending {
 		log.Infof("Current: %+v", current)

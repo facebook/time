@@ -17,9 +17,11 @@ limitations under the License.
 package utcoffset
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/facebook/time/leapsectz"
+	"github.com/facebook/time/ptp/ptp4u/server"
 )
 
 // Run the utcoffset calculation
@@ -35,5 +37,11 @@ func Run() (time.Duration, error) {
 
 	uo += latestLeap.Nleap
 
-	return time.Duration(uo) * time.Second, nil
+	offset := time.Duration(uo) * time.Second
+	dc := server.DynamicConfig{UTCOffset: offset}
+	if err := dc.UTCOffsetSanity(); err != nil {
+		return 0, fmt.Errorf("unusable UTC offset %v: %w", offset, err)
+	}
+
+	return offset, nil
 }
