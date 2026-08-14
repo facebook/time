@@ -54,7 +54,7 @@ func (p *Ping) Run(target string, _ bool) error {
 	response := make([]byte, 32)
 	request := make([]byte, 32)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		// Write
 		msg := &icmp.Message{
 			Type: ipv6.ICMPTypeEchoRequest,
