@@ -431,6 +431,13 @@ func streamFrames(
 					"gpsTowMs", gpsTowMs,
 					"frames_sent", frameCount,
 					"dropped_sats", rtcm.DroppedSats(),
+					"non_finite_pseudoranges", rtcm.NonFinitePseudoranges(),
+					"voided_rough_ranges", rtcm.VoidedRoughRanges(),
+					"voided_rough_rates", rtcm.VoidedRoughRates(),
+					"voided_fine_prs", rtcm.VoidedFinePRs(),
+					"voided_fine_phases", rtcm.VoidedFinePhases(),
+					"voided_fine_rates", rtcm.VoidedFineRates(),
+					"receiver_flagged_phases", rtcm.ReceiverFlaggedPhases(),
 					"age_s", time.Now().Unix()-(int64(315964800)+int64(epoch.Week)*604800-int64(epoch.LeapS)+int64(gpsTowMs/1000)),
 				)
 			}

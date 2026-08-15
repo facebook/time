@@ -39,6 +39,35 @@ const (
 	msmMaxCellMaskBits = 64
 )
 
+// The 1/1024 ms grid DF397 and DF398 share. DF397 = 255 means unavailable.
+const (
+	maxRoughUnits     = 254*1024 + 1023
+	invalidRoughUnits = 255 << 10
+)
+
+// Values RTCM 10403.x reserves to mark a signal's fine fields unavailable.
+const (
+	invalidFinePR    = -1 << 19 // DF405
+	invalidFinePhase = -1 << 23 // DF406
+)
+
+// The largest magnitude each fine field can carry. One step further is the
+// unavailable marker, so a residual past this has to be marked, not clamped:
+// clamping ships the extreme as if it were a real correction.
+const (
+	maxFinePR    = 1<<19 - 1
+	maxFinePhase = 1<<23 - 1
+	maxFineRate  = 1<<14 - 1
+)
+
+// DF399 spans -8192..8191; -8192 is the unavailable marker, so 8191 is the
+// largest magnitude it can carry. DF404 is a residual off DF399.
+const (
+	maxRoughRateMps  = 8191
+	invalidRoughRate = -1 << 13 // DF399
+	invalidFineRate  = -1 << 14 // DF404
+)
+
 // GNSS signal wavelengths in meters, keyed by u-blox sigID.
 var signalWavelength = map[uint8]map[uint8]float64{
 	GnssGPS:     {0: speedOfLight / 1575.42e6, 3: speedOfLight / 1227.60e6, 4: speedOfLight / 1227.60e6, 6: speedOfLight / 1176.45e6, 7: speedOfLight / 1176.45e6},
@@ -72,15 +101,75 @@ type satSig struct {
 	bit int
 }
 
-// droppedSats counts satellites discarded to keep a frame within the RTCM3
-// length field and the 64-bit cell mask. Non-zero means the caster is
-// receiving fewer observations than the receiver tracked.
-var droppedSats atomic.Uint64
+var (
+	// droppedSats counts satellites discarded to keep a frame within the RTCM3
+	// length field and the 64-bit cell mask. Non-zero means the caster is
+	// receiving fewer observations than the receiver tracked.
+	droppedSats atomic.Uint64
+
+	// nonFinitePseudoranges counts observations dropped before encoding because
+	// the receiver reported a NaN or Inf pseudorange. Unlike a ghost, which is a
+	// satellite the receiver never acquired, this is corrupt data.
+	nonFinitePseudoranges atomic.Uint64
+
+	voidedRoughRanges     atomic.Uint64
+	voidedRoughRates      atomic.Uint64
+	voidedFinePRs         atomic.Uint64
+	voidedFinePhases      atomic.Uint64
+	voidedFineRates       atomic.Uint64
+	receiverFlaggedPhases atomic.Uint64
+)
 
 // DroppedSats returns the cumulative number of satellites dropped to fit the
 // RTCM3 length field and the 64-bit cell mask.
 func DroppedSats() uint64 {
 	return droppedSats.Load()
+}
+
+// NonFinitePseudoranges returns the cumulative number of observations dropped
+// because the receiver reported a NaN or Inf pseudorange. The satellite leaves
+// the frame entirely, so no voided-field counter can report it.
+func NonFinitePseudoranges() uint64 {
+	return nonFinitePseudoranges.Load()
+}
+
+// VoidedRoughRanges returns the cumulative number of satellites whose DF397
+// rough range was marked unavailable.
+func VoidedRoughRanges() uint64 {
+	return voidedRoughRanges.Load()
+}
+
+// VoidedRoughRates returns the cumulative number of satellites whose DF399
+// rough phase range rate was marked unavailable.
+func VoidedRoughRates() uint64 {
+	return voidedRoughRates.Load()
+}
+
+// VoidedFinePRs returns the cumulative number of cells whose DF405 fine
+// pseudorange was marked unavailable.
+func VoidedFinePRs() uint64 {
+	return voidedFinePRs.Load()
+}
+
+// VoidedFinePhases returns the cumulative number of cells whose DF406 fine
+// phase range this encoder could not represent. A phase the receiver merely
+// flagged is counted by ReceiverFlaggedPhases instead; one that is also
+// unusable is counted here, since no encoder could have shipped it.
+func VoidedFinePhases() uint64 {
+	return voidedFinePhases.Load()
+}
+
+// ReceiverFlaggedPhases returns the cumulative number of cells whose DF406 was
+// marked unavailable because the receiver reported the carrier phase invalid.
+// Routine on healthy epochs; a sustained run means no caster can resolve phase.
+func ReceiverFlaggedPhases() uint64 {
+	return receiverFlaggedPhases.Load()
+}
+
+// VoidedFineRates returns the cumulative number of cells whose DF404 fine
+// phase range rate was marked unavailable.
+func VoidedFineRates() uint64 {
+	return voidedFineRates.Load()
 }
 
 // ErrNoObservations indicates a constellation had no usable observations to
@@ -115,14 +204,28 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 		// that prevent a caster from computing a position. A correct MSM
 		// encoder never emits cells for untracked signals. This encoder is the
 		// single output chokepoint, so it rejects them regardless of the caller.
-		if !obs[i].PrValid || obs[i].PrMes <= 0 || obs[i].CNO == 0 {
+		if !obs[i].PrValid || obs[i].CNO == 0 {
+			continue
+		}
+		// -Inf satisfies PrMes <= 0, so the finite check has to precede the
+		// magnitude check or corrupt data is discarded as a ghost, uncounted.
+		if !isFinite(obs[i].PrMes) {
+			nonFinitePseudoranges.Add(1)
+			continue
+		}
+		if obs[i].PrMes <= 0 {
 			continue
 		}
 		// Only include observations with a known signal mask bit mapping.
 		if _, ok := bits[obs[i].SigID]; !ok {
 			continue // unmapped signal ID, skip
 		}
-		filtered = append(filtered, obs[i])
+		o := obs[i]
+		// A corrupt phase costs the cell only DF406; its pseudorange still ships.
+		if !isFinite(o.CpMes) {
+			o.CpValid = false
+		}
+		filtered = append(filtered, o)
 	}
 	if len(filtered) == 0 {
 		return nil, ErrNoObservations
@@ -201,22 +304,40 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 		}
 	}
 
-	// Compute per-satellite rough range (ms) and rough phase range rate (m/s).
+	// Compute per-satellite rough range and rough phase range rate (m/s).
 	type satInfo struct {
-		roughRangeMs float64
-		roughRateMps float64
+		roughRateMps   float64
+		roughRateValid bool
+		// DF397, DF398 and the fine-range reference must all derive from this
+		// one value, or they can disagree by a 1/1024 ms quantum: 292.8 m.
+		roughUnits uint32
+		set        bool
 	}
 	satData := make([]satInfo, numSat)
+	for i := range satData {
+		satData[i].roughUnits = invalidRoughUnits
+	}
 	for _, c := range cells {
-		if satData[c.satIdx].roughRangeMs == 0 {
+		if !satData[c.satIdx].set {
 			rangeMs := c.obs.PrMes / speedOfLight * 1000.0 // convert m to light-ms
-			satData[c.satIdx].roughRangeMs = rangeMs
+			if roughUnits := quantizeRoughRange(rangeMs); roughUnits != invalidRoughUnits {
+				satData[c.satIdx].roughUnits = roughUnits
+				satData[c.satIdx].set = true
+			}
+		}
+		if !satData[c.satIdx].roughRateValid && isFinite(float64(c.obs.DoMes)) {
 			// Rough phase range rate (DF399) is the satellite range rate in
 			// integer m/s: -Doppler[Hz] * wavelength[m]. The raw Doppler in Hz
 			// is NOT the range rate; encoding it directly produces a nonsensical
 			// phase range rate that makes casters reject the measurements.
 			wavelength := getWavelength(gnssID, c.obs.SigID, c.obs.FreqID)
-			satData[c.satIdx].roughRateMps = math.Round(-float64(c.obs.DoMes) * wavelength)
+			// DF404 is a residual off this value, so a rate DF399 cannot carry
+			// leaves the pair unavailable rather than disagreeing on the wire.
+			rate := math.Round(-float64(c.obs.DoMes) * wavelength)
+			if math.Abs(rate) <= maxRoughRateMps {
+				satData[c.satIdx].roughRateMps = rate
+				satData[c.satIdx].roughRateValid = true
+			}
 		}
 	}
 
@@ -249,11 +370,10 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 
 	// Satellite data: rough range integer ms (8 bits per sat)
 	for i := range numSat {
-		intMs := uint32(math.Floor(satData[i].roughRangeMs))
-		if intMs > 254 {
-			intMs = 255 // invalid marker
+		if satData[i].roughUnits == invalidRoughUnits {
+			voidedRoughRanges.Add(1)
 		}
-		w.WriteBits(intMs, 8)
+		w.WriteBits(satData[i].roughUnits>>10, 8)
 	}
 
 	// Satellite data: extended info (4 bits per sat)
@@ -263,67 +383,72 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 
 	// Satellite data: rough range modulo (10 bits per sat)
 	for i := range numSat {
-		fracMs := satData[i].roughRangeMs - math.Floor(satData[i].roughRangeMs)
-		mod := min(uint32(math.Round(fracMs*1024.0)), 1023)
-		w.WriteBits(mod, 10)
+		w.WriteBits(satData[i].roughUnits&1023, 10)
 	}
 
 	// Satellite data: rough phase range rate (14 bits signed per sat, m/s)
 	for i := range numSat {
-		rate := int32(satData[i].roughRateMps)
-		if rate > 8191 {
-			rate = 8191
-		} else if rate < -8191 {
-			rate = -8191
+		if !satData[i].roughRateValid {
+			voidedRoughRates.Add(1)
+			w.WriteSignedBits(invalidRoughRate, 14)
+			continue
 		}
-		w.WriteSignedBits(rate, 14)
+		w.WriteSignedBits(int32(satData[i].roughRateMps), 14)
 	}
 
 	// Signal data: fine pseudorange (20 bits signed per cell)
 	for _, c := range cells {
-		rangeMs := c.obs.PrMes / speedOfLight * 1000.0
-		roughMs := math.Floor(satData[c.satIdx].roughRangeMs) +
-			math.Round((satData[c.satIdx].roughRangeMs-math.Floor(satData[c.satIdx].roughRangeMs))*1024.0)/1024.0
-		fineMs := rangeMs - roughMs
-		// Scale: 2^-29 ms → value = fineMs / 2^-29 = fineMs * 2^29
-		val := int32(math.Round(fineMs * (1 << 29)))
-		if val > (1<<19 - 1) {
-			val = 1<<19 - 1
-		} else if val < -(1 << 19) {
-			val = -(1 << 19)
+		// With no rough range to refine, the residual is the whole measurement.
+		if satData[c.satIdx].roughUnits == invalidRoughUnits {
+			voidedFinePRs.Add(1)
+			w.WriteSignedBits(invalidFinePR, 20)
+			continue
 		}
-		w.WriteSignedBits(val, 20)
+		// The rough range comes from the satellite's first cell, so this cell's
+		// own range can sit arbitrarily far from it.
+		rangeMs := c.obs.PrMes / speedOfLight * 1000.0
+		// Scale: 2^-29 ms -> value = fineMs / 2^-29 = fineMs * 2^29
+		val := math.Round((rangeMs - roughRangeMs(satData[c.satIdx].roughUnits)) * (1 << 29))
+		if math.Abs(val) > maxFinePR {
+			voidedFinePRs.Add(1)
+			w.WriteSignedBits(invalidFinePR, 20)
+			continue
+		}
+		w.WriteSignedBits(int32(val), 20)
 	}
 
 	// Signal data: fine phase range (24 bits signed per cell)
 	for _, c := range cells {
-		if !c.obs.CpValid {
-			w.WriteSignedBits(-1<<23, 24) // invalid marker
+		// DF406 refines the same rough range DF405 does, over a span four times
+		// wider, so it is voided by an unusable rough range but not by a
+		// pseudorange residual that only DF405 cannot carry.
+		roughUnusable := satData[c.satIdx].roughUnits == invalidRoughUnits
+		if !c.obs.CpValid || roughUnusable {
+			// Routine trkStat state would swamp the refusals oncall watches
+			// for, so the two get their own counters. Every marker written
+			// here increments exactly one of them.
+			switch {
+			case roughUnusable || !isFinite(c.obs.CpMes):
+				voidedFinePhases.Add(1)
+			default:
+				receiverFlaggedPhases.Add(1)
+			}
+			w.WriteSignedBits(invalidFinePhase, 24)
 			continue
 		}
 		wavelength := getWavelength(gnssID, c.obs.SigID, c.obs.FreqID)
-		rangeMs := c.obs.PrMes / speedOfLight * 1000.0
-		roughMs := math.Floor(satData[c.satIdx].roughRangeMs) +
-			math.Round((satData[c.satIdx].roughRangeMs-math.Floor(satData[c.satIdx].roughRangeMs))*1024.0)/1024.0
 		// Phase in ms: cpMes * wavelength / speedOfLight * 1000
 		phaseMs := c.obs.CpMes * wavelength / speedOfLight * 1000.0
-		finePhaseMs := phaseMs - roughMs
-		// Wrap to ±0.5 ms range
-		for finePhaseMs > 0.5 {
-			finePhaseMs -= 1.0
+		// Scale: 2^-31 ms. Measured off the rough range directly: folding whole
+		// milliseconds away would turn a phase 1 ms out into a plausible
+		// small correction, hiding a 299.8 km error.
+		val := math.Round((phaseMs - roughRangeMs(satData[c.satIdx].roughUnits)) * (1 << 31))
+		if math.Abs(val) > maxFinePhase {
+			voidedFinePhases.Add(1)
+			w.WriteSignedBits(invalidFinePhase, 24)
+			continue
 		}
-		for finePhaseMs < -0.5 {
-			finePhaseMs += 1.0
-		}
-		_ = rangeMs
-		// Scale: 2^-31 ms
-		val := int32(math.Round(finePhaseMs * (1 << 31)))
-		if val > (1<<23 - 1) {
-			val = 1<<23 - 1
-		} else if val < -(1<<23 - 1) {
-			val = -(1<<23 - 1)
-		}
-		w.WriteSignedBits(val, 24)
+		w.WriteSignedBits(int32(val), 24)
 	}
 
 	// Signal data: lock time indicator (10 bits per cell)
@@ -355,19 +480,24 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 
 	// Signal data: fine phase range rate (15 bits signed per cell)
 	for _, c := range cells {
-		// Doppler in Hz → phase range rate = -doppler * wavelength (m/s)
+		if !satData[c.satIdx].roughRateValid || !isFinite(float64(c.obs.DoMes)) {
+			voidedFineRates.Add(1)
+			w.WriteSignedBits(invalidFineRate, 15)
+			continue
+		}
+		// Doppler in Hz -> phase range rate = -doppler * wavelength (m/s)
 		// Fine rate = total rate - rough rate, in 0.0001 m/s units
 		wavelength := getWavelength(gnssID, c.obs.SigID, c.obs.FreqID)
 		totalRate := -float64(c.obs.DoMes) * wavelength
 		fineRate := totalRate - satData[c.satIdx].roughRateMps
 		// Scale: 0.0001 m/s
-		val := int32(math.Round(fineRate * 10000.0))
-		if val > (1<<14 - 1) {
-			val = 1<<14 - 1
-		} else if val < -(1 << 14) {
-			val = -(1 << 14)
+		val := math.Round(fineRate * 10000.0)
+		if math.Abs(val) > maxFineRate {
+			voidedFineRates.Add(1)
+			w.WriteSignedBits(invalidFineRate, 15)
+			continue
 		}
-		w.WriteSignedBits(val, 15)
+		w.WriteSignedBits(int32(val), 15)
 	}
 
 	// Build complete frame.
@@ -386,6 +516,34 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 	putCRC(frame)
 
 	return frame, nil
+}
+
+func isFinite(f float64) bool {
+	return !math.IsNaN(f) && !math.IsInf(f, 0)
+}
+
+// roughRangeMs converts DF397/DF398 grid units back to milliseconds. DF405 and
+// DF406 both refine this value, so both must read it the same way.
+func roughRangeMs(units uint32) float64 {
+	return float64(units) / 1024.0
+}
+
+// quantizeRoughRange rounds a rough range onto the DF397/DF398 grid, pinning a
+// range that rounds just past the top only while DF405 can carry the residual.
+// Sign is tested before rounding: math.Round takes a small negative to -0.
+func quantizeRoughRange(rangeMs float64) uint32 {
+	if math.IsNaN(rangeMs) || rangeMs < 0 {
+		return invalidRoughUnits
+	}
+	units := math.Round(rangeMs * 1024.0)
+	switch {
+	case units <= maxRoughUnits:
+		return uint32(units)
+	case math.Round((rangeMs*1024.0-maxRoughUnits)*(1<<19)) <= maxFinePR:
+		return maxRoughUnits
+	default:
+		return invalidRoughUnits
+	}
 }
 
 // maxSats returns the largest satellite count that fits both the 10-bit length
