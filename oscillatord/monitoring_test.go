@@ -19,11 +19,18 @@ package oscillatord
 import (
 	"errors"
 	"net"
+	"strings"
 	"testing"
 
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/stretchr/testify/require"
 )
+
+// statusPayload is a representative oscillatord monitoring response. extra is
+// spliced in as additional top-level keys and must start with a comma.
+func statusPayload(extra string) string {
+	return `{ "oscillator": { "model": "sa3x", "fw_version": "V1.6.5.0.669A7202", "fine_ctrl": 0, "coarse_ctrl": 0, "lock": false, "temperature": 45.944000000000003 }, "gnss": { "fix": 5, "fixOk": true, "antenna_power": 1, "antenna_status": 4, "lsChange": 0, "leap_seconds": 18, "satellites_count": 10, "time_accuracy": 13 }, "clock": { "class": "Holdover", "offset": -265095 }` + extra + ` }`
+}
 
 func TestOscillatordRead(t *testing.T) {
 	client, server := net.Pipe()
@@ -35,8 +42,7 @@ func TestOscillatordRead(t *testing.T) {
 		_, err := server.Read(b)
 		require.Nil(t, err)
 		// write response
-		data := `{ "oscillator": { "model": "sa3x", "fw_version": "V1.6.5.0.669A7202", "fine_ctrl": 0, "coarse_ctrl": 0, "lock": false, "temperature": 45.944000000000003 }, "gnss": { "fix": 5, "fixOk": true, "antenna_power": 1, "antenna_status": 4, "lsChange": 0, "leap_seconds": 18, "satellites_count": 10, "time_accuracy": 13 }, "clock": { "class": "Holdover", "offset": -265095 } }`
-		_, err = server.Write([]byte(data))
+		_, err = server.Write([]byte(statusPayload("")))
 		require.Nil(t, err)
 	}()
 	status, err := ReadStatus(client)
@@ -66,6 +72,73 @@ func TestOscillatordRead(t *testing.T) {
 		},
 	}
 	require.Equal(t, want, status)
+}
+
+// serveChunks answers ReadStatus's `{}` request by writing payload in the given
+// number of equal pieces, one Write per piece.
+func serveChunks(t *testing.T, server net.Conn, payload string, pieces int) <-chan error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		defer server.Close()
+		if _, err := server.Read(make([]byte, 2)); err != nil {
+			done <- err
+			return
+		}
+		size := (len(payload) + pieces - 1) / pieces
+		for start := 0; start < len(payload); start += size {
+			end := min(start+size, len(payload))
+			if _, err := server.Write([]byte(payload[start:end])); err != nil {
+				done <- err
+				return
+			}
+		}
+		done <- nil
+	}()
+	return done
+}
+
+func TestOscillatordReadSplitAcrossWrites(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	done := serveChunks(t, server, statusPayload(""), 3)
+
+	status, err := ReadStatus(client)
+	require.NoError(t, err)
+	require.NoError(t, <-done)
+	require.Equal(t, ClockClassHoldover, status.Clock.Class)
+	require.Equal(t, 10, status.GNSS.SatellitesCount)
+}
+
+func TestOscillatordReadLargerThanOneKiB(t *testing.T) {
+	// A firmware that reports sections we do not model still has to parse. Go
+	// ignores the unknown keys, but their bytes are on the wire regardless.
+	payload := statusPayload(`, "disciplining": {"note": "` + strings.Repeat("x", 1024) + `"}`)
+	require.Greater(t, len(payload), 1024)
+
+	client, server := net.Pipe()
+	defer client.Close()
+	done := serveChunks(t, server, payload, 1)
+
+	status, err := ReadStatus(client)
+	require.NoError(t, err)
+	require.NoError(t, <-done)
+	require.Equal(t, ClockClassHoldover, status.Clock.Class)
+	require.Equal(t, 10, status.GNSS.SatellitesCount)
+}
+
+func TestOscillatordReadStopsAtByteCap(t *testing.T) {
+	// Streaming the reply removed the old 1000-byte ceiling, so a firmware that keeps talking
+	// must still be cut off rather than buffered.
+	payload := statusPayload(`, "disciplining": {"note": "` + strings.Repeat("x", maxStatusBytes) + `"}`)
+	require.Greater(t, len(payload), maxStatusBytes)
+
+	client, server := net.Pipe()
+	defer client.Close()
+	serveChunks(t, server, payload, 1)
+
+	_, err := ReadStatus(client)
+	require.ErrorContains(t, err, "did not complete within")
 }
 
 func TestOscillatordReadFail(t *testing.T) {

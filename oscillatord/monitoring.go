@@ -34,6 +34,10 @@ import (
 // MonitoringPort is an oscillatord monitoring socket port
 const MonitoringPort = 2958
 
+// maxStatusBytes bounds one monitoring reply. Status is a fixed three-object struct and a real
+// reply is under 400 bytes, so this is only a backstop against a firmware that never stops talking.
+const maxStatusBytes = 64 << 10
+
 // AntennaStatus is an enum describing antenna status as reported by oscillatord
 type AntennaStatus int
 
@@ -286,24 +290,20 @@ func fwVersionToInt(version string) int64 {
 	return int64(major*10000 + minor*100 + patch)
 }
 
-// ReadStatus talks to oscillatord via monitoring port connection and reads reported Status
+// ReadStatus talks to oscillatord via monitoring port connection and reads reported Status.
+// The response is decoded as a stream: it is not guaranteed to arrive in a single read, and
+// its length is set by oscillatord's firmware rather than by anything we control.
 func ReadStatus(conn io.ReadWriter) (*Status, error) {
-	// send newline to make oscillatord send us data
-	_, err := conn.Write([]byte(`{}`))
-	if err != nil {
+	if _, err := conn.Write([]byte(`{}`)); err != nil {
 		return nil, fmt.Errorf("writing to oscillatord conn: %w", err)
 	}
-	buf := make([]byte, 1000)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return nil, fmt.Errorf("reading from oscillatord conn: %w", err)
-	}
-	if n == 0 {
-		return nil, fmt.Errorf("read 0 bytes from oscillatord")
-	}
+	bounded := &io.LimitedReader{R: conn, N: maxStatusBytes}
 	var status Status
-	if err := json.Unmarshal(buf[:n], &status); err != nil {
-		return nil, fmt.Errorf("unmarshalling JSON: %w", err)
+	if err := json.NewDecoder(bounded).Decode(&status); err != nil {
+		if bounded.N <= 0 {
+			return nil, fmt.Errorf("oscillatord reply did not complete within %d bytes", maxStatusBytes)
+		}
+		return nil, fmt.Errorf("decoding JSON from oscillatord conn: %w", err)
 	}
 	return &status, nil
 }
