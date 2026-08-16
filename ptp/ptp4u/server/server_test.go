@@ -20,6 +20,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -138,6 +139,60 @@ func TestUndrain(t *testing.T) {
 	require.ErrorIs(t, context.Canceled, s.ctx.Err())
 	s.Undrain()
 	require.NoError(t, s.ctx.Err())
+}
+
+func TestDrainCountsSubscriptionsUnderWorkerLock(t *testing.T) {
+	c := &Config{
+		StaticConfig: StaticConfig{SendWorkers: 1},
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	s := Server{
+		Config: c,
+		Stats:  stats.NewJSONStats(c.SendWorkers),
+		sw:     make([]*sendWorker, c.SendWorkers),
+		ctx:    ctx,
+		cancel: cancel,
+	}
+	for i := range s.sw {
+		s.sw[i] = newSendWorker(i, c, s.Stats)
+	}
+	types := []ptp.MessageType{ptp.MessageAnnounce, ptp.MessageSync}
+	held := make([]*SubscriptionClient, len(types))
+	for i, st := range types {
+		held[i] = &SubscriptionClient{running: true}
+		s.sw[0].RegisterSubscription(ptp.PortIdentity{PortNumber: 1}, st, held[i])
+	}
+	require.Equal(t, len(held), s.sw[0].inventoryClients())
+
+	registering := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		close(registering)
+		for msgType := uint8(1); msgType != 0; msgType++ {
+			time.Sleep(2 * time.Millisecond)
+			s.sw[0].RegisterSubscription(
+				ptp.PortIdentity{PortNumber: 2},
+				ptp.MessageType(msgType),
+				&SubscriptionClient{},
+			)
+		}
+		for _, sc := range held {
+			sc.setRunning(false)
+		}
+	})
+
+	<-registering
+	s.Drain()
+	wg.Wait()
+
+	require.ErrorIs(t, s.ctx.Err(), context.Canceled)
+	s.sw[0].mux.Lock()
+	var remaining int
+	for _, subs := range s.sw[0].clients {
+		remaining += len(subs)
+	}
+	s.sw[0].mux.Unlock()
+	require.Zero(t, remaining)
 }
 
 func TestHandleSighup(t *testing.T) {

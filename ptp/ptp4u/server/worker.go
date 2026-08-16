@@ -396,9 +396,11 @@ func (s *sendWorker) RegisterSubscription(clientID ptp.PortIdentity, st ptp.Mess
 	m[clientID] = sc
 }
 
-func (s *sendWorker) inventoryClients() {
+// inventoryClients drops the subscriptions that stopped and returns how many survived.
+func (s *sendWorker) inventoryClients() int {
 	s.mux.Lock()
 	defer s.mux.Unlock()
+	var n int
 	for st, subs := range s.clients {
 		for k, sc := range subs {
 			if !sc.Running() {
@@ -407,6 +409,8 @@ func (s *sendWorker) inventoryClients() {
 			}
 			s.stats.IncSubscription(st)
 			s.stats.IncWorkerSubs(s.id)
+			n++
 		}
 	}
+	return n
 }

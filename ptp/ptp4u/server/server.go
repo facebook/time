@@ -499,17 +499,12 @@ func (s *Server) Drain() {
 		s.cancel()
 	}
 
-	// Wait for drain to complete for up to 10 seconds
 	for range 10 {
 		// Verifying all subscriptions are over
 		for _, w := range s.sw {
-			w.inventoryClients()
-			for _, subs := range w.clients {
-				if len(subs) != 0 {
-					log.Warningf("Still waiting for %d subscriptions on worker %d to finish...", len(subs), w.id)
-					time.Sleep(time.Second)
-					break
-				}
+			if n := w.inventoryClients(); n != 0 {
+				log.Warningf("Still waiting for %d subscriptions on worker %d to finish...", n, w.id)
+				time.Sleep(time.Second)
 			}
 		}
 	}
