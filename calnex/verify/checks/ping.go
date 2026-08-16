@@ -50,6 +50,7 @@ func (p *Ping) Run(target string, _ bool) error {
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
 
 	response := make([]byte, 32)
 	request := make([]byte, 32)
