@@ -22,9 +22,19 @@ import (
 
 // Update processes result of GetTime call and updates Stats
 func (s *StatsCollector) Update(tt *TrueTime, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.stats.Requests++
 	if err != nil {
 		s.stats.Errors++
+		if s.errCauses == nil {
+			s.errCauses = map[string]int64{}
+		}
+		cause := err.Error()
+		if _, seen := s.errCauses[cause]; !seen && len(s.errCauses) >= maxErrorCauses-1 {
+			cause = otherErrorCauses
+		}
+		s.errCauses[cause]++
 		return
 	}
 	wou := tt.Latest.Sub(tt.Earliest)

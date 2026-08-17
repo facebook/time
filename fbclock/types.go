@@ -17,8 +17,10 @@ limitations under the License.
 package fbclock
 
 import (
+	"maps"
 	"math"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -74,13 +76,32 @@ type Stats struct {
 
 // StatsCollector collects stats based on GetTime results
 type StatsCollector struct {
-	stats  Stats
-	wouSum int64
+	mu        sync.Mutex
+	stats     Stats
+	wouSum    int64
+	errCauses map[string]int64
 }
 
 // Stats returns collected stats
 func (s *StatsCollector) Stats() Stats {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.stats
+}
+
+// The tally is capped so it cannot grow with the request count: a caller's
+// error text may vary per call. Overflow pools under otherErrorCauses.
+const (
+	maxErrorCauses   = 16
+	otherErrorCauses = "(other causes)"
+)
+
+// ErrorCauses breaks Stats().Errors down by message, which the count alone
+// cannot do across fbclock's ten failure modes.
+func (s *StatsCollector) ErrorCauses() map[string]int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return maps.Clone(s.errCauses)
 }
 
 // Close cleans up Shm resources
@@ -91,7 +112,7 @@ func (s *Shm) Close() error {
 	return nil
 }
 
-const pow2_16 = float64(1 << 16) //nolint:revive // underscore in name mirrors the mathematical notation 2^16
+const pow2_16 = float64(1 << 16)
 
 // FloatAsUint32 stores float as multiplier of 2**16
 func FloatAsUint32(val float64) uint32 {

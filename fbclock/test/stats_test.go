@@ -17,7 +17,9 @@ limitations under the License.
 package test
 
 import (
+	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -182,4 +184,92 @@ func TestStatsUpdate(t *testing.T) {
 			require.Equal(t, tt.want, s.Stats())
 		})
 	}
+}
+
+// The two messages are fbclock_strerror's text for FBCLOCK_E_DATA_STALE and
+// FBCLOCK_E_NO_DATA, the pair a daemon restart produces.
+func TestStatsErrorCauses(t *testing.T) {
+	stale := errors.New("reading FBClock TrueTime: shared memory data too old to extrapolate")
+	noData := errors.New("reading FBClock TrueTime: no data from daemon error")
+
+	s := &lib.StatsCollector{}
+	require.Empty(t, s.ErrorCauses())
+
+	s.Update(&lib.TrueTime{Earliest: time.Unix(0, 1000), Latest: time.Unix(0, 1100)}, nil)
+	for range 3 {
+		s.Update(nil, stale)
+	}
+	s.Update(nil, noData)
+
+	require.Equal(t, int64(5), s.Stats().Requests)
+	require.Equal(t, int64(4), s.Stats().Errors)
+	require.Equal(t, map[string]int64{stale.Error(): 3, noData.Error(): 1}, s.ErrorCauses())
+
+	var total int64
+	for _, n := range s.ErrorCauses() {
+		total += n
+	}
+	require.Equal(t, s.Stats().Errors, total)
+
+	// The map is a copy: mutating it must not corrupt the tally.
+	s.ErrorCauses()[stale.Error()] = 99
+	require.Equal(t, int64(3), s.ErrorCauses()[stale.Error()])
+}
+
+// StatsCollector is exported, so a caller can pass error text that varies per
+// call. fbclock's own messages are a fixed set of ten.
+func TestStatsErrorCausesBounded(t *testing.T) {
+	s := &lib.StatsCollector{}
+	for i := range 10_000 {
+		s.Update(nil, fmt.Errorf("attempt %d failed", i))
+	}
+
+	// Spelled out, not read back from the package, so a changed cap fails here.
+	causes := s.ErrorCauses()
+	require.Len(t, causes, 16)
+	require.Equal(t, int64(10_000-15), causes["(other causes)"])
+
+	var total int64
+	for _, n := range causes {
+		total += n
+	}
+	require.Equal(t, s.Stats().Errors, total)
+
+	// A message already tallied keeps its entry after the cap is hit.
+	s.Update(nil, errors.New("attempt 0 failed"))
+	require.Equal(t, int64(2), s.ErrorCauses()["attempt 0 failed"])
+	require.Len(t, s.ErrorCauses(), 16)
+}
+
+// StatsCollector is exported and holds a map, and the Go runtime fatals the
+// whole process on a concurrent map write.
+func TestStatsConcurrentUpdate(t *testing.T) {
+	const writers, perWriter = 8, 500
+	s := &lib.StatsCollector{}
+
+	var wg sync.WaitGroup
+	for w := range writers {
+		wg.Go(func() {
+			for i := range perWriter {
+				s.Update(nil, fmt.Errorf("writer %d cause %d", w, i%4))
+			}
+		})
+	}
+	// ErrorCauses clones the map, which is itself a read of every key.
+	for range writers {
+		wg.Go(func() {
+			for range perWriter {
+				s.ErrorCauses()
+				s.Stats()
+			}
+		})
+	}
+	wg.Wait()
+
+	require.Equal(t, int64(writers*perWriter), s.Stats().Errors)
+	var total int64
+	for _, n := range s.ErrorCauses() {
+		total += n
+	}
+	require.Equal(t, s.Stats().Errors, total, "every error landed in exactly one bucket")
 }

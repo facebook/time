@@ -17,9 +17,13 @@ limitations under the License.
 package cmd
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/facebook/time/fbclock"
@@ -38,6 +42,37 @@ func init() {
 	fbclockCmd.Flags().Int64VarP(&fbclockRequestsFlag, "requests", "r", 1, "number of requests to fbclock")
 	fbclockCmd.Flags().DurationVarP(&fbclockDurationFlag, "duration", "t", 1*time.Second, "spread the requests over this duration")
 	fbclockCmd.Flags().BoolVarP(&fbclockUTCFlag, "utc", "", false, "get UTC time (TAI is default)")
+}
+
+// formatErrorCauses orders by count, then by message so runs are comparable.
+func formatErrorCauses(causes map[string]int64) string {
+	msgs := slices.SortedFunc(maps.Keys(causes), func(a, b string) int {
+		return cmp.Or(cmp.Compare(causes[b], causes[a]), cmp.Compare(a, b))
+	})
+	var b strings.Builder
+	for _, msg := range msgs {
+		fmt.Fprintf(&b, "  %d\t%s\n", causes[msg], msg)
+	}
+	return b.String()
+}
+
+func fbclockSample(tt *fbclock.TrueTime, prefix string, out map[string]int64) {
+	out[prefix+"wou_ns"] = tt.Latest.Sub(tt.Earliest).Nanoseconds()
+	out[prefix+"latest_ns"] = tt.Latest.UnixNano()
+	out[prefix+"earliest_ns"] = tt.Earliest.UnixNano()
+}
+
+// Every key here is one ODS timeseries on every PTP client host. Fixed set,
+// pinned by TestFbclockMetricKeys.
+func fbclockMetrics(s fbclock.Stats, prefix, suffix string, out map[string]int64) {
+	out[prefix+"wou_ns.avg"+suffix] = s.WOUAvg
+	out[prefix+"wou_ns.max"+suffix] = s.WOUMax
+	out[prefix+"wou_lt_10us.sum"+suffix] = s.WOUlt10us
+	out[prefix+"wou_lt_100us.sum"+suffix] = s.WOUlt100us
+	out[prefix+"wou_lt_1000us.sum"+suffix] = s.WOUlt1000us
+	out[prefix+"wou_ge_1000us.sum"+suffix] = s.WOUge1000us
+	out[prefix+"errors.sum"+suffix] = s.Errors
+	out[prefix+"requests.sum"+suffix] = s.Requests
 }
 
 func fbclockRun(requests int64, duration time.Duration, utc bool) error {
@@ -84,25 +119,12 @@ func fbclockRun(requests int64, duration time.Duration, utc bool) error {
 		if r.err != nil {
 			continue
 		}
-		resWOU := r.tt.Latest.Sub(r.tt.Earliest).Nanoseconds()
 		// what we got (latest sample)
-		out[prefix+"wou_ns"] = resWOU
-		out[prefix+"latest_ns"] = r.tt.Latest.UnixNano()
-		out[prefix+"earliest_ns"] = r.tt.Earliest.UnixNano()
+		fbclockSample(r.tt, prefix, out)
 	}
 
 	s := sc.Stats()
-	// WOU aggregates
-	out[prefix+"wou_ns.avg"+suffix] = s.WOUAvg
-	out[prefix+"wou_ns.max"+suffix] = s.WOUMax
-	// WOU buckets
-	out[prefix+"wou_lt_10us.sum"+suffix] = s.WOUlt10us
-	out[prefix+"wou_lt_100us.sum"+suffix] = s.WOUlt100us
-	out[prefix+"wou_lt_1000us.sum"+suffix] = s.WOUlt1000us
-	out[prefix+"wou_ge_1000us.sum"+suffix] = s.WOUge1000us
-	// counters
-	out[prefix+"errors.sum"+suffix] = s.Errors
-	out[prefix+"requests.sum"+suffix] = s.Requests
+	fbclockMetrics(s, prefix, suffix, out)
 
 	toPrint, err := json.Marshal(out)
 	if err != nil {
@@ -112,6 +134,11 @@ func fbclockRun(requests int64, duration time.Duration, utc bool) error {
 
 	if requests > 1 {
 		fmt.Fprintf(os.Stderr, "Running clock.GetTime %d times over %v. Average WOU size is: %d\n", requests, duration, s.WOUAvg)
+	}
+	// stderr: the fbagent collector parses stdout as JSON.
+	if s.Errors > 0 {
+		fmt.Fprintf(os.Stderr, "%d of %d clock.GetTime calls failed:\n%s",
+			s.Errors, s.Requests, formatErrorCauses(sc.ErrorCauses()))
 	}
 	return nil
 }
