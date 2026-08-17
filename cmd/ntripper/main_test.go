@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/facebook/time/rtcm"
 	"github.com/stretchr/testify/require"
@@ -127,4 +128,158 @@ func TestTowToMsKeepsEpochOnTheSecond(t *testing.T) {
 		got := towToMs(float64(sec))
 		require.Zero(t, got%1000, "tow=%d stamped %d ms off the second", sec, got%1000)
 	}
+}
+
+func TestDueNow(t *testing.T) {
+	tests := []struct {
+		name     string
+		last     time.Time
+		interval time.Duration
+		want     bool
+	}{
+		{"IntervalElapsed", time.Now().Add(-2 * time.Second), time.Second, true},
+		{"IntervalNotElapsed", time.Now(), time.Second, false},
+		{"ZeroIntervalDisables", time.Now().Add(-time.Hour), 0, false},
+		{"NegativeIntervalDisables", time.Now().Add(-time.Hour), -time.Second, false},
+		{"ExactlyAtInterval", time.Now().Add(-time.Second), time.Second, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, dueNow(tt.last, tt.interval))
+		})
+	}
+}
+
+type recordingWriter struct {
+	writes [][]byte
+	failAt int
+}
+
+func (w *recordingWriter) Write(p []byte) (int, error) {
+	w.writes = append(w.writes, append([]byte{}, p...))
+	if w.failAt > 0 && len(w.writes) >= w.failAt {
+		return 0, errors.New("caster gone")
+	}
+	return len(p), nil
+}
+
+// fakeEphCache returns n stub cached ephemeris frames.
+type fakeEphCache struct{ n int }
+
+func (f fakeEphCache) All() [][]byte {
+	out := make([][]byte, 0, f.n)
+	for i := range f.n {
+		out = append(out, []byte{0xD3, 0x00, byte(i)})
+	}
+	return out
+}
+
+func TestPeriodicSenderCadences(t *testing.T) {
+	const ephInterval = 8 * time.Second
+	msg1033 := []byte{0xD3, 0x00, 0x01, 0xFF}
+
+	tests := []struct {
+		name        string
+		lastMsg1033 time.Time
+		lastEph     time.Time
+		ephInterval time.Duration
+		cachedEph   int
+		wantWrites  int
+		wantEphSent uint64
+	}{
+		{
+			name:        "EphemerisDueOnly",
+			lastMsg1033: time.Now(),
+			lastEph:     time.Now().Add(-ephInterval),
+			ephInterval: ephInterval,
+			cachedEph:   3,
+			wantWrites:  3,
+			wantEphSent: 3,
+		},
+		{
+			name:        "Msg1033DueOnly",
+			lastMsg1033: time.Now().Add(-msg1033Interval),
+			lastEph:     time.Now(),
+			ephInterval: ephInterval,
+			cachedEph:   3,
+			wantWrites:  1,
+			wantEphSent: 0,
+		},
+		{
+			name:        "BothDue",
+			lastMsg1033: time.Now().Add(-msg1033Interval),
+			lastEph:     time.Now().Add(-ephInterval),
+			ephInterval: ephInterval,
+			cachedEph:   2,
+			wantWrites:  3,
+			wantEphSent: 2,
+		},
+		{
+			name:        "NeitherDue",
+			lastMsg1033: time.Now(),
+			lastEph:     time.Now(),
+			ephInterval: ephInterval,
+			cachedEph:   2,
+			wantWrites:  0,
+			wantEphSent: 0,
+		},
+		{
+			name:        "ZeroIntervalDisablesEphemeris",
+			lastMsg1033: time.Now(),
+			lastEph:     time.Now().Add(-time.Hour),
+			ephInterval: 0,
+			cachedEph:   2,
+			wantWrites:  0,
+			wantEphSent: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &periodicSender{
+				lastMsg1033: tt.lastMsg1033,
+				lastEph:     tt.lastEph,
+				ephInterval: tt.ephInterval,
+			}
+			w := &recordingWriter{}
+			sent, err := p.send(w, msg1033, fakeEphCache{tt.cachedEph})
+			require.NoError(t, err)
+			require.Equal(t, tt.wantEphSent, sent)
+			require.Len(t, w.writes, tt.wantWrites)
+		})
+	}
+}
+
+// A due ephemeris tick must not advance the 1033 timer, and vice versa.
+func TestPeriodicSenderTimersAdvanceIndependently(t *testing.T) {
+	const ephInterval = 8 * time.Second
+	before1033 := time.Now().Add(-time.Minute)
+	p := &periodicSender{
+		lastMsg1033: before1033,
+		lastEph:     time.Now().Add(-ephInterval),
+		ephInterval: ephInterval,
+	}
+
+	_, err := p.send(&recordingWriter{}, []byte{0xD3}, fakeEphCache{1})
+	require.NoError(t, err)
+	require.True(t, p.lastMsg1033.After(before1033), "1033 was due, so its timer advanced")
+
+	sentEph := p.lastEph
+	p.lastMsg1033 = time.Now().Add(-msg1033Interval)
+	_, err = p.send(&recordingWriter{}, []byte{0xD3}, fakeEphCache{1})
+	require.NoError(t, err)
+	require.Equal(t, sentEph, p.lastEph, "1033 firing must not advance the ephemeris timer")
+}
+
+func TestPeriodicSenderEphemerisWriteError(t *testing.T) {
+	p := &periodicSender{
+		lastMsg1033: time.Now(),
+		lastEph:     time.Now().Add(-time.Minute),
+		ephInterval: time.Second,
+	}
+	w := &recordingWriter{failAt: 2}
+
+	sent, err := p.send(w, []byte{0xD3}, fakeEphCache{3})
+	require.Error(t, err)
+	require.True(t, isWriteError(err), "ephemeris write failure must be a caster write error")
+	require.Equal(t, uint64(1), sent, "frames written before the failure are counted")
 }

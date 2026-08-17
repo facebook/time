@@ -51,6 +51,9 @@ import (
 	"github.com/facebook/time/rtcm"
 )
 
+// msg1033Interval is how often the antenna descriptor is re-injected.
+const msg1033Interval = 30 * time.Second
+
 type config struct {
 	dumpW             io.Writer
 	socket            string
@@ -66,6 +69,7 @@ type config struct {
 	dump              string
 	parse             string
 	reconnectInterval time.Duration
+	ephInterval       time.Duration
 	monitoringPort    int
 	ntripVersion      int
 	dryRun            bool
@@ -110,6 +114,8 @@ func main() {
 		"NTRIP protocol version: 1 (SOURCE) or 2 (HTTP POST)")
 	flag.BoolVar(&cfg.chunked, "chunked", true,
 		"NTRIP v2 only: send body using HTTP chunked transfer encoding")
+	flag.DurationVar(&cfg.ephInterval, "ephemeris-interval", 8*time.Second,
+		"how often to re-send cached ephemeris (1019) to the caster")
 	flag.BoolVar(&cfg.rawxStats, "rawx-stats", false,
 		"read the socket and report the GNSS/signal breakdown of raw RAWX observations, then exit")
 	flag.Parse()
@@ -169,6 +175,48 @@ func main() {
 // every epoch 1 ms early and pushes it into the previous second.
 func towToMs(rcvTow float64) uint32 {
 	return uint32(math.Mod(math.Round(rcvTow*1000.0), 604800000.0))
+}
+
+// periodicSender re-injects the antenna descriptor and cached ephemeris on
+// independent cadences.
+type periodicSender struct {
+	lastMsg1033 time.Time
+	lastEph     time.Time
+	ephInterval time.Duration
+}
+
+// ephCache supplies the cached ephemeris frames to re-send.
+type ephCache interface {
+	All() [][]byte
+}
+
+// send writes whichever periodic messages are due and reports how many
+// ephemeris frames went out.
+func (p *periodicSender) send(w io.Writer, msg1033 []byte, ephColl ephCache) (uint64, error) {
+	if dueNow(p.lastMsg1033, msg1033Interval) {
+		if _, err := w.Write(msg1033); err != nil {
+			return 0, casterWrite("1033", err)
+		}
+		p.lastMsg1033 = time.Now()
+	}
+
+	sent := uint64(0)
+	if dueNow(p.lastEph, p.ephInterval) {
+		for _, eph := range ephColl.All() {
+			if _, err := w.Write(eph); err != nil {
+				return sent, casterWrite("ephemeris", err)
+			}
+			sent++
+		}
+		p.lastEph = time.Now()
+	}
+	return sent, nil
+}
+
+// dueNow reports whether interval has elapsed since last. A non-positive
+// interval disables the timer.
+func dueNow(last time.Time, interval time.Duration) bool {
+	return interval > 0 && time.Since(last) >= interval
 }
 
 func setupLogger(level string) *slog.Logger {
@@ -252,7 +300,7 @@ func runOnce(ctx context.Context, cfg config, logger *slog.Logger, st *stats.JSO
 			return fmt.Errorf("socket: %w", err)
 		}
 
-		err = streamFrames(ctx, sockConn, client, logger, st, stationID, ephColl)
+		err = streamFrames(ctx, sockConn, client, logger, st, stationID, ephColl, cfg.ephInterval)
 		sockConn.Close()
 
 		if ctx.Err() != nil {
@@ -361,6 +409,7 @@ func streamFrames(
 	st *stats.JSONStats,
 	stationID uint16,
 	ephColl *rtcm.EphCollector,
+	ephInterval time.Duration,
 ) error {
 	scanner := rtcm.NewMixedScanner(sockConn)
 	var frameCount uint64
@@ -387,7 +436,11 @@ func streamFrames(
 		}
 		frameCount++
 	}
-	lastMsg1033 := time.Now()
+	periodic := &periodicSender{
+		lastMsg1033: time.Now(),
+		lastEph:     time.Now(),
+		ephInterval: ephInterval,
+	}
 
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
@@ -541,18 +594,10 @@ func streamFrames(
 			frameCount++
 		}
 
-		// Inject 1033 and re-send ephemeris periodically.
-		if time.Since(lastMsg1033) >= 30*time.Second {
-			if _, err := client.Write(msg1033); err != nil {
-				return casterWrite("1033", err)
-			}
-			for _, eph := range ephColl.All() {
-				if _, err := client.Write(eph); err != nil {
-					return casterWrite("ephemeris", err)
-				}
-				frameCount++
-			}
-			lastMsg1033 = time.Now()
+		sent, err := periodic.send(client, msg1033, ephColl)
+		frameCount += sent
+		if err != nil {
+			return err
 		}
 	}
 
