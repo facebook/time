@@ -90,3 +90,6 @@ func (s *JSONStats) SetConnected(v int64) { s.connected.Store(v) }
 
 // IncReconnects increments the reconnect counter.
 func (s *JSONStats) IncReconnects() { s.reconnects.Add(1) }
+
+// Reconnects returns the cumulative reconnect count.
+func (s *JSONStats) Reconnects() int64 { return s.reconnects.Load() }

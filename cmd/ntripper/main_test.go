@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -24,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebook/time/cmd/ntripper/stats"
 	"github.com/facebook/time/rtcm"
 	"github.com/stretchr/testify/require"
 )
@@ -147,6 +149,37 @@ func TestDueNow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.want, dueNow(tt.last, tt.interval))
 		})
+	}
+}
+
+// A socket that does not exist is a wait condition: run must keep retrying
+// rather than exiting the process.
+func TestRunRetriesWhenSocketMissing(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	cfg := config{
+		socket:            filepath.Join(t.TempDir(), "absent.sock"),
+		dryRun:            true,
+		reconnectInterval: time.Millisecond,
+	}
+	st := stats.NewJSONStats()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		run(ctx, cfg, setupLogger("error"), st)
+	}()
+
+	require.Eventually(t, func() bool {
+		return st.Reconnects() > 1
+	}, 5*time.Second, 10*time.Millisecond, "run must retry a missing socket, not exit")
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "run did not return after context cancellation")
 	}
 }
 

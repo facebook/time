@@ -245,11 +245,6 @@ func run(ctx context.Context, cfg config, logger *slog.Logger, st *stats.JSONSta
 			return
 		}
 
-		if errors.Is(err, os.ErrNotExist) {
-			logger.Error("fatal error", "error", err)
-			os.Exit(1)
-		}
-
 		st.SetConnected(0)
 		st.IncReconnects()
 
@@ -355,9 +350,6 @@ func parseStationID(username string) uint16 {
 
 func connectSocket(ctx context.Context, cfg config, logger *slog.Logger) (net.Conn, error) {
 	logger.Info("connecting to RTCM socket", "path", cfg.socket)
-	if _, err := os.Stat(cfg.socket); err != nil {
-		return nil, fmt.Errorf("socket %s: %w", cfg.socket, err)
-	}
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "unix", cfg.socket)
 	if err != nil {
