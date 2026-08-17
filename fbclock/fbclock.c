@@ -460,10 +460,6 @@ int fbclock_calculate_time_v2(
   if (state->ingress_time_ns > phc_time_ns) {
     return FBCLOCK_E_PHC_IN_THE_PAST;
   }
-  // check how far back since last SYNC message from GM (in seconds)
-  double seconds =
-      (double)(phc_time_ns - state->ingress_time_ns) / NANOSECONDS_IN_SECONDS;
-
   int64_t diff_ns = sysclock_time_now_ns - state->sysclock_time_ns;
   // Refuse to extrapolate past a sane bound, or backwards in time. Either case
   // means the daemon stopped updating shared memory or there's a clock-source
@@ -477,6 +473,14 @@ int fbclock_calculate_time_v2(
   // the quotient ~2^64/1e9 ≈ 18.45 s instead of the intended small ns count.
   phc_time_ns +=
       diff_ns + diff_ns * state->coef_ppb / (int64_t)NANOSECONDS_IN_SECONDS;
+
+  // Time since the last SYNC from the GM, at the PHC instant this call
+  // reports. Clamped like the past_v2 path below: a coef_ppb under -1e9
+  // extrapolates back past ingress, and fbclock_window_of_uncertainty casts
+  // the holdover product to uint64_t.
+  int64_t holdover_ns = phc_time_ns - state->ingress_time_ns;
+  double seconds =
+      holdover_ns > 0 ? (double)holdover_ns / NANOSECONDS_IN_SECONDS : 0.0;
 
   // UTC offset applied if time standard used is UTC (and not TAI)
   if (time_standard == FBCLOCK_UTC) {

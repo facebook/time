@@ -18,6 +18,7 @@ limitations under the License.
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <cmath>
 #include <future>
 #include <iterator>
@@ -431,6 +432,83 @@ TEST(fbclockTest, test_fbclock_calculate_time_v2_stale_data) {
   EXPECT_EQ(err, FBCLOCK_E_DATA_STALE);
 }
 
+TEST(fbclockTest, test_fbclock_calculate_time_v2_holdover_grows_while_stale) {
+  // A stalled daemon freezes the anchor. The estimate still extrapolates
+  // forward from it; the window has to grow from that same instant.
+  fbclock_clockdata_v2 state = {
+      .ingress_time_ns = 1647269082943150996,
+      .clockId = CLOCK_MONOTONIC_RAW,
+      .phc_time_ns = 1647269082944150996, // anchor 1 ms after ingress
+      .sysclock_time_ns = 1000000000,
+      .coef_ppb = 0,
+  };
+  double error_bound = 172.0;
+  double h_value = 50.5; // ns of window per second of holdover
+
+  fbclock_truetime fresh;
+  ASSERT_EQ(
+      fbclock_calculate_time_v2(
+          error_bound,
+          h_value,
+          &state,
+          state.sysclock_time_ns,
+          &fresh,
+          FBCLOCK_TAI),
+      FBCLOCK_E_NO_ERROR);
+  EXPECT_EQ(fbclock_truetime_midpoint_ns(&fresh), (uint64_t)state.phc_time_ns);
+  // 1 ms of holdover contributes 0 ns, so the window is error_bound each side.
+  EXPECT_EQ(fresh.latest_ns - fresh.earliest_ns, 344ULL);
+
+  fbclock_truetime stale;
+  int64_t five_seconds_ns = 5000000000LL;
+  ASSERT_EQ(
+      fbclock_calculate_time_v2(
+          error_bound,
+          h_value,
+          &state,
+          state.sysclock_time_ns + five_seconds_ns,
+          &stale,
+          FBCLOCK_TAI),
+      FBCLOCK_E_NO_ERROR);
+  EXPECT_EQ(
+      fbclock_truetime_midpoint_ns(&stale),
+      (uint64_t)(state.phc_time_ns + five_seconds_ns));
+  // 5.001 s of holdover at 50.5 ns/s is 252 ns each side, on top of the 172.
+  EXPECT_EQ(stale.latest_ns - stale.earliest_ns, 848ULL);
+}
+
+TEST(fbclockTest, test_fbclock_calculate_time_v2_backwards_phc_keeps_a_window) {
+  // -1010101010 is what the daemon's calcCoeffPPB returns, with no error, for
+  // a 1 s backward CLOCK_REALTIME step against 10 ms of PHC. Dating holdover
+  // from the estimate puts it before ingress, and a negative holdover would
+  // reach fbclock_window_of_uncertainty's cast to uint64_t.
+  fbclock_clockdata_v2 state = {
+      .ingress_time_ns = 1647269082943150996,
+      .clockId = CLOCK_MONOTONIC_RAW,
+      .phc_time_ns = 1647269082944150996, // anchor 1 ms after ingress
+      .sysclock_time_ns = 1000000000,
+      .coef_ppb = -1010101010,
+  };
+  double error_bound = 172.0;
+  double h_value = 50.5;
+
+  fbclock_truetime truetime;
+  ASSERT_EQ(
+      fbclock_calculate_time_v2(
+          error_bound,
+          h_value,
+          &state,
+          state.sysclock_time_ns + 5000000000LL,
+          &truetime,
+          FBCLOCK_TAI),
+      FBCLOCK_E_NO_ERROR);
+  // 5 s * (1 - 1.010101010) walks the estimate 50505050 ns backwards.
+  EXPECT_EQ(
+      fbclock_truetime_midpoint_ns(&truetime),
+      (uint64_t)(state.phc_time_ns - 50505050));
+  EXPECT_EQ(truetime.latest_ns - truetime.earliest_ns, 344ULL);
+}
+
 TEST(fbclockTest, test_fbclock_calculate_time_past_v2) {
   // The REALTIME anchor section is a normal fbclock_clockdata_v2 whose anchor
   // lives in the standard phc_time_ns / sysclock_time_ns / coef_ppb fields.
@@ -833,6 +911,68 @@ TEST(fbclockTest, test_fbclock_max_wou_on_calculated_window) {
   EXPECT_EQ(fbclock_check_max_wou(window, &tt), FBCLOCK_E_NO_ERROR);
   EXPECT_EQ(fbclock_check_max_wou(window + 1000, &tt), FBCLOCK_E_NO_ERROR);
   EXPECT_EQ(fbclock_check_max_wou(window - 1, &tt), FBCLOCK_E_WOU_TOO_BIG);
+}
+
+TEST(fbclockTest, test_gettime_max_wou_rejects_the_stalled_window) {
+  // Callers never see this window raw: fbclock_gettime runs it through
+  // max_wou_ns, so widening it during a stall also changes which reads serve.
+  char* test_shm = std::tmpnam(nullptr);
+  FILE* f_rw = fopen(test_shm, "wb+");
+  ASSERT_NE(f_rw, nullptr);
+  int sfd_rw = fileno(f_rw);
+  ASSERT_EQ(ftruncate(sfd_rw, FBCLOCK_SHMDATA_V2_SIZE), 0);
+
+  FILE* f_ro = fopen(test_shm, "r");
+  ASSERT_NE(f_ro, nullptr);
+  fbclock_shmdata_v2* shmp = (fbclock_shmdata_v2*)mmap(
+      nullptr, FBCLOCK_SHMDATA_V2_SIZE, PROT_READ, MAP_SHARED, fileno(f_ro), 0);
+  ASSERT_NE(shmp, MAP_FAILED);
+
+  struct timespec ts = {};
+  ASSERT_EQ(clock_gettime(CLOCK_MONOTONIC_RAW, &ts), 0);
+  int64_t sysclock_now_ns = ts.tv_sec * 1000000000LL + ts.tv_nsec;
+
+  // The same 172 ns error bound and 50.5 ns/s holdover as
+  // test_fbclock_calculate_time_v2_holdover_grows_while_stale.
+  fbclock_clockdata_v2 data = {
+      .ingress_time_ns = 1647269082943150996,
+      .error_bound_ns = 172,
+      .holdover_multiplier_ns = (uint32_t)(50.5 * FBCLOCK_POW2_16),
+      .clockId = CLOCK_MONOTONIC_RAW,
+      .phc_time_ns = 1647269082944150996, // anchor 1 ms after ingress
+      .sysclock_time_ns = sysclock_now_ns,
+      .coef_ppb = 0,
+  };
+  ASSERT_EQ(fbclock_clockdata_store_data_v2(sfd_rw, &data), 0);
+
+  const uint64_t cap_ns = 500; // between the fresh and the stalled window
+  fbclock_lib lib = {};
+  lib.shmp_v2 = shmp;
+  lib.max_wou_ns = cap_ns;
+
+  // Widths are not pinned here: this read races the library's own clock read.
+  // The sibling test pins the exact arithmetic against a synthetic sysclock;
+  // what matters here is which side of the cap each read lands on.
+  fbclock_truetime fresh;
+  ASSERT_EQ(fbclock_gettime(&lib, &fresh), FBCLOCK_E_NO_ERROR);
+  EXPECT_LE(fresh.latest_ns - fresh.earliest_ns, cap_ns);
+
+  // The same snapshot, five seconds without a daemon update.
+  data.sysclock_time_ns = sysclock_now_ns - 5000000000LL;
+  ASSERT_EQ(fbclock_clockdata_store_data_v2(sfd_rw, &data), 0);
+
+  fbclock_truetime stalled;
+  EXPECT_EQ(fbclock_gettime(&lib, &stalled), FBCLOCK_E_WOU_TOO_BIG);
+
+  // The cap is what rejected it, not the stall itself.
+  lib.max_wou_ns = FBCLOCK_MAX_WOU_NS_UNSET;
+  ASSERT_EQ(fbclock_gettime(&lib, &stalled), FBCLOCK_E_NO_ERROR);
+  EXPECT_GT(stalled.latest_ns - stalled.earliest_ns, cap_ns);
+
+  munmap(shmp, FBCLOCK_SHMDATA_V2_SIZE);
+  fclose(f_ro);
+  fclose(f_rw);
+  remove(test_shm);
 }
 
 int main(int argc, char** argv) {
