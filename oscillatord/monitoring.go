@@ -24,6 +24,7 @@ package oscillatord
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -300,7 +301,9 @@ func ReadStatus(conn io.ReadWriter) (*Status, error) {
 	bounded := &io.LimitedReader{R: conn, N: maxStatusBytes}
 	var status Status
 	if err := json.NewDecoder(bounded).Decode(&status); err != nil {
-		if bounded.N <= 0 {
+		// The cap only explains the failure when the decoder ran out of stream. A malformed
+		// reply can also exhaust the budget, and reporting that as a truncation hides it.
+		if bounded.N <= 0 && (errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)) {
 			return nil, fmt.Errorf("oscillatord reply did not complete within %d bytes", maxStatusBytes)
 		}
 		return nil, fmt.Errorf("decoding JSON from oscillatord conn: %w", err)

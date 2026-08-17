@@ -18,6 +18,7 @@ package oscillatord
 
 import (
 	"errors"
+	"io"
 	"net"
 	"strings"
 	"testing"
@@ -135,10 +136,32 @@ func TestOscillatordReadStopsAtByteCap(t *testing.T) {
 
 	client, server := net.Pipe()
 	defer client.Close()
-	serveChunks(t, server, payload, 1)
+	done := serveChunks(t, server, payload, 1)
 
 	_, err := ReadStatus(client)
 	require.ErrorContains(t, err, "did not complete within")
+
+	// ReadStatus stopped at the cap, so the server is still blocked writing the rest.
+	require.NoError(t, client.Close())
+	require.ErrorIs(t, <-done, io.ErrClosedPipe)
+}
+
+func TestOscillatordReadMalformedReplyFillingTheCap(t *testing.T) {
+	// Every byte arrives inside the cap, but the reply is not JSON. Blaming the cap here
+	// would point a reader at the firmware's verbosity instead of at the broken reply.
+	empty := len(statusPayload(`, "disciplining": {"note": ""}`))
+	payload := statusPayload(`, "disciplining": {"note": "` + strings.Repeat("x", maxStatusBytes-empty) + `"}`)
+	require.Len(t, payload, maxStatusBytes)
+	payload = payload[:maxStatusBytes-1] + "]"
+
+	client, server := net.Pipe()
+	defer client.Close()
+	done := serveChunks(t, server, payload, 1)
+
+	_, err := ReadStatus(client)
+	require.NoError(t, <-done)
+	require.ErrorContains(t, err, "decoding JSON from oscillatord conn")
+	require.NotContains(t, err.Error(), "did not complete within")
 }
 
 func TestOscillatordReadFail(t *testing.T) {
