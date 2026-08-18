@@ -136,7 +136,10 @@ func connect(address, local string, timeout time.Duration) (*net.UnixConn, error
 	if err != nil {
 		return nil, err
 	}
-	localAddr, _ := net.ResolveUnixAddr("unixgram", local)
+	localAddr, err := net.ResolveUnixAddr("unixgram", local)
+	if err != nil {
+		return nil, err
+	}
 	conn, err := net.DialUnix("unixgram", localAddr, addr)
 	if err != nil {
 		return nil, err
