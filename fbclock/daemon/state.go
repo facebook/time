@@ -85,6 +85,18 @@ func (s *daemonState) ingressTimeNS() int64 {
 	return s.lastIngressTimeNS
 }
 
+func (s *daemonState) updateStoredData(d *fbclock.Data) {
+	s.Lock()
+	defer s.Unlock()
+	s.lastStoredData = d
+}
+
+func (s *daemonState) storedData() *fbclock.Data {
+	s.Lock()
+	defer s.Unlock()
+	return s.lastStoredData
+}
+
 func (s *daemonState) pushDataPoint(data *DataPoint) {
 	s.Lock()
 	defer s.Unlock()
