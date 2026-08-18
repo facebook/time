@@ -211,3 +211,58 @@ func TestTakeLinearizabilityTestResultEmpty(t *testing.T) {
 	got := s.takeLinearizabilityTestResult(5)
 	require.Empty(t, got)
 }
+
+func TestGetMeanCoefPPBFirstSample(t *testing.T) {
+	s := newDaemonState(5)
+	// The very first sample has nothing else to average against.
+	require.Equal(t, int64(1000), s.getMeanCoeffPPB(1000))
+}
+
+func TestGetMeanCoefPPBPartialRing(t *testing.T) {
+	s := newDaemonState(5)
+
+	require.Equal(t, int64(100), s.getMeanCoeffPPB(100))
+	require.Equal(t, int64(150), s.getMeanCoeffPPB(200)) // (100 + 200) / 2
+	require.Equal(t, int64(200), s.getMeanCoeffPPB(300)) // (100 + 200 + 300) / 3
+}
+
+func TestGetMeanCoefPPBRingSizedIndependently(t *testing.T) {
+	// coefPPBs is sized by coefPPBRingSize, not by the ringSize argument that
+	// sizes the ptp4l data rings.
+	s := newDaemonState(3)
+
+	s.getMeanCoeffPPB(100)
+	s.getMeanCoeffPPB(100)
+	s.getMeanCoeffPPB(100)
+	// A 3-slot ring would have evicted the first sample by now.
+	require.Equal(t, int64(75), s.getMeanCoeffPPB(0)) // (100 + 100 + 100 + 0) / 4
+}
+
+func TestGetMeanCoefPPBFullRingRollover(t *testing.T) {
+	s := newDaemonState(3)
+
+	var mean int64
+	for range coefPPBRingSize {
+		mean = s.getMeanCoeffPPB(100)
+	}
+	require.Equal(t, int64(100), mean)
+
+	// Every further push evicts exactly one of the old samples, so the mean
+	// walks from 100 to 200 in coefPPBRingSize steps instead of being diluted
+	// over an ever-growing sample count.
+	for i := 1; i <= coefPPBRingSize; i++ {
+		want := int64(100 + i*100/coefPPBRingSize)
+		require.Equal(t, want, s.getMeanCoeffPPB(200), "after %d rollover pushes", i)
+	}
+
+	// The ring now holds nothing but 200s.
+	require.Equal(t, int64(200), s.getMeanCoeffPPB(200))
+}
+
+func TestGetMeanCoefPPBMixedSign(t *testing.T) {
+	s := newDaemonState(5)
+
+	s.getMeanCoeffPPB(-100)
+	s.getMeanCoeffPPB(300)
+	require.Equal(t, int64(0), s.getMeanCoeffPPB(-200)) // (-100 + 300 - 200) / 3
+}

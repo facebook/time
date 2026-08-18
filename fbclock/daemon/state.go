@@ -32,16 +32,27 @@ type daemonState struct {
 	DataPoints                 *ring.Ring // DataPoints we collected from ptp4l
 	mmms                       *ring.Ring // M values we calculated
 	linearizabilityTestResults *ring.Ring // linearizability test results
+	coefPPBs                   *ring.Ring // set of extrapolation coefficients for mean coefficient
 
 	lastIngressTimeNS int64
 	lastStoredData    *fbclock.Data
 }
+
+// coefPPBRingSize is the number of extrapolation coefficients averaged into the
+// mean coefficient. The primary anchor is refreshed by the fixed 10ms fastTicker
+// in populateDataV2, so 100 samples cover ~1s of holdover — validated to smooth
+// extended holdover (up to 30s) without hurting short-interval precision. It is
+// sized against that fixed tick on purpose, decoupled from the ptp4l sampling
+// interval that sizes the other rings, so an unrelated sampling knob can't
+// silently retune the holdover extrapolation window.
+const coefPPBRingSize = 100
 
 func newDaemonState(ringSize int) *daemonState {
 	s := &daemonState{
 		DataPoints:                 ring.New(ringSize),
 		mmms:                       ring.New(ringSize),
 		linearizabilityTestResults: ring.New(ringSize),
+		coefPPBs:                   ring.New(coefPPBRingSize),
 	}
 	// init ring buffers with nils
 	for range ringSize {
@@ -53,6 +64,11 @@ func newDaemonState(ringSize int) *daemonState {
 
 		s.linearizabilityTestResults.Value = nil
 		s.linearizabilityTestResults = s.linearizabilityTestResults.Next()
+	}
+
+	for range coefPPBRingSize {
+		s.coefPPBs.Value = nil
+		s.coefPPBs = s.coefPPBs.Next()
 	}
 	return s
 }
@@ -157,4 +173,22 @@ func (s *daemonState) takeLinearizabilityTestResult(n int) []linearizability.Tes
 		r = r.Prev()
 	}
 	return result
+}
+
+func (s *daemonState) getMeanCoeffPPB(coef int64) int64 {
+	s.coefPPBs.Value = coef
+	s.coefPPBs = s.coefPPBs.Next()
+
+	var cnt, sumCoeff int64
+	s.coefPPBs.Do(func(val any) {
+		if val == nil {
+			return
+		}
+
+		v := val.(int64)
+		cnt++
+		sumCoeff += v
+	})
+
+	return sumCoeff / cnt
 }

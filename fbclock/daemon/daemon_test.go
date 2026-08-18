@@ -896,3 +896,24 @@ func TestDaemonGradualWindowSteadyStateIdentical(t *testing.T) {
 	require.Equal(t, offFull.ErrorBoundNS, onFull.ErrorBoundNS,
 		"with the ring full, GradualWindow must not change the published window")
 }
+
+// TestMeanCoeffPPB covers the composition wired into populateDataV2: the synthetic
+// first-run coefficient must not be averaged into the mean, so the first real
+// measurement is published unbiased rather than halved by a phantom zero.
+func TestMeanCoeffPPB(t *testing.T) {
+	d := newTestDaemon(&Config{RingSize: 30, Interval: time.Second}, stats.NewStats())
+
+	// First run: prev has no sysclock anchor, so calcCoeffPPB yields the synthetic
+	// 0 and nothing is enqueued into the mean ring.
+	prev := fbclock.DataV2{}
+	cur := fbclock.DataV2{}
+	c := d.meanCoeffPPB(&prev, &cur)
+	require.Equal(t, int64(0), c)
+
+	// First real measurement. Because the synthetic 0 was skipped, the mean is the
+	// measured coefficient itself (-493), not (0 + -493) / 2.
+	prev = fbclock.DataV2{SysclockTimeNS: 1749167822494826022, PHCTimeNS: 1749167859494830869}
+	cur = fbclock.DataV2{SysclockTimeNS: 1749167822504951677, PHCTimeNS: 1749167859504956519}
+	c = d.meanCoeffPPB(&prev, &cur)
+	require.Equal(t, int64(-493), c)
+}

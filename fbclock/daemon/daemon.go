@@ -563,6 +563,19 @@ func calcCoeffPPB(prev, cur *fbclock.DataV2) (int64, error) {
 	return coefPPB, err
 }
 
+// meanCoefPPB returns 0 on first sample and mean coefficient in other cases
+func (s *Daemon) meanCoeffPPB(prev, cur *fbclock.DataV2) int64 {
+	if prev.SysclockTimeNS == 0 {
+		return 0
+	}
+	coefPPB, err := calcCoeffPPB(prev, cur)
+	if err != nil {
+		log.Warning(err)
+		s.stats.UpdateCounterBy("monotonictime_error", 1)
+	}
+	return s.state.getMeanCoeffPPB(coefPPB)
+}
+
 // populateDataV2 populates fbclock.DataV2 with data from fbclock.Data plus calculated values
 func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 	prevPrimary := fbclock.DataV2{}
@@ -592,10 +605,7 @@ func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 				SysclockTimeNS:       sysTime.UnixNano(),
 				ClockID:              clockID,
 			}
-			if primary.CoefPPB, err = calcCoeffPPB(&prevPrimary, &primary); err != nil {
-				log.Warning(err)
-				s.stats.UpdateCounterBy("monotonictime_error", 1)
-			}
+			primary.CoefPPB = s.meanCoeffPPB(&prevPrimary, &primary)
 			prevPrimary = primary
 			// Publish the primary section right away, before the slower REALTIME
 			// read below, so its anchor isn't aged by that read.
