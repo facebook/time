@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -287,4 +288,54 @@ func TestServerNTS(t *testing.T) {
 	inner, cleartext := openResponse(t, buf[:n], ntp.AEADAESSIVCMAC512, s2c)
 	require.Equal(t, 3, inner) // 1 + 2 placeholders
 	require.Zero(t, cleartext)
+}
+
+// TestServerNTSAnswersPlainRequestWithLegacyMAC pins the outage the MAC split
+// exists to end, at the layer where it was seen. A keystore is what makes the
+// difference: startListener hands the whole datagram to UnmarshalBinary only when
+// one is set, so on an NTS-enabled responder an RFC 5905 MAC used to fail the
+// parse and the client got nothing back. Without the split in
+// ntp.Packet.UnmarshalBinary this test times out on the read.
+func TestServerNTSAnswersPlainRequestWithLegacyMAC(t *testing.T) {
+	s := &Server{
+		Checker: &checker.SimpleChecker{ExpectedListeners: 1, ExpectedWorkers: 1},
+		Stats:   &stats.JSONStats{},
+		tasks:   make(chan task, 1),
+		Config: Config{
+			Workers: 1, TimestampType: timestamp.SWRX, Iface: "lo", Keystore: newTestKeystore(t),
+		},
+	}
+	go s.startWorker()
+
+	conn := tryListenUDP(t)
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	go s.startListener(conn)
+	time.Sleep(100 * time.Millisecond)
+
+	header, err := ntpRequest.Bytes()
+	require.NoError(t, err)
+	// Key identifier 1 plus an MD5 digest: 20 octets, and no extension-field
+	// parser can read the identifier as a {type, length}.
+	req := append(header, append([]byte{0x00, 0x00, 0x00, 0x01}, bytes.Repeat([]byte{0xAB}, 16)...)...)
+
+	addr := net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", localAddr.Port))
+	sendConn, err := net.DialTimeout("udp", addr, time.Second)
+	require.NoError(t, err)
+	defer sendConn.Close()
+
+	_, err = sendConn.Write(req)
+	require.NoError(t, err)
+
+	buf := make([]byte, maxPacketSizeBytes)
+	require.NoError(t, sendConn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	n, err := sendConn.Read(buf)
+	require.NoError(t, err)
+	require.Equal(t, ntp.PacketSizeBytes, n)
+
+	var reply ntp.Packet
+	require.NoError(t, reply.UnmarshalBinary(buf[:n]))
+	require.Equal(t, uint8(4), reply.Settings&0x07, "server mode")
+	require.Empty(t, reply.ExtensionFields)
+	require.Nil(t, reply.MAC, "we hold no symmetric key, so the reply carries no MAC")
 }

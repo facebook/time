@@ -105,6 +105,23 @@ func TestVerifyNTSResponseRoundTrip(t *testing.T) {
 	require.Equal(t, fresh, cookies)
 }
 
+// TestVerifyNTSResponseRejectsLegacyMAC pins that the new MAC split does not open
+// a hole here: octets appended behind the authenticator sit outside the associated
+// data, so an on-path attacker chooses them freely. Taking them for a MAC would
+// verify the response anyway.
+func TestVerifyNTSResponseRejectsLegacyMAC(t *testing.T) {
+	s2c := testKey(1)
+	uid := testUID()
+	resp := sealResponse(t, testAEAD, s2c, uid, [][]byte{[]byte("cookie-1")})
+
+	_, _, err := VerifyNTSResponse(resp, testAEAD, s2c, uid)
+	require.NoError(t, err, "the response verifies before the MAC is appended")
+
+	withMAC := append(bytes.Clone(resp), bytes.Repeat([]byte{0xAB}, 20)...)
+	_, _, err = VerifyNTSResponse(withMAC, testAEAD, s2c, uid)
+	require.ErrorIs(t, err, protocol.ErrExtensionLengthInvalid)
+}
+
 // TestNTPRoundTrip exercises both helpers for every supported AEAD: build a
 // request, confirm its authenticator verifies (server side), then verify a reply.
 func TestNTPRoundTrip(t *testing.T) {

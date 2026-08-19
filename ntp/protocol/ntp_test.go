@@ -17,7 +17,9 @@ limitations under the License.
 package protocol
 
 import (
+	"bytes"
 	"net"
+	"slices"
 	"testing"
 	"time"
 
@@ -124,6 +126,275 @@ func TestPacketHeaderRoundTrip(t *testing.T) {
 	var got Packet
 	require.NoError(t, got.UnmarshalBinary(b))
 	require.Equal(t, *p, got)
+}
+
+// withTrailer returns ntpRequestBytes followed by trailer.
+func withTrailer(trailer ...[]byte) []byte {
+	b := bytes.Clone(ntpRequestBytes)
+	for _, t := range trailer {
+		b = append(b, t...)
+	}
+	return b
+}
+
+// legacyMAC returns an unframed MAC: a key identifier no extension-field parser
+// can read as a {type, length}, plus a digest of the given length.
+func legacyMAC(digestLen int) []byte {
+	keyID := make([]byte, 4, 4+digestLen)
+	if digestLen > 0 {
+		keyID[3] = 1
+	}
+	return append(keyID, bytes.Repeat([]byte{0xAB}, digestLen)...)
+}
+
+// TestUnmarshalBinaryLegacyMAC pins the split: an unframed trailer at one of the
+// three RFC 5905 MAC lengths lands in Packet.MAC instead of failing the parse. Any
+// other length is still an error.
+func TestUnmarshalBinaryLegacyMAC(t *testing.T) {
+	tests := []struct {
+		name      string
+		digestLen int
+		want      bool
+	}{
+		{"CryptoNAK", 0, true},
+		{"MD5", 16, true},
+		{"SHA1", 20, true},
+		// No RFC 5905 digest is this long, so these are malformed, not authenticated.
+		{"ShorterThanAnyDigest", 4, false},
+		{"BetweenMD5AndSHA1", 18, false},
+		{"SHA256", 32, false},
+		{"SHA512", 64, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mac := legacyMAC(tc.digestLen)
+			b := withTrailer(mac)
+			var p Packet
+			err := p.UnmarshalBinary(b)
+			if !tc.want {
+				require.Error(t, err, "only an RFC 5905 MAC length earns a reply")
+				require.Nil(t, p.MAC)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, mac, p.MAC)
+			require.Empty(t, p.ExtensionFields)
+		})
+	}
+	t.Run("NonzeroKeyIDWithoutDigest", func(t *testing.T) {
+		var p Packet
+		require.Error(t, p.UnmarshalBinary(withTrailer([]byte{0x00, 0x00, 0x00, 0x01})))
+		require.Nil(t, p.MAC)
+	})
+}
+
+// TestUnmarshalBinaryCopiesMAC pins that the MAC does not alias the caller's
+// buffer, which the responder reuses across reads.
+func TestUnmarshalBinaryCopiesMAC(t *testing.T) {
+	mac := legacyMAC(16)
+	b := withTrailer(mac)
+	var p Packet
+	require.NoError(t, p.UnmarshalBinary(b))
+	clear(b)
+	require.Equal(t, mac, p.MAC)
+}
+
+// TestUnmarshalBinaryReadsAMACBehindExtensionFields covers the other shape RFC 5905
+// allows: extension fields, then a MAC. The fields frame, so the MAC starts where
+// framing stopped and no length guess is needed. Totals here avoid 4, 20 and 24
+// octets, where the trailer is a MAC whole and
+// TestUnmarshalBinaryReadsAShortTrailerWholeEvenBehindAField applies instead.
+func TestUnmarshalBinaryReadsAMACBehindExtensionFields(t *testing.T) {
+	// The shortest field RFC 7822 allows ahead of another, written out so the
+	// octets a client would put on the wire are visible.
+	minimalField := slices.Concat([]byte{0x05, 0x00, 0x00, 0x10}, bytes.Repeat([]byte{0xCD}, 12))
+	tests := []struct {
+		name   string
+		fields []byte
+		want   []ExtensionField
+		mac    []byte
+	}{
+		{"MinimumFieldThenMD5", minimalField,
+			[]ExtensionField{{Type: 0x0500, Body: bytes.Repeat([]byte{0xCD}, 12)}}, legacyMAC(16)},
+		{"MinimumFieldThenSHA1", minimalField,
+			[]ExtensionField{{Type: 0x0500, Body: bytes.Repeat([]byte{0xCD}, 12)}}, legacyMAC(20)},
+		{"TwoFieldsThenMD5", slices.Concat(minimalField, minimalField),
+			[]ExtensionField{
+				{Type: 0x0500, Body: bytes.Repeat([]byte{0xCD}, 12)},
+				{Type: 0x0500, Body: bytes.Repeat([]byte{0xCD}, 12)},
+			}, legacyMAC(16)},
+		{"LongFieldThenCryptoNAK", slices.Concat([]byte{0x05, 0x00, 0x00, 0x1C}, make([]byte, 24)),
+			[]ExtensionField{{Type: 0x0500, Body: make([]byte, 24)}}, legacyMAC(0)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.False(t, isLegacyMAC(slices.Concat(tc.fields, tc.mac)), "trailer must not be a MAC whole")
+			var p Packet
+			require.NoError(t, p.UnmarshalBinary(withTrailer(tc.fields, tc.mac)))
+			require.Equal(t, tc.want, p.ExtensionFields)
+			require.Equal(t, tc.mac, p.MAC)
+		})
+	}
+}
+
+// TestUnmarshalBinaryRejectsATailBehindExtensionFields pins the limits on that
+// split. A tail no RFC 5905 digest length explains is still a parse error; a tail
+// that would pass for a MAC is refused once anything names NTS, since answering
+// that in plain NTP would downgrade it; and a key identifier that frames is only
+// recovered when the trailer is a MAC whole, which a field ahead of it rules out.
+func TestUnmarshalBinaryRejectsATailBehindExtensionFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		trailer []byte
+	}{
+		{"TailIsNoDigestLength", slices.Concat(
+			[]byte{0x05, 0x00, 0x00, 0x10}, bytes.Repeat([]byte{0xCD}, 12), legacyMAC(8))},
+		// A 4-octet cookie frames cleanly, so only the parsed fields give NTS away.
+		// The trailer is 24 octets, a MAC length, so nothing else would stop it.
+		{"MACLengthTailBehindAnNTSField", slices.Concat(
+			[]byte{0x02, 0x04, 0x00, 0x04}, legacyMAC(16))},
+		// Key identifier 0x00000004 frames as an empty field, so parsing stops 4
+		// octets late and the tail is 16, not 20. Alone this trailer is recovered
+		// whole (TestUnmarshalBinaryRecoversMACWhoseKeyIDFrames/EmptyFieldThenMD5);
+		// behind a field it is not, and separating the two needs a search this
+		// deliberately does not do.
+		{"FramingKeyIDBehindAField", slices.Concat(
+			[]byte{0x05, 0x00, 0x00, 0x10}, bytes.Repeat([]byte{0xCD}, 12),
+			[]byte{0x00, 0x00, 0x00, 0x04}, bytes.Repeat([]byte{0xAB}, 16))},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var p Packet
+			require.Error(t, p.UnmarshalBinary(withTrailer(tc.trailer)))
+			require.Nil(t, p.MAC)
+			require.Nil(t, p.ExtensionFields)
+		})
+	}
+}
+
+// TestUnmarshalBinaryReadsFramedKeyIDAsExtensionField pins a residual ambiguity: a
+// key identifier whose low 16 bits are a valid field length frames the whole MAC as
+// one field, so the parse succeeds and MAC stays nil -- master reads these the same
+// way. Preferring the MAC would misread a well-framed 20- or 24-octet field.
+func TestUnmarshalBinaryReadsFramedKeyIDAsExtensionField(t *testing.T) {
+	tests := []struct {
+		name      string
+		keyID     []byte
+		digestLen int
+	}{
+		{"MD5LengthKeyID", []byte{0x00, 0x00, 0x00, 0x14}, 16},
+		{"SHA1LengthKeyID", []byte{0x00, 0x00, 0x00, 0x18}, 20},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			trailer := slices.Concat(tc.keyID, bytes.Repeat([]byte{0xAB}, tc.digestLen))
+			var p Packet
+			require.NoError(t, p.UnmarshalBinary(withTrailer(trailer)))
+			require.Nil(t, p.MAC)
+			require.Equal(t, []ExtensionField{{Type: 0x0000, Body: trailer[ExtensionHeaderSize:]}}, p.ExtensionFields)
+		})
+	}
+}
+
+// TestUnmarshalBinaryRecoversMACWhoseKeyIDFrames covers the case between the two
+// tests above: a key identifier whose low 16 bits frame a field ending inside the
+// digest rather than at the end of the trailer. Taking the trailer whole keeps the
+// key identifier attached to its digest.
+func TestUnmarshalBinaryRecoversMACWhoseKeyIDFrames(t *testing.T) {
+	tests := []struct {
+		name      string
+		keyID     []byte
+		digestLen int
+	}{
+		// low 16 bits = 4: an empty field, leaving 20 octets that are a MAC length.
+		{"EmptyFieldThenSHA1", []byte{0x00, 0x00, 0x00, 0x04}, 20},
+		// The type octets are arbitrary too, so this is not a zero-key-id quirk.
+		{"NonZeroTypeOctets", []byte{0x12, 0x34, 0x00, 0x04}, 20},
+		// low 16 bits = 4 with an MD5 digest: 16 left over, not a MAC length, so
+		// before this fix the whole packet failed to parse instead.
+		{"EmptyFieldThenMD5", []byte{0x00, 0x00, 0x00, 0x04}, 16},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mac := slices.Concat(tc.keyID, bytes.Repeat([]byte{0xAB}, tc.digestLen))
+			require.True(t, isLegacyMAC(mac), "test fixture must be a MAC")
+			var p Packet
+			require.NoError(t, p.UnmarshalBinary(withTrailer(mac)))
+			require.Equal(t, mac, p.MAC)
+			require.Empty(t, p.ExtensionFields, "the key identifier is not a field")
+		})
+	}
+}
+
+// TestUnmarshalBinaryReadsAShortTrailerWholeEvenBehindAField pins the other side of
+// that decision. When a well-framed field and the octets after it together come to a
+// MAC length, the trailer is taken whole and the field goes with it. That favours
+// what real traffic sends -- a plain authenticated packet carrying no fields at all.
+// Either reading answers the client the same: neither trailer names NTS, so the
+// responder replies in plain NTP.
+func TestUnmarshalBinaryReadsAShortTrailerWholeEvenBehindAField(t *testing.T) {
+	tests := []struct {
+		name    string
+		trailer []byte
+	}{
+		// Not a crypto-NAK: those are key identifier zero, and taken alone these four
+		// octets are rejected by TestUnmarshalBinaryLegacyMAC/NonzeroKeyIDWithoutDigest.
+		{"FieldThenTrailingKeyID", slices.Concat(
+			[]byte{0x05, 0x00, 0x00, 0x14}, bytes.Repeat([]byte{0xAB}, 16), []byte{0x00, 0x00, 0x00, 0x01})},
+		{"EmptyFieldThenMD5", slices.Concat(
+			[]byte{0x05, 0x00, 0x00, 0x04}, []byte{0x00, 0x00, 0x00, 0x01}, bytes.Repeat([]byte{0xAB}, 16))},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.True(t, isLegacyMAC(tc.trailer), "test fixture must be a MAC")
+			var p Packet
+			require.NoError(t, p.UnmarshalBinary(withTrailer(tc.trailer)))
+			require.Equal(t, tc.trailer, p.MAC)
+			require.Empty(t, p.ExtensionFields)
+		})
+	}
+}
+
+// TestUnmarshalBinaryRejectsNTSTrailerAsMAC pins that a trailer naming an NTS field
+// type is not read as a MAC: answering it in plain NTP would downgrade a request
+// that named NTS. Cases split by where the name sits -- at the header that failed to
+// frame, or in a field ahead of it -- which is what the guard reads. Every case is a
+// legal MAC length, so that guard is all that stands between it and a reply.
+func TestUnmarshalBinaryRejectsNTSTrailerAsMAC(t *testing.T) {
+	// A 4-octet non-NTS field, a well-framed 4-octet NTS field, then 16 octets that
+	// do not frame: 24 in all, with the failure past the NTS field.
+	framedNTSThenGarbage := func(ntsHeader []byte) []byte {
+		b := append([]byte{0x00, 0x00, 0x00, 0x04}, ntsHeader...)
+		b = append(b, 0x00, 0x00, 0x00, 0x03)
+		return append(b, make([]byte, 12)...)
+	}
+	tests := []struct {
+		name    string
+		trailer []byte
+	}{
+		// The NTS field is the one that failed to frame, so it sits exactly where a
+		// MAC would start.
+		{"UniqueIdentifier", append([]byte{0x01, 0x04, 0x00, 0x24}, make([]byte, 20)...)},
+		{"Cookie", append([]byte{0x02, 0x04, 0x00, 0x40}, make([]byte, 16)...)},
+		{"Authenticator", append([]byte{0x04, 0x04, 0x00, 0x40}, make([]byte, 16)...)},
+		{"UnalignedLength", append([]byte{0x03, 0x04, 0x00, 0x06}, make([]byte, 16)...)},
+		{"BehindAFramedKeyID",
+			append([]byte{0x00, 0x00, 0x00, 0x04, 0x02, 0x04, 0x00, 0x40}, make([]byte, 16)...)},
+		// The NTS field framed cleanly, so it is behind where framing stopped and
+		// only the parsed fields give it away.
+		{"FramedAuthenticator", framedNTSThenGarbage([]byte{0x04, 0x04, 0x00, 0x04})},
+		{"FramedCookie", framedNTSThenGarbage([]byte{0x02, 0x04, 0x00, 0x04})},
+		{"FramedUniqueIdentifier", framedNTSThenGarbage([]byte{0x01, 0x04, 0x00, 0x04})},
+		{"FramedCookiePlaceholder", framedNTSThenGarbage([]byte{0x03, 0x04, 0x00, 0x04})},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var p Packet
+			require.Error(t, p.UnmarshalBinary(withTrailer(tc.trailer)))
+			require.Nil(t, p.MAC)
+			require.Nil(t, p.ExtensionFields)
+		})
+	}
 }
 
 func TestBytesToPacket(t *testing.T) {

@@ -17,9 +17,11 @@ limitations under the License.
 package protocol
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
+	"slices"
 )
 
 // PacketSizeBytes sets the size of NTP packet
@@ -32,6 +34,19 @@ const ControlHeaderSizeBytes = 32
 // NTS-protected packet also carries extension fields, so reads are sized to a
 // full 1500-octet MTU to avoid silently truncating them.
 const maxUDPPacketSizeBytes = 1500
+
+// isLegacyMAC reports whether b is one of the three MAC shapes RFC 5905 defines for
+// NTPv4: a 4-octet crypto-NAK, which is specifically key identifier zero, or a key
+// identifier plus an MD5 or SHA-1 digest.
+func isLegacyMAC(b []byte) bool {
+	switch len(b) {
+	case 4:
+		return binary.BigEndian.Uint32(b) == 0
+	case 20, 24:
+		return true
+	}
+	return false
+}
 
 // Packet is an NTPv4 packet
 /*
@@ -94,6 +109,9 @@ type Packet struct {
 	TxTimeSec       uint32           // transmit time sec
 	TxTimeFrac      uint32           // transmit time frac
 	ExtensionFields []ExtensionField // Empty for plain NTP
+	// MAC is the RFC 5905 legacy MAC, nil when the packet carries none. It is
+	// read from the wire only: this package never sends one, so Bytes drops it.
+	MAC []byte
 }
 
 const (
@@ -193,22 +211,59 @@ func (p *Packet) Bytes() ([]byte, error) {
 	return out, nil
 }
 
+// hasNTSField reports whether efs carries any RFC 8915 field type.
+func hasNTSField(efs []ExtensionField) bool {
+	return slices.ContainsFunc(efs, func(ef ExtensionField) bool { return ef.Type.isNTS() })
+}
+
 // UnmarshalBinary fills the Packet from []bytes
 func (p *Packet) UnmarshalBinary(b []byte) error {
 	if len(b) < PacketSizeBytes {
 		return fmt.Errorf("ntp packet too short: %d bytes", len(b))
 	}
 	p.readHeader(b)
-	if len(b) > PacketSizeBytes {
-		efs, err := ParseExtensionFields(b[PacketSizeBytes:])
-		if err != nil {
-			return err
-		}
-		p.ExtensionFields = efs
-	} else {
-		p.ExtensionFields = nil
+	p.ExtensionFields = nil
+	p.MAC = nil
+	if len(b) == PacketSizeBytes {
+		return nil
 	}
+	efs, mac, err := splitTrailer(b[PacketSizeBytes:])
+	if err != nil {
+		return err
+	}
+	p.ExtensionFields = efs
+	p.MAC = mac
 	return nil
+}
+
+// splitTrailer divides the octets following the NTP header into extension fields
+// and an RFC 5905 legacy MAC. A MAC carries no framing, so it is recognised by
+// length alone: either the trailer is one whole, or one is left over where field
+// framing stopped. Clones so the MAC outlives any reuse of b.
+func splitTrailer(b []byte) ([]ExtensionField, []byte, error) {
+	efs, parsed, err := parseExtensionFields(b)
+	if err == nil {
+		return efs, nil, nil
+	}
+	tail := b[parsed:]
+	// Reading NTS octets as an opaque MAC would answer a mangled NTS request in
+	// plain NTP, downgrading it. These read the header that failed to frame and
+	// every field ahead of it, which is where a request that names NTS puts one: by
+	// RFC 8915 §5.3 a conformant one opens with a >=32-octet unique identifier, far
+	// longer than any MAC, so it is never this far in without having framed.
+	if namesNTSFieldType(tail) || hasNTSField(efs) {
+		return nil, nil, err
+	}
+	// A key identifier is a small integer, so its low 16 bits routinely frame the
+	// MAC's own octets as a field. Read the trailer whole first, or that framing
+	// splits the identifier off its digest.
+	if isLegacyMAC(b) {
+		return nil, bytes.Clone(b), nil
+	}
+	if isLegacyMAC(tail) {
+		return efs, bytes.Clone(tail), nil
+	}
+	return nil, nil, err
 }
 
 // AssociatedData returns the header plus the first n extension fields,

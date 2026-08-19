@@ -149,6 +149,16 @@ func (t ExtensionFieldType) String() string {
 	}
 }
 
+// isNTS reports whether t is one of the extension field types RFC 8915 §5.1.1
+// defines for NTS.
+func (t ExtensionFieldType) isNTS() bool {
+	switch t {
+	case UniqueIdentifier, NTSCookie, NTSCookiePlaceholder, NTSAuthenticator:
+		return true
+	}
+	return false
+}
+
 // isReserved reports whether t falls in the IANA-reserved range
 // 0xF000–0xFFFF ("Reserved for Private or Experimental Use", RFC 9748).
 func (t ExtensionFieldType) isReserved() bool {
@@ -250,19 +260,32 @@ func encodeExtensionFields(efs []ExtensionField) ([]byte, error) {
 // fields per. The buffer must contain only extension fields;
 // any legacy NTPv3/v4 MAC bytes must be stripped before calling.
 func ParseExtensionFields(b []byte) ([]ExtensionField, error) {
+	efs, _, err := parseExtensionFields(b)
+	if err != nil {
+		return nil, err
+	}
+	return efs, nil
+}
+
+// parseExtensionFields parses concatenated extension fields from the front of b,
+// also returning how many octets they occupy. On failure it still returns both,
+// so a caller whose buffer may end in an unframed legacy MAC can see where the
+// framing stopped.
+func parseExtensionFields(b []byte) ([]ExtensionField, int, error) {
 	var efs []ExtensionField
+	total := len(b)
 	for len(b) > 0 {
 		if len(b) < ExtensionHeaderSize {
-			return nil, fmt.Errorf("%w: need %d header bytes, have %d",
+			return efs, total - len(b), fmt.Errorf("%w: need %d header bytes, have %d",
 				ErrExtensionTruncated, ExtensionHeaderSize, len(b))
 		}
 		ftype := ExtensionFieldType(binary.BigEndian.Uint16(b[0:2]))
 		flen := int(binary.BigEndian.Uint16(b[2:4]))
 		if flen < ExtensionMinSize || flen%ExtensionAlignment != 0 {
-			return nil, fmt.Errorf("%w: type=%#x length=%d", ErrExtensionLengthInvalid, ftype, flen)
+			return efs, total - len(b), fmt.Errorf("%w: type=%#x length=%d", ErrExtensionLengthInvalid, ftype, flen)
 		}
 		if flen > len(b) {
-			return nil, fmt.Errorf("%w: type=%#x length=%d remaining=%d",
+			return efs, total - len(b), fmt.Errorf("%w: type=%#x length=%d remaining=%d",
 				ErrExtensionTruncated, ftype, flen, len(b))
 		}
 		// Copy so the body outlives any reuse of b.
@@ -271,5 +294,16 @@ func ParseExtensionFields(b []byte) ([]ExtensionField, error) {
 		efs = append(efs, ExtensionField{Type: ftype, Body: body})
 		b = b[flen:]
 	}
-	return efs, nil
+	return efs, total, nil
+}
+
+// namesNTSFieldType reports whether b opens with an extension-field header naming
+// an RFC 8915 field type. It is read where parseExtensionFields stopped, so those
+// four octets are the header that failed: a broken NTS field is never mistaken
+// for an unframed legacy MAC.
+func namesNTSFieldType(b []byte) bool {
+	if len(b) < ExtensionHeaderSize {
+		return false
+	}
+	return ExtensionFieldType(binary.BigEndian.Uint16(b[0:2])).isNTS()
 }
