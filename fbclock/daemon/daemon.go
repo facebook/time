@@ -411,9 +411,9 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 	}
 
 	if data.IngressTimeNS > 0 {
-		s.state.updateIngressTimeNS(data.IngressTimeNS)
+		s.state.lastIngressTimeNS = data.IngressTimeNS
 	}
-	it := s.state.ingressTimeNS()
+	it := s.state.lastIngressTimeNS
 	if it > 0 {
 		timeSinceIngress := phcTime.UnixNano() - it
 		log.Debugf("Time since ingress: %dns", timeSinceIngress)

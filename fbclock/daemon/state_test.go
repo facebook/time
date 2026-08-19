@@ -24,17 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIngressTimeNS(t *testing.T) {
-	s := newDaemonState(3)
-	require.Equal(t, int64(0), s.ingressTimeNS())
-
-	s.updateIngressTimeNS(123456789)
-	require.Equal(t, int64(123456789), s.ingressTimeNS())
-
-	s.updateIngressTimeNS(987654321)
-	require.Equal(t, int64(987654321), s.ingressTimeNS())
-}
-
 func TestPushAndTakeDataPoint(t *testing.T) {
 	s := newDaemonState(3)
 

@@ -73,18 +73,6 @@ func newDaemonState(ringSize int) *daemonState {
 	return s
 }
 
-func (s *daemonState) updateIngressTimeNS(it int64) {
-	s.Lock()
-	defer s.Unlock()
-	s.lastIngressTimeNS = it
-}
-
-func (s *daemonState) ingressTimeNS() int64 {
-	s.Lock()
-	defer s.Unlock()
-	return s.lastIngressTimeNS
-}
-
 func (s *daemonState) updateStoredData(d *fbclock.Data) {
 	s.Lock()
 	defer s.Unlock()
