@@ -211,8 +211,9 @@ func (p *Packet) Bytes() ([]byte, error) {
 	return out, nil
 }
 
-// hasNTSField reports whether efs carries any RFC 8915 field type.
-func hasNTSField(efs []ExtensionField) bool {
+// HasNTSField reports whether efs carries any RFC 8915 field type, so a responder
+// can tell a request asking for NTS apart from one carrying an unrelated field.
+func HasNTSField(efs []ExtensionField) bool {
 	return slices.ContainsFunc(efs, func(ef ExtensionField) bool { return ef.Type.isNTS() })
 }
 
@@ -251,7 +252,7 @@ func splitTrailer(b []byte) ([]ExtensionField, []byte, error) {
 	// every field ahead of it, which is where a request that names NTS puts one: by
 	// RFC 8915 §5.3 a conformant one opens with a >=32-octet unique identifier, far
 	// longer than any MAC, so it is never this far in without having framed.
-	if namesNTSFieldType(tail) || hasNTSField(efs) {
+	if namesNTSFieldType(tail) || HasNTSField(efs) {
 		return nil, nil, err
 	}
 	// A key identifier is a small integer, so its low 16 bits routinely frame the

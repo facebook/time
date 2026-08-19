@@ -249,7 +249,7 @@ func (t *task) serve(response *ntp.Packet, extraoffset time.Duration) {
 
 	generateResponse(time.Now().Add(extraoffset), t.received.Add(extraoffset), t.request, response)
 	response.ExtensionFields = nil
-	if t.keystore != nil && len(t.request.ExtensionFields) > 0 {
+	if t.keystore != nil && ntp.HasNTSField(t.request.ExtensionFields) {
 		if err := processNTSRequest(t.keystore, t.request, response); err != nil {
 			log.Debugf("NTS request rejected: %v", err)
 			switch {

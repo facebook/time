@@ -339,3 +339,77 @@ func TestServerNTSAnswersPlainRequestWithLegacyMAC(t *testing.T) {
 	require.Empty(t, reply.ExtensionFields)
 	require.Nil(t, reply.MAC, "we hold no symmetric key, so the reply carries no MAC")
 }
+
+// TestServerAnswersTrailersThatFrameAsFields covers the rest of the same outage.
+// Splitting the MAC only rescues a trailer the field parser chokes on; when the
+// trailer frames cleanly, splitTrailer returns fields and a nil MAC. serve then
+// routed every parsed field into processNTSRequest, which rejects anything that
+// is not a full NTS request, so these clients still got silence. A key
+// identifier whose low 16 bits are a valid field length does exactly that, and
+// so does any ordinary non-NTS field. The last case is the guard: a request that
+// does name NTS must never be answered in plain NTP.
+func TestServerAnswersTrailersThatFrameAsFields(t *testing.T) {
+	const uidLen = ntp.ExtensionHeaderSize + nts.MinUniqueIdentifierLen
+	uid := make([]byte, uidLen)
+	binary.BigEndian.PutUint16(uid[0:2], uint16(ntp.UniqueIdentifier))
+	binary.BigEndian.PutUint16(uid[2:4], uidLen)
+
+	tests := []struct {
+		name     string
+		trailer  []byte
+		answered bool
+	}{
+		{"CryptoNAKKeyID", []byte{0x00, 0x00, 0x00, 0x04}, true},
+		{"MD5LengthKeyID", append([]byte{0x00, 0x00, 0x00, 0x14}, bytes.Repeat([]byte{0xAB}, 16)...), true},
+		{"SHA1LengthKeyID", append([]byte{0x00, 0x00, 0x00, 0x18}, bytes.Repeat([]byte{0xAB}, 20)...), true},
+		{"NonNTSExtensionField", []byte{0x05, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00}, true},
+		{"UniqueIdentifierWithoutCookie", uid, false},
+	}
+
+	s := &Server{
+		Checker: &checker.SimpleChecker{ExpectedListeners: 1, ExpectedWorkers: 1},
+		Stats:   &stats.JSONStats{},
+		tasks:   make(chan task, 1),
+		Config: Config{
+			Workers: 1, TimestampType: timestamp.SWRX, Iface: "lo", Keystore: newTestKeystore(t),
+		},
+	}
+	go s.startWorker()
+
+	conn := tryListenUDP(t)
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	go s.startListener(conn)
+	time.Sleep(100 * time.Millisecond)
+
+	header, err := ntpRequest.Bytes()
+	require.NoError(t, err)
+	addr := net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", localAddr.Port))
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sendConn, err := net.DialTimeout("udp", addr, time.Second)
+			require.NoError(t, err)
+			defer sendConn.Close()
+
+			_, err = sendConn.Write(append(bytes.Clone(header), tc.trailer...))
+			require.NoError(t, err)
+
+			buf := make([]byte, maxPacketSizeBytes)
+			require.NoError(t, sendConn.SetReadDeadline(time.Now().Add(2*time.Second)))
+			n, err := sendConn.Read(buf)
+			if !tc.answered {
+				require.Error(t, err, "a request naming NTS must not get a plain reply")
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, ntp.PacketSizeBytes, n)
+
+			var reply ntp.Packet
+			require.NoError(t, reply.UnmarshalBinary(buf[:n]))
+			require.Equal(t, uint8(4), reply.Settings&0x07, "server mode")
+			require.Empty(t, reply.ExtensionFields)
+			require.Nil(t, reply.MAC)
+		})
+	}
+}
