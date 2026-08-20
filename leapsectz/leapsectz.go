@@ -107,7 +107,7 @@ func Latest(srcfile string) (*LeapSecond, error) {
 func parseVx(r io.Reader) ([]LeapSecond, error) {
 	var ret []LeapSecond
 	var v byte
-	for v = 0; v < 2; v++ {
+	for v = range 2 {
 		// 4-byte magic "TZif"
 		magic := make([]byte, 4)
 		if _, _ = r.Read(magic); string(magic) != "TZif" {
