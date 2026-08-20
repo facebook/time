@@ -127,16 +127,17 @@ func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 		offset = syspeer.Offset
 	}
 
-	// get averages from non-sys peers
+	// compare our offset against the median offset of the non-sys peers
 	okPeers, err := r.FindAcceptableNonSysPeers()
-	if err != nil {
-		log.Debugf("Can't get any peers for avg calculations: %v", err)
-	} else {
-		peerAvgs, err := peersAverages(okPeers)
-		if err == nil {
-			log.Debugf("Sys Offset: %v, Avg Peer Offset: %v", time.Duration(offset*float64(time.Millisecond)), time.Duration(peerAvgs.offset*float64(time.Millisecond)))
-			offsetComparedToPeers = math.Abs(math.Abs(offset) - math.Abs(medianOffset(okPeers)))
-		}
+	switch {
+	case err != nil:
+		log.Debugf("Can't get any peers to compare the offset against: %v", err)
+	case len(okPeers) == 0:
+		log.Debugf("No non-sys peers to compare the offset against, reporting 0")
+	default:
+		median := medianOffset(okPeers)
+		log.Debugf("Offset: %v, Median Peer Offset: %v", time.Duration(offset*float64(time.Millisecond)), time.Duration(median*float64(time.Millisecond)))
+		offsetComparedToPeers = math.Abs(offset - median)
 	}
 	output := NTPStats{
 		PeerDelay:             delay,

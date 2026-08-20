@@ -107,6 +107,49 @@ func TestNTPStatsNoSysPeer(t *testing.T) {
 	require.Equal(t, want, stats)
 }
 
+func TestNTPStatsNoSysPeerMeasuresPeerSetSkew(t *testing.T) {
+	peers := map[uint16]*Peer{}
+	id := uint16(0)
+	for _, offset := range []float64{-400, 100, 100} {
+		peers[id] = &Peer{
+			Selection: control.SelCandidate,
+			Offset:    offset,
+			Stratum:   3,
+			HPoll:     10,
+			PPoll:     4,
+		}
+		id++
+	}
+	stats, err := NewNTPStats(&NTPCheckResult{SysVars: &SystemVariables{}, Peers: peers})
+	require.NoError(t, err)
+	require.InDelta(t, -200.0/3, stats.PeerOffset, 1e-9)
+	require.InDelta(t, 500.0/3, stats.OffsetComparedToPeers, 1e-9)
+}
+
+func TestNTPStatsNoSysPeerIgnoresNoSelectControls(t *testing.T) {
+	peers := map[uint16]*Peer{
+		0: {Selection: control.SelCandidate, Offset: 10, Stratum: 3, HPoll: 10, PPoll: 4},
+		1: {Selection: control.SelCandidate, Offset: 20, Stratum: 3, HPoll: 10, PPoll: 4},
+		2: {Selection: control.SelReject, NoSelect: true, Offset: 1000, Stratum: 1, HPoll: 10, PPoll: 4},
+		3: {Selection: control.SelReject, NoSelect: true, Offset: 1000, Stratum: 1, HPoll: 10, PPoll: 4},
+	}
+	stats, err := NewNTPStats(&NTPCheckResult{SysVars: &SystemVariables{}, Peers: peers})
+	require.NoError(t, err)
+	require.InDelta(t, 15.0, stats.PeerOffset, 1e-9)
+	// FindAcceptableNonSysPeers only falls back to the noselect controls when there are
+	// fewer than two good peers, so 985 (the distance to the controls) is never reported here.
+	require.InDelta(t, 5.0, stats.OffsetComparedToPeers, 1e-9)
+}
+
+func TestNTPStatsSysPeerWithoutComparisonPeers(t *testing.T) {
+	peers := map[uint16]*Peer{
+		0: {Selection: control.SelSYSPeer, Offset: 0.045, Stratum: 1, HPoll: 10, PPoll: 4},
+	}
+	stats, err := NewNTPStats(&NTPCheckResult{SysVars: &SystemVariables{}, Peers: peers})
+	require.NoError(t, err)
+	require.Zero(t, stats.OffsetComparedToPeers)
+}
+
 func TestNTPStatsWithSysPeer(t *testing.T) {
 	s := SystemVariables{
 		Offset:    0.003,
@@ -194,6 +237,68 @@ func TestNTPStatsWithSysPeerAndNoSelect(t *testing.T) {
 		OffsetComparedToPeers: r.Peers[1].Offset - r.Peers[0].Offset,
 	}
 	require.Equal(t, want, stats)
+}
+
+func TestNTPStatsOffsetComparedToPeers(t *testing.T) {
+	tests := []struct {
+		name        string
+		sysOffset   float64
+		peerOffsets []float64
+		want        float64
+	}{
+		{
+			name:        "same sign, peers near sys.peer, unchanged by sign handling",
+			sysOffset:   0.045,
+			peerOffsets: []float64{0.030, 0.040, 0.050},
+			want:        0.005,
+		},
+		{
+			name:        "sys.peer pinned to its refclock while peers see a stepped clock, unchanged by sign handling",
+			sysOffset:   0,
+			peerOffsets: []float64{-42000, -41000, -40000},
+			want:        41000,
+		},
+		{
+			name:        "even peer count: medianOffset's existing tie-break picks the upper middle offset",
+			sysOffset:   -60,
+			peerOffsets: []float64{-61, 59},
+			want:        119,
+		},
+		{
+			name:        "peers drift the opposite way from sys.peer",
+			sysOffset:   -0.2,
+			peerOffsets: []float64{0.3, 0.4, 0.5},
+			want:        0.6,
+		},
+		{
+			name:        "sys.peer and peers disagree symmetrically",
+			sysOffset:   600,
+			peerOffsets: []float64{-610, -600, -590},
+			want:        1200,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			peers := map[uint16]*Peer{
+				0: {Selection: control.SelSYSPeer, Offset: tt.sysOffset, Stratum: 1, HPoll: 10, PPoll: 4},
+			}
+			id := uint16(1)
+			for _, offset := range tt.peerOffsets {
+				peers[id] = &Peer{
+					Selection: control.SelReject,
+					NoSelect:  true,
+					Offset:    offset,
+					Stratum:   1,
+					HPoll:     10,
+					PPoll:     4,
+				}
+				id++
+			}
+			stats, err := NewNTPStats(&NTPCheckResult{SysVars: &SystemVariables{}, Peers: peers})
+			require.NoError(t, err)
+			require.InDelta(t, tt.want, stats.OffsetComparedToPeers, 1e-9)
+		})
+	}
 }
 
 func TestMedianOffset(t *testing.T) {
