@@ -18,7 +18,9 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"testing"
@@ -410,6 +412,163 @@ func TestServerAnswersTrailersThatFrameAsFields(t *testing.T) {
 			require.Equal(t, uint8(4), reply.Settings&0x07, "server mode")
 			require.Empty(t, reply.ExtensionFields)
 			require.Nil(t, reply.MAC)
+		})
+	}
+}
+
+// errAnnounceStopInProgress is what FBAnnounce.Advertise returns once Withdraw
+// has latched, verbatim from the production log that motivated this change.
+var errAnnounceStopInProgress = errors.New("[announce]: stop is in progress. Do not announce")
+
+type countingAnnounce struct {
+	err              error
+	stopBeginsDuring *Server
+	// observes, when set, records whether that Server had already latched
+	// stopping by the time Withdraw ran. Withdraw blocks for 60s of BGP
+	// convergence, so latching after it would reopen the window fixed here.
+	observes *Server
+	// advertisedSignal, when set, reports each Advertise. advertised is written
+	// only by the announce loop and withdrawn only by whoever calls Stop, so
+	// neither is safe to read until Start has returned.
+	advertisedSignal   chan struct{}
+	advertised         int
+	withdrawn          int
+	stoppingAtWithdraw bool
+}
+
+func (a *countingAnnounce) Advertise([]net.IP) error {
+	a.advertised++
+	if a.stopBeginsDuring != nil {
+		a.stopBeginsDuring.stopping.Store(true)
+	}
+	select {
+	case a.advertisedSignal <- struct{}{}:
+	default:
+	}
+	return a.err
+}
+
+func (a *countingAnnounce) Withdraw() error {
+	a.withdrawn++
+	if a.observes != nil {
+		a.stoppingAtWithdraw = a.observes.stopping.Load()
+	}
+	return nil
+}
+
+type countingAnnounceStats struct {
+	*stats.JSONStats
+	set   int
+	reset int
+}
+
+func (s *countingAnnounceStats) SetAnnounce()   { s.set++ }
+func (s *countingAnnounceStats) ResetAnnounce() { s.reset++ }
+
+func newAnnounceServer(a Announce) (*Server, *countingAnnounceStats) {
+	st := &countingAnnounceStats{JSONStats: &stats.JSONStats{}}
+	return &Server{Announce: a, Stats: st, Config: Config{ShouldAnnounce: true}}, st
+}
+
+func TestRefreshAnnounceStopsOnceStopBegins(t *testing.T) {
+	a := &countingAnnounce{}
+	s, st := newAnnounceServer(a)
+	a.observes = s
+
+	require.True(t, s.refreshAnnounce())
+	require.Equal(t, 1, a.advertised)
+	require.Equal(t, 1, st.set)
+
+	s.Stop()
+	require.Equal(t, 1, a.withdrawn)
+	require.True(t, a.stoppingAtWithdraw, "Stop must latch stopping before Withdraw waits out BGP convergence")
+
+	// Production Advertise refuses from here on, so even reaching it must leave
+	// the gauge alone.
+	a.err = errAnnounceStopInProgress
+
+	require.False(t, s.refreshAnnounce(), "refresh must end the loop once Stop has begun")
+	require.Equal(t, 1, a.advertised, "must not re-advertise against a withdrawal in flight")
+	require.Zero(t, st.reset, "a deliberate stop is not an announcement failure")
+}
+
+func TestRefreshAnnounceReportsRealFailure(t *testing.T) {
+	a := &countingAnnounce{err: errors.New("bgp session down")}
+	s, st := newAnnounceServer(a)
+
+	require.True(t, s.refreshAnnounce())
+	require.Equal(t, 1, a.advertised)
+	require.Zero(t, st.set)
+	require.Equal(t, 1, st.reset)
+}
+
+func TestRefreshAnnounceHoldsGaugeDownWhenNotAnnouncing(t *testing.T) {
+	a := &countingAnnounce{}
+	st := &countingAnnounceStats{JSONStats: &stats.JSONStats{}}
+	s := &Server{Announce: a, Stats: st}
+
+	require.True(t, s.refreshAnnounce())
+	require.Zero(t, a.advertised, "a responder started without -announce must not advertise")
+	require.Zero(t, st.set)
+	require.Equal(t, 1, st.reset, "the gauge must read 0, not go unpublished")
+}
+
+func TestStartEndsAnnounceLoopOnceStopBegins(t *testing.T) {
+	prevInterval := announceInterval
+	announceInterval = time.Millisecond
+
+	a := &countingAnnounce{advertisedSignal: make(chan struct{}, 1)}
+	s, st := newAnnounceServer(a)
+	s.Checker = &checker.SimpleChecker{}
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	returned := make(chan struct{})
+	go func() {
+		s.Start(ctx, cancel)
+		close(returned)
+	}()
+	// The loop reads announceInterval, so restoring it before the loop has
+	// returned is a race on every t.Fatal path below.
+	t.Cleanup(func() {
+		cancel()
+		<-returned
+		announceInterval = prevInterval
+	})
+
+	select {
+	case <-a.advertisedSignal:
+	case <-time.After(10 * time.Second):
+		t.Fatal("announce loop never advertised")
+	}
+
+	s.Stop()
+
+	select {
+	case <-returned:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Start must end the announce loop once Stop has begun")
+	}
+	require.Zero(t, st.reset, "a deliberate stop must not publish an announce failure")
+}
+
+func TestRefreshAnnounceIgnoresStopThatLandsDuringAdvertise(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		err  error
+	}{
+		{name: "Advertise refuses", err: errors.New("[announce]: stop is in progress. Do not announce")},
+		{name: "Advertise wins the race", err: nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &countingAnnounce{err: tt.err}
+			s, st := newAnnounceServer(a)
+			a.stopBeginsDuring = s
+
+			require.False(t, s.refreshAnnounce(), "refresh must end the loop when Stop lands during Advertise")
+			require.Equal(t, 1, a.advertised)
+			require.Zero(t, st.reset, "a stop that lands during Advertise is not an announcement failure")
+			require.Zero(t, st.set, "an advertisement that raced the withdrawal is not a success")
 		})
 	}
 }

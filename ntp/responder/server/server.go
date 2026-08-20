@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/facebook/time/ntp/ntske"
@@ -40,6 +41,10 @@ import (
 // an authenticator, so the buffer is grown to a full 1500-octet MTU to hold it.
 const maxPacketSizeBytes = 1500
 
+// announceInterval is a var rather than a const so tests can drive the announce
+// loop without waiting on the production cadence.
+var announceInterval = 30 * time.Second
+
 // task is a data structure with everything needed to work independently on NTP packet.
 type task struct {
 	connFd   int
@@ -51,15 +56,21 @@ type task struct {
 }
 
 // Server is a type for UDP server which handles connections.
+// A Server must not be copied after first use, and is single-use: Stop is
+// permanent, so a Server that has been stopped cannot be started again.
 type Server struct {
 	Config   Config
 	Announce Announce
 	Stats    Stats
 	Checker  Checker
 	tasks    chan task
+	stopping atomic.Bool
 }
 
-// Start UDP server.
+// Start UDP server. It returns when ctx is cancelled, or on the first announce
+// tick to finish after Stop begins - an Advertise already in flight is waited
+// out first. Callers must still wait for Stop itself to return, because it
+// holds the announcement withdrawal open before the IPs are removed.
 func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 	log.Infof("Creating %d goroutine workers", s.Config.Workers)
 	s.tasks = make(chan task, s.Config.Workers)
@@ -125,26 +136,50 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(30 * time.Second):
-			if s.Config.ShouldAnnounce {
-				// First run will be 30 seconds delayed
-				log.Debug("Requesting VIPs announce")
-				err := s.Announce.Advertise(s.Config.IPs)
-				if err != nil {
-					log.Errorf("Error during announcement: %v", err)
-					s.Stats.ResetAnnounce()
-				} else {
-					s.Stats.SetAnnounce()
-				}
-			} else {
-				s.Stats.ResetAnnounce()
+		case <-time.After(announceInterval):
+			if !s.refreshAnnounce() {
+				return
 			}
 		}
 	}
 }
 
+// refreshAnnounce re-advertises the VIPs and publishes the outcome as the
+// announce gauge. It returns false once Stop has begun: re-advertising would
+// race the withdrawal, and a deliberate stop is not an announcement failure.
+// Stop can also begin while Advertise is in flight. Withdraw then contends for
+// the same announce file, so neither an error nor a success from that call is
+// attributable to our ability to announce, and neither is published.
+func (s *Server) refreshAnnounce() bool {
+	if s.stopping.Load() {
+		return false
+	}
+	if s.Config.ShouldAnnounce {
+		log.Debug("Requesting VIPs announce")
+		err := s.Announce.Advertise(s.Config.IPs)
+		if s.stopping.Load() {
+			if err != nil {
+				log.Warningf("Announcement failed while a withdrawal was in progress, not an announce failure: %v", err)
+			} else {
+				log.Warning("Advertised VIPs while a withdrawal was in progress, announcement may outlive Withdraw")
+			}
+			return false
+		}
+		if err != nil {
+			log.Errorf("Error during announcement: %v", err)
+			s.Stats.ResetAnnounce()
+		} else {
+			s.Stats.SetAnnounce()
+		}
+	} else {
+		s.Stats.ResetAnnounce()
+	}
+	return true
+}
+
 // Stop will stop announcement, delete IPs from interfaces
 func (s *Server) Stop() {
+	s.stopping.Store(true)
 	if err := s.Announce.Withdraw(); err != nil {
 		log.Errorf("[server] failed to withdraw announce: %v", err)
 	}
