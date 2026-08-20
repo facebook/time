@@ -33,7 +33,8 @@ import (
 // Client performs the client side of an NTS-KE handshake against a Server.
 type Client struct {
 	// SupportedAEAD is the client's AEAD preference list, most preferred first.
-	// Defaults to [AES-128-GCM-SIV (30), AES-SIV-CMAC-512 (17)] when empty.
+	// Defaults to [AES-128-GCM-SIV (30), AES-SIV-CMAC-256 (15),
+	// AES-SIV-CMAC-512 (17)] when empty.
 	SupportedAEAD []uint16
 	// RequestCompliantExport, when true, offers chrony's
 	// compliant-128-GCM-SIV-export record in the request.
@@ -246,13 +247,16 @@ func (c *Client) interpret(records []Record) (*HandshakeResult, error) {
 }
 
 // supportedAEAD returns the configured preference list or the default
-// [AES-128-GCM-SIV (30), AES-SIV-CMAC-512 (17)] when unset.
+// [AES-128-GCM-SIV (30), AES-SIV-CMAC-256 (15), AES-SIV-CMAC-512 (17)].
+// GCM-SIV leads so the negotiated algorithm is unchanged against peers we
+// already talk to; 15 is offered as the RFC 8915 mandatory-to-implement one.
 func (c *Client) supportedAEAD() []uint16 {
 	if len(c.SupportedAEAD) > 0 {
 		return c.SupportedAEAD
 	}
 	return []uint16{
 		uint16(protocol.AEADAES128GCMSIV),  // 30
+		uint16(protocol.AEADAESSIVCMAC256), // 15
 		uint16(protocol.AEADAESSIVCMAC512), // 17
 	}
 }

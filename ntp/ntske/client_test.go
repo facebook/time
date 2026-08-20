@@ -187,7 +187,7 @@ func TestClientTLSConfig(t *testing.T) {
 
 func TestClientInterpret(t *testing.T) {
 	cookie := func(n byte) Record { return NewCookie([]byte{n, n, n, n}) }
-	c := &Client{} // default offers [30, 17]
+	c := &Client{} // default offers [30, 15, 17]
 
 	t.Run("valid", func(t *testing.T) {
 		res, err := c.interpret([]Record{
@@ -282,7 +282,7 @@ func TestClientInterpret(t *testing.T) {
 	t.Run("unoffered AEAD rejected", func(t *testing.T) {
 		_, err := c.interpret([]Record{
 			NewNextProtocol(NextProtocolNTPv4),
-			NewAEADAlgorithm(9999), // not in [30, 17]
+			NewAEADAlgorithm(9999), // not in [30, 15, 17]
 			cookie(1),
 		})
 		require.Error(t, err)

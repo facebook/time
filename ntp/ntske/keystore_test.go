@@ -50,6 +50,7 @@ func TestSealOpenRoundTrip(t *testing.T) {
 		wantLen int
 	}{
 		{"AES-128-GCM-SIV", protocol.AEADAES128GCMSIV, 16, 68},
+		{"AES-SIV-CMAC-256", protocol.AEADAESSIVCMAC256, 32, 100},
 		{"AES-SIV-CMAC-512", protocol.AEADAESSIVCMAC512, 64, 164},
 	}
 	for _, tc := range cases {

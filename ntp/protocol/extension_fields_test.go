@@ -239,6 +239,7 @@ func TestMarshalExtensionFieldsRejectsInvalid(t *testing.T) {
 // "AEAD Algorithms" registry values; drift here would silently break NTS-KE
 // interop with peers.
 func TestAEADAlgorithmValues(t *testing.T) {
+	require.Equal(t, AEADAlgorithm(15), AEADAESSIVCMAC256)
 	require.Equal(t, AEADAlgorithm(17), AEADAESSIVCMAC512)
 	require.Equal(t, AEADAlgorithm(30), AEADAES128GCMSIV)
 }

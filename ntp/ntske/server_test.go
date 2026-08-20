@@ -34,11 +34,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// gcmSIV and sivCMAC are the two AEAD IDs as they travel on the wire (uint16),
-// spelled out here so the tests read against the negotiation, not the crypto.
+// gcmSIV, sivCMAC256 and sivCMAC are the AEAD IDs as they travel on the wire
+// (uint16), spelled out here so the tests read against the negotiation, not the crypto.
 const (
-	gcmSIV  = uint16(protocol.AEADAES128GCMSIV)  // 30
-	sivCMAC = uint16(protocol.AEADAESSIVCMAC512) // 17
+	gcmSIV     = uint16(protocol.AEADAES128GCMSIV)  // 30
+	sivCMAC256 = uint16(protocol.AEADAESSIVCMAC256) // 15
+	sivCMAC    = uint16(protocol.AEADAESSIVCMAC512) // 17
 )
 
 // countingStats is a Stats implementation that tallies calls. Uses atomics so
@@ -228,7 +229,7 @@ func TestServerAEADPreferenceOrder(t *testing.T) {
 	serverTLS, clientTLS := newTestTLSConfigs(t)
 	ks, err := NewInMemoryKeystore(InMemoryKeystoreOptions{})
 	require.NoError(t, err)
-	// Default SupportedAEAD is [30, 17]; client prefers 17 first.
+	// Default SupportedAEAD is [30, 15, 17]; client prefers 17 first.
 	srv := &Server{TLSConfig: serverTLS, Keystore: ks, Cookies: 1}
 
 	_, resp := runExchange(t, srv, clientTLS, []Record{
@@ -239,6 +240,53 @@ func TestServerAEADPreferenceOrder(t *testing.T) {
 	aead := recordsByType(resp)[RecordAEADAlgorithm]
 	require.Len(t, aead, 1)
 	require.Equal(t, []uint16{sivCMAC}, parseUint16s(aead[0].Body), "client's first preference wins")
+}
+
+// TestServerNegotiatesSIVCMAC256 covers the behaviour adding id 15 introduces:
+// a client offering 15 ahead of 30 now gets 15 rather than falling through to
+// the default, and the cookies it receives use the 100-octet layout.
+func TestServerNegotiatesSIVCMAC256(t *testing.T) {
+	serverTLS, clientTLS := newTestTLSConfigs(t)
+	ks, err := NewInMemoryKeystore(InMemoryKeystoreOptions{})
+	require.NoError(t, err)
+	srv := &Server{TLSConfig: serverTLS, Keystore: ks, Cookies: 2}
+
+	tlsClient, resp := runExchange(t, srv, clientTLS, []Record{
+		NewNextProtocol(NextProtocolNTPv4),
+		NewAEADAlgorithm(sivCMAC256, gcmSIV),
+		NewCompliant128GCMExport(),
+		NewEndOfMessage(),
+	})
+
+	byType := recordsByType(resp)
+	require.Equal(t, []uint16{sivCMAC256}, parseUint16s(byType[RecordAEADAlgorithm][0].Body),
+		"offering 15 before 30 must negotiate 15, not fall through to the default")
+	require.Empty(t, byType[RecordCompliant128GCMExport],
+		"compliant export is AES-128-GCM-SIV only, so it must not be echoed for id 15")
+
+	// 4 (key id) + 16 (nonce) + 16 (SIV tag) + 2*32 (session keys) = 100, the
+	// length OpenCookie infers the algorithm from.
+	cookies := byType[RecordNewCookie]
+	require.Len(t, cookies, 2)
+	for _, c := range cookies {
+		require.Len(t, c.Body, 100, "id 15 cookies carry 32-octet session keys")
+	}
+
+	// Every cookie must open to exactly the 32-octet keys the client derives
+	// independently, proving the exporter context matches on both sides.
+	cs := tlsClient.ConnectionState()
+	wantC2S, err := cs.ExportKeyingMaterial(exporterLabel, exporterContext(sivCMAC256, directionC2S), 32)
+	require.NoError(t, err)
+	wantS2C, err := cs.ExportKeyingMaterial(exporterLabel, exporterContext(sivCMAC256, directionS2C), 32)
+	require.NoError(t, err)
+
+	for _, c := range cookies {
+		id, c2s, s2c, err := ks.OpenCookie(c.Body)
+		require.NoError(t, err)
+		require.Equal(t, protocol.AEADAESSIVCMAC256, id)
+		require.Equal(t, wantC2S, c2s)
+		require.Equal(t, wantS2C, s2c)
+	}
 }
 
 // TestServerCompliant128GCMExport verifies the compliant-export negotiation:
@@ -476,7 +524,7 @@ func TestListenAndServe(t *testing.T) {
 // TestValidateRequest unit-tests the pure negotiation logic, including the
 // missing-EOM branch that readMessage otherwise guarantees end-to-end.
 func TestValidateRequest(t *testing.T) {
-	srv := &Server{} // uses default SupportedAEAD [30, 17]
+	srv := &Server{} // uses default SupportedAEAD [30, 15, 17]
 
 	t.Run("happy path returns chosen AEAD", func(t *testing.T) {
 		id, _, err := srv.validateRequest([]Record{

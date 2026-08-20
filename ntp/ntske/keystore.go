@@ -64,6 +64,7 @@ The *session* AEAD algorithm (the one the client will use for NTP, negotiated
 via NTS-KE) is NOT stored in the cookie. It is inferred from the total cookie
 length, because the C2S/S2C key length is fixed per algorithm:
 	 68 octets  ->  AEAD_AES_128_GCM_SIV  (id 30, 16-octet session keys)
+	100 octets  ->  AEAD_AES_SIV_CMAC_256 (id 15, 32-octet session keys)
 	164 octets  ->  AEAD_AES_SIV_CMAC_512 (id 17, 64-octet session keys)
 Note the distinction between the two AES-SIV-CMAC-512 uses here: the *keystore*
 always seals cookies with it (a fixed 64-octet master key), independent of
@@ -355,6 +356,8 @@ func keyLenToAEADID(keyLen int) (protocol.AEADAlgorithm, error) {
 	switch keyLen {
 	case 16:
 		return protocol.AEADAES128GCMSIV, nil
+	case 32:
+		return protocol.AEADAESSIVCMAC256, nil
 	case 64:
 		return protocol.AEADAESSIVCMAC512, nil
 	default:
@@ -367,6 +370,8 @@ func aeadIDToKeyLen(aeadID protocol.AEADAlgorithm) (int, error) {
 	switch aeadID {
 	case protocol.AEADAES128GCMSIV:
 		return 16, nil
+	case protocol.AEADAESSIVCMAC256:
+		return 32, nil
 	case protocol.AEADAESSIVCMAC512:
 		return 64, nil
 	default:

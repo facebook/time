@@ -97,7 +97,8 @@ type Server struct {
 	// are clamped to bound per-connection cost.
 	Cookies uint16
 	// SupportedAEAD is the list of AEAD algorithm IDs the server will negotiate.
-	// Defaults to AES-128-GCM-SIV (30) and AES-SIV-CMAC-512 (17) when unset.
+	// Defaults to AES-128-GCM-SIV (30), AES-SIV-CMAC-256 (15) and
+	// AES-SIV-CMAC-512 (17) when unset.
 	SupportedAEAD []uint16
 	// HandshakeTimeout is the per-connection deadline for the entire NTS-KE
 	// exchange, not just the TLS handshake. It bounds TLS handshake,
@@ -448,8 +449,12 @@ func (s *Server) supportedAEAD() []uint16 {
 	if len(s.SupportedAEAD) > 0 {
 		return s.SupportedAEAD
 	}
+	// Client preference wins during negotiation, so this is the set we accept
+	// rather than a ranking. GCM-SIV stays first so peers that already
+	// negotiate 30 keep doing so; 15 is added for RFC 8915 conformance.
 	return []uint16{
 		uint16(protocol.AEADAES128GCMSIV),  // 30
+		uint16(protocol.AEADAESSIVCMAC256), // 15
 		uint16(protocol.AEADAESSIVCMAC512), // 17
 	}
 }

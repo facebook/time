@@ -23,12 +23,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// supportedAEADAlgs lists every algorithm NewAEAD implements, so the
+// round-trip and tamper tests exercise all of them.
+var supportedAEADAlgs = []protocol.AEADAlgorithm{
+	protocol.AEADAESSIVCMAC256,
+	protocol.AEADAESSIVCMAC512,
+	protocol.AEADAES128GCMSIV,
+}
+
 // aeadFor builds an AEAD for the given algorithm using a deterministic,
 // correctly-sized key so tests can seal and open without external key material.
 func aeadFor(t *testing.T, alg protocol.AEADAlgorithm) AEAD {
 	t.Helper()
 	var keyLen int
 	switch alg {
+	case protocol.AEADAESSIVCMAC256:
+		keyLen = 32
 	case protocol.AEADAESSIVCMAC512:
 		keyLen = 64
 	case protocol.AEADAES128GCMSIV:
@@ -48,7 +58,7 @@ func aeadFor(t *testing.T, alg protocol.AEADAlgorithm) AEAD {
 // TestAEADRoundTrip checks that both supported algorithms decrypt back to the
 // original plaintext when sealing and opening with matching associated data.
 func TestAEADRoundTrip(t *testing.T) {
-	for _, alg := range []protocol.AEADAlgorithm{protocol.AEADAESSIVCMAC512, protocol.AEADAES128GCMSIV} {
+	for _, alg := range supportedAEADAlgs {
 		a := aeadFor(t, alg)
 		ad := []byte("associated-data")
 		pt := []byte("secret-extension-fields")
@@ -63,7 +73,7 @@ func TestAEADRoundTrip(t *testing.T) {
 // TestAEADADTamper checks that opening fails for both algorithms when the
 // associated data differs from what was bound at seal time.
 func TestAEADADTamper(t *testing.T) {
-	for _, alg := range []protocol.AEADAlgorithm{protocol.AEADAESSIVCMAC512, protocol.AEADAES128GCMSIV} {
+	for _, alg := range supportedAEADAlgs {
 		a := aeadFor(t, alg)
 		pt := []byte("secret-extension-fields")
 		nonce, ct, err := a.Seal([]byte("associated-data"), pt)
@@ -76,7 +86,7 @@ func TestAEADADTamper(t *testing.T) {
 // TestAEADCiphertextTamper checks that opening fails for both algorithms when a
 // single ciphertext byte is flipped after sealing.
 func TestAEADCiphertextTamper(t *testing.T) {
-	for _, alg := range []protocol.AEADAlgorithm{protocol.AEADAESSIVCMAC512, protocol.AEADAES128GCMSIV} {
+	for _, alg := range supportedAEADAlgs {
 		a := aeadFor(t, alg)
 		ad := []byte("associated-data")
 		pt := []byte("secret-extension-fields")
@@ -93,7 +103,7 @@ func TestAEADCiphertextTamper(t *testing.T) {
 // length with ErrAEADNonceSize: SIV requires an empty nonce, while GCM-SIV
 // requires a fixed-length nonce.
 func TestAEADWrongLengthNonce(t *testing.T) {
-	for _, alg := range []protocol.AEADAlgorithm{protocol.AEADAESSIVCMAC512, protocol.AEADAES128GCMSIV} {
+	for _, alg := range supportedAEADAlgs {
 		a := aeadFor(t, alg)
 		ad := []byte("associated-data")
 		pt := []byte("secret-extension-fields")
@@ -120,7 +130,9 @@ func TestNewAEADInvalidKeySize(t *testing.T) {
 		alg  protocol.AEADAlgorithm
 		key  []byte
 	}{
-		{"SIV short key", protocol.AEADAESSIVCMAC512, make([]byte, 32)},
+		{"SIV-256 short key", protocol.AEADAESSIVCMAC256, make([]byte, 16)},
+		{"SIV-256 long key", protocol.AEADAESSIVCMAC256, make([]byte, 64)},
+		{"SIV-512 short key", protocol.AEADAESSIVCMAC512, make([]byte, 32)},
 		{"GCM-SIV short key", protocol.AEADAES128GCMSIV, make([]byte, 15)},
 		{"GCM-SIV long key", protocol.AEADAES128GCMSIV, make([]byte, 32)},
 	}

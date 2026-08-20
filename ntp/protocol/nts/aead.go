@@ -23,6 +23,7 @@ import (
 	"slices"
 
 	"github.com/facebook/time/ntp/protocol"
+	"github.com/facebook/time/ntp/protocol/nts/aessiv"
 	aeadsubtle "github.com/tink-crypto/tink-go/v2/aead/subtle"
 	daeadsubtle "github.com/tink-crypto/tink-go/v2/daead/subtle"
 )
@@ -54,6 +55,9 @@ var (
 )
 
 const (
+	// aesSIVCMAC256KeySize is the AES-SIV-CMAC-256 key length in octets (RFC 5297).
+	aesSIVCMAC256KeySize = aessiv.KeySize
+
 	// aesSIVCMAC512KeySize is the AES-SIV-CMAC-512 key length in octets (RFC 5297).
 	aesSIVCMAC512KeySize = 64
 
@@ -69,9 +73,21 @@ const (
 )
 
 // NewAEAD builds an AEAD for the negotiated IANA AEAD algorithm ID. Supported
-// IDs: AEADAESSIVCMAC512 (17) and AEADAES128GCMSIV (30).
+// IDs: AEADAESSIVCMAC256 (15), AEADAESSIVCMAC512 (17) and AEADAES128GCMSIV (30).
 func NewAEAD(algorithm protocol.AEADAlgorithm, key []byte) (AEAD, error) {
 	switch algorithm {
+	case protocol.AEADAESSIVCMAC256:
+		// tink's daead/subtle takes 64-octet keys only, so the RFC 8915
+		// mandatory-to-implement algorithm uses our own RFC 5297 package.
+		if len(key) != aesSIVCMAC256KeySize {
+			return nil, fmt.Errorf("%w: AES-SIV-CMAC-256 requires %d bytes, got %d",
+				ErrAEADKeySize, aesSIVCMAC256KeySize, len(key))
+		}
+		siv, err := aessiv.NewAESSIV(key)
+		if err != nil {
+			return nil, fmt.Errorf("nts: AES-SIV-CMAC-256: %w", err)
+		}
+		return &aesSIVCMAC256{siv: siv}, nil
 	case protocol.AEADAESSIVCMAC512:
 		if len(key) != aesSIVCMAC512KeySize {
 			return nil, fmt.Errorf("%w: AES-SIV-CMAC-512 requires %d bytes, got %d",
@@ -96,6 +112,37 @@ func NewAEAD(algorithm protocol.AEADAlgorithm, key []byte) (AEAD, error) {
 	default:
 		return nil, fmt.Errorf("%w: %#x", ErrUnsupportedAlgorithm, algorithm)
 	}
+}
+
+// aesSIVCMAC256 wraps our AES-SIV-CMAC-256 (RFC 5297, 32-octet key), the
+// RFC 8915 §4.1.5 mandatory-to-implement algorithm. The associated data is the
+// single S2V component, matching the CMAC-512 path.
+type aesSIVCMAC256 struct {
+	siv *aessiv.AESSIV
+}
+
+// encrypt-and-authenticate
+func (a *aesSIVCMAC256) Seal(ad, plaintext []byte) ([]byte, []byte, error) {
+	ct, err := a.siv.Seal(nil, plaintext, ad)
+	if err != nil {
+		return nil, nil, fmt.Errorf("nts: SIV-CMAC-256 encrypt: %w", err)
+	}
+	// Deterministic AEAD: no nonce on the wire (RFC 8915 §5.7); the synthetic
+	// IV is the first 16 octets of the ciphertext.
+	return nil, ct, nil
+}
+
+// verify-and-decrypt
+func (a *aesSIVCMAC256) Open(ad, nonce, ciphertext []byte) ([]byte, error) {
+	if len(nonce) != 0 {
+		return nil, fmt.Errorf("%w: empty nonce required for SIV, got %d bytes",
+			ErrAEADNonceSize, len(nonce))
+	}
+	pt, err := a.siv.Open(nil, ciphertext, ad)
+	if err != nil {
+		return nil, fmt.Errorf("nts: SIV-CMAC-256 decrypt: %w", err)
+	}
+	return pt, nil
 }
 
 // aesSIVCMAC wraps tink's deterministic AES-SIV-CMAC (RFC 5297, 64-octet key).
