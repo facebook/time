@@ -225,3 +225,25 @@ func TestParseFrameExtraTrailingData(t *testing.T) {
 	// Raw should be only the frame, not the trailing bytes.
 	require.Len(t, frame.Raw, HeaderSize+20+CRCSize)
 }
+
+// FuzzParseFrame fuzzes RTCM3 frame validation. ParseFrame sits on the hot path
+// for every GNSS correction stream the daemon ingests (see cmd/ntripper), and
+// the input is untrusted network data, so no input may panic or hang it.
+func FuzzParseFrame(f *testing.F) {
+	for _, seed := range [][]byte{
+		{},
+		{0},
+		{9},
+		buildFrame(buildPayloadWithType(TypeStationARP, 20)),
+		buildFrame(buildPayloadWithType(TypeGPSMSM7, 100)),
+		buildFrame(buildPayloadWithType(TypeGLONASSBiases, 10)),
+		buildFrame(make([]byte, MaxPayloadLen)),
+		buildFrame(nil),
+		{0xD3, 0x00, 0x00, 0x00, 0x00, 0x00},
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		_, _ = ParseFrame(b)
+	})
+}
