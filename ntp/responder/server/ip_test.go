@@ -26,18 +26,18 @@ import (
 const testIP = "1.2.3.4"
 
 func TestAddIPToInterfaceError(t *testing.T) {
-	c := Config{Iface: "lol-does-not-exist", ManageLoopback: true}
+	// Config must be built in place: it holds an atomic, so copying a Config
+	// value into the literal would trip go vet's copylocks check.
 	s := &Server{
-		Config: c,
+		Config: Config{Iface: "lol-does-not-exist", ManageLoopback: true},
 	}
 	err := s.addIPToInterface(net.ParseIP(testIP))
 	require.NotNil(t, err)
 }
 
 func TestDeleteIPFromInterfaceError(t *testing.T) {
-	c := Config{Iface: "lol-does-not-exist", ManageLoopback: true}
 	s := &Server{
-		Config: c,
+		Config: Config{Iface: "lol-does-not-exist", ManageLoopback: true},
 	}
 	err := s.deleteIPFromInterface(net.ParseIP(testIP))
 	require.NotNil(t, err)
