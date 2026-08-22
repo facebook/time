@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/facebook/time/ntp/ntske"
@@ -43,7 +44,7 @@ type Config struct {
 	TimestampType  timestamp.Timestamp
 	Workers        int
 	Keystore       ntske.Keystore // if non-nil enables NTS auth path.
-	phcOffset      time.Duration
+	phcOffset      atomic.Int64
 }
 
 // MultiIPs is a wrapper allowing to set multiple IPs with flag parser

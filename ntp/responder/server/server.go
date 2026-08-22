@@ -126,7 +126,7 @@ func (s *Server) Start(ctx context.Context, cancelFunc context.CancelFunc) {
 					cancelFunc()
 					return
 				}
-				s.Config.phcOffset = offset
+				s.Config.phcOffset.Store(int64(offset))
 				log.Debugf("[phcoffset] offset between PHC and SYS: %v", offset)
 			}
 		}()
@@ -236,7 +236,7 @@ func (s *Server) startListener(conn *net.UDPConn) {
 		}
 
 		if s.Config.TimestampType == timestamp.HWRX {
-			rxTS = rxTS.Add(s.Config.phcOffset)
+			rxTS = rxTS.Add(time.Duration(s.Config.phcOffset.Load()))
 		}
 
 		// On a plain-NTP server (no keystore) ignore anything past the 48-octet
