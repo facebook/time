@@ -17,6 +17,7 @@ limitations under the License.
 package export
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -48,6 +49,10 @@ type NormalData struct {
 
 // entryFromCSV generates Entry from CSV
 func entryFromCSV(csvLine []string, channel, target, protocol, source string) (*Entry, error) {
+	if len(csvLine) < 2 {
+		return nil, fmt.Errorf("malformed measurement record: want at least 2 fields, got %d", len(csvLine))
+	}
+
 	timestamp, err := strconv.ParseInt(strings.Split(csvLine[0], ".")[0], 10, 64)
 	if err != nil {
 		return nil, err

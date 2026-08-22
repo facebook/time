@@ -91,7 +91,7 @@ func Export(source string, insecureTLS bool, allData bool, channels []api.Channe
 			entry, err := entryFromCSV(csvLine, string(channel), target, string(*probe), source)
 			if err != nil {
 				printSuccess = false
-				log.Warnf("%s failed to generate scribe line for channel %s: %v", source, channel, err)
+				log.Errorf("%s failed to generate scribe line for channel %s: %v", source, channel, err)
 				break
 			}
 
