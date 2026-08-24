@@ -17,6 +17,7 @@ limitations under the License.
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -26,6 +27,10 @@ import (
 	"github.com/go-ini/ini"
 	log "github.com/sirupsen/logrus"
 )
+
+// ErrNoMeasureTargets is returned instead of pushing a config that has nothing to
+// measure, because measureConfig marks every channel it is not given as unused.
+var ErrNoMeasureTargets = errors.New("no measurement targets")
 
 // Calnexes is a map of devices to CalnexConfig
 type Calnexes map[string]*CalnexConfig
@@ -223,6 +228,10 @@ func (c *config) baseConfig(target string, measure *ini.Section, gnss *ini.Secti
 
 // Config configures target Calnex with Network/Calnex configs if apply is specified
 func Config(target string, insecureTLS bool, cc *CalnexConfig, apply bool) error {
+	if len(cc.Measure) == 0 {
+		return ErrNoMeasureTargets
+	}
+
 	var c config
 	api, err := api.NewAPI(target, insecureTLS, 4*time.Minute)
 	if err != nil {

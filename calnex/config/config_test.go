@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1274,10 +1275,35 @@ func TestConfig(t *testing.T) {
 }
 
 func TestConfigFail(t *testing.T) {
-	cc := &CalnexConfig{Measure: map[api.Channel]MeasureConfig{}}
+	cc := &CalnexConfig{
+		Measure: map[api.Channel]MeasureConfig{
+			api.ChannelVP1: {
+				Target: "fd00:3226:301b::3f",
+				Probe:  api.ProbeNTP,
+			},
+		},
+	}
 
 	err := Config("localhost", true, cc, true)
 	require.Error(t, err)
+}
+
+func TestConfigNoMeasureTargets(t *testing.T) {
+	var reached atomic.Int64
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		reached.Add(1)
+		t.Logf("device was contacted: %s", r.URL.Path)
+	}))
+	defer ts.Close()
+
+	parsed, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+
+	err = Config(parsed.Host, true, &CalnexConfig{AntennaDelayNS: 4200}, true)
+	require.ErrorIs(t, err, ErrNoMeasureTargets)
+
+	ts.Close()
+	require.Zero(t, reached.Load())
 }
 
 func TestJSONExport(t *testing.T) {
