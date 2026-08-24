@@ -205,7 +205,7 @@ func ReadFBClockDataV1(shmp unsafe.Pointer) (*Data, error) {
 	// fbclock_clockdata_load_data comes from fbclock.c
 	res := C.fbclock_clockdata_load_data(shmpData, cData)
 	if res != 0 {
-		return nil, fmt.Errorf("failed to store data: %s", strerror(res))
+		return nil, fmt.Errorf("failed to load data: %s", strerror(res))
 	}
 	return &Data{
 		IngressTimeNS:        int64(cData.ingress_time_ns),
