@@ -363,13 +363,13 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 		offsetSigmaSq += (v.offset - f.offsetMean) * (v.offset - f.offsetMean)
 	})
 	f.offsetStdev = int64(math.Sqrt(float64(offsetSigmaSq) / float64(f.offsetSamplesCount)))
-	f.lastOffset = s.offset
 
 	/*
 	 * Mean frequency is heavily affected by the values used to compensate for offsets in case of
 	 * recovering after holdover state. If we have to go to holdover again while recovering from
 	 * previous holdover, we may apply bad frequency which will cause PHC going off pretty fast.
 	 * Let's calculate mean frequency only when we are sure that PHC is running more or less stable.
+	 * IsStable compares the previous offset with this one, so lastOffset is only advanced below.
 	 */
 	if f.IsStable(s.offset) {
 		var freqSigmaSq float64
@@ -407,6 +407,7 @@ func (f *PiServoFilter) Sample(s *PiServoFilterSample) {
 		f.freqStdev = math.Sqrt(freqSigmaSq / float64(f.freqSamplesCount))
 		log.Debugf("Filter.Sample: freq stdev %f, meanFreq = %f", f.freqStdev, f.freqMean)
 	}
+	f.lastOffset = s.offset
 }
 
 // Unlock resets and unlocks the servo

@@ -650,18 +650,40 @@ func TestPiServoIsStable(t *testing.T) {
 	}
 }
 
+func TestPiServoFilterMeanFreqNeedsTwoStableSamples(t *testing.T) {
+	pi := NewPiServo(DefaultServoConfig(), DefaultPiServoCfg(), 0)
+	piFilterCfg := DefaultPiServoFilterCfg()
+	piFilterCfg.ringSize = 4
+	f := NewPiServoFilter(pi, piFilterCfg)
+
+	f.Sample(&PiServoFilterSample{offset: 10, freq: 100})
+	require.Equal(t, 1, f.freqSamplesCount)
+
+	f.Sample(&PiServoFilterSample{offset: 5000, freq: 900})
+	require.Equal(t, 1, f.freqSamplesCount)
+
+	// One in-range offset does not prove the PHC recovered: the frequency that
+	// produced it is still compensating for the excursion above.
+	f.Sample(&PiServoFilterSample{offset: 10, freq: 800})
+	require.Equal(t, 1, f.freqSamplesCount)
+
+	f.Sample(&PiServoFilterSample{offset: 10, freq: 105})
+	require.Equal(t, 2, f.freqSamplesCount)
+}
+
 func TestPiServoFilterFreqStdevOverAdmittedSamples(t *testing.T) {
 	pi := NewPiServo(DefaultServoConfig(), DefaultPiServoCfg(), 0)
 	piFilterCfg := DefaultPiServoFilterCfg()
 	piFilterCfg.ringSize = 4
 	f := NewPiServoFilter(pi, piFilterCfg)
 
-	// Offsets outside offsetRange fail the IsStable gate, so they advance
-	// offsetSamplesCount without contributing a frequency sample.
+	// An offset outside offsetRange fails the IsStable gate, and so does the
+	// sample right after it, so those two advance offsetSamplesCount without
+	// contributing a frequency sample.
 	f.Sample(&PiServoFilterSample{offset: 10, freq: 100})
 	f.Sample(&PiServoFilterSample{offset: 500, freq: 200})
-	f.Sample(&PiServoFilterSample{offset: 600, freq: 220})
-	f.Sample(&PiServoFilterSample{offset: 20, freq: 110})
+	f.Sample(&PiServoFilterSample{offset: 20, freq: 220})
+	f.Sample(&PiServoFilterSample{offset: 30, freq: 110})
 
 	require.Equal(t, 4, f.offsetSamplesCount)
 	require.Equal(t, 2, f.freqSamplesCount)
