@@ -25,6 +25,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -163,10 +164,8 @@ func (c *Config) IfaceHasIP() (bool, error) {
 		return false, err
 	}
 
-	for _, ip := range ips {
-		if c.IP.Equal(ip) {
-			return true, nil
-		}
+	if slices.ContainsFunc(ips, c.IP.Equal) {
+		return true, nil
 	}
 
 	return false, nil
