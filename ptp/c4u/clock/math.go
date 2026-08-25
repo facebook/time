@@ -19,6 +19,7 @@ package clock
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 
 	"github.com/Knetic/govaluate"
@@ -63,12 +64,7 @@ var supportedVariables = []string{
 }
 
 func isSupportedVar(varName string) bool {
-	for _, v := range supportedVariables {
-		if v == varName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(supportedVariables, varName)
 }
 
 // all the functions we support in expressions
