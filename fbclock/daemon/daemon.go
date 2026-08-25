@@ -584,61 +584,63 @@ func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 	fastTicker := time.NewTicker(10 * time.Millisecond)
 	defer fastTicker.Stop()
 	for ; true; <-fastTicker.C { // first run without delay, then at interval
-		if s.state.getLastStoredData() != nil {
+		d := s.state.getLastStoredData()
+		if d == nil {
 			// we need a copy of the latest v1 data to fill in parts of v2 data
 			// the pointer dereference is needed to avoid partial reads of the data
-			curData := *s.state.getLastStoredData()
-			phcTime, sysTime, clockID, phcReadDelay, err := s.getPHCAndSysTime()
-			if err != nil {
-				log.Errorf("reading PHC time from %s: %v", s.cfg.Iface, err)
-				s.stats.UpdateCounterBy("phc_read_error", 1)
-				continue
-			}
-			primary := fbclock.DataV2{
-				IngressTimeNS:        curData.IngressTimeNS,
-				ErrorBoundNS:         curData.ErrorBoundNS + uint64(phcReadDelay.Nanoseconds()), //nolint:gosec
-				HoldoverMultiplierNS: curData.HoldoverMultiplierNS,
-				SmearingStartS:       curData.SmearingStartS,
-				UTCOffsetPreS:        int16(curData.UTCOffsetPreS),  //nolint:gosec
-				UTCOffsetPostS:       int16(curData.UTCOffsetPostS), //nolint:gosec
-				PHCTimeNS:            phcTime.UnixNano(),
-				SysclockTimeNS:       sysTime.UnixNano(),
-				ClockID:              clockID,
-			}
-			primary.CoefPPB = s.meanCoeffPPB(&prevPrimary, &primary)
-			prevPrimary = primary
-			// Publish the primary section right away, before the slower REALTIME
-			// read below, so its anchor isn't aged by that read.
-			if err := fbclock.StoreFBClockDataV2(shmv2.File.Fd(), primary); err != nil {
-				log.Errorf("writing dataV2 to shm: %v", err)
-			}
+			continue
+		}
+		curData := *d
+		phcTime, sysTime, clockID, phcReadDelay, err := s.getPHCAndSysTime()
+		if err != nil {
+			log.Errorf("reading PHC time from %s: %v", s.cfg.Iface, err)
+			s.stats.UpdateCounterBy("phc_read_error", 1)
+			continue
+		}
+		primary := fbclock.DataV2{
+			IngressTimeNS:        curData.IngressTimeNS,
+			ErrorBoundNS:         curData.ErrorBoundNS + uint64(phcReadDelay.Nanoseconds()), //nolint:gosec
+			HoldoverMultiplierNS: curData.HoldoverMultiplierNS,
+			SmearingStartS:       curData.SmearingStartS,
+			UTCOffsetPreS:        int16(curData.UTCOffsetPreS),  //nolint:gosec
+			UTCOffsetPostS:       int16(curData.UTCOffsetPostS), //nolint:gosec
+			PHCTimeNS:            phcTime.UnixNano(),
+			SysclockTimeNS:       sysTime.UnixNano(),
+			ClockID:              clockID,
+		}
+		primary.CoefPPB = s.meanCoeffPPB(&prevPrimary, &primary)
+		prevPrimary = primary
+		// Publish the primary section right away, before the slower REALTIME
+		// read below, so its anchor isn't aged by that read.
+		if err := fbclock.StoreFBClockDataV2(shmv2.File.Fd(), primary); err != nil {
+			log.Errorf("writing dataV2 to shm: %v", err)
+		}
 
-			// The REALTIME anchor section is only needed on hosts whose primary is
-			// MONOTONIC_RAW. When the primary is already REALTIME, gettime_past uses
-			// it directly, so we skip the second ioctl and don't write the section.
-			if clockID != unix.CLOCK_REALTIME {
-				phcTimeRT, sysTimeRT, phcReadDelayRT, errRT := s.getPHCAndSysTimeRealtime()
-				if errRT != nil {
-					// Tolerate failure: the primary section still publishes.
-					log.Warningf("reading PHC time (REALTIME anchor) from %s: %v", s.cfg.Iface, errRT)
-					s.stats.UpdateCounterBy("phc_read_error", 1)
-				} else {
-					// Start from the primary so the host-level fields (ingress,
-					// holdover, utc, smearing) are shared, then override with the
-					// REALTIME anchor and its own independent error bound.
-					rt := primary
-					rt.ClockID = unix.CLOCK_REALTIME
-					rt.PHCTimeNS = phcTimeRT.UnixNano()
-					rt.SysclockTimeNS = sysTimeRT.UnixNano()
-					rt.ErrorBoundNS = curData.ErrorBoundNS + uint64(phcReadDelayRT.Nanoseconds()) //nolint:gosec
-					if rt.CoefPPB, errRT = calcCoeffPPB(&prevRealtime, &rt); errRT != nil {
-						log.Warning(errRT)
-						s.stats.UpdateCounterBy("monotonictime_error", 1)
-					}
-					prevRealtime = rt
-					if err := fbclock.StoreFBClockDataRealtime(shmv2.File.Fd(), rt); err != nil {
-						log.Errorf("writing realtime dataV2 to shm: %v", err)
-					}
+		// The REALTIME anchor section is only needed on hosts whose primary is
+		// MONOTONIC_RAW. When the primary is already REALTIME, gettime_past uses
+		// it directly, so we skip the second ioctl and don't write the section.
+		if clockID != unix.CLOCK_REALTIME {
+			phcTimeRT, sysTimeRT, phcReadDelayRT, errRT := s.getPHCAndSysTimeRealtime()
+			if errRT != nil {
+				// Tolerate failure: the primary section still publishes.
+				log.Warningf("reading PHC time (REALTIME anchor) from %s: %v", s.cfg.Iface, errRT)
+				s.stats.UpdateCounterBy("phc_read_error", 1)
+			} else {
+				// Start from the primary so the host-level fields (ingress,
+				// holdover, utc, smearing) are shared, then override with the
+				// REALTIME anchor and its own independent error bound.
+				rt := primary
+				rt.ClockID = unix.CLOCK_REALTIME
+				rt.PHCTimeNS = phcTimeRT.UnixNano()
+				rt.SysclockTimeNS = sysTimeRT.UnixNano()
+				rt.ErrorBoundNS = curData.ErrorBoundNS + uint64(phcReadDelayRT.Nanoseconds()) //nolint:gosec
+				if rt.CoefPPB, errRT = calcCoeffPPB(&prevRealtime, &rt); errRT != nil {
+					log.Warning(errRT)
+					s.stats.UpdateCounterBy("monotonictime_error", 1)
+				}
+				prevRealtime = rt
+				if err := fbclock.StoreFBClockDataRealtime(shmv2.File.Fd(), rt); err != nil {
+					log.Errorf("writing realtime dataV2 to shm: %v", err)
 				}
 			}
 		}
