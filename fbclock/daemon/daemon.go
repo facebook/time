@@ -434,7 +434,7 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 		}
 		return err
 	}
-	s.state.lastStoredData = d
+	s.state.setLastStoredData(d)
 	if err := fbclock.StoreFBClockDataV1(shm.File.Fd(), *d); err != nil {
 		return err
 	}
@@ -584,10 +584,10 @@ func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 	fastTicker := time.NewTicker(10 * time.Millisecond)
 	defer fastTicker.Stop()
 	for ; true; <-fastTicker.C { // first run without delay, then at interval
-		if s.state.lastStoredData != nil {
+		if s.state.getLastStoredData() != nil {
 			// we need a copy of the latest v1 data to fill in parts of v2 data
 			// the pointer dereference is needed to avoid partial reads of the data
-			curData := *s.state.lastStoredData
+			curData := *s.state.getLastStoredData()
 			phcTime, sysTime, clockID, phcReadDelay, err := s.getPHCAndSysTime()
 			if err != nil {
 				log.Errorf("reading PHC time from %s: %v", s.cfg.Iface, err)

@@ -20,6 +20,7 @@ import (
 	"container/ring"
 	"math"
 	"sync"
+	"sync/atomic"
 
 	"github.com/facebook/time/fbclock"
 	"github.com/facebook/time/ptp/linearizability"
@@ -35,7 +36,7 @@ type daemonState struct {
 	coefPPBs                   *ring.Ring // set of extrapolation coefficients for mean coefficient
 
 	lastIngressTimeNS int64
-	lastStoredData    *fbclock.Data
+	lastStoredData    atomic.Pointer[fbclock.Data]
 }
 
 // coefPPBRingSize is the number of extrapolation coefficients averaged into the
@@ -179,4 +180,12 @@ func (s *daemonState) getMeanCoeffPPB(coef int64) int64 {
 	})
 
 	return sumCoeff / cnt
+}
+
+func (s *daemonState) getLastStoredData() *fbclock.Data {
+	return s.lastStoredData.Load()
+}
+
+func (s *daemonState) setLastStoredData(d *fbclock.Data) {
+	s.lastStoredData.Store(d)
 }
