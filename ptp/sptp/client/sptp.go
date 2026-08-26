@@ -530,6 +530,7 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 			log.Debugf("No GMs are available, checking interface %s status", p.cfg.Iface)
 			if ifaceErr := checkInterfaceDown(p.cfg.Iface); ifaceErr != nil {
 				log.Warningf("Interface %s is down: %v, entering holdover", p.cfg.Iface, ifaceErr)
+				p.isStalled = true
 			} else {
 				log.Debugf("Interface %s is healthy, errors are due to other issues", p.cfg.Iface)
 			}
