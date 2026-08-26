@@ -1046,7 +1046,6 @@ func TestHandlePDelayReqSuccess(t *testing.T) {
 
 	err = p.handlePDelayReq(mockEventConn, reqBytes, addrEphemeral, rxts)
 	require.NoError(t, err)
-
 }
 
 func TestHandlePDelayReqRespSendError(t *testing.T) {
