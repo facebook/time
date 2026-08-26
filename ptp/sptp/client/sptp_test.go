@@ -1026,16 +1026,27 @@ func TestHandlePDelayReqSuccess(t *testing.T) {
 	require.NoError(t, err)
 
 	addr := &unix.SockaddrInet4{Addr: [4]byte{192, 168, 0, 10}, Port: 319}
+	addrGeneral := &unix.SockaddrInet4{Addr: [4]byte{192, 168, 0, 10}, Port: 320}
+	addrEphemeral := &unix.SockaddrInet4{Addr: [4]byte{192, 168, 0, 10}, Port: 31900}
 	rxts := time.Now()
 	txts := rxts.Add(100 * time.Microsecond)
 
 	// Expect Pdelay_Resp to be sent and return TX timestamp
 	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(txts, nil)
 	// Expect Pdelay_Resp_Follow_Up to be sent via general msg port
-	mockGeneralConn.EXPECT().WriteTo(gomock.Any(), addr).Return(0, nil)
+	mockGeneralConn.EXPECT().WriteTo(gomock.Any(), addrGeneral).Return(0, nil)
 
 	err = p.handlePDelayReq(mockEventConn, reqBytes, addr, rxts)
 	require.NoError(t, err)
+
+	// Expect Pdelay_Resp to be sent and return TX timestamp
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addrEphemeral, uint16(42)).Return(txts, nil)
+	// Expect Pdelay_Resp_Follow_Up to be sent via general msg port
+	mockGeneralConn.EXPECT().WriteTo(gomock.Any(), addrEphemeral).Return(0, nil)
+
+	err = p.handlePDelayReq(mockEventConn, reqBytes, addrEphemeral, rxts)
+	require.NoError(t, err)
+
 }
 
 func TestHandlePDelayReqRespSendError(t *testing.T) {
@@ -1084,13 +1095,14 @@ func TestHandlePDelayReqFollowUpSendError(t *testing.T) {
 	require.NoError(t, err)
 
 	addr := &unix.SockaddrInet4{Addr: [4]byte{192, 168, 0, 10}, Port: 319}
+	addrGeneral := &unix.SockaddrInet4{Addr: [4]byte{192, 168, 0, 10}, Port: 320}
 	rxts := time.Now()
 	txts := rxts.Add(100 * time.Microsecond)
 
 	// Pdelay_Resp sent successfully
 	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(txts, nil)
 	// Pdelay_Resp_Follow_Up send fails
-	mockGeneralConn.EXPECT().WriteTo(gomock.Any(), addr).Return(0, fmt.Errorf("send error"))
+	mockGeneralConn.EXPECT().WriteTo(gomock.Any(), addrGeneral).Return(0, fmt.Errorf("send error"))
 
 	err = p.handlePDelayReq(mockEventConn, reqBytes, addr, rxts)
 	require.Error(t, err)

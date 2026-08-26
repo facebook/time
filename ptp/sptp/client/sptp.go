@@ -290,6 +290,10 @@ func (p *SPTP) handlePDelayReq(econn UDPConnWithTS, buf []byte, addr unix.Sockad
 		return fmt.Errorf("marshaling Pdelay_Resp_Follow_Up: %w", err)
 	}
 
+	if timestamp.SockaddrToPort(addr) == ptp.PortEvent {
+		// Follow up packets have to go to General Port, not Event Port
+		addr = timestamp.NewSockaddrWithPort(addr, ptp.PortGeneral)
+	}
 	if _, err := p.genConn.WriteTo(followUpBytes, addr); err != nil {
 		return fmt.Errorf("sending Pdelay_Resp_Follow_Up: %w", err)
 	}
