@@ -570,7 +570,10 @@ func TestGet(t *testing.T) {
 	err = calnexAPI.ClearDevice()
 	require.NoError(t, err)
 
-	err = calnexAPI.Reboot()
+	err = calnexAPI.Reboot(false)
+	require.NoError(t, err)
+
+	err = calnexAPI.Reboot(true)
 	require.NoError(t, err)
 }
 

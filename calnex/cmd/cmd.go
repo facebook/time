@@ -38,6 +38,7 @@ var (
 	saveConfig  string
 	source      string
 	target      string
+	reset       bool
 )
 
 // Execute is the main entry point for CLI interface

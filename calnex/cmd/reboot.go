@@ -26,7 +26,8 @@ import (
 
 func init() {
 	RootCmd.AddCommand(rebootCmd)
-	rebootCmd.Flags().BoolVar(&apply, "apply", false, "apply the config changes")
+	rebootCmd.Flags().BoolVar(&apply, "apply", false, "do execute reboot action")
+	rebootCmd.Flags().BoolVar(&reset, "reset", false, "execute reset action (if graceful reboot cannot succeed)")
 	rebootCmd.Flags().BoolVar(&insecureTLS, "insecureTLS", false, "Ignore TLS certificate errors")
 	rebootCmd.Flags().StringVar(&target, "device", "", "device to configure")
 	if err := rebootCmd.MarkFlagRequired("device"); err != nil {
@@ -44,7 +45,7 @@ func reboot() error {
 	if err != nil {
 		return err
 	}
-	if err := api.Reboot(); err != nil {
+	if err := api.Reboot(reset); err != nil {
 		return err
 	}
 

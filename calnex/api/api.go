@@ -486,6 +486,7 @@ const (
 
 	clearDeviceURL = "https://%s/api/cleardevice?action=cleardevice"
 	rebootURL      = "https://%s/api/reboot?action=reboot"
+	resetURL       = "https://%s/api/reset?action=reset"
 
 	versionURL       = "https://%s/api/version"
 	uptimeURL        = "https://%s/api/uptime"
@@ -987,7 +988,12 @@ func (a *API) ClearDevice() error {
 }
 
 // Reboot the device
-func (a *API) Reboot() error {
+func (a *API) Reboot(reset bool) error {
+	// reset is not graceful, execute immediately
+	if reset {
+		return a.get(resetURL)
+	}
+
 	// check measurement status
 	status, err := a.FetchStatus()
 
