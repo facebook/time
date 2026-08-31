@@ -243,19 +243,27 @@ func CurrentDataSetRequest() *Management {
 	size := uint16(binary.Size(CurrentDataSetTLV{}))
 	tlvHeadSize := uint16(binary.Size(TLVHead{}))
 	return &Management{
-		SdoIDAndMsgType:      NewSdoIDAndMsgType(MessageManagement, 0),
-		Version:              Version,
-		MessageLength:        headerSize + size,
-		SourcePortIdentity:   identity,
-		LogMessageInterval:   MgmtLogMessageInterval,
-		TargetPortIdentity:   DefaultTargetPortIdentity,
-		StartingBoundaryHops: 0,
-		BoundaryHops:         0,
-		ActionField:          GET,
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + size,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
 		TLV: &CurrentDataSetTLV{
-			TLVType:      TLVManagement,
-			LengthField:  size - tlvHeadSize,
-			ManagementID: IDCurrentDataSet,
+			ManagementTLVHead: ManagementTLVHead{
+				TLVHead: TLVHead{
+					TLVType:     TLVManagement,
+					LengthField: size - tlvHeadSize,
+				},
+				ManagementID: IDCurrentDataSet,
+			},
 		},
 	}
 }
@@ -266,19 +274,27 @@ func DefaultDataSetRequest() *Management {
 	size := uint16(binary.Size(DefaultDataSetTLV{}))
 	tlvHeadSize := uint16(binary.Size(TLVHead{}))
 	return &Management{
-		SdoIDAndMsgType:      NewSdoIDAndMsgType(MessageManagement, 0),
-		Version:              Version,
-		MessageLength:        headerSize + size,
-		SourcePortIdentity:   identity,
-		LogMessageInterval:   MgmtLogMessageInterval,
-		TargetPortIdentity:   DefaultTargetPortIdentity,
-		StartingBoundaryHops: 0,
-		BoundaryHops:         0,
-		ActionField:          GET,
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + size,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
 		TLV: &DefaultDataSetTLV{
-			TLVType:      TLVManagement,
-			LengthField:  size - tlvHeadSize,
-			ManagementID: IDDefaultDataSet,
+			ManagementTLVHead: ManagementTLVHead{
+				TLVHead: TLVHead{
+					TLVType:     TLVManagement,
+					LengthField: size - tlvHeadSize,
+				},
+				ManagementID: IDDefaultDataSet,
+			},
 		},
 	}
 }
@@ -289,19 +305,27 @@ func ParentDataSetRequest() *Management {
 	size := uint16(binary.Size(ParentDataSetTLV{}))
 	tlvHeadSize := uint16(binary.Size(TLVHead{}))
 	return &Management{
-		SdoIDAndMsgType:      NewSdoIDAndMsgType(MessageManagement, 0),
-		Version:              Version,
-		MessageLength:        headerSize + size,
-		SourcePortIdentity:   identity,
-		LogMessageInterval:   MgmtLogMessageInterval,
-		TargetPortIdentity:   DefaultTargetPortIdentity,
-		StartingBoundaryHops: 0,
-		BoundaryHops:         0,
-		ActionField:          GET,
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + size,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
 		TLV: &ParentDataSetTLV{
-			TLVType:      TLVManagement,
-			LengthField:  size - tlvHeadSize,
-			ManagementID: IDParentDataSet,
+			ManagementTLVHead: ManagementTLVHead{
+				TLVHead: TLVHead{
+					TLVType:     TLVManagement,
+					LengthField: size - tlvHeadSize,
+				},
+				ManagementID: IDParentDataSet,
+			},
 		},
 	}
 }
@@ -312,19 +336,27 @@ func ClockAccuracyRequest() *Management {
 	size := uint16(binary.Size(ClockAccuracyTLV{}))
 	tlvHeadSize := uint16(binary.Size(TLVHead{}))
 	return &Management{
-		SdoIDAndMsgType:      NewSdoIDAndMsgType(MessageManagement, 0),
-		Version:              Version,
-		MessageLength:        headerSize + size,
-		SourcePortIdentity:   identity,
-		LogMessageInterval:   MgmtLogMessageInterval,
-		TargetPortIdentity:   DefaultTargetPortIdentity,
-		StartingBoundaryHops: 0,
-		BoundaryHops:         0,
-		ActionField:          GET,
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + size,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
 		TLV: &ClockAccuracyTLV{
-			TLVType:      TLVManagement,
-			LengthField:  size - tlvHeadSize,
-			ManagementID: IDClockAccuracy,
+			ManagementTLVHead: ManagementTLVHead{
+				TLVHead: TLVHead{
+					TLVType:     TLVManagement,
+					LengthField: size - tlvHeadSize,
+				},
+				ManagementID: IDClockAccuracy,
+			},
 		},
 	}
 }

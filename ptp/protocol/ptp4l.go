@@ -336,18 +336,24 @@ func PortStatsNPRequest() *Management {
 	tlvHeadSize := uint16(binary.Size(TLVHead{}))
 	// we send request with no portStats data just like pmc does
 	return &Management{
-		SdoIDAndMsgType:      NewSdoIDAndMsgType(MessageManagement, 0),
-		Version:              Version,
-		MessageLength:        headerSize + tlvHeadSize + 2,
-		SourcePortIdentity:   identity,
-		LogMessageInterval:   MgmtLogMessageInterval,
-		TargetPortIdentity:   DefaultTargetPortIdentity,
-		StartingBoundaryHops: 0,
-		BoundaryHops:         0,
-		ActionField:          GET,
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + tlvHeadSize + 2,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
 		TLV: &ManagementTLVHead{
-			TLVType:      TLVManagement,
-			LengthField:  2,
+			TLVHead: TLVHead{
+				TLVType:     TLVManagement,
+				LengthField: 2,
+			},
 			ManagementID: IDPortStatsNP,
 		},
 	}
@@ -373,18 +379,24 @@ func TimeStatusNPRequest() *Management {
 	tlvHeadSize := uint16(binary.Size(TLVHead{}))
 	// we send request with no TimeStatusNP data just like pmc does
 	return &Management{
-		SdoIDAndMsgType:      NewSdoIDAndMsgType(MessageManagement, 0),
-		Version:              Version,
-		MessageLength:        headerSize + tlvHeadSize + 2,
-		SourcePortIdentity:   identity,
-		LogMessageInterval:   MgmtLogMessageInterval,
-		TargetPortIdentity:   DefaultTargetPortIdentity,
-		StartingBoundaryHops: 0,
-		BoundaryHops:         0,
-		ActionField:          GET,
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + tlvHeadSize + 2,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
 		TLV: &ManagementTLVHead{
-			TLVType:      TLVManagement,
-			LengthField:  2,
+			TLVHead: TLVHead{
+				TLVType:     TLVManagement,
+				LengthField: 2,
+			},
 			ManagementID: IDTimeStatusNP,
 		},
 	}
@@ -410,18 +422,24 @@ func PortServiceStatsNPRequest() *Management {
 	tlvHeadSize := uint16(binary.Size(TLVHead{}))
 	// we send request with no portServiceStats data just like pmc does
 	return &Management{
-		SdoIDAndMsgType:      NewSdoIDAndMsgType(MessageManagement, 0),
-		Version:              Version,
-		MessageLength:        headerSize + tlvHeadSize + 2,
-		SourcePortIdentity:   identity,
-		LogMessageInterval:   MgmtLogMessageInterval,
-		TargetPortIdentity:   DefaultTargetPortIdentity,
-		StartingBoundaryHops: 0,
-		BoundaryHops:         0,
-		ActionField:          GET,
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + tlvHeadSize + 2,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
 		TLV: &ManagementTLVHead{
-			TLVType:      TLVManagement,
-			LengthField:  2,
+			TLVHead: TLVHead{
+				TLVType:     TLVManagement,
+				LengthField: 2,
+			},
 			ManagementID: IDPortServiceStatsNP,
 		},
 	}
@@ -447,18 +465,24 @@ func PortPropertiesNPRequest() *Management {
 	tlvHeadSize := uint16(binary.Size(TLVHead{}))
 	// we send request with no portStats data just like pmc does
 	return &Management{
-		SdoIDAndMsgType:      NewSdoIDAndMsgType(MessageManagement, 0),
-		Version:              Version,
-		MessageLength:        headerSize + tlvHeadSize + 2,
-		SourcePortIdentity:   identity,
-		LogMessageInterval:   MgmtLogMessageInterval,
-		TargetPortIdentity:   DefaultTargetPortIdentity,
-		StartingBoundaryHops: 0,
-		BoundaryHops:         0,
-		ActionField:          GET,
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + tlvHeadSize + 2,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
 		TLV: &ManagementTLVHead{
-			TLVType:      TLVManagement,
-			LengthField:  2,
+			TLVHead: TLVHead{
+				TLVType:     TLVManagement,
+				LengthField: 2,
+			},
 			ManagementID: IDPortPropertiesNP,
 		},
 	}
@@ -484,18 +508,24 @@ func UnicastMasterTableNPRequest() *Management {
 	tlvHeadSize := uint16(binary.Size(TLVHead{}))
 	// we send request with no data just like pmc does
 	return &Management{
-		SdoIDAndMsgType:      NewSdoIDAndMsgType(MessageManagement, 0),
-		Version:              Version,
-		MessageLength:        headerSize + tlvHeadSize + 2,
-		SourcePortIdentity:   identity,
-		LogMessageInterval:   MgmtLogMessageInterval,
-		TargetPortIdentity:   DefaultTargetPortIdentity,
-		StartingBoundaryHops: 0,
-		BoundaryHops:         0,
-		ActionField:          GET,
+		ManagementMsgHead: ManagementMsgHead{
+			Header: Header{
+				SdoIDAndMsgType:    NewSdoIDAndMsgType(MessageManagement, 0),
+				Version:            Version,
+				MessageLength:      headerSize + tlvHeadSize + 2,
+				SourcePortIdentity: identity,
+				LogMessageInterval: MgmtLogMessageInterval,
+			},
+			TargetPortIdentity:   DefaultTargetPortIdentity,
+			StartingBoundaryHops: 0,
+			BoundaryHops:         0,
+			ActionField:          GET,
+		},
 		TLV: &ManagementTLVHead{
-			TLVType:      TLVManagement,
-			LengthField:  2,
+			TLVHead: TLVHead{
+				TLVType:     TLVManagement,
+				LengthField: 2,
+			},
 			ManagementID: IDUnicastMasterTableNP,
 		},
 	}
