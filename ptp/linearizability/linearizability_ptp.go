@@ -74,24 +74,28 @@ func (c *udpConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, erro
 func reqUnicast(clockID ptp.ClockIdentity, port uint16, duration time.Duration, what ptp.MessageType) *ptp.Signaling {
 	l := binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.RequestUnicastTransmissionTLV{})
 	return &ptp.Signaling{
-		SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageSignaling, 0),
-		Version:         ptp.Version,
-		SequenceID:      0, // will be populated on sending
-		MessageLength:   uint16(l),
-		FlagField:       ptp.FlagUnicast,
-		SourcePortIdentity: ptp.PortIdentity{
-			PortNumber:    port,
-			ClockIdentity: clockID,
+		Header: ptp.Header{
+			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageSignaling, 0),
+			Version:         ptp.Version,
+			SequenceID:      0, // will be populated on sending
+			MessageLength:   uint16(l),
+			FlagField:       ptp.FlagUnicast,
+			SourcePortIdentity: ptp.PortIdentity{
+				PortNumber:    port,
+				ClockIdentity: clockID,
+			},
+			LogMessageInterval: 0x7f,
 		},
-		LogMessageInterval: 0x7f,
 		TargetPortIdentity: ptp.PortIdentity{
 			PortNumber:    0xffff,
 			ClockIdentity: 0xffffffffffffffff,
 		},
 		TLVs: []ptp.TLV{
 			&ptp.RequestUnicastTransmissionTLV{
-				TLVType:               ptp.TLVRequestUnicastTransmission,
-				LengthField:           uint16(binary.Size(ptp.RequestUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{})),
+				TLVHead: ptp.TLVHead{
+					TLVType:     ptp.TLVRequestUnicastTransmission,
+					LengthField: uint16(binary.Size(ptp.RequestUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{})),
+				},
 				MsgTypeAndReserved:    ptp.NewUnicastMsgTypeAndFlags(what, 0),
 				LogInterMessagePeriod: 1,
 				DurationField:         uint32(duration.Seconds()), // seconds
@@ -107,16 +111,18 @@ func reqDelay(clockID ptp.ClockIdentity, port uint16, proto PTPImplementation) *
 		ptpFlags = ptpFlags | ptp.FlagProfileSpecific1
 	}
 	return &ptp.SyncDelayReq{
-		SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageDelayReq, 0),
-		Version:         ptp.Version,
-		SequenceID:      0,                                                                       // will be populated on sending
-		MessageLength:   uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.SyncDelayReqBody{})), //#nosec G115
-		FlagField:       ptpFlags,
-		SourcePortIdentity: ptp.PortIdentity{
-			PortNumber:    port,
-			ClockIdentity: clockID,
+		Header: ptp.Header{
+			SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageDelayReq, 0),
+			Version:         ptp.Version,
+			SequenceID:      0,                                                                       // will be populated on sending
+			MessageLength:   uint16(binary.Size(ptp.Header{}) + binary.Size(ptp.SyncDelayReqBody{})), //#nosec G115
+			FlagField:       ptpFlags,
+			SourcePortIdentity: ptp.PortIdentity{
+				PortNumber:    port,
+				ClockIdentity: clockID,
+			},
+			LogMessageInterval: 0x7f,
 		},
-		LogMessageInterval: 0x7f,
 	}
 }
 

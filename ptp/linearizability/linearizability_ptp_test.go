@@ -34,20 +34,24 @@ import (
 func grantUnicastPkt(seq int, clockID ptp.ClockIdentity, duration time.Duration, what ptp.MessageType) *ptp.Signaling {
 	l := binary.Size(ptp.Header{}) + binary.Size(ptp.PortIdentity{}) + binary.Size(ptp.GrantUnicastTransmissionTLV{})
 	return &ptp.Signaling{
-		SdoIDAndMsgType:    ptp.NewSdoIDAndMsgType(ptp.MessageSignaling, 0),
-		Version:            ptp.Version,
-		SequenceID:         uint16(seq),
-		MessageLength:      uint16(l),
-		FlagField:          ptp.FlagUnicast,
-		LogMessageInterval: 0x7f,
+		Header: ptp.Header{
+			SdoIDAndMsgType:    ptp.NewSdoIDAndMsgType(ptp.MessageSignaling, 0),
+			Version:            ptp.Version,
+			SequenceID:         uint16(seq),
+			MessageLength:      uint16(l),
+			FlagField:          ptp.FlagUnicast,
+			LogMessageInterval: 0x7f,
+		},
 		TargetPortIdentity: ptp.PortIdentity{
 			PortNumber:    1,
 			ClockIdentity: clockID,
 		},
 		TLVs: []ptp.TLV{
 			&ptp.GrantUnicastTransmissionTLV{
-				TLVType:               ptp.TLVGrantUnicastTransmission,
-				LengthField:           uint16(binary.Size(ptp.GrantUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{})),
+				TLVHead: ptp.TLVHead{
+					TLVType:     ptp.TLVGrantUnicastTransmission,
+					LengthField: uint16(binary.Size(ptp.GrantUnicastTransmissionTLV{}) - binary.Size(ptp.TLVHead{})),
+				},
 				MsgTypeAndReserved:    ptp.NewUnicastMsgTypeAndFlags(what, 0),
 				LogInterMessagePeriod: 1,
 				DurationField:         uint32(duration.Seconds()), // seconds
@@ -60,13 +64,17 @@ func grantUnicastPkt(seq int, clockID ptp.ClockIdentity, duration time.Duration,
 func delayRespPkt(seq int, receiveTimestamp time.Time) *ptp.DelayResp {
 	l := binary.Size(ptp.DelayResp{})
 	return &ptp.DelayResp{
-		SdoIDAndMsgType:    ptp.NewSdoIDAndMsgType(ptp.MessageDelayResp, 0),
-		Version:            ptp.Version,
-		SequenceID:         uint16(seq),
-		MessageLength:      uint16(l),
-		FlagField:          ptp.FlagUnicast,
-		LogMessageInterval: 0x7f,
-		ReceiveTimestamp:   ptp.NewTimestamp(receiveTimestamp),
+		Header: ptp.Header{
+			SdoIDAndMsgType:    ptp.NewSdoIDAndMsgType(ptp.MessageDelayResp, 0),
+			Version:            ptp.Version,
+			SequenceID:         uint16(seq),
+			MessageLength:      uint16(l),
+			FlagField:          ptp.FlagUnicast,
+			LogMessageInterval: 0x7f,
+		},
+		DelayRespBody: ptp.DelayRespBody{
+			ReceiveTimestamp: ptp.NewTimestamp(receiveTimestamp),
+		},
 	}
 }
 
