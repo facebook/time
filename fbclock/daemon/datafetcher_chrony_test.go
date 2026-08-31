@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebook/time/leapsectz"
 	"github.com/stretchr/testify/require"
 )
 
@@ -77,4 +78,42 @@ func TestFetchTrackingTimeout(t *testing.T) {
 	_, err := (&ChronyFetcher{address: fakeChronyd(t, nil)}).FetchTracking(cfg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to get tracking from chronyd")
+}
+
+// testUTCOffsetS is what current tzdata yields (latest leap 2017-01-01), and
+// leap2017 is that leap instant: Tleap-Nleap+1 of the record below.
+const (
+	testUTCOffsetS = 37
+	leap2015       = 1435708800
+	leap2017       = 1483228800
+)
+
+var (
+	// testLeaps is verbatim from /usr/share/zoneinfo/right/UTC
+	testLeaps = []leapsectz.LeapSecond{
+		{Tleap: 1435708825, Nleap: 26},
+		{Tleap: 1483228826, Nleap: 27},
+	}
+	// testSysTime is the CLOCK_REALTIME read the daemon stamps at fetch time, a
+	// second after the fixtures' RefTime so assertions can tell them apart.
+	testSysTime = time.Unix(1755000001, 0)
+)
+
+func TestCurrentUTCOffsetS(t *testing.T) {
+	testCases := []struct {
+		name string
+		now  time.Time
+		want int32
+	}{
+		{name: "long after the latest leap", now: testSysTime, want: 37},
+		{name: "one second before the leap", now: time.Unix(leap2017-1, 0), want: 36},
+		{name: "at the leap instant", now: time.Unix(leap2017, 0), want: 37},
+		// older than every record: floors at the same offset the client subtracts
+		{name: "before every record we hold", now: time.Unix(leap2015-1, 0), want: 36},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, currentUTCOffsetS(testLeaps, tc.now))
+		})
+	}
 }
