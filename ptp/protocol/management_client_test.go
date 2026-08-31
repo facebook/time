@@ -79,38 +79,30 @@ func TestMgmtClientCommunicateEOF(t *testing.T) {
 func TestMgmtClientCommunicateError(t *testing.T) {
 	var err error
 	packet := &ManagementMsgErrorStatus{
-		ManagementMsgHead: ManagementMsgHead{
-			Header: Header{
-				SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageManagement, 0),
-				Version:             MajorVersion,
-				MessageLength:       62,
-				DomainNumber:        0,
-				MinorSdoID:          0,
-				FlagField:           0,
-				CorrectionField:     0,
-				MessageTypeSpecific: 0,
-				SourcePortIdentity: PortIdentity{
-					PortNumber:    0,
-					ClockIdentity: 5212879185253000328,
-				},
-				SequenceID:         1,
-				ControlField:       4,
-				LogMessageInterval: 0x7f,
-			},
-			TargetPortIdentity: PortIdentity{
-				PortNumber:    56428,
-				ClockIdentity: 0,
-			},
-			ActionField: RESPONSE,
+		SdoIDAndMsgType:     NewSdoIDAndMsgType(MessageManagement, 0),
+		Version:             MajorVersion,
+		MessageLength:       62,
+		DomainNumber:        0,
+		MinorSdoID:          0,
+		FlagField:           0,
+		CorrectionField:     0,
+		MessageTypeSpecific: 0,
+		SourcePortIdentity: PortIdentity{
+			PortNumber:    0,
+			ClockIdentity: 5212879185253000328,
 		},
-		ManagementErrorStatusTLV: ManagementErrorStatusTLV{
-			TLVHead: TLVHead{
-				TLVType:     TLVManagementErrorStatus,
-				LengthField: 8,
-			},
-			ManagementErrorID: ErrorNotSupported,
-			ManagementID:      IDCurrentDataSet,
+		SequenceID:         1,
+		ControlField:       4,
+		LogMessageInterval: 0x7f,
+		TargetPortIdentity: PortIdentity{
+			PortNumber:    56428,
+			ClockIdentity: 0,
 		},
+		ActionField:       RESPONSE,
+		TLVType:           TLVManagementErrorStatus,
+		LengthField:       8,
+		ManagementErrorID: ErrorNotSupported,
+		ManagementID:      IDCurrentDataSet,
 	}
 	_, client := prepareTestClient(t, packet)
 	_, err = client.Communicate(CurrentDataSetRequest())
