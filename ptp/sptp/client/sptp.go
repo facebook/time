@@ -30,6 +30,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/facebook/time/phc"
+	"github.com/facebook/time/ptp/pdelay"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/servo"
 	"github.com/facebook/time/timestamp"
@@ -48,6 +49,12 @@ type Servo interface {
 	IsStable(offset int64) bool
 }
 
+// PDelayResults is map of peer measurements from pdelay request
+type PDelayResults struct {
+	sync.Mutex
+	Results map[netip.Addr]*pdelay.Result
+}
+
 // SPTP is a Simple Unicast PTP client
 type SPTP struct {
 	cfg *Config
@@ -63,8 +70,10 @@ type SPTP struct {
 	clients    map[netip.Addr]*Client
 	priorities map[netip.Addr]int
 	backoff    map[netip.Addr]*backoff
-	lastTick   time.Time
-	isStalled  bool
+	// latest collection of pdelay measurements
+	pdm       *PDelayResults
+	lastTick  time.Time
+	isStalled bool
 
 	clockID ptp.ClockIdentity
 	genConn UDPConnNoTS
@@ -79,6 +88,7 @@ func NewSPTP(cfg *Config, stats StatsServer) (*SPTP, error) {
 	p := &SPTP{
 		cfg:   cfg,
 		stats: stats,
+		pdm:   &PDelayResults{Results: map[netip.Addr]*pdelay.Result{}},
 	}
 	if err := p.init(); err != nil {
 		return nil, err
@@ -303,6 +313,43 @@ func (p *SPTP) handlePDelayReq(econn UDPConnWithTS, buf []byte, addr unix.Sockad
 	return nil
 }
 
+func (p *SPTP) handlePDelayResp(buf []byte, addr netip.Addr, rxts time.Time) error {
+	resp := &ptp.PDelayResp{}
+	if err := ptp.FromBytes(buf, resp); err != nil {
+		return fmt.Errorf("parsing Pdelay_Resp: %w", err)
+	}
+
+	p.pdm.Lock()
+	defer p.pdm.Unlock()
+	res, ok := p.pdm.Results[addr]
+	if !ok {
+		res = &pdelay.Result{}
+		p.pdm.Results[addr] = res
+	}
+	res.CorrectionFieldResp = resp.CorrectionField.Duration()
+	res.T4 = rxts
+	res.T2 = resp.RequestReceiptTimestamp.Time()
+	return nil
+}
+
+func (p *SPTP) handlePDelayRespFollowup(buf []byte, addr netip.Addr) error {
+	resp := &ptp.PDelayRespFollowUp{}
+	if err := ptp.FromBytes(buf, resp); err != nil {
+		return fmt.Errorf("parsing Pdelay_Resp_FollowUp: %w", err)
+	}
+
+	p.pdm.Lock()
+	defer p.pdm.Unlock()
+	res, ok := p.pdm.Results[addr]
+	if !ok {
+		res = &pdelay.Result{}
+		p.pdm.Results[addr] = res
+	}
+	res.CorrectionFieldReq = resp.CorrectionField.Duration()
+	res.T3 = resp.ResponseOriginTimestamp.Time()
+	return nil
+}
+
 // RunListener starts a listener, must be run before any client-server interactions happen
 func (p *SPTP) RunListener(ctx context.Context) error {
 	eg, ctx := errgroup.WithContext(ctx)
@@ -323,8 +370,24 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					doneChan <- fmt.Errorf("received packet on port 320 with invalid source address")
 					return
 				}
+
 				addr = addr.Unmap()
 				log.Debugf("[%s] received packet on port 320, n = %v", addr, bbuf)
+
+				// Probe message type first
+				msgType, err := ptp.ProbeMsgType(buf[:bbuf])
+				if err != nil {
+					log.Warningf("probing message type: %v", err)
+					continue
+				}
+
+				if msgType == ptp.MessagePDelayRespFollowUp {
+					if err := p.handlePDelayRespFollowup(buf[:bbuf], addr); err != nil {
+						log.Warningf("[%s] handling Pdelay_Resp_FollowUp: %v", addr, err)
+					}
+					continue
+				}
+
 				cc, found := p.clients[addr]
 				if !found {
 					log.Warningf("[%s] ignoring packets from unknown server", addr)
@@ -383,6 +446,13 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					if msgType == ptp.MessagePDelayReq {
 						if err := p.handlePDelayReq(econn, buf[:bbuf], addr, rxtx); err != nil {
 							log.Warningf("[%s] handling Pdelay_Req: %v", ip, err)
+						}
+						continue
+					}
+
+					if msgType == ptp.MessagePDelayResp {
+						if err := p.handlePDelayResp(buf[:bbuf], ip, rxtx); err != nil {
+							log.Warningf("[%s] handling Pdelay_Resp: %v", ip, err)
 						}
 						continue
 					}
