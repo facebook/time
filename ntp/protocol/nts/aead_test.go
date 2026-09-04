@@ -99,11 +99,36 @@ func TestAEADCiphertextTamper(t *testing.T) {
 	}
 }
 
-// TestAEADWrongLengthNonce checks that opening rejects a nonce of the wrong
-// length with ErrAEADNonceSize: SIV requires an empty nonce, while GCM-SIV
-// requires a fixed-length nonce.
+// TestAEADAESSIVCMAC256Nonce checks compatibility with chrony, which
+// authenticates the wire nonce as an S2V component after the associated data.
+func TestAEADAESSIVCMAC256Nonce(t *testing.T) {
+	a := aeadFor(t, protocol.AEADAESSIVCMAC256).(*aesSIVCMAC256)
+	ad := []byte("associated-data")
+	pt := []byte("secret-extension-fields")
+
+	nonce, ct, err := a.Seal(ad, pt)
+	require.NoError(t, err)
+	require.Len(t, nonce, aesSIVCMAC256GeneratedNonceSize)
+
+	got, err := a.Open(ad, nonce, ct)
+	require.NoError(t, err)
+	require.Equal(t, pt, got)
+
+	nonce[0] ^= 0xFF
+	_, err = a.Open(ad, nonce, ct)
+	require.Error(t, err)
+
+	_, err = a.Open(ad, nil, ct)
+	require.ErrorIs(t, err, ErrAEADNonceSize)
+}
+
+// TestAEADWrongLengthNonce checks that algorithms with fixed nonce
+// requirements reject a nonce of the wrong length with ErrAEADNonceSize.
 func TestAEADWrongLengthNonce(t *testing.T) {
-	for _, alg := range supportedAEADAlgs {
+	for _, alg := range []protocol.AEADAlgorithm{
+		protocol.AEADAESSIVCMAC512,
+		protocol.AEADAES128GCMSIV,
+	} {
 		a := aeadFor(t, alg)
 		ad := []byte("associated-data")
 		pt := []byte("secret-extension-fields")

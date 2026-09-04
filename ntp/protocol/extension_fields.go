@@ -98,12 +98,12 @@ type AEADAlgorithm uint16
 
 const (
 	// AEADAESSIVCMAC256 is AEAD_AES_SIV_CMAC_256 (RFC 5297), the RFC 8915
-	// §4.1.5 mandatory-to-implement algorithm. Deterministic: it carries no
-	// separate nonce and uses a 32-octet key.
+	// §4.1.5 mandatory-to-implement algorithm. NTS carries a non-empty wire nonce
+	// as an S2V component; this implementation generates 16 octets to match chrony.
 	AEADAESSIVCMAC256 AEADAlgorithm = 15
-	// AEADAESSIVCMAC512 is AEAD_AES_SIV_CMAC_512 (RFC 5297). Deterministic like
-	// CMAC-256 but with a 64-octet key. It is not mandatory to implement, and
-	// chrony, the most widely deployed NTS implementation, does not offer it.
+	// AEADAESSIVCMAC512 is AEAD_AES_SIV_CMAC_512 (RFC 5297). This implementation
+	// uses Tink's deterministic AEAD interface with an empty wire nonce and a
+	// 64-octet key. It is not mandatory to implement, and chrony does not offer it.
 	AEADAESSIVCMAC512 AEADAlgorithm = 17
 	// AEADAES128GCMSIV is AEAD_AES_128_GCM_SIV (RFC 8452). It uses a 16-octet
 	// key and a 12-octet nonce.
