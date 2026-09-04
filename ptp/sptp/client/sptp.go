@@ -125,6 +125,14 @@ func (p *SPTP) initClients() error {
 			if err := ConfigPktInfo(econn.ConnFd()); err != nil {
 				log.Warningf("failed to configure pktinfo: %v", err)
 			}
+			loopLevel, loopOpt := unix.IPPROTO_IPV6, unix.IPV6_MULTICAST_LOOP
+			if err := unix.SetsockoptInt(econn.ConnFd(), loopLevel, loopOpt, 0); err != nil {
+				log.Warningf("disabling IPv6 multicast loopback: %v", err)
+			}
+			loopLevel, loopOpt = unix.IPPROTO_IP, unix.IP_MULTICAST_LOOP
+			if err := unix.SetsockoptInt(econn.ConnFd(), loopLevel, loopOpt, 0); err != nil {
+				log.Warningf("disabling IPv4 multicast loopback: %v", err)
+			}
 			// keep track of the event connections
 			p.eventConns = append(p.eventConns, econn)
 		} else {
@@ -194,6 +202,14 @@ func (p *SPTP) init() error {
 		}
 		if err := ConfigPktInfo(eventConn.ConnFd()); err != nil {
 			log.Warningf("failed to configure pktinfo: %v", err)
+		}
+		loopLevel, loopOpt := unix.IPPROTO_IPV6, unix.IPV6_MULTICAST_LOOP
+		if err := unix.SetsockoptInt(eventConn.ConnFd(), loopLevel, loopOpt, 0); err != nil {
+			log.Warningf("disabling IPv6 multicast loopback: %v", err)
+		}
+		loopLevel, loopOpt = unix.IPPROTO_IP, unix.IP_MULTICAST_LOOP
+		if err := unix.SetsockoptInt(eventConn.ConnFd(), loopLevel, loopOpt, 0); err != nil {
+			log.Warningf("disabling IPv4 multicast loopback: %v", err)
 		}
 
 		p.eventConns = append(p.eventConns, eventConn)
