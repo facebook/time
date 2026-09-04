@@ -66,6 +66,7 @@ type UDPConn interface {
 type UDPConnWithTS interface {
 	UDPConn
 	WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, error)
+	WriteToSrcAddrTS(b []byte, src, dst net.Addr) (time.Time, error)
 }
 
 type udpConnTS struct {
@@ -87,6 +88,10 @@ func (c *udpConnTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Time, erro
 		return 0, time.Time{}, fmt.Errorf("failed to get timestamp of last packet: %w", err)
 	}
 	return n, hwts, nil
+}
+
+func (c *udpConnTS) WriteToSrcAddrTS(_ []byte, _, _ net.Addr) (time.Time, error) {
+	return time.Time{}, fmt.Errorf("not implemented")
 }
 
 // Config specifies Client run options

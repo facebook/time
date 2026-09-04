@@ -17,12 +17,14 @@ limitations under the License.
 package client
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
 	"net/netip"
 	"sync"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/unix"
 
@@ -40,6 +42,7 @@ type UDPConnNoTS interface {
 // UDPConnWithTS describes the functionality we expect from a UDP connection that will allow us to read TX timestamps
 type UDPConnWithTS interface {
 	WriteToWithTS(b []byte, addr unix.Sockaddr, seq uint16) (time.Time, error)
+	WriteToSrcAddrTS(b []byte, src, dst unix.Sockaddr) (time.Time, error)
 	ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, unix.Sockaddr, time.Time, error)
 	Close() error
 	ConnFd() int
@@ -178,6 +181,56 @@ func (c *UDPConnTS) sendMsgTS(b []byte, addr unix.Sockaddr) (time.Time, error) {
 	hwts, _, err := timestamp.ReadTXtimestamp(c.connFd)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to read TX timestamp: %w", err)
+	}
+	return hwts, nil
+}
+
+func pktInfo6Cmsg(addr *unix.SockaddrInet6) []byte {
+	var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
+	b := make([]byte, unix.CmsgSpace(unix.SizeofInet6Pktinfo))
+	h := (*unix.Cmsghdr)(unsafe.Pointer(&b[0]))
+	h.Level = unix.IPPROTO_IPV6
+	h.Type = unix.IPV6_PKTINFO
+	h.SetLen(unix.CmsgLen(unix.SizeofInet6Pktinfo))
+	pktInfo := (*unix.Inet6Pktinfo)(unsafe.Pointer(&b[socketControlMessageHeaderOffset]))
+	copy(pktInfo.Addr[:], addr.Addr[:])
+	return b
+}
+
+func pktInfo4Cmsg(addr *unix.SockaddrInet4) []byte {
+	var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
+	b := make([]byte, unix.CmsgSpace(unix.SizeofInet4Pktinfo))
+	h := (*unix.Cmsghdr)(unsafe.Pointer(&b[0]))
+	h.Level = unix.IPPROTO_IP
+	h.Type = unix.IP_PKTINFO
+	h.SetLen(unix.CmsgLen(unix.SizeofInet4Pktinfo))
+	pktInfo := (*unix.Inet4Pktinfo)(unsafe.Pointer(&b[socketControlMessageHeaderOffset]))
+	copy(pktInfo.Addr[:], addr.Addr[:])
+	return b
+}
+
+// WriteToSrcAddrTS sends packet with specified source address to provided destination
+// and returns TX timestamp
+func (c *UDPConnTS) WriteToSrcAddrTS(b []byte, src, dst unix.Sockaddr) (time.Time, error) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	var oob []byte
+
+	switch src := src.(type) {
+	case *unix.SockaddrInet4:
+		oob = pktInfo4Cmsg(src)
+	case *unix.SockaddrInet6:
+		oob = pktInfo6Cmsg(src)
+	default:
+		return time.Time{}, fmt.Errorf("unsupported source address type %T", src)
+	}
+	if err := unix.Sendmsg(c.connFd, b, oob, dst, 0); err != nil {
+		return time.Time{}, fmt.Errorf("message sent to socket failed: %w", err)
+	}
+	hwts, _, err := timestamp.ReadTXtimestamp(c.connFd)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get timestamp of last packet: %w", err)
 	}
 	return hwts, nil
 }

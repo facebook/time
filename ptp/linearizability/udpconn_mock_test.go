@@ -26,6 +26,7 @@ import (
 	time "time"
 
 	gomock "go.uber.org/mock/gomock"
+	unix "golang.org/x/sys/unix"
 )
 
 // MockUDPConn is a mock of UDPConn interface.
@@ -178,4 +179,19 @@ func (m *MockUDPConnWithTS) WriteToWithTS(b []byte, addr net.Addr) (int, time.Ti
 func (mr *MockUDPConnWithTSMockRecorder) WriteToWithTS(b, addr interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteToWithTS", reflect.TypeOf((*MockUDPConnWithTS)(nil).WriteToWithTS), b, addr)
+}
+
+// WriteToSrcAddrTS mocks base method.
+func (m *MockUDPConnWithTS) WriteToSrcAddrTS(b []byte, src, dst unix.Sockaddr) (time.Time, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WriteToSrcAddrTS", b, src, dst)
+	ret0, _ := ret[0].(time.Time)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WriteToSrcAddrTS indicates an expected call of WriteToSrcAddrTS.
+func (mr *MockUDPConnWithTSMockRecorder) WriteToSrcAddrTS(b, src, dst interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteToSrcAddrTS", reflect.TypeOf((*MockUDPConnWithTS)(nil).WriteToSrcAddrTS), b, src, dst)
 }
