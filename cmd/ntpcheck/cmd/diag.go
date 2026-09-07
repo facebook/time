@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/facebook/time/cmd/ntpcheck/checker"
+	ntp "github.com/facebook/time/ntp/protocol"
 	"github.com/fatih/color"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -91,7 +92,7 @@ func checkSync(r *checker.NTPCheckResult) (status, string) {
 	if err != nil {
 		return CRITICAL, "No sys peer, clock is not syncing"
 	}
-	if r.LI == 3 {
+	if r.LI == ntp.LeapAlarm {
 		return FAIL, "Clock is not fully synchronized, leap indicator is set to 'alarm'"
 	}
 	return OK, fmt.Sprintf("Clock is syncing to %s", color.BlueString(checker.GetSyncSource(syspeer, r.ClockSource)))

@@ -22,6 +22,7 @@ import (
 	"sort"
 	"time"
 
+	ntp "github.com/facebook/time/ntp/protocol"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -149,7 +150,7 @@ func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 		PeerStratum:           stratum,
 		Frequency:             r.SysVars.Frequency,
 		Correction:            r.Correction,
-		StatError:             r.LI == 3, // that's how ntpstat defines unsynchronized
+		StatError:             r.LI == ntp.LeapAlarm, // that's how ntpstat defines unsynchronized
 		PeerCount:             len(r.Peers),
 		OffsetComparedToPeers: offsetComparedToPeers,
 	}

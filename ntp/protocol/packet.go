@@ -114,12 +114,21 @@ type Packet struct {
 	MAC []byte
 }
 
+// Leap indicator values, the 2-bit LI field of the NTP header (RFC 5905 s7.3).
+// Untyped: LI is carried as uint8 once unpacked from a header or status word, and
+// as uint16 in chrony's Tracking. Indexes control.LeapDesc.
 const (
-	liNoWarning      = 0
-	liAlarmCondition = 3
-	vnFirst          = 1
-	vnLast           = 4
-	modeClient       = 3
+	LeapNoWarning = 0
+	LeapAddSecond = 1
+	LeapDelSecond = 2
+	// LeapAlarm means the clock is not synchronised
+	LeapAlarm = 3
+)
+
+const (
+	vnFirst    = 1
+	vnLast     = 4
+	modeClient = 3
 )
 
 // putHeader writes the fixed 48-octet NTP header (RFC 5905) into dst in wire
@@ -176,7 +185,7 @@ func (p *Packet) ValidSettingsFormat() bool {
 	var l = settings >> 6
 	var v = (settings << 2) >> 5
 	var m = (settings << 5) >> 5
-	if (l == liNoWarning) || (l == liAlarmCondition) {
+	if (l == LeapNoWarning) || (l == LeapAlarm) {
 		if (v >= vnFirst) && (v <= vnLast) {
 			if m == modeClient {
 				return true
