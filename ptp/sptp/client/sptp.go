@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/netip"
 	"sync"
@@ -30,7 +31,6 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/facebook/time/phc"
-	"github.com/facebook/time/ptp/pdelay"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/servo"
 	"github.com/facebook/time/timestamp"
@@ -49,12 +49,6 @@ type Servo interface {
 	IsStable(offset int64) bool
 }
 
-// PDelayResults is map of peer measurements from pdelay request
-type PDelayResults struct {
-	sync.Mutex
-	Results map[netip.Addr]*pdelay.Result
-}
-
 // SPTP is a Simple Unicast PTP client
 type SPTP struct {
 	cfg *Config
@@ -70,10 +64,10 @@ type SPTP struct {
 	clients    map[netip.Addr]*Client
 	priorities map[netip.Addr]int
 	backoff    map[netip.Addr]*backoff
-	// latest collection of pdelay measurements
-	pdm       *PDelayResults
-	lastTick  time.Time
-	isStalled bool
+	lastTick   time.Time
+	isStalled  bool
+
+	pinger pingState
 
 	clockID ptp.ClockIdentity
 	genConn UDPConnNoTS
@@ -88,8 +82,8 @@ func NewSPTP(cfg *Config, stats StatsServer) (*SPTP, error) {
 	p := &SPTP{
 		cfg:   cfg,
 		stats: stats,
-		pdm:   &PDelayResults{Results: map[netip.Addr]*pdelay.Result{}},
 	}
+	p.pinger.init(cfg)
 	if err := p.init(); err != nil {
 		return nil, err
 	}
@@ -157,15 +151,16 @@ func (p *SPTP) initClients() error {
 			hasIPv6 = true
 		}
 	}
+	mcastFd := p.eventConns[0].ConnFd()
 	if hasIPv4 {
-		if err := timestamp.JoinMulticast(p.eventConns[0].ConnFd(), iface, net.ParseIP(ptp.PDelayMulticastIPv4)); err != nil {
+		if err := timestamp.JoinMulticast(mcastFd, iface, net.ParseIP(ptp.PDelayMulticastIPv4)); err != nil {
 			log.Warningf("failed to join IPv4 peer delay multicast group %s: %v", ptp.PDelayMulticastIPv4, err)
 		} else {
 			log.Debugf("joined PTP peer delay multicast group %s on interface %s", ptp.PDelayMulticastIPv4, iface.Name)
 		}
 	}
 	if hasIPv6 {
-		if err := timestamp.JoinMulticast(p.eventConns[0].ConnFd(), iface, net.ParseIP(ptp.PDelayMulticastIPv6)); err != nil {
+		if err := timestamp.JoinMulticast(mcastFd, iface, net.ParseIP(ptp.PDelayMulticastIPv6)); err != nil {
 			log.Warningf("failed to join IPv6 peer delay multicast group %s: %v", ptp.PDelayMulticastIPv6, err)
 		} else {
 			log.Debugf("joined PTP peer delay multicast group %s on interface %s", ptp.PDelayMulticastIPv6, iface.Name)
@@ -174,7 +169,31 @@ func (p *SPTP) initClients() error {
 	if !hasIPv4 && !hasIPv6 {
 		log.Warningf("no servers configured, not joining any peer delay multicast group")
 	}
+	// AddrToSockaddr drops the IPv6 zone, so multicast egress relies entirely on this.
+	// Only a family we actually use is worth warning about: the other one legitimately
+	// fails on a single-family socket.
+	err6, err4 := setMulticastIface(mcastFd, iface)
+	if hasIPv6 && err6 != nil {
+		log.Warningf("IPv6 multicast egress not pinned to %s: %v", iface.Name, err6)
+	}
+	if hasIPv4 && err4 != nil {
+		log.Warningf("IPv4 multicast egress not pinned to %s: %v", iface.Name, err4)
+	}
 	return nil
+}
+
+// setMulticastIface pins outgoing multicast to iface, reporting each family
+// separately so the caller can ignore one it does not use
+func setMulticastIface(fd int, iface *net.Interface) (err6, err4 error) {
+	if iface.Index < 0 || iface.Index > math.MaxInt32 {
+		err := fmt.Errorf("interface index %d out of range", iface.Index)
+		return err, err
+	}
+	idx := int32(iface.Index)
+	err6 = unix.SetsockoptInt(fd, unix.IPPROTO_IPV6, unix.IPV6_MULTICAST_IF, iface.Index)
+	// IP_MULTICAST_IF takes an ip_mreqn, an int would be read as a struct in_addr
+	err4 = unix.SetsockoptIPMreqn(fd, unix.IPPROTO_IP, unix.IP_MULTICAST_IF, &unix.IPMreqn{Ifindex: idx})
+	return err6, err4
 }
 
 func (p *SPTP) init() error {
@@ -334,38 +353,20 @@ func (p *SPTP) handlePDelayResp(buf []byte, addr netip.Addr, rxts time.Time) err
 	if err := ptp.FromBytes(buf, resp); err != nil {
 		return fmt.Errorf("parsing Pdelay_Resp: %w", err)
 	}
-
-	p.pdm.Lock()
-	defer p.pdm.Unlock()
-	res, ok := p.pdm.Results[addr]
-	if !ok {
-		res = &pdelay.Result{}
-		p.pdm.Results[addr] = res
+	if req := p.inflight(); req.matches(resp.Header, addr) {
+		req.collectPDelayResp(resp, addr, rxts)
 	}
-	res.Responder = addr
-	res.Timestamp = time.Now()
-	res.CorrectionFieldReq = resp.CorrectionField.Duration()
-	res.T4 = rxts
-	res.T2 = resp.RequestReceiptTimestamp.Time()
 	return nil
 }
 
 func (p *SPTP) handlePDelayRespFollowup(buf []byte, addr netip.Addr) error {
 	resp := &ptp.PDelayRespFollowUp{}
 	if err := ptp.FromBytes(buf, resp); err != nil {
-		return fmt.Errorf("parsing Pdelay_Resp_FollowUp: %w", err)
+		return fmt.Errorf("parsing Pdelay_Resp_Follow_Up: %w", err)
 	}
-
-	p.pdm.Lock()
-	defer p.pdm.Unlock()
-	res, ok := p.pdm.Results[addr]
-	if !ok {
-		res = &pdelay.Result{}
-		p.pdm.Results[addr] = res
+	if req := p.inflight(); req.matches(resp.Header, addr) {
+		req.collectPDelayRespFollowUp(resp, addr)
 	}
-	res.Responder = addr
-	res.CorrectionFieldResp = resp.CorrectionField.Duration()
-	res.T3 = resp.ResponseOriginTimestamp.Time()
 	return nil
 }
 
@@ -404,6 +405,10 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					if err := p.handlePDelayRespFollowup(buf[:bbuf], addr); err != nil {
 						log.Warningf("[%s] handling Pdelay_Resp_FollowUp: %v", addr, err)
 					}
+					continue
+				}
+
+				if p.collectPingReply(buf[:bbuf], addr, time.Time{}) {
 					continue
 				}
 
@@ -473,6 +478,10 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 						if err := p.handlePDelayResp(buf[:bbuf], ip, rxtx); err != nil {
 							log.Warningf("[%s] handling Pdelay_Resp: %v", ip, err)
 						}
+						continue
+					}
+
+					if p.collectPingReply(buf[:bbuf], ip, rxtx) {
 						continue
 					}
 
