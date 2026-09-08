@@ -342,7 +342,9 @@ func (p *SPTP) handlePDelayResp(buf []byte, addr netip.Addr, rxts time.Time) err
 		res = &pdelay.Result{}
 		p.pdm.Results[addr] = res
 	}
-	res.CorrectionFieldResp = resp.CorrectionField.Duration()
+	res.Responder = addr
+	res.Timestamp = time.Now()
+	res.CorrectionFieldReq = resp.CorrectionField.Duration()
 	res.T4 = rxts
 	res.T2 = resp.RequestReceiptTimestamp.Time()
 	return nil
@@ -361,7 +363,8 @@ func (p *SPTP) handlePDelayRespFollowup(buf []byte, addr netip.Addr) error {
 		res = &pdelay.Result{}
 		p.pdm.Results[addr] = res
 	}
-	res.CorrectionFieldReq = resp.CorrectionField.Duration()
+	res.Responder = addr
+	res.CorrectionFieldResp = resp.CorrectionField.Duration()
 	res.T3 = resp.ResponseOriginTimestamp.Time()
 	return nil
 }

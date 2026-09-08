@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebook/time/ptp/pdelay"
 	ptp "github.com/facebook/time/ptp/protocol"
 	gmstats "github.com/facebook/time/ptp/sptp/stats"
 	"github.com/facebook/time/servo"
@@ -1106,4 +1107,57 @@ func TestHandlePDelayReqFollowUpSendError(t *testing.T) {
 	err = p.handlePDelayReq(mockEventConn, reqBytes, addr, rxts)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "sending Pdelay_Resp_Follow_Up")
+}
+
+func TestHandlePDelayRespCorrectionFieldsAreNotSwapped(t *testing.T) {
+	p := &SPTP{pdm: &PDelayResults{Results: map[netip.Addr]*pdelay.Result{}}}
+	addr := netip.MustParseAddr("2401:db00::1")
+	base := time.Unix(1700000000, 0)
+
+	req := ptp.ReqPDelay(ptp.ClockIdentity(2), 1, 42)
+	resp := ptp.RespPDelay(ptp.ClockIdentity(1), 1, ptp.NewTimestamp(base.Add(100*time.Microsecond)), req)
+	resp.CorrectionField = ptp.NewCorrection(float64(3 * time.Microsecond))
+	respBytes, err := ptp.Bytes(resp)
+	require.NoError(t, err)
+
+	followUp := ptp.RespFollowUpPDelay(ptp.ClockIdentity(1), 1, ptp.NewTimestamp(base.Add(200*time.Microsecond)), req)
+	followUp.CorrectionField = ptp.NewCorrection(float64(4 * time.Microsecond))
+	followUpBytes, err := ptp.Bytes(followUp)
+	require.NoError(t, err)
+
+	require.NoError(t, p.handlePDelayResp(respBytes, addr, base.Add(310*time.Microsecond)))
+	require.NoError(t, p.handlePDelayRespFollowup(followUpBytes, addr))
+
+	res := p.pdm.Results[addr]
+	res.T1 = base
+	require.Equal(t, 3*time.Microsecond, res.CorrectionFieldReq, "CF from Pdelay_Resp is the request path")
+	require.Equal(t, 4*time.Microsecond, res.CorrectionFieldResp, "CF from Follow_Up is the response path")
+	require.True(t, res.Valid())
+	require.Equal(t, addr, res.Responder)
+	require.False(t, res.Timestamp.IsZero())
+
+	// forward = (T2-T1)-CFReq = 97us, backward = (T4-T3)-CFResp = 106us
+	require.Equal(t, (97*time.Microsecond+106*time.Microsecond)/2, res.PathDelay())
+	require.Equal(t, (97*time.Microsecond-106*time.Microsecond)/2, res.Offset())
+}
+
+func TestHandlePDelayRespOneStep(t *testing.T) {
+	p := &SPTP{pdm: &PDelayResults{Results: map[netip.Addr]*pdelay.Result{}}}
+	addr := netip.MustParseAddr("2401:db00::1")
+	base := time.Unix(1700000000, 0)
+
+	req := ptp.ReqPDelay(ptp.ClockIdentity(2), 1, 7)
+	resp := ptp.RespPDelay(ptp.ClockIdentity(1), 1, ptp.NewTimestamp(base.Add(100*time.Microsecond)), req)
+	resp.FlagField = 0
+	respBytes, err := ptp.Bytes(resp)
+	require.NoError(t, err)
+
+	require.NoError(t, p.handlePDelayResp(respBytes, addr, base.Add(310*time.Microsecond)))
+
+	// T3 only ever comes from the follow-up. Synthesising it as T2 would make
+	// Valid() true while Offset() silently absorbs the responder turnaround.
+	res := p.pdm.Results[addr]
+	res.T1 = base
+	require.True(t, res.T3.IsZero())
+	require.False(t, res.Valid())
 }
