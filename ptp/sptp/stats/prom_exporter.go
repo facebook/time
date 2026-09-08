@@ -61,7 +61,7 @@ func (e *PrometheusExporter) Start() {
 }
 
 func (e *PrometheusExporter) scrapeMetrics() {
-	counters, err := FetchCounters(fmt.Sprintf("http://localhost:%d", e.sptpPort))
+	counters, err := FetchCounters(fmt.Sprintf("http://[::1]:%d", e.sptpPort))
 	if err != nil {
 		log.Fatalf("Failed to fetch sptp metrics :%v", err)
 	}
