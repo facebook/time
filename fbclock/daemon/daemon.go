@@ -220,31 +220,18 @@ func currentUTCOffsetS(leaps []leapsectz.LeapSecond, now time.Time) int32 {
 	return leaps[0].Nleap + utcOffsetOriginalS
 }
 
-// New creates new fbclock-daemon
-func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
-	// we need at least 1m of samples for aggregate values
-	effectiveRingSize := minRingSize(cfg.RingSize, cfg.Interval)
-	s := &Daemon{
-		stats: stats,
-		state: newDaemonState(effectiveRingSize),
-		cfg:   cfg,
-		l:     l,
-	}
-	if cfg.SPTP {
-		s.DataFetcher = &HTTPFetcher{}
-	} else {
-		s.DataFetcher = &SockFetcher{}
-	}
-
-	phcDevice, err := phc.IfaceToPHCDevice(cfg.Iface)
+// setupPHC opens the PHC device backing iface and installs the clock accessors
+// that read it. The device file stays open for the lifetime of the Daemon.
+func (s *Daemon) setupPHC(iface string) error {
+	phcDevice, err := phc.IfaceToPHCDevice(iface)
 	if err != nil {
-		return nil, fmt.Errorf("finding PHC device for %q: %w", cfg.Iface, err)
+		return fmt.Errorf("finding PHC device for %q: %w", iface, err)
 	}
 
 	// Keep file open for the lifetime of the fbclock
 	f, err := os.OpenFile(phcDevice, os.O_RDWR, 0)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	dev := phc.FromFile(f)
 
@@ -271,6 +258,28 @@ func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
 		return best.PHCTime, best.SysTime, best.Delay, nil
 	}
 	s.getPHCFreqPPB = func() (float64, error) { return dev.FreqPPB() }
+	return nil
+}
+
+// New creates new fbclock-daemon
+func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
+	// we need at least 1m of samples for aggregate values
+	effectiveRingSize := minRingSize(cfg.RingSize, cfg.Interval)
+	s := &Daemon{
+		stats: stats,
+		state: newDaemonState(effectiveRingSize),
+		cfg:   cfg,
+		l:     l,
+	}
+	if cfg.SPTP {
+		s.DataFetcher = &HTTPFetcher{}
+	} else {
+		s.DataFetcher = &SockFetcher{}
+	}
+
+	if err := s.setupPHC(cfg.Iface); err != nil {
+		return nil, err
+	}
 	// calculated values
 	s.stats.SetCounter("m_ns", 0)
 	s.stats.SetCounter("w_ns", 0)
