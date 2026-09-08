@@ -45,23 +45,26 @@ import (
 // Result represents the result of a peer delay measurement
 type Result struct {
 	// Responder is the target of the measurement (remote host)
-	Responder netip.Addr
+	Responder netip.Addr `json:"responder"`
 	// T1 is the Pdelay_Req departure time at requester
-	T1 time.Time
+	T1 time.Time `json:"t1"`
 	// T2 is the Pdelay_Req arrival time at responder
-	T2 time.Time
+	T2 time.Time `json:"t2"`
 	// T3 is the Pdelay_Resp departure time at responder
-	T3 time.Time
+	T3 time.Time `json:"t3"`
 	// T4 is the Pdelay_Resp arrival time at requester
-	T4 time.Time
+	T4 time.Time `json:"t4"`
 	// CorrectionFieldReq is the CF from PDelay_Resp (request path: requester→responder)
-	CorrectionFieldReq time.Duration
+	CorrectionFieldReq time.Duration `json:"cf_req"`
 	// CorrectionFieldResp is the CF from PDelay_Resp_Follow_Up (response path: responder→requester)
-	CorrectionFieldResp time.Duration
+	CorrectionFieldResp time.Duration `json:"cf_resp"`
 	// Timestamp is when this measurement was taken
-	Timestamp time.Time
+	Timestamp time.Time `json:"timestamp"`
+	// SWRTT is the software-measured round trip time. Unlike the hardware
+	// timestamps above it cannot be derived from T1..T4, and ptping reports it.
+	SWRTT time.Duration `json:"sw_rtt,omitzero"`
 	// Error contains any error that occurred during measurement
-	Error error
+	Error error `json:"-"`
 }
 
 // PathDelay calculates the mean path delay between requester and responder
