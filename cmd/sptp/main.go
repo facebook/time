@@ -34,7 +34,7 @@ func doWork(cfg *client.Config) error {
 	if err != nil {
 		return err
 	}
-	go stats.Start(cfg.MonitoringPort, cfg.MetricsAggregationWindow)
+	go stats.Start(cfg.MonitoringHost, cfg.MonitoringPort, cfg.MetricsAggregationWindow)
 	p, err := client.NewSPTP(cfg, *stats)
 	if err != nil {
 		return err
@@ -48,6 +48,7 @@ func main() {
 		verboseFlag        bool
 		ifaceFlag          string
 		monitoringPortFlag int
+		monitoringHostFlag string
 		intervalFlag       time.Duration
 		dscpFlag           int
 		configFlag         string
@@ -59,6 +60,7 @@ func main() {
 	flag.StringVar(&ifaceFlag, "iface", defaults.Iface, "network interface to use")
 	flag.StringVar(&configFlag, "config", "", "path to the config")
 	flag.IntVar(&monitoringPortFlag, "monitoringport", defaults.MonitoringPort, "port to start monitoring http server on")
+	flag.StringVar(&monitoringHostFlag, "monitoringhost", defaults.MonitoringHost, "host to bind the monitoring http server to")
 	flag.IntVar(&dscpFlag, "dscp", defaults.DSCP, "DSCP for PTP packets, valid values are between 0-63 (used by send workers)")
 	flag.DurationVar(&intervalFlag, "interval", defaults.Interval, "how often to send DelayReq to each GM")
 	flag.StringVar(&pprofFlag, "pprof", "", "Address to have the profiler listen on, disabled if empty.")
@@ -73,7 +75,7 @@ func main() {
 	if verboseFlag {
 		log.SetLevel(log.DebugLevel)
 	}
-	cfg, err := client.PrepareConfig(configFlag, flag.Args(), ifaceFlag, monitoringPortFlag, intervalFlag, dscpFlag, setFlags)
+	cfg, err := client.PrepareConfig(configFlag, flag.Args(), ifaceFlag, monitoringHostFlag, monitoringPortFlag, intervalFlag, dscpFlag, setFlags)
 	if err != nil {
 		log.Fatal(err)
 	}

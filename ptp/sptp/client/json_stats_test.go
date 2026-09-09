@@ -48,7 +48,7 @@ func TestJSONStats(t *testing.T) {
 	port, err := getFreePort()
 	require.Nil(t, err, "Failed to allocate port")
 	url := fmt.Sprintf("http://localhost:%d", port)
-	go stats.Start(port, time.Second)
+	go stats.Start("::1", port, time.Second)
 	time.Sleep(time.Second)
 
 	stats.SetTickDuration(time.Millisecond)
@@ -94,7 +94,7 @@ func TestHeaders(t *testing.T) {
 	port, err := getFreePort()
 	require.Nil(t, err, "Failed to allocate port")
 	url := fmt.Sprintf("http://localhost:%d", port)
-	go stats.Start(port, time.Second)
+	go stats.Start("::1", port, time.Second)
 	time.Sleep(time.Second)
 
 	c := http.Client{
@@ -106,4 +106,33 @@ func TestHeaders(t *testing.T) {
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Equal(t, applicationJSON, resp.Header.Get(contentType))
+}
+
+// only loopback literals may bind the monitoring server; everything else,
+
+// the default keeps the server on-box; an empty host must not fall through to
+// net.JoinHostPort's wildcard bind
+func TestStartHostDefaulting(t *testing.T) {
+	require.Equal(t, "::1", DefaultConfig().MonitoringHost)
+
+	for _, host := range []string{"", "::1"} {
+		port, err := getFreePort()
+		require.NoError(t, err)
+		stats, err := NewJSONStats()
+		require.NoError(t, err)
+		go stats.Start(host, port, time.Minute)
+
+		c := http.Client{Timeout: time.Second}
+		require.Eventually(t, func() bool {
+			resp, err := c.Get(fmt.Sprintf("http://[::1]:%d/", port))
+			if err != nil {
+				return false
+			}
+			resp.Body.Close()
+			return true
+		}, 5*time.Second, 10*time.Millisecond, "host %q must serve ::1", host)
+
+		_, err = c.Get(fmt.Sprintf("http://127.0.0.1:%d/", port))
+		require.Error(t, err, "host %q must not bind the wildcard", host)
+	}
 }

@@ -17,9 +17,11 @@ limitations under the License.
 package client
 
 import (
+	"cmp"
 	"encoding/json"
-	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -42,7 +44,7 @@ func NewJSONStats() (*JSONStats, error) {
 }
 
 // Start runs http server and initializes maps
-func (s JSONStats) Start(monitoringport int, interval time.Duration) {
+func (s JSONStats) Start(monitoringhost string, monitoringport int, interval time.Duration) {
 	// collect stats forever
 	go func() {
 		for range time.Tick(interval) {
@@ -54,7 +56,7 @@ func (s JSONStats) Start(monitoringport int, interval time.Duration) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleRootRequest)
 	mux.HandleFunc("/counters", s.handleCountersRequest)
-	addr := fmt.Sprintf(":%d", monitoringport)
+	addr := net.JoinHostPort(cmp.Or(monitoringhost, DefaultConfig().MonitoringHost), strconv.Itoa(monitoringport))
 	log.Infof("Starting http json server on %s", addr)
 	server := &http.Server{
 		Addr:         addr,

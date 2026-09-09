@@ -39,6 +39,7 @@ func TestReadConfigDefaults(t *testing.T) {
 	want := &Config{
 		Iface:                    "eth0",
 		MonitoringPort:           4269,
+		MonitoringHost:           "::1",
 		Interval:                 time.Second,
 		ExchangeTimeout:          100 * time.Millisecond,
 		MetricsAggregationWindow: time.Duration(60) * time.Second,
@@ -97,6 +98,7 @@ asymmetry:
 		Iface:                    "eth0",
 		Timestamping:             timestamp.HW,
 		MonitoringPort:           4269,
+		MonitoringHost:           "::1",
 		Interval:                 time.Second,
 		ExchangeTimeout:          200 * time.Millisecond,
 		DSCP:                     35,
@@ -455,6 +457,7 @@ func TestConfigValidate(t *testing.T) {
 					"192.168.0.10": 0,
 				},
 				MonitoringPort: -10,
+				MonitoringHost: "::1",
 			},
 			wantErr: true,
 		},
@@ -695,12 +698,13 @@ asymmetry:
 		"interval":       true,
 		"dscp":           true,
 	}
-	cfg, err := PrepareConfig(f.Name(), nil, "eth1", 3456, 2*time.Second, 42, setFlags)
+	cfg, err := PrepareConfig(f.Name(), nil, "eth1", "::1", 3456, 2*time.Second, 42, setFlags)
 	require.NoError(t, err)
 	want := &Config{
 		Iface:                    "eth1",
 		Timestamping:             timestamp.HW,
 		MonitoringPort:           3456,
+		MonitoringHost:           "::1",
 		Interval:                 2 * time.Second,
 		ExchangeTimeout:          200 * time.Millisecond,
 		DSCP:                     42,
@@ -741,12 +745,13 @@ func TestPrepareConfigDefaults(t *testing.T) {
 		"interval":       true,
 		"dscp":           true,
 	}
-	cfg, err := PrepareConfig("", []string{"192.168.0.10"}, "eth1", 3456, 2*time.Second, 42, setFlags)
+	cfg, err := PrepareConfig("", []string{"192.168.0.10"}, "eth1", "::1", 3456, 2*time.Second, 42, setFlags)
 	require.NoError(t, err)
 	want := &Config{
 		Iface:                    "eth1",
 		Timestamping:             timestamp.HW,
 		MonitoringPort:           3456,
+		MonitoringHost:           "::1",
 		Interval:                 2 * time.Second,
 		ExchangeTimeout:          100 * time.Millisecond,
 		DSCP:                     42,
@@ -809,12 +814,13 @@ asymmetry:
 `))
 	require.NoError(t, err)
 	defaults := DefaultConfig()
-	cfg, err := PrepareConfig(f.Name(), nil, defaults.Iface, defaults.MonitoringPort, defaults.Interval, defaults.DSCP, map[string]bool{})
+	cfg, err := PrepareConfig(f.Name(), nil, defaults.Iface, defaults.MonitoringHost, defaults.MonitoringPort, defaults.Interval, defaults.DSCP, map[string]bool{})
 	require.NoError(t, err)
 	want := &Config{
 		Iface:                    "eth1",
 		Timestamping:             timestamp.HW,
 		MonitoringPort:           8000,
+		MonitoringHost:           "::1",
 		Interval:                 2 * time.Second,
 		ExchangeTimeout:          200 * time.Millisecond,
 		DSCP:                     35,

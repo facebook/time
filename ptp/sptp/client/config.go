@@ -118,6 +118,7 @@ type Config struct {
 	Iface                    string
 	Timestamping             timestamp.Timestamp
 	MonitoringPort           int
+	MonitoringHost           string
 	Interval                 time.Duration
 	ExchangeTimeout          time.Duration
 	DSCP                     int
@@ -143,6 +144,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		Iface:                    "eth0",
 		MonitoringPort:           4269,
+		MonitoringHost:           "::1",
 		Interval:                 time.Second,
 		DSCP:                     0,
 		ExchangeTimeout:          100 * time.Millisecond,
@@ -255,7 +257,7 @@ func addrToIPstr(address string) string {
 }
 
 // PrepareConfig prepares final version of config based on defaults, CLI flags and on-disk config, and validates resulting config
-func PrepareConfig(cfgPath string, targets []string, iface string, monitoringPort int, interval time.Duration, dscp int, setFlags map[string]bool) (*Config, error) {
+func PrepareConfig(cfgPath string, targets []string, iface string, monitoringHost string, monitoringPort int, interval time.Duration, dscp int, setFlags map[string]bool) (*Config, error) {
 	cfg := DefaultConfig()
 	var err error
 	warn := func(name string) {
@@ -289,6 +291,10 @@ func PrepareConfig(cfgPath string, targets []string, iface string, monitoringPor
 	if setFlags["monitoringport"] {
 		warn("monitoringPort")
 		cfg.MonitoringPort = monitoringPort
+	}
+	if setFlags["monitoringhost"] {
+		warn("monitoringHost")
+		cfg.MonitoringHost = monitoringHost
 	}
 	if setFlags["interval"] {
 		warn("interval")
