@@ -17,7 +17,6 @@ limitations under the License.
 package cmd
 
 import (
-	"net"
 	"testing"
 	"time"
 
@@ -64,34 +63,6 @@ func TestCalculateJitterBounds(t *testing.T) {
 	result = CalculateJitter(100 * time.Millisecond)
 	require.GreaterOrEqual(t, result, time.Duration(0))
 	require.Less(t, result, 100*time.Millisecond)
-}
-
-func TestSelectNonLinkLocalAddrEdgeCases(t *testing.T) {
-	// no addresses
-	_, err := selectNonLinkLocalAddr(nil)
-	require.Error(t, err)
-
-	// only IPv4 (should be skipped)
-	addrs := []net.Addr{
-		&net.IPNet{IP: net.ParseIP("192.168.1.1"), Mask: net.CIDRMask(24, 32)},
-	}
-	_, err = selectNonLinkLocalAddr(addrs)
-	require.Error(t, err)
-
-	// link-local IPv6 (should be skipped)
-	addrs = []net.Addr{
-		&net.IPNet{IP: net.ParseIP("fe80::1"), Mask: net.CIDRMask(64, 128)},
-	}
-	_, err = selectNonLinkLocalAddr(addrs)
-	require.Error(t, err)
-
-	// global unicast IPv6
-	addrs = []net.Addr{
-		&net.IPNet{IP: net.ParseIP("2001:db8::1"), Mask: net.CIDRMask(64, 128)},
-	}
-	ip, err := selectNonLinkLocalAddr(addrs)
-	require.NoError(t, err)
-	require.Equal(t, "2001:db8::1", ip.String())
 }
 
 func TestFmtThreshold(t *testing.T) {

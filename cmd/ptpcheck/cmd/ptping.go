@@ -20,34 +20,27 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/rand"
-	"net"
 	"net/netip"
 	"time"
 
-	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/cmd/ptpcheck/checker"
+	"github.com/facebook/time/ptp/pdelay"
 	"github.com/facebook/time/ptp/sptp/client"
-	"github.com/facebook/time/timestamp"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
 // flags
 var (
-	ifacef     string
-	countf     int
-	dscpf      int
-	timeoutf   time.Duration
-	listenAddr string
+	countf   int
+	timeoutf time.Duration
 )
 
 func init() {
 	RootCmd.AddCommand(ptpingCmd)
-	ptpingCmd.Flags().StringVarP(&ifacef, "iface", "i", "eth0", "network interface to use")
-	ptpingCmd.Flags().StringVarP(&listenAddr, "listenaddr", "l", "::", "IP address to use")
+	ptpingCmd.Flags().StringVarP(&rootClientFlag, "client", "C", "", sptpClientFlagDesc)
 	ptpingCmd.Flags().IntVarP(&countf, "count", "c", 5, "number of probes to send")
-	ptpingCmd.Flags().IntVarP(&dscpf, "dscp", "d", 35, "dscp value (QoS)")
-	ptpingCmd.Flags().DurationVarP(&timeoutf, "timeout", "t", time.Second, "request timeout/interval")
+	ptpingCmd.Flags().DurationVarP(&timeoutf, "timeout", "t", DefaultPingTimeout, "request timeout")
 }
 
 type timestamps struct {
@@ -55,96 +48,6 @@ type timestamps struct {
 	t2 time.Time
 	t3 time.Time
 	t4 time.Time
-	ts time.Time // software timestamp SYNC message received
-}
-
-func (t *timestamps) reset() {
-	t.t1 = time.Time{}
-	t.t2 = time.Time{}
-	t.t3 = time.Time{}
-	t.t4 = time.Time{}
-	t.ts = time.Time{}
-}
-
-type ptping struct {
-	iface  string
-	dscp   int
-	target netip.Addr
-
-	clockID   ptp.ClockIdentity
-	eventConn client.UDPConnWithTS
-	client    *client.Client
-	ts        timestamps
-}
-
-func (p *ptping) init() error {
-	iface, err := net.InterfaceByName(p.iface)
-	if err != nil {
-		return err
-	}
-
-	cid, err := ptp.NewClockIdentity(iface.HardwareAddr)
-	if err != nil {
-		return err
-	}
-	p.clockID = cid
-
-	p.eventConn, err = client.NewUDPConnTS(net.ParseIP(listenAddr), 0, timestamp.HW, iface, p.dscp)
-	if err != nil {
-		return err
-	}
-	timestamp.AttemptsTXTS = 5
-	timestamp.TimeoutTXTS = 100 * time.Millisecond
-	p.client, err = client.NewClient(p.target, ptp.PortEvent, p.clockID, p.eventConn, &client.Config{}, &client.JSONStats{})
-	go func() {
-		err := p.runReader()
-		log.Error(err)
-	}()
-
-	return err
-}
-
-// timestamps fills timestamps
-func (p *ptping) timestamps(timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	<-ctx.Done()
-	if p.ts.t4.IsZero() {
-		return fmt.Errorf("timeout waiting")
-	}
-	return nil
-}
-
-func (p *ptping) runReader() error {
-	sync := &ptp.SyncDelayReq{}
-	buf := make([]byte, timestamp.PayloadSizeBytes)
-	oob := make([]byte, timestamp.ControlSizeBytes)
-	for {
-		bbuf, _, rxts, _ := p.eventConn.ReadPacketWithRXTimestampBuf(buf, oob)
-		msgType, err := ptp.ProbeMsgType(buf[:bbuf])
-		if err != nil {
-			return fmt.Errorf("can't read a message type")
-		}
-
-		switch msgType {
-		case ptp.MessageSync, ptp.MessageDelayReq:
-			p.ts.t2 = rxts
-			p.ts.ts = time.Now()
-			if err = ptp.FromBytes(buf[:bbuf], sync); err != nil {
-				return fmt.Errorf("reading sync msg: %w", err)
-			}
-			p.ts.t4 = sync.OriginTimestamp.Time()
-		case ptp.MessageAnnounce:
-			announce := &ptp.Announce{}
-			if err = ptp.FromBytes(buf[:bbuf], announce); err != nil {
-				return fmt.Errorf("reading announce msg: %w", err)
-			}
-			p.ts.t1 = announce.OriginTimestamp.Time()
-		default:
-			log.Infof("got unsupported packet %v:", msgType)
-		}
-	}
 }
 
 func ptpingOutput(count int, server string, totalRTT time.Duration, ts timestamps) {
@@ -162,41 +65,87 @@ func ptpingOutput(count int, server string, totalRTT time.Duration, ts timestamp
 	}
 }
 
-func ptpingRun(iface string, dscp int, server string, count int, timeout time.Duration) error {
-	var err error
-	p := &ptping{
-		iface: iface,
-		dscp:  dscp,
+// resultToTimestamps maps the canonical T1..T4 of a ping onto ptping's view, where
+// t3/t4 is the outbound leg and t1/t2 the return leg.
+func resultToTimestamps(r *pdelay.Result) timestamps {
+	return timestamps{
+		t3: r.T1,
+		t4: r.T2,
+		t1: r.T3,
+		t2: r.T4,
 	}
+}
 
-	p.target, err = client.LookupNetIP(server)
+func ptpingRun(ctx context.Context, sptpAddress string, server string, count int, timeout time.Duration) error {
+	if count <= 0 {
+		return nil
+	}
+	if err := checkPingTimeout(timeout); err != nil {
+		return err
+	}
+	// resolve here so the probe and the printed label name the same host
+	target, err := client.LookupNetIP(server)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolving %s: %w", server, err)
 	}
+	address := checker.GetServerAddress(sptpAddress, checker.FlavourSPTP)
 
-	if err = p.init(); err != nil {
-		return err
-	}
-	// We want to avoid first 10 which may be used by other tools.
-	// Intn(65524) will generate a random number between 0 and 65524
-	portID := uint16(rand.Intn(65524) + 11)
-
+	var succeeded int
 	for c := 1; c <= count; c++ {
-		p.ts.reset()
-		start := time.Now()
-		_, p.ts.t3, err = p.client.SendDelayReq(client.ReqDelay(p.clockID, portID))
-
+		if err := ctx.Err(); err != nil {
+			if succeeded > 0 {
+				return nil
+			}
+			return err
+		}
+		wire, err := pdelay.FetchPing(ctx, address, target.String(), timeout)
 		if err != nil {
+			if ctx.Err() != nil && succeeded > 0 {
+				return nil
+			}
 			log.Errorf("failed to send request: %s", err)
 			continue
 		}
-
-		if err = p.timestamps(timeout); err != nil {
-			log.Errorf("failed to read sync response: %v", err)
+		res := pickResponder(wire, target)
+		if res == nil {
+			log.Errorf("failed to read sync response: no result for %s", target)
 			continue
 		}
-		totalRTT := p.ts.ts.Sub(start)
-		ptpingOutput(c, server, totalRTT, p.ts)
+		if res.Error != nil {
+			log.Errorf("failed to read sync response: %v", res.Error)
+			continue
+		}
+		// zero timestamps would render as bogus fw/bk values
+		if !res.Valid() {
+			log.Errorf("incomplete response from %s", target)
+			continue
+		}
+		// SWRTT is the only round trip source here, so a zero means missing data
+		if res.SWRTT <= 0 {
+			log.Errorf("no round trip time in response from %s", target)
+			continue
+		}
+		succeeded++
+		ptpingOutput(c, server, res.SWRTT, resultToTimestamps(res))
+	}
+	if succeeded == 0 {
+		return fmt.Errorf("no successful probes to %s out of %d", server, count)
+	}
+	return nil
+}
+
+// pickResponder returns the result belonging to target. Canonical forms are
+// compared: LookupNetIP can return ::ffff:a.b.c.d while sptp Unmap()s.
+func pickResponder(wire pdelay.Results, target netip.Addr) *pdelay.Result {
+	want := target.Unmap().WithZone("")
+	for _, r := range wire {
+		if r.Responder.Unmap().WithZone("") == want {
+			return r
+		}
+	}
+	// a lone result with no responder is still ours: we named the target
+	if len(wire) == 1 && !wire[0].Responder.IsValid() {
+		return wire[0]
 	}
 	return nil
 }
@@ -207,10 +156,10 @@ var ptpingCmd = &cobra.Command{
 	Long:       "measure real network latency between 2 sptp-enabled hosts",
 	Args:       cobra.ExactArgs(1),
 	ArgAliases: []string{"server"},
-	Run: func(_ *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, args []string) {
 		ConfigureVerbosity()
 
-		if err := ptpingRun(ifacef, dscpf, args[0], countf, timeoutf); err != nil {
+		if err := ptpingRun(cmd.Context(), rootClientFlag, args[0], countf, timeoutf); err != nil {
 			log.Fatal(err)
 		}
 	},
