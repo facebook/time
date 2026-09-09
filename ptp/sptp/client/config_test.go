@@ -853,3 +853,13 @@ asymmetry:
 	}
 	require.Equal(t, want, cfg)
 }
+
+func TestPrepareConfigMonitoringHostFlag(t *testing.T) {
+	defaults := DefaultConfig()
+	require.Equal(t, "::1", defaults.MonitoringHost, "loopback by default")
+
+	cfg, err := PrepareConfig("", []string{"192.168.0.10"}, "eth0", "::", 4269,
+		time.Second, 35, map[string]bool{"monitoringhost": true})
+	require.NoError(t, err)
+	require.Equal(t, "::", cfg.MonitoringHost, "the flag must override the default")
+}

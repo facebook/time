@@ -43,6 +43,9 @@ type StatsServer interface {
 	SetGMStats(stat *gmstats.Stat)
 	CollectSysStats()
 	IncPortChangeCount(AsymmetricTotal int)
+	IncPingRequests()
+	IncPingRejected()
+	IncPingErrors()
 }
 
 // Stats is an implementation of
@@ -72,6 +75,9 @@ type clientStats struct {
 	unsupported     atomic.Int64
 	servoState      atomic.Int64
 	portChangeCount atomic.Int64
+	pingRequests    atomic.Int64
+	pingRejected    atomic.Int64
+	pingErrors      atomic.Int64
 }
 
 // sysStats is just a grouping, don't use directly
@@ -150,6 +156,21 @@ func (s *Stats) IncPortChangeCount(count int) {
 	s.portChangeCount.Add(int64(count))
 }
 
+// IncPingRequests counts /ping requests that completed a probe
+func (s *Stats) IncPingRequests() {
+	s.pingRequests.Add(1)
+}
+
+// IncPingRejected counts /ping requests refused before any packet was sent
+func (s *Stats) IncPingRejected() {
+	s.pingRejected.Add(1)
+}
+
+// IncPingErrors counts /ping requests that failed while probing
+func (s *Stats) IncPingErrors() {
+	s.pingErrors.Add(1)
+}
+
 // GetCounters returns an map of counters
 func (s *Stats) GetCounters() map[string]int64 {
 	s.Lock()
@@ -167,6 +188,9 @@ func (s *Stats) GetCounters() map[string]int64 {
 		"ptp.sptp.portstats.rx.unsupported": s.unsupported.Load(),
 		"ptp.sptp.servo.state":              s.servoState.Load(),
 		"ptp.sptp.port_change_count":        s.portChangeCount.Load(),
+		"ptp.sptp.ping.requests":            s.pingRequests.Load(),
+		"ptp.sptp.ping.rejected":            s.pingRejected.Load(),
+		"ptp.sptp.ping.errors":              s.pingErrors.Load(),
 		// sysStats
 		"ptp.sptp.runtime.gc.pause_ns.sum.60":    s.gcPauseNs,
 		"ptp.sptp.runtime.mem.gc.pause_total_ns": s.gcPauseTotalNs,

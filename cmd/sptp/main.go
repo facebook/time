@@ -34,11 +34,11 @@ func doWork(cfg *client.Config) error {
 	if err != nil {
 		return err
 	}
-	go stats.Start(cfg.MonitoringHost, cfg.MonitoringPort, cfg.MetricsAggregationWindow)
 	p, err := client.NewSPTP(cfg, *stats)
 	if err != nil {
 		return err
 	}
+	go stats.Start(cfg.MonitoringHost, cfg.MonitoringPort, cfg.MetricsAggregationWindow, p)
 	ctx := context.Background()
 	return p.Run(ctx)
 }

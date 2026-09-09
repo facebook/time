@@ -141,6 +141,42 @@ func (m *MockStatsServer) IncUnsupported() {
 	m.ctrl.Call(m, "IncUnsupported")
 }
 
+// IncPingRequests mocks base method.
+func (m *MockStatsServer) IncPingRequests() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "IncPingRequests")
+}
+
+// IncPingRequests indicates an expected call of IncPingRequests.
+func (mr *MockStatsServerMockRecorder) IncPingRequests() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncPingRequests", reflect.TypeOf((*MockStatsServer)(nil).IncPingRequests))
+}
+
+// IncPingRejected mocks base method.
+func (m *MockStatsServer) IncPingRejected() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "IncPingRejected")
+}
+
+// IncPingRejected indicates an expected call of IncPingRejected.
+func (mr *MockStatsServerMockRecorder) IncPingRejected() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncPingRejected", reflect.TypeOf((*MockStatsServer)(nil).IncPingRejected))
+}
+
+// IncPingErrors mocks base method.
+func (m *MockStatsServer) IncPingErrors() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "IncPingErrors")
+}
+
+// IncPingErrors indicates an expected call of IncPingErrors.
+func (mr *MockStatsServerMockRecorder) IncPingErrors() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncPingErrors", reflect.TypeOf((*MockStatsServer)(nil).IncPingErrors))
+}
+
 // IncUnsupported indicates an expected call of IncUnsupported.
 func (mr *MockStatsServerMockRecorder) IncUnsupported() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
