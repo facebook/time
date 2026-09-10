@@ -194,10 +194,10 @@ func runMulticastProbe(ctx context.Context, cfg ProbeConfig) ([]*pdelay.Result, 
 			result.Error = errors.New("incomplete response")
 		}
 		if result.Error != nil {
-			fmt.Printf("%s: %v\n", result.Responder, result.Error)
+			fmt.Printf("%s (%s): %v\n", result.Responder, result.ResponderMAC, result.Error)
 			continue
 		}
-		fmt.Printf("%s: offset=%s path_delay=%s\n", result.Responder, result.Offset(), result.PathDelay())
+		fmt.Printf("%s (%s): offset=%s path_delay=%s\n", result.Responder, result.ResponderMAC, result.Offset(), result.PathDelay())
 	}
 	return results, nil
 }

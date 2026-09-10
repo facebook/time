@@ -891,3 +891,15 @@ func TestCollectPingReplyUnconfiguredGMCompletes(t *testing.T) {
 		t.Fatal("exchange must complete")
 	}
 }
+
+// the EUI-64 link-local has no DNS, so the MAC from ClockIdentity is what
+// identifies the responder
+func TestCollectPDelayRespRecordsResponderMAC(t *testing.T) {
+	req := newTestPingRequest(t, 42, pingPeer)
+	resp := &ptp.PDelayResp{}
+	resp.SourcePortIdentity.ClockIdentity = ptp.ClockIdentity(0xc470bdfffe857d36)
+	resp.RequestingPortIdentity = req.requester
+
+	req.collectPDelayResp(resp, pingPeer, time.Unix(1700000000, 0))
+	require.Equal(t, "c4:70:bd:85:7d:36", req.results[pingPeer].ResponderMAC)
+}

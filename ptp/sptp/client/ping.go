@@ -368,6 +368,7 @@ func (r *pingRequest) collectPDelayResp(resp *ptp.PDelayResp, addr netip.Addr, r
 	r.Lock()
 	defer r.Unlock()
 	res := r.result(addr)
+	res.ResponderMAC = resp.SourcePortIdentity.ClockIdentity.MAC().String()
 	res.CorrectionFieldReq = resp.CorrectionField.Duration()
 	res.T2 = resp.RequestReceiptTimestamp.Time()
 	res.T4 = rxts
