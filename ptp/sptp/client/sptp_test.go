@@ -1107,3 +1107,25 @@ func TestHandlePDelayReqFollowUpSendError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "sending Pdelay_Resp_Follow_Up")
 }
+
+// a peer replies to the port we probed from, so a Pdelay_Resp_Follow_Up arrives on
+// the event port. Parsing it as a DELAY_REQ reads its RequestingPortIdentity as a
+// TLV header and drops the response, losing T3.
+func TestPtpingRejectsPDelayRespFollowUp(t *testing.T) {
+	followUp := ptp.RespFollowUpPDelay(ptp.ClockIdentity(0xc470bdfffe857d36), 1,
+		ptp.NewTimestamp(time.Unix(1700000000, 0)), &ptp.PDelayReq{})
+	b, err := ptp.Bytes(followUp)
+	require.NoError(t, err)
+
+	msgType, err := ptp.ProbeMsgType(b)
+	require.NoError(t, err)
+	require.Equal(t, ptp.MessagePDelayRespFollowUp, msgType,
+		"the listener must dispatch on this type instead of falling through to ptping")
+
+	peer := netip.MustParseAddr("fe80::c670:bdff:fe85:7d36")
+	p := &SPTP{cfg: &Config{Iface: "lo"}}
+	require.ErrorContains(t, p.ptping(peer, ptp.PortEvent, b, time.Time{}), "not yet implemented")
+
+	// the dispatched handler records T3 instead
+	require.NoError(t, p.handlePDelayRespFollowup(b, peer))
+}

@@ -459,24 +459,27 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					ip := timestamp.SockaddrToAddr(addr)
 					log.Debugf("[%s] received packet on port 319, n = %v", ip, bbuf)
 
-					// Probe message type first
 					msgType, err := ptp.ProbeMsgType(buf[:bbuf])
 					if err != nil {
 						log.Warningf("probing message type: %v", err)
 						continue
 					}
 
-					// Handle Pdelay_Req messages for in-rack linearizability checks
-					if msgType == ptp.MessagePDelayReq {
+					// a peer replies to the port we probed from, so the follow-up lands here too
+					switch msgType {
+					case ptp.MessagePDelayReq:
 						if err := p.handlePDelayReq(econn, buf[:bbuf], addr, rxtx); err != nil {
 							log.Warningf("[%s] handling Pdelay_Req: %v", ip, err)
 						}
 						continue
-					}
-
-					if msgType == ptp.MessagePDelayResp {
+					case ptp.MessagePDelayResp:
 						if err := p.handlePDelayResp(buf[:bbuf], ip, rxtx); err != nil {
 							log.Warningf("[%s] handling Pdelay_Resp: %v", ip, err)
+						}
+						continue
+					case ptp.MessagePDelayRespFollowUp:
+						if err := p.handlePDelayRespFollowup(buf[:bbuf], ip); err != nil {
+							log.Warningf("[%s] handling Pdelay_Resp_FollowUp: %v", ip, err)
 						}
 						continue
 					}
