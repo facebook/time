@@ -60,15 +60,35 @@ type testConfig struct {
 
 type ntsClient interface {
 	handshake(context.Context, testConfig) (*ntske.HandshakeResult, error)
-	exchange(context.Context, testConfig, string, *ntske.HandshakeResult, []byte) ([][]byte, error)
+	newExchangeSession(context.Context, testConfig, string) (exchangeSession, error)
+}
+
+type exchangeSession interface {
+	exchange(context.Context, time.Time, *ntske.HandshakeResult, []byte) ([][]byte, error)
+	close()
 }
 
 type realNTSClient struct{}
+
+type udpExchangeSession struct {
+	conn        net.Conn
+	receiveBuf  []byte
+	printResult bool
+}
 
 type workerSession struct {
 	handshake *ntske.HandshakeResult
 	ntpAddr   string
 	cookies   [][]byte
+	exchange  exchangeSession
+}
+
+func (s *workerSession) close() {
+	if s.exchange == nil {
+		return
+	}
+	s.exchange.close()
+	s.exchange = nil
 }
 
 func main() {
@@ -149,8 +169,10 @@ func runLoad(parent context.Context, cfg testConfig, client ntsClient) (int, err
 
 	deadlineCtx := parent
 	cancelDeadline := func() {}
+	var loadDeadline time.Time
 	if cfg.duration > 0 {
-		deadlineCtx, cancelDeadline = context.WithTimeoutCause(parent, cfg.duration, errLoadDurationExpired)
+		loadDeadline = time.Now().Add(cfg.duration)
+		deadlineCtx, cancelDeadline = context.WithDeadlineCause(parent, loadDeadline, errLoadDurationExpired)
 	}
 	defer cancelDeadline()
 	ctx, cancel := context.WithCancel(deadlineCtx)
@@ -173,7 +195,7 @@ func runLoad(parent context.Context, cfg testConfig, client ntsClient) (int, err
 	for workerID := range workers {
 		wg.Go(func() {
 			err := runWorker(ctx, cfg, client, &nextRequest, &completed)
-			if err != nil && !isOverallDeadlineCancellation(ctx, err) {
+			if err != nil && !isOverallDeadlineCancellation(loadDeadline, err) {
 				reportError(fmt.Errorf("worker %d: %w", workerID, err))
 			}
 		})
@@ -189,7 +211,7 @@ func runLoad(parent context.Context, cfg testConfig, client ntsClient) (int, err
 		return count, err
 	default:
 	}
-	if errors.Is(context.Cause(ctx), errLoadDurationExpired) {
+	if loadWindowClosed(loadDeadline) {
 		return count, fmt.Errorf(
 			"completed %d of %d exchanges before duration %s expired",
 			count,
@@ -223,6 +245,7 @@ func runWorker(
 	if err != nil {
 		return fmt.Errorf("initialization: %w", err)
 	}
+	defer session.close()
 	for {
 		requestID, ok := claimRequest(ctx, cfg.requests, nextRequest)
 		if !ok {
@@ -243,13 +266,20 @@ func claimRequest(ctx context.Context, requests int, nextRequest *atomic.Int64) 
 	return requestID, requestID < requests
 }
 
-func isOverallDeadlineCancellation(ctx context.Context, err error) bool {
-	return errors.Is(context.Cause(ctx), errLoadDurationExpired) &&
-		(errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded))
+func loadWindowClosed(loadDeadline time.Time) bool {
+	return !loadDeadline.IsZero() && !time.Now().Before(loadDeadline)
+}
+
+func isOverallDeadlineCancellation(loadDeadline time.Time, err error) bool {
+	return loadWindowClosed(loadDeadline) &&
+		(errors.Is(err, context.Canceled) ||
+			errors.Is(err, context.DeadlineExceeded) ||
+			errors.Is(err, os.ErrDeadlineExceeded))
 }
 
 func runSessionExchange(ctx context.Context, cfg testConfig, client ntsClient, session *workerSession) error {
 	if len(session.cookies) == 0 {
+		session.close()
 		newSession, err := initializeSession(ctx, cfg, client)
 		if err != nil {
 			return err
@@ -259,8 +289,9 @@ func runSessionExchange(ctx context.Context, cfg testConfig, client ntsClient, s
 
 	cookie := session.cookies[0]
 	session.cookies = session.cookies[1:]
-	freshCookies, err := performNTPExchange(ctx, cfg, client, session.ntpAddr, session.handshake, cookie)
+	freshCookies, err := performNTPExchange(ctx, cfg, session.exchange, session.handshake, cookie)
 	if err != nil {
+		session.close()
 		return fmt.Errorf("NTPv4 exchange: %w", err)
 	}
 	session.cookies = append(session.cookies, freshCookies...)
@@ -283,7 +314,12 @@ func runFreshExchange(ctx context.Context, cfg testConfig, client ntsClient) err
 	if err != nil {
 		return err
 	}
-	freshCookies, err := performNTPExchange(ctx, cfg, client, ntpAddr, res, res.Cookies[0])
+	exchange, err := client.newExchangeSession(ctx, cfg, ntpAddr)
+	if err != nil {
+		return fmt.Errorf("opening NTPv4 exchange session: %w", err)
+	}
+	defer exchange.close()
+	freshCookies, err := performNTPExchange(ctx, cfg, exchange, res, res.Cookies[0])
 	if err != nil {
 		return fmt.Errorf("NTPv4 exchange: %w", err)
 	}
@@ -306,10 +342,15 @@ func initializeSession(ctx context.Context, cfg testConfig, client ntsClient) (*
 	if err != nil {
 		return nil, err
 	}
+	exchange, err := client.newExchangeSession(ctx, cfg, ntpAddr)
+	if err != nil {
+		return nil, fmt.Errorf("opening NTPv4 exchange session: %w", err)
+	}
 	return &workerSession{
 		handshake: res,
 		ntpAddr:   ntpAddr,
 		cookies:   res.Cookies,
+		exchange:  exchange,
 	}, nil
 }
 
@@ -322,14 +363,22 @@ func performHandshake(ctx context.Context, cfg testConfig, client ntsClient) (*n
 func performNTPExchange(
 	ctx context.Context,
 	cfg testConfig,
-	client ntsClient,
-	ntpAddr string,
+	session exchangeSession,
 	res *ntske.HandshakeResult,
 	cookie []byte,
 ) ([][]byte, error) {
-	operationCtx, cancel := context.WithTimeout(ctx, cfg.timeout)
-	defer cancel()
-	return client.exchange(operationCtx, cfg, ntpAddr, res, cookie)
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("no time left before NTP exchange: %w", err)
+	}
+	return session.exchange(ctx, exchangeDeadline(ctx, cfg.timeout, time.Now()), res, cookie)
+}
+
+func exchangeDeadline(ctx context.Context, timeout time.Duration, now time.Time) time.Time {
+	deadline := now.Add(timeout)
+	if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
+		return contextDeadline
+	}
+	return deadline
 }
 
 func (realNTSClient) handshake(ctx context.Context, cfg testConfig) (*ntske.HandshakeResult, error) {
@@ -366,20 +415,43 @@ func resolveNTPAddr(keAddr, ntpAddr string, res *ntske.HandshakeResult) (string,
 	return ntpAddr, nil
 }
 
-// exchange sends one NTS-protected NTPv4 request using the selected cookie and
-// returns fresh cookies only after verifying the response under the S2C key.
-func (realNTSClient) exchange(
+func (realNTSClient) newExchangeSession(
 	ctx context.Context,
 	cfg testConfig,
 	ntpAddr string,
+) (exchangeSession, error) {
+	conn, err := (&net.Dialer{}).DialContext(ctx, "udp", ntpAddr)
+	if err != nil {
+		return nil, fmt.Errorf("dial %q: %w", ntpAddr, err)
+	}
+	if cfg.printResult {
+		slog.Debug("[ntp] dialed", "local", conn.LocalAddr(), "remote", conn.RemoteAddr())
+	}
+	return &udpExchangeSession{
+		conn:        conn,
+		receiveBuf:  make([]byte, 1500),
+		printResult: cfg.printResult,
+	}, nil
+}
+
+func (s *udpExchangeSession) close() {
+	_ = s.conn.Close()
+}
+
+// exchange sends one NTS-protected NTPv4 request using the selected cookie and
+// returns fresh cookies only after verifying the response under the S2C key.
+func (s *udpExchangeSession) exchange(
+	ctx context.Context,
+	deadline time.Time,
 	res *ntske.HandshakeResult,
 	cookie []byte,
 ) ([][]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("no time left before NTP exchange: %w", err)
 	}
-	slog.Debug("[ntp] target resolved",
-		"ke", cfg.addr, "ntp", ntpAddr, "ke_advertised_server", res.NTPServer, "ke_advertised_port", res.NTPPort)
+	if err := s.conn.SetDeadline(deadline); err != nil {
+		return nil, fmt.Errorf("setting deadline: %w", err)
+	}
 
 	uid := make([]byte, nts.MinUniqueIdentifierLen)
 	if _, err := rand.Read(uid); err != nil {
@@ -394,36 +466,36 @@ func (realNTSClient) exchange(
 	if err != nil {
 		return nil, fmt.Errorf("building request: %w", err)
 	}
-	slog.Debug("[ntp] request built", "bytes", len(reqBytes), "aead", res.AEAD, "cookie_len", len(cookie))
-
-	conn, err := net.Dial("udp", ntpAddr)
-	if err != nil {
-		return nil, fmt.Errorf("dial %q: %w", ntpAddr, err)
+	if s.printResult {
+		slog.Debug("[ntp] request built", "bytes", len(reqBytes), "aead", res.AEAD, "cookie_len", len(cookie))
 	}
-	defer conn.Close()
-	if deadline, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(deadline)
-	}
-	slog.Debug("[ntp] dialed", "local", conn.LocalAddr(), "remote", conn.RemoteAddr())
 
-	if _, err := conn.Write(reqBytes); err != nil {
+	if _, err := s.conn.Write(reqBytes); err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 		return nil, fmt.Errorf("send: %w", err)
 	}
-	slog.Debug("[ntp] request sent", "bytes", len(reqBytes))
-	buf := make([]byte, 1500)
-	n, err := conn.Read(buf)
+	if s.printResult {
+		slog.Debug("[ntp] request sent", "bytes", len(reqBytes))
+	}
+	n, err := s.conn.Read(s.receiveBuf)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 		return nil, fmt.Errorf("read: %w", err)
 	}
-	slog.Debug("[ntp] response received", "bytes", n)
+	if s.printResult {
+		slog.Debug("[ntp] response received", "bytes", n)
+	}
 
-	_, freshCookies, err := nts.VerifyNTSResponse(buf[:n], protocol.AEADAlgorithm(res.AEAD), res.S2C, uid)
+	_, freshCookies, err := nts.VerifyNTSResponse(
+		s.receiveBuf[:n],
+		protocol.AEADAlgorithm(res.AEAD),
+		res.S2C,
+		uid,
+	)
 	if err != nil {
 		return nil, err
 	}
