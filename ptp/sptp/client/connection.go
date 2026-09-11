@@ -91,8 +91,10 @@ type UDPConnTS struct {
 
 	l           sync.Mutex
 	newerKernel bool
-	// ifIndex names the egress interface in a pktinfo, which a zero would override
-	ifIndex int32
+	// ifIndex names the egress interface in a pktinfo, which a zero would override.
+	// Inet6Pktinfo declares it uint32 and Inet4Pktinfo int32, hence both.
+	ifIndex  uint32
+	ifIndex4 int32
 }
 
 // ConfigPktInfo enables pktinfo on the socket so the destination address of
@@ -111,6 +113,9 @@ func ConfigPktInfo(fd int) error {
 
 // NewUDPConnTS initialises a new struct UDPConnTS
 func NewUDPConnTS(address net.IP, port int, ts timestamp.Timestamp, iface *net.Interface, dscpValue int) (*UDPConnTS, error) {
+	if iface.Index <= 0 || iface.Index > math.MaxInt32 {
+		return nil, fmt.Errorf("interface index %d out of range", iface.Index)
+	}
 	udpConn, err := NewUDPConn(address, port)
 	if err != nil {
 		return nil, err
@@ -124,12 +129,10 @@ func NewUDPConnTS(address net.IP, port int, ts timestamp.Timestamp, iface *net.I
 		return nil, fmt.Errorf("failed to enable timestamps on port %d: %w", port, err)
 	}
 
-	if iface.Index <= 0 || iface.Index > math.MaxInt32 {
-		return nil, fmt.Errorf("interface index %d out of range", iface.Index)
-	}
 	return &UDPConnTS{
 		UDPConn:     *udpConn,
-		ifIndex:     int32(iface.Index),
+		ifIndex:     uint32(iface.Index),
+		ifIndex4:    int32(iface.Index),
 		newerKernel: true, // assume kernel is recent enough to support SCM_TS_OPT_ID
 	}, nil
 }
@@ -173,7 +176,7 @@ func (c *UDPConnTS) pktInfoCmsg(src unix.Sockaddr) ([]byte, error) {
 	case nil:
 		return nil, nil
 	case *unix.SockaddrInet4:
-		return pktInfo4Cmsg(src, c.ifIndex), nil
+		return pktInfo4Cmsg(src, c.ifIndex4), nil
 	case *unix.SockaddrInet6:
 		return pktInfo6Cmsg(src, c.ifIndex), nil
 	}
@@ -214,7 +217,7 @@ func (c *UDPConnTS) sendMsgTS(b []byte, src, addr unix.Sockaddr) (time.Time, err
 	return hwts, nil
 }
 
-func pktInfo6Cmsg(addr *unix.SockaddrInet6, ifIndex int32) []byte {
+func pktInfo6Cmsg(addr *unix.SockaddrInet6, ifIndex uint32) []byte {
 	var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
 	b := make([]byte, unix.CmsgSpace(unix.SizeofInet6Pktinfo))
 	h := (*unix.Cmsghdr)(unsafe.Pointer(&b[0]))
@@ -223,9 +226,7 @@ func pktInfo6Cmsg(addr *unix.SockaddrInet6, ifIndex int32) []byte {
 	h.SetLen(unix.CmsgLen(unix.SizeofInet6Pktinfo))
 	pktInfo := (*unix.Inet6Pktinfo)(unsafe.Pointer(&b[socketControlMessageHeaderOffset]))
 	copy(pktInfo.Addr[:], addr.Addr[:])
-	if ifIndex > 0 {
-		pktInfo.Ifindex = uint32(ifIndex)
-	}
+	pktInfo.Ifindex = ifIndex
 	return b
 }
 

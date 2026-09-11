@@ -567,8 +567,6 @@ func TestPingSendFailureReleasesSlot(t *testing.T) {
 			mockEventConn := NewMockUDPConnWithTS(ctrl)
 			mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(time.Time{}, errors.New("send failed")).AnyTimes()
-			mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-				Return(time.Time{}, errors.New("send failed")).AnyTimes()
 
 			p := &SPTP{clockID: ptp.ClockIdentity(1), pdelaySrc: testPDelaySrc, eventConns: []UDPConnWithTS{mockEventConn}}
 			_, err := p.Ping(t.Context(), tt.target)

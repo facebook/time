@@ -56,6 +56,16 @@ func (m MessageType) IsGeneral() bool {
 	return m&GeneralMsgClass != 0
 }
 
+// IsPDelay reports whether this is a peer delay message, which is sent to the
+// multicast group and so is not hardware stamped
+func (m MessageType) IsPDelay() bool {
+	switch m {
+	case MessagePDelayReq, MessagePDelayResp, MessagePDelayRespFollowUp:
+		return true
+	}
+	return false
+}
+
 // IsEvent reports whether this is an event message, the only class a NIC stamps
 func (m MessageType) IsEvent() bool {
 	return m&GeneralMsgClass == EventMsgClass

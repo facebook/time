@@ -226,7 +226,7 @@ func (p *SPTP) peerDelaySources() map[bool]netip.Addr {
 			errs = append(errs, err)
 			continue
 		}
-		if _, seen := srcs[dst.Is4()]; seen {
+		if _, seen := srcs[dst.Unmap().Is4()]; seen {
 			continue
 		}
 		src, err := sourceAddrTowards(dst)
@@ -234,7 +234,8 @@ func (p *SPTP) peerDelaySources() map[bool]netip.Addr {
 			errs = append(errs, err)
 			continue
 		}
-		srcs[dst.Is4()] = src
+		// a hostname resolving to IPv4 yields ::ffff:a.b.c.d, whose source is IPv4
+		srcs[src.Unmap().Is4()] = src.Unmap()
 	}
 	if len(errs) > 0 {
 		// probes to the family that failed here report only "no source address"
@@ -516,8 +517,8 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					var rxtx time.Time
 					if msgType.IsEvent() {
 						if rxtx, err = econn.RXTimestamp(oob, boob); err != nil {
-							// our own multicast Pdelay_Req loops back unstamped
-							if errors.Is(err, timestamp.ErrNoTimestamp) && msgType == ptp.MessagePDelayReq {
+							// anything sent to the pdelay group arrives unstamped
+							if errors.Is(err, timestamp.ErrNoTimestamp) && msgType.IsPDelay() {
 								log.Warningf("received %s without timestamp, skipping: %v", msgType, err)
 								continue
 							}

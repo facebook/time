@@ -233,7 +233,7 @@ func (p *SPTP) sendProbe(req *pingRequest, msg ptp.Packet) (time.Time, error) {
 	// peers reply to the source they saw, and the group would get a link-local one
 	var src unix.Sockaddr
 	if req.multicast {
-		pinned, ok := p.pdelaySrc[req.target.Is4()]
+		pinned, ok := p.pdelaySrc[req.target.Unmap().Is4()]
 		if !ok {
 			return time.Time{}, fmt.Errorf("no source address to probe %s from", req.target)
 		}

@@ -163,7 +163,7 @@ func (m *MockUDPConnWithTS) WriteToWithTS(b []byte, src, dst unix.Sockaddr, seq 
 }
 
 // WriteToWithTS indicates an expected call of WriteToWithTS.
-func (mr *MockUDPConnWithTSMockRecorder) WriteToWithTS(b, src, dst, seq interface{}) *gomock.Call {
+func (mr *MockUDPConnWithTSMockRecorder) WriteToWithTS(b, src, dst, seq any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteToWithTS", reflect.TypeOf((*MockUDPConnWithTS)(nil).WriteToWithTS), b, src, dst, seq)
 }
@@ -180,7 +180,7 @@ func (m *MockUDPConnWithTS) ReadPacketBuf(buf, oob []byte) (int, int, unix.Socka
 }
 
 // ReadPacketBuf indicates an expected call of ReadPacketBuf.
-func (mr *MockUDPConnWithTSMockRecorder) ReadPacketBuf(buf, oob interface{}) *gomock.Call {
+func (mr *MockUDPConnWithTSMockRecorder) ReadPacketBuf(buf, oob any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadPacketBuf", reflect.TypeOf((*MockUDPConnWithTS)(nil).ReadPacketBuf), buf, oob)
 }
@@ -195,7 +195,7 @@ func (m *MockUDPConnWithTS) RXTimestamp(oob []byte, boob int) (time.Time, error)
 }
 
 // RXTimestamp indicates an expected call of RXTimestamp.
-func (mr *MockUDPConnWithTSMockRecorder) RXTimestamp(oob, boob interface{}) *gomock.Call {
+func (mr *MockUDPConnWithTSMockRecorder) RXTimestamp(oob, boob any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RXTimestamp", reflect.TypeOf((*MockUDPConnWithTS)(nil).RXTimestamp), oob, boob)
 }
