@@ -1152,7 +1152,8 @@ func TestReadPacketBufKeepsUnstampedPacket(t *testing.T) {
 	fd, err := unix.Socket(unix.AF_INET6, unix.SOCK_DGRAM, 0)
 	require.NoError(t, err)
 	require.NoError(t, unix.Bind(fd, &unix.SockaddrInet6{Addr: [16]byte{15: 1}}))
-	conn := &UDPConnTS{connFd: fd}
+	// the promoted-field form embedlit wants is go1.27; github.com/facebook/time is go1.26
+	conn := &UDPConnTS{UDPConn: UDPConn{connFd: fd}} //nolint:modernize
 	defer conn.Close()
 
 	local, err := unix.Getsockname(fd)
