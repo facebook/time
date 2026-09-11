@@ -95,6 +95,8 @@ type Client struct {
 	inChan chan bool
 	// listening connection on port 319
 	eventConn UDPConnWithTS
+	// connection for general messages
+	genConn UDPConnNoTS
 	// outgoing DELAY_REQ packet
 	delayRequest *ptp.SyncDelayReq
 	// outgoing packet bytes buffer
@@ -125,7 +127,7 @@ func (c *Client) SendDelayReq(p *ptp.SyncDelayReq) (uint16, time.Time, error) {
 		return 0, time.Time{}, err
 	}
 	// send packet
-	hwts, err := c.eventConn.WriteToWithTS(c.delayReqBytes, c.eventAddr, seq)
+	hwts, err := c.eventConn.WriteToWithTS(c.delayReqBytes, nil, c.eventAddr, seq)
 
 	c.incrementSequence()
 	if err != nil {
@@ -137,7 +139,7 @@ func (c *Client) SendDelayReq(p *ptp.SyncDelayReq) (uint16, time.Time, error) {
 	return seq, hwts, nil
 }
 
-// SendAnnounce sends an ANNOUNCE packet via event socket
+// SendAnnounce sends an ANNOUNCE packet
 // NOTE: this is used by ptping and is not required for sptp
 func (c *Client) SendAnnounce(p *ptp.Announce) (uint16, error) {
 	seq := c.eventSequence
@@ -146,9 +148,8 @@ func (c *Client) SendAnnounce(p *ptp.Announce) (uint16, error) {
 	if err != nil {
 		return 0, err
 	}
-	// send packet
-	// since client only has the event conn we have to read the TS
-	_, err = c.eventConn.WriteToWithTS(b, c.eventAddr, seq)
+	// no NIC stamps a general message, and ptp4u answers ptping on the event address
+	_, err = c.genConn.WriteTo(b, c.eventAddr)
 
 	c.incrementSequence()
 	if err != nil {
@@ -161,7 +162,7 @@ func (c *Client) SendAnnounce(p *ptp.Announce) (uint16, error) {
 }
 
 // NewClient initializes sptp client
-func NewClient(target netip.Addr, targetPort int, clockID ptp.ClockIdentity, eventConn UDPConnWithTS, cfg *Config, stats StatsServer) (*Client, error) {
+func NewClient(target netip.Addr, targetPort int, clockID ptp.ClockIdentity, eventConn UDPConnWithTS, genConn UDPConnNoTS, cfg *Config, stats StatsServer) (*Client, error) {
 	// where to send to
 	eventAddr := timestamp.AddrToSockaddr(target, targetPort)
 	sequenceIDMask, sequenceIDMaskedValue := cfg.GenerateMaskAndValue()
@@ -172,6 +173,7 @@ func NewClient(target netip.Addr, targetPort int, clockID ptp.ClockIdentity, eve
 		delayRequest:    ReqDelay(clockID, 1),
 		delayReqBytes:   make([]byte, binary.Size(ptp.Header{})+binary.Size(ptp.SyncDelayReqBody{})+binary.Size(ptp.AlternateResponsePortTLV{})+ptp.TrailingBytes),
 		eventConn:       eventConn,
+		genConn:         genConn,
 		eventAddr:       eventAddr,
 		inChan:          make(chan bool, 100),
 		server:          target,

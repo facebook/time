@@ -30,6 +30,7 @@ import (
 	"github.com/facebook/time/ptp/pdelay"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/timestamp"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -229,7 +230,16 @@ func (p *SPTP) sendProbe(req *pingRequest, msg ptp.Packet) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("marshaling %s: %w", msgType, err)
 	}
 	addr := timestamp.AddrToSockaddr(req.target, ptp.PortEvent)
-	t1, err := p.eventConns[0].WriteToWithTS(b, addr, req.seq)
+	// peers reply to the source they saw, and the group would get a link-local one
+	var src unix.Sockaddr
+	if req.multicast {
+		pinned, ok := p.pdelaySrc[req.target.Is4()]
+		if !ok {
+			return time.Time{}, fmt.Errorf("no source address to probe %s from", req.target)
+		}
+		src = timestamp.AddrToSockaddr(pinned, ptp.PortEvent)
+	}
+	t1, err := p.eventConns[0].WriteToWithTS(b, src, addr, req.seq)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("sending %s to %s: %w", msgType, req.target, err)
 	}
@@ -368,7 +378,6 @@ func (r *pingRequest) collectPDelayResp(resp *ptp.PDelayResp, addr netip.Addr, r
 	r.Lock()
 	defer r.Unlock()
 	res := r.result(addr)
-	res.ResponderMAC = resp.SourcePortIdentity.ClockIdentity.MAC().String()
 	res.CorrectionFieldReq = resp.CorrectionField.Duration()
 	res.T2 = resp.RequestReceiptTimestamp.Time()
 	res.T4 = rxts

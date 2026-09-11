@@ -19,6 +19,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"github.com/facebook/time/timestamp"
 	"net"
 	"net/netip"
 	"testing"
@@ -412,7 +413,7 @@ func TestRunInternalAllDead(t *testing.T) {
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 	mockEventConn.EXPECT().ConnFd().Return(0)
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).Times(4)
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(4)
 	mockClock := NewMockClock(ctrl)
 	mockClock.EXPECT().AdjFreqPPB((float64(0))).Times(3)
 	mockServo := NewMockServo(ctrl)
@@ -662,7 +663,8 @@ func TestRunListenerErr(t *testing.T) {
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 	mockEventConn.EXPECT().ConnFd().Return(0)
-	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).AnyTimes().Return(0, &unix.SockaddrInet6{}, time.Time{}, fmt.Errorf("oops"))
+	mockEventConn.EXPECT().ReadPacketBuf(gomock.Any(), gomock.Any()).AnyTimes().Return(0, 0, &unix.SockaddrInet6{}, fmt.Errorf("oops"))
+	mockEventConn.EXPECT().RXTimestamp(gomock.Any(), gomock.Any()).Return(time.Now(), nil).AnyTimes()
 	mockGenConn := NewMockUDPConnNoTS(ctrl)
 	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).AnyTimes()
 	mockClock := NewMockClock(ctrl)
@@ -697,7 +699,8 @@ func TestRunListenerError(t *testing.T) {
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 	mockEventConn.EXPECT().ConnFd().Return(0)
-	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).Return(0, &unix.SockaddrInet6{}, time.Time{}, fmt.Errorf("some error")).AnyTimes()
+	mockEventConn.EXPECT().ReadPacketBuf(gomock.Any(), gomock.Any()).Return(0, 0, &unix.SockaddrInet6{}, fmt.Errorf("some error")).AnyTimes()
+	mockEventConn.EXPECT().RXTimestamp(gomock.Any(), gomock.Any()).Return(time.Now(), nil).AnyTimes()
 	mockGenConn := NewMockUDPConnNoTS(ctrl)
 	mockGenConn.EXPECT().ReadPacketBuf(gomock.Any()).Return(2, netip.Addr{}, fmt.Errorf("some error")).AnyTimes()
 	mockClock := NewMockClock(ctrl)
@@ -737,12 +740,13 @@ func TestRunListenerGood(t *testing.T) {
 	syncBytes, _ := ptp.Bytes(&ptp.SyncDelayReq{})
 	announceBytes, _ := ptp.Bytes(&ptp.Announce{})
 
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	mockEventConn.EXPECT().ReadPacketWithRXTimestampBuf(gomock.Any(), gomock.Any()).DoAndReturn(func(b, oob []byte) (int, unix.Sockaddr, time.Time, error) {
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockEventConn.EXPECT().RXTimestamp(gomock.Any(), gomock.Any()).Return(time.Now(), nil).AnyTimes()
+	mockEventConn.EXPECT().ReadPacketBuf(gomock.Any(), gomock.Any()).DoAndReturn(func(b, _ []byte) (int, int, unix.Sockaddr, error) {
 		// limit how many we send, so we don't overwhelm the client. packets from uknown IPs will be discarded
 		if sentEvent > 10 {
 			time.Sleep(2 * defaultTestTimeout) // idle socket; no busy-spin, ctx cancels the listener
-			return 0, &unix.SockaddrInet4{}, time.Time{}, nil
+			return 0, 0, &unix.SockaddrInet4{}, nil
 		}
 		addr := "192.168.0.11"
 		if sentEvent%2 == 0 {
@@ -757,7 +761,7 @@ func TestRunListenerGood(t *testing.T) {
 		b[1] = 2
 		b[2] = 3
 		b[3] = 4
-		return len(syncBytes), &unix.SockaddrInet4{Addr: addrBytes, Port: 319}, time.Now(), nil
+		return len(syncBytes), 0, &unix.SockaddrInet4{Addr: addrBytes, Port: 319}, nil
 	}).AnyTimes()
 
 	mockGenConn := NewMockUDPConnNoTS(ctrl)
@@ -833,7 +837,10 @@ func TestPTPing(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).Times(2)
+	mockGenConn := NewMockUDPConnNoTS(ctrl)
+	// DELAY_RESP is an event message and is stamped, ANNOUNCE goes out plain
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	mockGenConn.EXPECT().WriteTo(gomock.Any(), gomock.Any())
 	mockClock := NewMockClock(ctrl)
 	mockServo := NewMockServo(ctrl)
 	mockStatsServer := NewMockStatsServer(ctrl)
@@ -842,6 +849,7 @@ func TestPTPing(t *testing.T) {
 		pi:         mockServo,
 		stats:      mockStatsServer,
 		cfg:        &Config{Iface: "lo"},
+		genConn:    mockGenConn,
 		eventConns: []UDPConnWithTS{mockEventConn},
 	}
 
@@ -1032,7 +1040,7 @@ func TestHandlePDelayReqSuccess(t *testing.T) {
 	txts := rxts.Add(100 * time.Microsecond)
 
 	// Expect Pdelay_Resp to be sent and return TX timestamp
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(txts, nil)
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), nil, addr, uint16(42)).Return(txts, nil)
 	// Expect Pdelay_Resp_Follow_Up to be sent via general msg port
 	mockGeneralConn.EXPECT().WriteTo(gomock.Any(), addrGeneral).Return(0, nil)
 
@@ -1040,7 +1048,7 @@ func TestHandlePDelayReqSuccess(t *testing.T) {
 	require.NoError(t, err)
 
 	// Expect Pdelay_Resp to be sent and return TX timestamp
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addrEphemeral, uint16(42)).Return(txts, nil)
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), nil, addrEphemeral, uint16(42)).Return(txts, nil)
 	// Expect Pdelay_Resp_Follow_Up to be sent via general msg port
 	mockGeneralConn.EXPECT().WriteTo(gomock.Any(), addrEphemeral).Return(0, nil)
 
@@ -1068,7 +1076,7 @@ func TestHandlePDelayReqRespSendError(t *testing.T) {
 	rxts := time.Now()
 
 	// Pdelay_Resp send fails
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(time.Time{}, fmt.Errorf("send error"))
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), nil, addr, uint16(42)).Return(time.Time{}, fmt.Errorf("send error"))
 
 	err = p.handlePDelayReq(mockEventConn, reqBytes, addr, rxts)
 	require.Error(t, err)
@@ -1099,7 +1107,7 @@ func TestHandlePDelayReqFollowUpSendError(t *testing.T) {
 	txts := rxts.Add(100 * time.Microsecond)
 
 	// Pdelay_Resp sent successfully
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), addr, uint16(42)).Return(txts, nil)
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), nil, addr, uint16(42)).Return(txts, nil)
 	// Pdelay_Resp_Follow_Up send fails
 	mockGeneralConn.EXPECT().WriteTo(gomock.Any(), addrGeneral).Return(0, fmt.Errorf("send error"))
 
@@ -1128,4 +1136,39 @@ func TestPtpingRejectsPDelayRespFollowUp(t *testing.T) {
 
 	// the dispatched handler records T3 instead
 	require.NoError(t, p.handlePDelayRespFollowup(b, peer))
+}
+
+// init() runs before initClients(), so the source has to come from the config
+func TestPeerDelaySourceUsesConfiguredServers(t *testing.T) {
+	p := &SPTP{cfg: &Config{Servers: map[string]int{"::1": 1}}}
+	srcs := p.peerDelaySources()
+	require.True(t, srcs[false].IsValid(), "an IPv6 server yields an IPv6 source")
+	require.Empty(t, p.clients, "clients are not populated yet at this point")
+}
+
+// ptping answers on the event port with an ANNOUNCE that no NIC stamps
+func TestReadPacketBufKeepsUnstampedPacket(t *testing.T) {
+	// no SO_TIMESTAMPING on this socket, so nothing will be stamped
+	fd, err := unix.Socket(unix.AF_INET6, unix.SOCK_DGRAM, 0)
+	require.NoError(t, err)
+	require.NoError(t, unix.Bind(fd, &unix.SockaddrInet6{Addr: [16]byte{15: 1}}))
+	conn := &UDPConnTS{connFd: fd}
+	defer conn.Close()
+
+	local, err := unix.Getsockname(fd)
+	require.NoError(t, err)
+	announce, err := ptp.Bytes(&ptp.Announce{Header: ptp.Header{
+		SdoIDAndMsgType: ptp.NewSdoIDAndMsgType(ptp.MessageAnnounce, 0),
+	}})
+	require.NoError(t, err)
+	require.NoError(t, unix.Sendto(fd, announce, 0, local))
+
+	buf := make([]byte, timestamp.PayloadSizeBytes)
+	oob := make([]byte, timestamp.ControlSizeBytes)
+	bbuf, boob, saddr, err := conn.ReadPacketBuf(buf, oob)
+	require.NoError(t, err)
+	require.Positive(t, bbuf, "a general message must survive having no timestamp")
+	require.NotNil(t, saddr)
+	_, err = conn.RXTimestamp(oob, boob)
+	require.ErrorIs(t, err, timestamp.ErrNoTimestamp, "a general message is never stamped")
 }

@@ -598,3 +598,38 @@ func TestClockAccuracyToDuration(t *testing.T) {
 	require.Equal(t, time.Second*10, ClockAccuracySecond10.Duration())
 	require.Equal(t, time.Second*25, ClockAccuracySecondGreater10.Duration())
 }
+
+func TestMessageTypeClass(t *testing.T) {
+	// Table 36: event messages are 0x0-0x3, general 0x8-0xD
+	for msgType, general := range map[MessageType]bool{
+		MessageSync:               false,
+		MessageDelayReq:           false,
+		MessagePDelayReq:          false,
+		MessagePDelayResp:         false,
+		MessageFollowUp:           true,
+		MessageDelayResp:          true,
+		MessagePDelayRespFollowUp: true,
+		MessageAnnounce:           true,
+		MessageSignaling:          true,
+		MessageManagement:         true,
+	} {
+		require.Equal(t, general, msgType.IsGeneral(), msgType.String())
+		require.Equal(t, !general, msgType.IsEvent(), msgType.String())
+	}
+}
+
+// only event messages are hardware stamped, so this runs per received packet
+func BenchmarkProbeMsgTypeClass(b *testing.B) {
+	for _, msg := range []MessageType{MessageSync, MessageAnnounce} {
+		b.Run(msg.String(), func(b *testing.B) {
+			pkt := []byte{byte(msg), 0x12}
+			want := msg.IsGeneral()
+			for b.Loop() {
+				msgType, err := ProbeMsgType(pkt)
+				if err != nil || msgType.IsGeneral() != want || msgType.IsEvent() == want {
+					b.Fatalf("misclassified %s", msg)
+				}
+			}
+		})
+	}
+}

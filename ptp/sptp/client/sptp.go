@@ -20,9 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net"
 	"net/netip"
+	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -68,6 +71,8 @@ type SPTP struct {
 	isStalled  bool
 
 	pinger pingState
+	// pdelaySrc is the source multicast peer delay probes must come from, by family
+	pdelaySrc map[bool]netip.Addr
 
 	clockID ptp.ClockIdentity
 	genConn UDPConnNoTS
@@ -132,7 +137,7 @@ func (p *SPTP) initClients() error {
 		} else {
 			econn = p.eventConns[0]
 		}
-		c, err := NewClient(ip, ptp.PortEvent, p.clockID, econn, p.cfg, p.stats)
+		c, err := NewClient(ip, ptp.PortEvent, p.clockID, econn, p.genConn, p.cfg, p.stats)
 		if err != nil {
 			return fmt.Errorf("initializing client %v: %w", ip, err)
 		}
@@ -196,6 +201,48 @@ func setMulticastIface(fd int, iface *net.Interface) (err6, err4 error) {
 	return err6, err4
 }
 
+// sourceAddrTowards asks the routing table which source a packet to dst would use
+func sourceAddrTowards(dst netip.Addr) (netip.Addr, error) {
+	c, err := net.Dial("udp", net.JoinHostPort(dst.String(), strconv.Itoa(ptp.PortEvent)))
+	if err != nil {
+		return netip.Addr{}, fmt.Errorf("resolving source address towards %s: %w", dst, err)
+	}
+	defer c.Close()
+	src, ok := netip.AddrFromSlice(c.LocalAddr().(*net.UDPAddr).IP)
+	if !ok {
+		return netip.Addr{}, fmt.Errorf("unexpected local address %v", c.LocalAddr())
+	}
+	return src.Unmap(), nil
+}
+
+// peerDelaySources is the address rack peers must reply to, per family. A probe
+// to the IPv4 group cannot be pinned to an IPv6 source, so both are kept.
+func (p *SPTP) peerDelaySources() map[bool]netip.Addr {
+	srcs := map[bool]netip.Addr{}
+	var errs []error
+	for _, server := range slices.Sorted(maps.Keys(p.cfg.Servers)) {
+		dst, err := LookupNetIP(server)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if _, seen := srcs[dst.Is4()]; seen {
+			continue
+		}
+		src, err := sourceAddrTowards(dst)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		srcs[dst.Is4()] = src
+	}
+	if len(errs) > 0 {
+		// probes to the family that failed here report only "no source address"
+		log.Warningf("no peer delay source for some families: %v", errors.Join(errs...))
+	}
+	return srcs
+}
+
 func (p *SPTP) init() error {
 	iface, err := net.InterfaceByName(p.cfg.Iface)
 	if err != nil {
@@ -207,6 +254,10 @@ func (p *SPTP) init() error {
 		return err
 	}
 	p.clockID = cid
+
+	// only multicast pdelay needs this, so a routing gap must not stop the daemon:
+	// Ping fails closed per family instead
+	p.pdelaySrc = p.peerDelaySources()
 
 	p.genConn, err = NewUDPConn(net.ParseIP(p.cfg.ListenAddress), ptp.PortGeneral)
 	if err != nil {
@@ -289,7 +340,7 @@ func (p *SPTP) ptping(sourceIP netip.Addr, sourcePort int, response []byte, rxtx
 		return fmt.Errorf("failed to read DELAY_REQ %w", err)
 	}
 	// use first event connection, doesn't really matter which one we use
-	c, err := NewClient(sourceIP, sourcePort, p.clockID, p.eventConns[0], p.cfg, p.stats)
+	c, err := NewClient(sourceIP, sourcePort, p.clockID, p.eventConns[0], p.genConn, p.cfg, p.stats)
 	if err != nil {
 		return fmt.Errorf("failed to respond to a DELAY_REQ %w", err)
 	}
@@ -321,7 +372,7 @@ func (p *SPTP) handlePDelayReq(econn UDPConnWithTS, buf []byte, addr unix.Sockad
 		return fmt.Errorf("marshaling Pdelay_Resp: %w", err)
 	}
 
-	t3, err := econn.WriteToWithTS(respBytes, addr, seq)
+	t3, err := econn.WriteToWithTS(respBytes, nil, addr, seq)
 	if err != nil {
 		return fmt.Errorf("sending Pdelay_Resp: %w", err)
 	}
@@ -447,11 +498,7 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 				buf := make([]byte, timestamp.PayloadSizeBytes)
 				oob := make([]byte, timestamp.ControlSizeBytes)
 				for {
-					bbuf, addr, rxtx, err := econn.ReadPacketWithRXTimestampBuf(buf, oob)
-					if errors.Is(err, timestamp.ErrNoTimestampForMulticastPkt) {
-						log.Warningf("received multicast packet (Pdelay_Req) without timestamp, skipping: %v", err)
-						continue
-					}
+					bbuf, boob, addr, err := econn.ReadPacketBuf(buf, oob)
 					if err != nil {
 						doneChan <- err
 						return
@@ -463,6 +510,20 @@ func (p *SPTP) RunListener(ctx context.Context) error {
 					if err != nil {
 						log.Warningf("probing message type: %v", err)
 						continue
+					}
+
+					// only event messages are stamped, and ptping answers with an ANNOUNCE
+					var rxtx time.Time
+					if msgType.IsEvent() {
+						if rxtx, err = econn.RXTimestamp(oob, boob); err != nil {
+							// our own multicast Pdelay_Req loops back unstamped
+							if errors.Is(err, timestamp.ErrNoTimestamp) && msgType == ptp.MessagePDelayReq {
+								log.Warningf("received %s without timestamp, skipping: %v", msgType, err)
+								continue
+							}
+							doneChan <- err
+							return
+						}
 					}
 
 					// a peer replies to the port we probed from, so the follow-up lands here too

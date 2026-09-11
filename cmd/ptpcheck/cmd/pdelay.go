@@ -187,6 +187,11 @@ func runMulticastProbe(ctx context.Context, cfg ProbeConfig) ([]*pdelay.Result, 
 		return nil, fmt.Errorf("asking sptp at %s to probe %s: %w", address, cfg.multicastGroup(), err)
 	}
 
+	var addrW, offW int
+	for _, result := range results {
+		addrW = max(addrW, len(result.Responder.String()))
+		offW = max(offW, len(result.Offset().String()))
+	}
 	for _, result := range results {
 		// the scuba logger branches on Error, so an incomplete measurement must
 		// carry one rather than be recorded as a real zero offset
@@ -194,10 +199,11 @@ func runMulticastProbe(ctx context.Context, cfg ProbeConfig) ([]*pdelay.Result, 
 			result.Error = errors.New("incomplete response")
 		}
 		if result.Error != nil {
-			fmt.Printf("%s (%s): %v\n", result.Responder, result.ResponderMAC, result.Error)
+			fmt.Printf("%-*s %v\n", addrW, result.Responder, result.Error)
 			continue
 		}
-		fmt.Printf("%s (%s): offset=%s path_delay=%s\n", result.Responder, result.ResponderMAC, result.Offset(), result.PathDelay())
+		fmt.Printf("%-*s offset=%-*s path_delay=%s\n", addrW, result.Responder,
+			offW, result.Offset(), result.PathDelay())
 	}
 	return results, nil
 }

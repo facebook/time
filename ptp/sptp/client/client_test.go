@@ -82,7 +82,7 @@ func TestClientRun(t *testing.T) {
 		},
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, &cfg, statsServer)
+	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, nil, &cfg, statsServer)
 	require.NoError(t, err)
 
 	// put stuff into measurements to make sure it got cleaned before the run
@@ -93,7 +93,7 @@ func TestClientRun(t *testing.T) {
 	// handle whatever client is sending over eventConn
 	statsServer.EXPECT().IncTXDelayReq()
 	// unexpected packet we just ignore
-	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ unix.Sockaddr, seq uint16) (time.Time, error) {
+	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _, _ unix.Sockaddr, _ uint16) (time.Time, error) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
 		require.Nil(t, err, "reading delayReq msg")
@@ -142,10 +142,10 @@ func TestClientTimeout(t *testing.T) {
 		},
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, &cfg, statsServer)
+	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, nil, &cfg, statsServer)
 	require.NoError(t, err)
 	statsServer.EXPECT().IncTXDelayReq()
-	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any())
+	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
 	ctx := context.Background()
 	runResult := c.RunOnce(ctx, &Config{ExchangeTimeout: defaultTestTimeout})
@@ -168,12 +168,12 @@ func TestClientBadPacket(t *testing.T) {
 		},
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, &cfg, statsServer)
+	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, nil, &cfg, statsServer)
 	require.NoError(t, err)
 
 	// handle whatever client is sending over eventConn
 	statsServer.EXPECT().IncTXDelayReq()
-	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _ unix.Sockaddr, seq uint16) (time.Time, error) {
+	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(b []byte, _, _ unix.Sockaddr, _ uint16) (time.Time, error) {
 		delayReq := &ptp.SyncDelayReq{}
 		err := ptp.FromBytes(b, delayReq)
 		require.Nil(t, err, "reading delayReq msg")
@@ -206,7 +206,7 @@ func TestClientIncrementSequence(t *testing.T) {
 		SequenceIDMaskValue: 3,
 	}
 	statsServer := NewMockStatsServer(ctrl)
-	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, &cfg, statsServer)
+	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, nil, &cfg, statsServer)
 	require.NoError(t, err)
 	require.Equal(t, uint16(0x3FFF), c.sequenceIDMask)
 	require.Equal(t, uint16(0xC000), c.sequenceIDValue)

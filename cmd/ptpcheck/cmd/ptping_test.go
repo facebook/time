@@ -53,7 +53,7 @@ func TestPtpingRunFailsWhenEveryProbeFails(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := ptpingRun(t.Context(), srv.URL, "2401:db00::1", 2, DefaultPingTimeout)
+	err := ptpingRun(t.Context(), srv.URL, "2401:db00::1", 2, DefaultPingTimeout, 0)
 	require.ErrorContains(t, err, "no successful probes")
 }
 
@@ -64,7 +64,7 @@ func TestPtpingRunFailsOnIncompleteResult(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout)
+	err := ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout, 0)
 	require.ErrorContains(t, err, "no successful probes")
 }
 
@@ -81,7 +81,7 @@ func TestPtpingRunSucceedsOnValidResult(t *testing.T) {
 	readStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	err := ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout)
+	err := ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout, 0)
 	w.Close()
 	out, _ := io.ReadAll(r)
 	os.Stdout = readStdout
@@ -94,7 +94,7 @@ func TestPtpingRunSucceedsOnValidResult(t *testing.T) {
 }
 
 func TestPtpingRunNoOpOnZeroCount(t *testing.T) {
-	require.NoError(t, ptpingRun(t.Context(), "http://127.0.0.1:1", "2401:db00::1", 0, DefaultPingTimeout))
+	require.NoError(t, ptpingRun(t.Context(), "http://127.0.0.1:1", "2401:db00::1", 0, DefaultPingTimeout, 0))
 }
 
 func TestPtpingRunFailsOnEmptyResponse(t *testing.T) {
@@ -103,7 +103,7 @@ func TestPtpingRunFailsOnEmptyResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	require.ErrorContains(t, ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout), "no successful probes")
+	require.ErrorContains(t, ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout, 0), "no successful probes")
 }
 
 func TestPtpingRunFailsOnWireError(t *testing.T) {
@@ -113,7 +113,7 @@ func TestPtpingRunFailsOnWireError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	require.ErrorContains(t, ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout), "no successful probes")
+	require.ErrorContains(t, ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout, 0), "no successful probes")
 }
 
 // more than one result for a unicast target is unexpected; the first is used
@@ -130,7 +130,7 @@ func TestPtpingRunSelectsMatchingResponder(t *testing.T) {
 	readStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	err := ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout)
+	err := ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout, 0)
 	w.Close()
 	out, _ := io.ReadAll(r)
 	os.Stdout = readStdout
@@ -147,7 +147,7 @@ func TestPtpingRunFailsOnMissingRTT(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout)
+	err := ptpingRun(t.Context(), srv.URL, "2401:db00::1", 1, DefaultPingTimeout, 0)
 	require.ErrorContains(t, err, "no successful probes")
 }
 
@@ -169,7 +169,7 @@ func TestPickResponder(t *testing.T) {
 }
 
 func TestPtpingRunRejectsShortTimeout(t *testing.T) {
-	err := ptpingRun(t.Context(), "http://127.0.0.1:1", "2401:db00::1", 1, time.Second)
+	err := ptpingRun(t.Context(), "http://127.0.0.1:1", "2401:db00::1", 1, time.Second, 0)
 	require.ErrorContains(t, err, "must exceed")
 }
 
@@ -193,6 +193,21 @@ func TestPtpingRunStopsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	err := ptpingRun(ctx, "http://127.0.0.1:1", "2401:db00::1", 5, DefaultPingTimeout)
+	err := ptpingRun(ctx, "http://127.0.0.1:1", "2401:db00::1", 5, DefaultPingTimeout, 0)
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+// ptping paces probes like ping does; the timeout used to double as the interval
+func TestPtpingRunPacesProbes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[{"responder":"2401:db00::1","t1":"2026-01-01T00:00:00Z","t2":"2026-01-01T00:00:00.00001Z","t3":"2026-01-01T00:00:00.00002Z","t4":"2026-01-01T00:00:00.00003Z","sw_rtt":100000}]`)
+	}))
+	defer srv.Close()
+
+	start := time.Now()
+	require.NoError(t, ptpingRun(t.Context(), srv.URL, "2401:db00::1", 3, DefaultPingTimeout, 50*time.Millisecond))
+	// two gaps between three probes
+	require.GreaterOrEqual(t, time.Since(start), 100*time.Millisecond)
+	require.Less(t, time.Since(start), 400*time.Millisecond)
 }

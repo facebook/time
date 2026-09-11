@@ -46,8 +46,6 @@ import (
 type Result struct {
 	// Responder is the target of the measurement (remote host)
 	Responder netip.Addr `json:"responder"`
-	// ResponderMAC identifies the host behind the EUI-64 link-local, which has no DNS
-	ResponderMAC string `json:"responder_mac,omitempty"`
 	// T1 is the Pdelay_Req departure time at requester
 	T1 time.Time `json:"t1"`
 	// T2 is the Pdelay_Req arrival time at responder

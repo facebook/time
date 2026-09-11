@@ -32,8 +32,9 @@ import (
 
 // flags
 var (
-	countf   int
-	timeoutf time.Duration
+	countf    int
+	timeoutf  time.Duration
+	intervalf time.Duration
 )
 
 func init() {
@@ -41,6 +42,7 @@ func init() {
 	ptpingCmd.Flags().StringVarP(&rootClientFlag, "client", "C", "", sptpClientFlagDesc)
 	ptpingCmd.Flags().IntVarP(&countf, "count", "c", 5, "number of probes to send")
 	ptpingCmd.Flags().DurationVarP(&timeoutf, "timeout", "t", DefaultPingTimeout, "request timeout")
+	ptpingCmd.Flags().DurationVarP(&intervalf, "interval", "i", time.Second, "interval between probes")
 }
 
 type timestamps struct {
@@ -76,7 +78,7 @@ func resultToTimestamps(r *pdelay.Result) timestamps {
 	}
 }
 
-func ptpingRun(ctx context.Context, sptpAddress string, server string, count int, timeout time.Duration) error {
+func ptpingRun(ctx context.Context, sptpAddress string, server string, count int, timeout, interval time.Duration) error {
 	if count <= 0 {
 		return nil
 	}
@@ -92,6 +94,12 @@ func ptpingRun(ctx context.Context, sptpAddress string, server string, count int
 
 	var succeeded int
 	for c := 1; c <= count; c++ {
+		if c > 1 {
+			select {
+			case <-ctx.Done():
+			case <-time.After(interval):
+			}
+		}
 		if err := ctx.Err(); err != nil {
 			if succeeded > 0 {
 				return nil
@@ -159,7 +167,7 @@ var ptpingCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ConfigureVerbosity()
 
-		if err := ptpingRun(cmd.Context(), rootClientFlag, args[0], countf, timeoutf); err != nil {
+		if err := ptpingRun(cmd.Context(), rootClientFlag, args[0], countf, timeoutf, intervalf); err != nil {
 			log.Fatal(err)
 		}
 	},

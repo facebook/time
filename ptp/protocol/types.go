@@ -45,6 +45,22 @@ const (
 	MessageManagement         MessageType = 0xD
 )
 
+// Table 36 splits message types into two classes by the 0x8 bit
+const (
+	EventMsgClass   MessageType = 0x0
+	GeneralMsgClass MessageType = 0x8
+)
+
+// IsGeneral reports whether this is a general message. Only event ones are hardware stamped.
+func (m MessageType) IsGeneral() bool {
+	return m&GeneralMsgClass != 0
+}
+
+// IsEvent reports whether this is an event message, the only class a NIC stamps
+func (m MessageType) IsEvent() bool {
+	return m&GeneralMsgClass == EventMsgClass
+}
+
 // MessageTypeToString is a map from MessageType to string
 var MessageTypeToString = map[MessageType]string{
 	MessageSync:               "SYNC",

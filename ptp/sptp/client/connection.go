@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/netip"
 	"sync"
@@ -41,9 +42,9 @@ type UDPConnNoTS interface {
 
 // UDPConnWithTS describes the functionality we expect from a UDP connection that will allow us to read TX timestamps
 type UDPConnWithTS interface {
-	WriteToWithTS(b []byte, addr unix.Sockaddr, seq uint16) (time.Time, error)
-	WriteToSrcAddrTS(b []byte, src, dst unix.Sockaddr) (time.Time, error)
-	ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, unix.Sockaddr, time.Time, error)
+	WriteToWithTS(b []byte, src, dst unix.Sockaddr, seq uint16) (time.Time, error)
+	ReadPacketBuf(buf, oob []byte) (int, int, unix.Sockaddr, error)
+	RXTimestamp(oob []byte, boob int) (time.Time, error)
 	Close() error
 	ConnFd() int
 }
@@ -90,6 +91,8 @@ type UDPConnTS struct {
 
 	l           sync.Mutex
 	newerKernel bool
+	// ifIndex names the egress interface in a pktinfo, which a zero would override
+	ifIndex int32
 }
 
 // ConfigPktInfo enables pktinfo on the socket so the destination address of
@@ -121,8 +124,12 @@ func NewUDPConnTS(address net.IP, port int, ts timestamp.Timestamp, iface *net.I
 		return nil, fmt.Errorf("failed to enable timestamps on port %d: %w", port, err)
 	}
 
+	if iface.Index <= 0 || iface.Index > math.MaxInt32 {
+		return nil, fmt.Errorf("interface index %d out of range", iface.Index)
+	}
 	return &UDPConnTS{
 		UDPConn:     *udpConn,
+		ifIndex:     int32(iface.Index),
 		newerKernel: true, // assume kernel is recent enough to support SCM_TS_OPT_ID
 	}, nil
 }
@@ -135,35 +142,53 @@ func (c *UDPConnTS) ConnFd() int {
 
 // WriteToWithTS writes bytes to addr via underlying UDPConn. Uses the Sequence ID for
 // reliable matching of HW TX timestamps with socket control messages returned in the
-// socket error queue by the kernel (if supported by kernel)
-func (c *UDPConnTS) WriteToWithTS(b []byte, addr unix.Sockaddr, seq uint16) (time.Time, error) {
+// socket error queue by the kernel (if supported by kernel). A non-nil src pins the source.
+func (c *UDPConnTS) WriteToWithTS(b []byte, src, addr unix.Sockaddr, seq uint16) (time.Time, error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	if c.newerKernel {
-		hwts, err := c.sendMsgSeqIDTS(b, addr, seq)
+		hwts, err := c.sendMsgSeqIDTS(b, src, addr, seq)
 		if err != nil {
-			if errors.Is(err, unix.EINVAL) {
-				c.newerKernel = false
-			} else {
+			// a pinned source can also make sendmsg return EINVAL, and reading that
+			// as missing SCM_TS_OPT_ID would drop seq-ID matching for every later send
+			if !errors.Is(err, unix.EINVAL) || src != nil {
 				return time.Time{}, fmt.Errorf("failed to send message to %v: %w", addr, err)
 			}
+			c.newerKernel = false
 		} else {
 			return hwts, nil
 		}
 	}
-	hwts, err := c.sendMsgTS(b, addr)
+	hwts, err := c.sendMsgTS(b, src, addr)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to send message to %v: %w", addr, err)
 	}
 	return hwts, nil
 }
 
-func (c *UDPConnTS) sendMsgSeqIDTS(b []byte, addr unix.Sockaddr, seq uint16) (time.Time, error) {
+// pktInfoCmsg pins the source address, empty for a nil src
+func (c *UDPConnTS) pktInfoCmsg(src unix.Sockaddr) ([]byte, error) {
+	switch src := src.(type) {
+	case nil:
+		return nil, nil
+	case *unix.SockaddrInet4:
+		return pktInfo4Cmsg(src, c.ifIndex), nil
+	case *unix.SockaddrInet6:
+		return pktInfo6Cmsg(src, c.ifIndex), nil
+	}
+	return nil, fmt.Errorf("unsupported source address type %T", src)
+}
+
+func (c *UDPConnTS) sendMsgSeqIDTS(b []byte, src, addr unix.Sockaddr, seq uint16) (time.Time, error) {
+	oob, err := c.pktInfoCmsg(src)
+	if err != nil {
+		return time.Time{}, err
+	}
 	seqID := uint32(seq)
 	soob := make([]byte, unix.CmsgSpace(timestamp.SizeofSeqID))
 	timestamp.SeqIDSocketControlMessage(seqID, soob)
-	if err := unix.Sendmsg(c.connFd, b, soob, addr, 0); err != nil {
+	if err := unix.Sendmsg(c.connFd, b, append(oob, soob...), addr, 0); err != nil {
 		return time.Time{}, fmt.Errorf("message sent to socket failed: %w", err)
 	}
 	toob := make([]byte, timestamp.ControlSizeBytes)
@@ -174,58 +199,12 @@ func (c *UDPConnTS) sendMsgSeqIDTS(b []byte, addr unix.Sockaddr, seq uint16) (ti
 	return hwts, nil
 }
 
-func (c *UDPConnTS) sendMsgTS(b []byte, addr unix.Sockaddr) (time.Time, error) {
-	if err := unix.Sendto(c.connFd, b, 0, addr); err != nil {
-		return time.Time{}, fmt.Errorf("message sent to socket failed: %w", err)
-	}
-	hwts, _, err := timestamp.ReadTXtimestamp(c.connFd)
+func (c *UDPConnTS) sendMsgTS(b []byte, src, addr unix.Sockaddr) (time.Time, error) {
+	oob, err := c.pktInfoCmsg(src)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to read TX timestamp: %w", err)
+		return time.Time{}, err
 	}
-	return hwts, nil
-}
-
-func pktInfo6Cmsg(addr *unix.SockaddrInet6) []byte {
-	var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
-	b := make([]byte, unix.CmsgSpace(unix.SizeofInet6Pktinfo))
-	h := (*unix.Cmsghdr)(unsafe.Pointer(&b[0]))
-	h.Level = unix.IPPROTO_IPV6
-	h.Type = unix.IPV6_PKTINFO
-	h.SetLen(unix.CmsgLen(unix.SizeofInet6Pktinfo))
-	pktInfo := (*unix.Inet6Pktinfo)(unsafe.Pointer(&b[socketControlMessageHeaderOffset]))
-	copy(pktInfo.Addr[:], addr.Addr[:])
-	return b
-}
-
-func pktInfo4Cmsg(addr *unix.SockaddrInet4) []byte {
-	var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
-	b := make([]byte, unix.CmsgSpace(unix.SizeofInet4Pktinfo))
-	h := (*unix.Cmsghdr)(unsafe.Pointer(&b[0]))
-	h.Level = unix.IPPROTO_IP
-	h.Type = unix.IP_PKTINFO
-	h.SetLen(unix.CmsgLen(unix.SizeofInet4Pktinfo))
-	pktInfo := (*unix.Inet4Pktinfo)(unsafe.Pointer(&b[socketControlMessageHeaderOffset]))
-	copy(pktInfo.Addr[:], addr.Addr[:])
-	return b
-}
-
-// WriteToSrcAddrTS sends packet with specified source address to provided destination
-// and returns TX timestamp
-func (c *UDPConnTS) WriteToSrcAddrTS(b []byte, src, dst unix.Sockaddr) (time.Time, error) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	var oob []byte
-
-	switch src := src.(type) {
-	case *unix.SockaddrInet4:
-		oob = pktInfo4Cmsg(src)
-	case *unix.SockaddrInet6:
-		oob = pktInfo6Cmsg(src)
-	default:
-		return time.Time{}, fmt.Errorf("unsupported source address type %T", src)
-	}
-	if err := unix.Sendmsg(c.connFd, b, oob, dst, 0); err != nil {
+	if err := unix.Sendmsg(c.connFd, b, oob, addr, 0); err != nil {
 		return time.Time{}, fmt.Errorf("message sent to socket failed: %w", err)
 	}
 	hwts, _, err := timestamp.ReadTXtimestamp(c.connFd)
@@ -235,9 +214,42 @@ func (c *UDPConnTS) WriteToSrcAddrTS(b []byte, src, dst unix.Sockaddr) (time.Tim
 	return hwts, nil
 }
 
-// ReadPacketWithRXTimestampBuf reads bytes and a timestamp from underlying fd
-func (c *UDPConnTS) ReadPacketWithRXTimestampBuf(buf, oob []byte) (int, unix.Sockaddr, time.Time, error) {
-	return timestamp.ReadPacketWithRXTimestampBuf(c.connFd, buf, oob)
+func pktInfo6Cmsg(addr *unix.SockaddrInet6, ifIndex int32) []byte {
+	var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
+	b := make([]byte, unix.CmsgSpace(unix.SizeofInet6Pktinfo))
+	h := (*unix.Cmsghdr)(unsafe.Pointer(&b[0]))
+	h.Level = unix.IPPROTO_IPV6
+	h.Type = unix.IPV6_PKTINFO
+	h.SetLen(unix.CmsgLen(unix.SizeofInet6Pktinfo))
+	pktInfo := (*unix.Inet6Pktinfo)(unsafe.Pointer(&b[socketControlMessageHeaderOffset]))
+	copy(pktInfo.Addr[:], addr.Addr[:])
+	if ifIndex > 0 {
+		pktInfo.Ifindex = uint32(ifIndex)
+	}
+	return b
+}
+
+func pktInfo4Cmsg(addr *unix.SockaddrInet4, ifIndex int32) []byte {
+	var socketControlMessageHeaderOffset = binary.Size(unix.Cmsghdr{})
+	b := make([]byte, unix.CmsgSpace(unix.SizeofInet4Pktinfo))
+	h := (*unix.Cmsghdr)(unsafe.Pointer(&b[0]))
+	h.Level = unix.IPPROTO_IP
+	h.Type = unix.IP_PKTINFO
+	h.SetLen(unix.CmsgLen(unix.SizeofInet4Pktinfo))
+	pktInfo := (*unix.Inet4Pktinfo)(unsafe.Pointer(&b[socketControlMessageHeaderOffset]))
+	copy(pktInfo.Addr[:], addr.Addr[:])
+	pktInfo.Ifindex = ifIndex
+	return b
+}
+
+// ReadPacketBuf reads a packet and its control messages from the underlying fd
+func (c *UDPConnTS) ReadPacketBuf(buf, oob []byte) (int, int, unix.Sockaddr, error) {
+	return timestamp.ReadPacketWithCMsgBuf(c.connFd, buf, oob)
+}
+
+// RXTimestamp parses the hardware RX timestamp out of control messages already read
+func (c *UDPConnTS) RXTimestamp(oob []byte, boob int) (time.Time, error) {
+	return timestamp.ReadRXTimestamp(oob, boob)
 }
 
 func listenUDP(address net.IP, port int) (int, error) {

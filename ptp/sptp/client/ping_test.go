@@ -29,6 +29,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -54,6 +55,8 @@ func newTestPingRequest(_ *testing.T, seq uint16, target netip.Addr) *pingReques
 		done:      make(chan struct{}),
 	}
 }
+
+var testPDelaySrc = map[bool]netip.Addr{false: netip.MustParseAddr("2401:db00:1c:4b1f:face:0:3c7:0")}
 
 func TestPingCorrectionFieldsAreNotSwapped(t *testing.T) {
 	req := newTestPingRequest(t, 42, netip.MustParseAddr("ff02::6b"))
@@ -234,10 +237,10 @@ func TestPingCancelledParentIsNotAnEmptyResult(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(time.Unix(1700000000, 0), nil)
 
-	p := &SPTP{clockID: ptp.ClockIdentity(1), eventConns: []UDPConnWithTS{mockEventConn}}
+	p := &SPTP{clockID: ptp.ClockIdentity(1), pdelaySrc: testPDelaySrc, eventConns: []UDPConnWithTS{mockEventConn}}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -286,13 +289,13 @@ func TestPingMulticastSendsPDelayReq(t *testing.T) {
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 
 	var sent []byte
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(b []byte, _ any, _ uint16) (time.Time, error) {
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(b []byte, _, _ unix.Sockaddr, _ uint16) (time.Time, error) {
 			sent = append([]byte{}, b...)
 			return time.Unix(1700000000, 0), nil
 		})
 
-	p := &SPTP{clockID: ptp.ClockIdentity(1), eventConns: []UDPConnWithTS{mockEventConn}}
+	p := &SPTP{clockID: ptp.ClockIdentity(1), pdelaySrc: testPDelaySrc, eventConns: []UDPConnWithTS{mockEventConn}}
 	// multicast always waits the full window, so cap it rather than burn PingTimeout
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
@@ -311,13 +314,13 @@ func TestPingUnicastSendsDelayReq(t *testing.T) {
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 
 	var sent []byte
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(b []byte, _ any, _ uint16) (time.Time, error) {
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(b []byte, _, _ unix.Sockaddr, _ uint16) (time.Time, error) {
 			sent = append([]byte{}, b...)
 			return time.Unix(1700000000, 0), nil
 		})
 
-	p := &SPTP{clockID: ptp.ClockIdentity(1), eventConns: []UDPConnWithTS{mockEventConn}}
+	p := &SPTP{clockID: ptp.ClockIdentity(1), pdelaySrc: testPDelaySrc, eventConns: []UDPConnWithTS{mockEventConn}}
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	_, err := p.Ping(ctx, pingPeer)
@@ -332,10 +335,10 @@ func TestPingIncompleteResponseIsReported(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(time.Unix(1700000000, 0), nil)
 
-	p := &SPTP{clockID: ptp.ClockIdentity(1), eventConns: []UDPConnWithTS{mockEventConn}}
+	p := &SPTP{clockID: ptp.ClockIdentity(1), pdelaySrc: testPDelaySrc, eventConns: []UDPConnWithTS{mockEventConn}}
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
@@ -422,10 +425,10 @@ func TestPingResultsAreSnapshots(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(time.Unix(1700000000, 0), nil)
 
-	p := &SPTP{clockID: ptp.ClockIdentity(1), eventConns: []UDPConnWithTS{mockEventConn}}
+	p := &SPTP{clockID: ptp.ClockIdentity(1), pdelaySrc: testPDelaySrc, eventConns: []UDPConnWithTS{mockEventConn}}
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
@@ -456,14 +459,22 @@ func TestPingMulticastEndToEnd(t *testing.T) {
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
 
 	base := time.Unix(1700000000, 0)
+	src := testPDelaySrc[false]
 	seq := make(chan uint16, 1)
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ []byte, _ any, s uint16) (time.Time, error) {
-			seq <- s
+	// responders reply to the source they saw, so it has to be the routable one
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(b []byte, s, _ unix.Sockaddr, _ uint16) (time.Time, error) {
+			s6, ok := s.(*unix.SockaddrInet6)
+			require.True(t, ok)
+			from, _ := netip.AddrFromSlice(s6.Addr[:])
+			require.Equal(t, src, from)
+			h := &ptp.Header{}
+			require.NoError(t, ptp.FromBytes(b, h))
+			seq <- h.SequenceID
 			return base, nil
 		})
 
-	p := &SPTP{clockID: testClockID, eventConns: []UDPConnWithTS{mockEventConn}}
+	p := &SPTP{clockID: testClockID, pdelaySrc: map[bool]netip.Addr{false: src}, eventConns: []UDPConnWithTS{mockEventConn}}
 
 	// the responder goroutine only records an error; require runs on the test goroutine
 	var respErr error
@@ -554,10 +565,12 @@ func TestPingSendFailureReleasesSlot(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			mockEventConn := NewMockUDPConnWithTS(ctrl)
-			mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).
-				Return(time.Time{}, errors.New("send failed"))
+			mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(time.Time{}, errors.New("send failed")).AnyTimes()
+			mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(time.Time{}, errors.New("send failed")).AnyTimes()
 
-			p := &SPTP{clockID: ptp.ClockIdentity(1), eventConns: []UDPConnWithTS{mockEventConn}}
+			p := &SPTP{clockID: ptp.ClockIdentity(1), pdelaySrc: testPDelaySrc, eventConns: []UDPConnWithTS{mockEventConn}}
 			_, err := p.Ping(t.Context(), tt.target)
 			require.ErrorContains(t, err, "send failed")
 			require.Nil(t, p.inflight(), "a failed send must not leave the slot held")
@@ -633,10 +646,10 @@ func TestPingCancelledWithCauseIsNotAnEmptyResult(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockEventConn := NewMockUDPConnWithTS(ctrl)
-	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any()).
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(time.Unix(1700000000, 0), nil)
 
-	p := &SPTP{clockID: testClockID, eventConns: []UDPConnWithTS{mockEventConn}}
+	p := &SPTP{clockID: testClockID, pdelaySrc: testPDelaySrc, eventConns: []UDPConnWithTS{mockEventConn}}
 	shutdown := errors.New("shutting down")
 	ctx, cancel := context.WithCancelCause(t.Context())
 	go func() {
@@ -892,14 +905,16 @@ func TestCollectPingReplyUnconfiguredGMCompletes(t *testing.T) {
 	}
 }
 
-// the EUI-64 link-local has no DNS, so the MAC from ClockIdentity is what
-// identifies the responder
-func TestCollectPDelayRespRecordsResponderMAC(t *testing.T) {
-	req := newTestPingRequest(t, 42, pingPeer)
-	resp := &ptp.PDelayResp{}
-	resp.SourcePortIdentity.ClockIdentity = ptp.ClockIdentity(0xc470bdfffe857d36)
-	resp.RequestingPortIdentity = req.requester
-
-	req.collectPDelayResp(resp, pingPeer, time.Unix(1700000000, 0))
-	require.Equal(t, "c4:70:bd:85:7d:36", req.results[pingPeer].ResponderMAC)
+// an IPv6 source cannot pin a probe to the IPv4 group, so fail rather than send it
+func TestPingMulticastRejectsSourceFamilyMismatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	p := &SPTP{
+		clockID:    ptp.ClockIdentity(1),
+		pdelaySrc:  testPDelaySrc,
+		eventConns: []UDPConnWithTS{NewMockUDPConnWithTS(ctrl)},
+	}
+	_, err := p.Ping(t.Context(), netip.MustParseAddr(ptp.PDelayMulticastIPv4))
+	require.ErrorContains(t, err, "no source address to probe")
+	require.Nil(t, p.inflight(), "a rejected probe must not hold the slot")
 }
