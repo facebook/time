@@ -449,7 +449,9 @@ func ReqPDelay(clockID ClockIdentity, portID uint16, seq uint16) *PDelayReq {
 	}
 }
 
-// RespPDelay builds a Pdelay_Resp packet
+// RespPDelay builds a Pdelay_Resp packet. Its correctionField is deliberately left
+// at zero so transparent clocks can accrue the response path into it; the request
+// path is relayed by RespFollowUpPDelay.
 func RespPDelay(clockID ClockIdentity, portID uint16, reqReceiptTS Timestamp, req *PDelayReq) *PDelayResp {
 	return &PDelayResp{
 		Header: Header{
@@ -471,7 +473,9 @@ func RespPDelay(clockID ClockIdentity, portID uint16, reqReceiptTS Timestamp, re
 	}
 }
 
-// RespFollowUpPDelay builds a Pdelay_Resp_Follow_Up packet
+// RespFollowUpPDelay builds a Pdelay_Resp_Follow_Up packet. A two-step responder
+// relays the Pdelay_Req correctionField here (IEEE 1588 11.4.2) because that message
+// never reaches the requester, so this field is the REQUEST path, not the response.
 func RespFollowUpPDelay(clockID ClockIdentity, portID uint16, respOriginTS Timestamp, req *PDelayReq) *PDelayRespFollowUp {
 	return &PDelayRespFollowUp{
 		Header: Header{

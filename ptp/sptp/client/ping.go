@@ -371,6 +371,9 @@ func (r *pingRequest) matches(h ptp.Header, addr netip.Addr) bool {
 	return r.multicast || addr == r.target
 }
 
+// collectPDelayResp records T2, T4 and the response-path correction field. The
+// responder sends Pdelay_Resp with a zero correctionField, so whatever arrives in
+// it was accrued by transparent clocks on the way back.
 func (r *pingRequest) collectPDelayResp(resp *ptp.PDelayResp, addr netip.Addr, rxts time.Time) {
 	if resp.RequestingPortIdentity != r.requester {
 		return
@@ -378,12 +381,14 @@ func (r *pingRequest) collectPDelayResp(resp *ptp.PDelayResp, addr netip.Addr, r
 	r.Lock()
 	defer r.Unlock()
 	res := r.result(addr)
-	res.CorrectionFieldReq = resp.CorrectionField.Duration()
+	res.CorrectionFieldResp = resp.CorrectionField.Duration()
 	res.T2 = resp.RequestReceiptTimestamp.Time()
 	res.T4 = rxts
 }
 
-// collectPDelayRespFollowUp records T3 and the response-path correction field
+// collectPDelayRespFollowUp records T3 and the request-path correction field. The
+// Pdelay_Req never comes back, so the responder relays the correction it arrived
+// with in this message (IEEE 1588 11.4.2).
 func (r *pingRequest) collectPDelayRespFollowUp(resp *ptp.PDelayRespFollowUp, addr netip.Addr) {
 	if resp.RequestingPortIdentity != r.requester {
 		return
@@ -391,7 +396,7 @@ func (r *pingRequest) collectPDelayRespFollowUp(resp *ptp.PDelayRespFollowUp, ad
 	r.Lock()
 	defer r.Unlock()
 	res := r.result(addr)
-	res.CorrectionFieldResp = resp.CorrectionField.Duration()
+	res.CorrectionFieldReq = resp.CorrectionField.Duration()
 	res.T3 = resp.ResponseOriginTimestamp.Time()
 	res.SWRTT = time.Since(r.sentAt)
 	r.complete()

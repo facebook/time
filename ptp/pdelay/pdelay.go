@@ -28,9 +28,13 @@ Timestamp exchange:
   - T3: Pdelay_Resp departure time (responder)
   - T4: Pdelay_Resp arrival time (requester)
 
-CorrectionFields compensate for residence time in Transparent Clocks:
-  - CFReq: from PDelay_Resp (request path: requester→responder)
-  - CFResp: from PDelay_Resp_Follow_Up (response path: responder→requester)
+CorrectionFields compensate for residence time in Transparent Clocks. The
+Pdelay_Req never reaches the requester, so the responder relays the correction it
+accumulated into the Pdelay_Resp_Follow_Up (IEEE 1588 11.4.2) and sends the
+Pdelay_Resp with a zero correctionField, leaving that field to accrue the
+response path in flight:
+  - CFReq: from PDelay_Resp_Follow_Up (request path: requester->responder)
+  - CFResp: from PDelay_Resp (response path: responder->requester)
 
 Path delay = ((T2 - T1 - CFReq) + (T4 - T3 - CFResp)) / 2
 Offset = ((T2 - T1 - CFReq) - (T4 - T3 - CFResp)) / 2
@@ -54,9 +58,9 @@ type Result struct {
 	T3 time.Time `json:"t3"`
 	// T4 is the Pdelay_Resp arrival time at requester
 	T4 time.Time `json:"t4"`
-	// CorrectionFieldReq is the CF from PDelay_Resp (request path: requester→responder)
+	// CorrectionFieldReq is the CF from PDelay_Resp_Follow_Up (request path: requester->responder)
 	CorrectionFieldReq time.Duration `json:"cf_req"`
-	// CorrectionFieldResp is the CF from PDelay_Resp_Follow_Up (response path: responder→requester)
+	// CorrectionFieldResp is the CF from PDelay_Resp (response path: responder->requester)
 	CorrectionFieldResp time.Duration `json:"cf_resp"`
 	// Timestamp is when this measurement was taken
 	Timestamp time.Time `json:"timestamp"`

@@ -62,15 +62,23 @@ func TestPingCorrectionFieldsAreNotSwapped(t *testing.T) {
 	req := newTestPingRequest(t, 42, netip.MustParseAddr("ff02::6b"))
 
 	base := time.Unix(1700000000, 0)
-	resp := ptp.RespPDelay(ptp.ClockIdentity(1), 1, ptp.NewTimestamp(base.Add(100*time.Microsecond)),
-		ptp.ReqPDelay(testClockID, pingPDelayPort, 42))
-	resp.CorrectionField = ptp.NewCorrection(float64(3 * time.Microsecond))
+	// Built by the real responder so the two sides cannot drift apart: a transparent
+	// clock charged 3us to the Pdelay_Req, which comes back relayed in the follow-up,
+	// and 4us to the Pdelay_Resp in flight.
+	pdelayReq := ptp.ReqPDelay(testClockID, pingPDelayPort, 42)
+	pdelayReq.CorrectionField = ptp.NewCorrection(float64(3 * time.Microsecond))
+
+	resp := ptp.RespPDelay(ptp.ClockIdentity(1), 1,
+		ptp.NewTimestamp(base.Add(100*time.Microsecond)), pdelayReq)
+	require.Zero(t, resp.CorrectionField.Duration(), "responder must leave the response path free")
+	resp.CorrectionField = ptp.NewCorrection(float64(4 * time.Microsecond))
 	respBytes, err := ptp.Bytes(resp)
 	require.NoError(t, err)
 
-	followUp := ptp.RespFollowUpPDelay(ptp.ClockIdentity(1), 1, ptp.NewTimestamp(base.Add(200*time.Microsecond)),
-		ptp.ReqPDelay(testClockID, pingPDelayPort, 42))
-	followUp.CorrectionField = ptp.NewCorrection(float64(4 * time.Microsecond))
+	followUp := ptp.RespFollowUpPDelay(ptp.ClockIdentity(1), 1,
+		ptp.NewTimestamp(base.Add(200*time.Microsecond)), pdelayReq)
+	require.Equal(t, 3*time.Microsecond, followUp.CorrectionField.Duration(),
+		"responder relays the request path in the follow-up")
 	followUpBytes, err := ptp.Bytes(followUp)
 	require.NoError(t, err)
 
@@ -79,8 +87,8 @@ func TestPingCorrectionFieldsAreNotSwapped(t *testing.T) {
 
 	res := req.results[pingPeer]
 	res.T1 = base
-	require.Equal(t, 3*time.Microsecond, res.CorrectionFieldReq, "CF from Pdelay_Resp is the request path")
-	require.Equal(t, 4*time.Microsecond, res.CorrectionFieldResp, "CF from Follow_Up is the response path")
+	require.Equal(t, 3*time.Microsecond, res.CorrectionFieldReq, "CF from Follow_Up is the request path")
+	require.Equal(t, 4*time.Microsecond, res.CorrectionFieldResp, "CF from Pdelay_Resp is the response path")
 	require.True(t, res.Valid())
 
 	// forward = (T2-T1)-CFReq = 100us-3us = 97us; backward = (T4-T3)-CFResp = 110us-4us = 106us

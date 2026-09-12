@@ -540,6 +540,7 @@ func TestRespPDelayMarshalUnmarshal(t *testing.T) {
 	reqPortID := uint16(2)
 	seq := uint16(42)
 	req := ReqPDelay(reqClockID, reqPortID, seq)
+	req.CorrectionField = NewCorrection(968)
 
 	clockID := ClockIdentity(0x123456789abcdef0)
 	portID := uint16(1)
@@ -564,6 +565,8 @@ func TestRespPDelayMarshalUnmarshal(t *testing.T) {
 	require.Equal(t, req.SourcePortIdentity, decoded.RequestingPortIdentity)
 	require.Equal(t, FlagTwoStep, decoded.FlagField)
 	require.Equal(t, reqReceiptTS, decoded.RequestReceiptTimestamp)
+	// The request path goes in the follow-up; this field is left to the response path.
+	require.Zero(t, decoded.CorrectionField)
 
 	pp, err := DecodePacket(b)
 	require.NoError(t, err)
