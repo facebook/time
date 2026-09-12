@@ -238,7 +238,9 @@ func (c *Client) handleDelayReq(clockID ptp.ClockIdentity, ts time.Time) error {
 func (c *Client) RunOnce(ctx context.Context, config *Config) *RunResult {
 	ctx, cancel := context.WithTimeout(ctx, config.ExchangeTimeout)
 	defer cancel()
-	errchan := make(chan error)
+	// buffered: on timeout this select and the exchange goroutine's can both be ready,
+	// so the goroutine must be able to report even once nothing is receiving
+	errchan := make(chan error, 1)
 
 	result := &RunResult{
 		Server: c.server,

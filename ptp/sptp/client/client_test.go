@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/binary"
 	"net/netip"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,6 +153,49 @@ func TestClientTimeout(t *testing.T) {
 	runResult := c.RunOnce(ctx, &Config{ExchangeTimeout: defaultTestTimeout})
 	require.NotNil(t, runResult)
 	require.Error(t, runResult.Error, "full client run should fail")
+}
+
+func TestClientTimeoutReleasesGoroutine(t *testing.T) {
+	const runs = 20
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	cid := ptp.ClockIdentity(0xc42a1fffe6d7ca6)
+
+	eventConn := NewMockUDPConnWithTS(ctrl)
+	statsServer := NewMockStatsServer(ctrl)
+	c, err := NewClient(netip.MustParseAddr("127.0.0.1"), ptp.PortEvent, cid, eventConn, nil, &Config{}, statsServer)
+	require.NoError(t, err)
+	statsServer.EXPECT().IncTXDelayReq().Times(runs)
+	eventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(runs)
+
+	// a delta, so exchanges parked by an earlier test in this binary cannot fail this one
+	_, before := exchangeGoroutines()
+
+	for range runs {
+		runResult := c.RunOnce(t.Context(), &Config{ExchangeTimeout: 20 * time.Millisecond})
+		require.ErrorIs(t, runResult.Error, context.DeadlineExceeded, "unanswered exchange should time out")
+	}
+
+	// an exchange that cannot report its timeout parks forever, so waiting never clears it
+	deadline := time.Now().Add(5 * time.Second)
+	stacks, left := exchangeGoroutines()
+	for left > before && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+		stacks, left = exchangeGoroutines()
+	}
+	require.Equal(t, before, left, "exchange goroutines still parked after their timeout:\n%s", stacks)
+}
+
+func exchangeGoroutines() (string, int) {
+	for size := 1 << 20; ; size *= 2 {
+		buf := make([]byte, size)
+		// a dump that exactly fills buf may have been truncated, hiding parked goroutines
+		if n := runtime.Stack(buf, true); n < size {
+			stacks := string(buf[:n])
+			return stacks, strings.Count(stacks, "(*Client).RunOnce.func1")
+		}
+	}
 }
 
 func TestClientBadPacket(t *testing.T) {
