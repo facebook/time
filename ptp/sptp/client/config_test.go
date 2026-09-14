@@ -52,7 +52,7 @@ func TestReadConfigDefaults(t *testing.T) {
 			PathDelayDiscardMultiplier: 1000,
 		},
 		ListenAddress: "::",
-		Asymmetry:     AsymmetryConfig{MaxConsecutiveAsymmetry: 10},
+		Asymmetry:     AsymmetryConfig{MaxConsecutiveAsymmetry: 10, MaxPortChanges: 4},
 	}
 	require.Equal(t, want, cfg)
 }
@@ -772,7 +772,7 @@ func TestPrepareConfigDefaults(t *testing.T) {
 			PathDelayDiscardMultiplier:    1000,
 		},
 		ListenAddress: "::",
-		Asymmetry:     AsymmetryConfig{MaxConsecutiveAsymmetry: 10},
+		Asymmetry:     AsymmetryConfig{MaxConsecutiveAsymmetry: 10, MaxPortChanges: 4},
 	}
 	require.Equal(t, want, cfg)
 }

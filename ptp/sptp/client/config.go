@@ -160,6 +160,8 @@ func DefaultConfig() *Config {
 		ListenAddress: "::",
 		Asymmetry: AsymmetryConfig{
 			MaxConsecutiveAsymmetry: 10,
+			// a zero would make any single bumped GM condemn the selected one
+			MaxPortChanges: 4,
 		},
 	}
 }

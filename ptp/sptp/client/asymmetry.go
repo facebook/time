@@ -53,7 +53,11 @@ func correctNonSelectedGMsAsymmetry(clients map[netip.Addr]*Client, results map[
 		if result == nil {
 			continue
 		}
-		client := clients[result.Server]
+		client, ok := clients[result.Server]
+		if !ok {
+			// result from unknown client, can be caused by malformed packets
+			continue
+		}
 		client.asymmetric = false
 		if result.Server == bestAddr {
 			continue

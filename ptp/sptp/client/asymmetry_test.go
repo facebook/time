@@ -741,3 +741,18 @@ func TestSimpleCorrectSelectedGMAsymmetry(t *testing.T) {
 	require.True(t, otherClient.asymmetric, "Asymmetric flag is unchanged on simple compensation")
 	require.Equal(t, 5, otherClient.asymmetryCounter, "Other GM asymmetry grace should stay the same")
 }
+
+// a malformed packet can yield a result for a server we never configured, and
+// the complex path used to dereference that missing client straight away
+func TestCorrectAsymmetryUnknownServer(t *testing.T) {
+	known := netip.MustParseAddr("192.168.0.10")
+	unknown := netip.MustParseAddr("192.168.0.99")
+	clients := map[netip.Addr]*Client{known: {}}
+	results := map[netip.Addr]*RunResult{
+		unknown: {Server: unknown, Measurement: &MeasurementResult{}},
+	}
+
+	require.NotPanics(t, func() {
+		correctAsymmetry(clients, results, known, AsymmetryConfig{AsymmetryThreshold: time.Microsecond})
+	})
+}
