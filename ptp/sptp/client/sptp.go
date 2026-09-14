@@ -35,6 +35,7 @@ import (
 
 	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/ptp/sptp/asymmetry"
 	"github.com/facebook/time/servo"
 	"github.com/facebook/time/timestamp"
 )
@@ -73,6 +74,8 @@ type SPTP struct {
 	pinger pingState
 	// pdelaySrc is the source multicast peer delay probes must come from, by family
 	pdelaySrc map[bool]netip.Addr
+	// corrector is nil when asymmetry correction is disabled
+	corrector asymmetry.Corrector
 
 	clockID ptp.ClockIdentity
 	genConn UDPConnNoTS
@@ -259,6 +262,7 @@ func (p *SPTP) init() error {
 	// only multicast pdelay needs this, so a routing gap must not stop the daemon:
 	// Ping fails closed per family instead
 	p.pdelaySrc = p.peerDelaySources()
+	p.corrector = newCorrector(p.cfg.Asymmetry)
 
 	p.genConn, err = NewUDPConn(net.ParseIP(p.cfg.ListenAddress), ptp.PortGeneral)
 	if err != nil {
@@ -801,16 +805,8 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 		// make sure we don't step after we get into the locked state
 		p.pi.UnsetFirstUpdate()
 	}
-	if p.cfg.Asymmetry.AsymmetryCorrectionEnabled {
-		if !isSpike && !isBadTick && p.pi.IsStable(bmOffset) {
-			var portChangeCount int
-			if p.cfg.Asymmetry.Simple {
-				portChangeCount = correctAsymmetrySimple(p.clients, results, bestAddr, p.cfg.Asymmetry)
-			} else {
-				portChangeCount = correctAsymmetry(p.clients, results, bestAddr, p.cfg.Asymmetry)
-			}
-			p.stats.IncPortChangeCount(portChangeCount)
-		}
+	if p.corrector != nil && !isSpike && !isBadTick && p.pi.IsStable(bmOffset) {
+		p.stats.IncPortChangeCount(p.correctAsymmetry(results, bestAddr))
 	}
 	return nil
 }
