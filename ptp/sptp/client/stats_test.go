@@ -43,14 +43,14 @@ func TestRunResultToStatsError(t *testing.T) {
 	}
 
 	t.Run("not selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, false, 0)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, false, 0, 0)
 		require.Equal(t, want, got)
 	})
 
 	// A grandmaster we could not reach must never be published as selected,
 	// whatever the caller passes.
 	t.Run("selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, true, int(servo.StateFilter))
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, true, int(servo.StateFilter), 0)
 		require.Equal(t, want, got)
 	})
 }
@@ -64,14 +64,14 @@ func TestRunResultToStatsNoMeasurement(t *testing.T) {
 	}
 
 	t.Run("not selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false, int(servo.StateFilter))
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false, int(servo.StateFilter), 0)
 		require.Equal(t, want, got)
 	})
 
 	want.Selected = true
 	want.ServoState = int(servo.StateFilter)
 	t.Run("selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true, int(servo.StateFilter))
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true, int(servo.StateFilter), 0)
 		require.Equal(t, want, got)
 	})
 }
@@ -135,13 +135,13 @@ func TestRunResultToStats(t *testing.T) {
 	}
 
 	t.Run("not selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false, 2)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false, 2, 0)
 		require.Equal(t, want, got)
 	})
 	want.Selected = true
 	want.ServoState = 2
 	t.Run("selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true, 2)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true, 2, 0)
 		require.Equal(t, want, got)
 	})
 }
@@ -266,4 +266,14 @@ func TestGetCountersDuringCounterUpdates(t *testing.T) {
 	require.Equal(t, int64(updates), got["ptp.sptp.portstats.tx.delay_req"])
 	require.Equal(t, int64(updates), got["ptp.sptp.portstats.rx.unsupported"])
 	require.Equal(t, int64(updates), got["ptp.sptp.port_change_count"])
+}
+
+// the process-wide counter cannot say which GM was corrected, so the per-GM
+// stat carries that GM's own port offset
+func TestRunResultToGMStatsPortChangeCount(t *testing.T) {
+	r := &RunResult{Measurement: &MeasurementResult{Announce: ptp.Announce{}}}
+	require.Equal(t, uint64(3), runResultToGMStats(
+		netip.MustParseAddr("2401:db00::1"), r, 1, true, 0, 3).PortChangeCount)
+	require.Zero(t, runResultToGMStats(
+		netip.MustParseAddr("2401:db00::1"), r, 1, true, 0, 0).PortChangeCount)
 }

@@ -641,11 +641,21 @@ func (p *SPTP) reprioritize(bestAddr netip.Addr) {
 	}
 }
 
+// portChanges is how many times asymmetry correction has moved this GM's response
+// port. The process-wide counter cannot say which GM was corrected.
+func (p *SPTP) portChanges(addr netip.Addr) uint16 {
+	tlv := getAlternateResponsePortTLV(p.clients[addr])
+	if tlv == nil {
+		return 0
+	}
+	return tlv.Offset
+}
+
 func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 	var state servo.State
 	defer func() {
 		for addr, res := range results {
-			s := runResultToGMStats(addr, res, p.priorities[addr], addr == p.bestGM, int(state))
+			s := runResultToGMStats(addr, res, p.priorities[addr], addr == p.bestGM, int(state), p.portChanges(addr))
 			p.stats.SetGMStats(s)
 		}
 	}()

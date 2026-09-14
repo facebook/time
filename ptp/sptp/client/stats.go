@@ -244,11 +244,12 @@ func (s *Stats) CollectSysStats() {
 	s.gcPauseTotalNs = int64(s.memstats.PauseTotalNs)
 }
 
-func runResultToGMStats(address netip.Addr, r *RunResult, p3 int, selected bool, servoState int) *gmstats.Stat {
+func runResultToGMStats(address netip.Addr, r *RunResult, p3 int, selected bool, servoState int, portChanges uint16) *gmstats.Stat {
 	s := &gmstats.Stat{
 		GMAddress: address.String(),
 		Priority3: uint8(p3),
 	}
+	s.PortChangeCount = uint64(portChanges)
 
 	if r.Error != nil {
 		s.GMPresent = 0
