@@ -605,6 +605,12 @@ func (s *Daemon) meanCoeffPPB(prev, cur *fbclock.DataV2) int64 {
 	return s.state.getMeanCoeffPPB(coefPPB)
 }
 
+// readClocks samples the clocks a DataV2 record is built from. A seam for time
+// sources that discipline a clock other than the PHC.
+func (s *Daemon) readClocks() (time.Time, time.Time, uint32, time.Duration, error) {
+	return s.getPHCAndSysTime()
+}
+
 // populateDataV2 populates fbclock.DataV2 with data from fbclock.Data plus calculated values
 func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 	prevPrimary := fbclock.DataV2{}
@@ -620,7 +626,7 @@ func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 			continue
 		}
 		curData := *d
-		phcTime, sysTime, clockID, phcReadDelay, err := s.getPHCAndSysTime()
+		phcTime, sysTime, clockID, phcReadDelay, err := s.readClocks()
 		if err != nil {
 			log.Errorf("reading PHC time from %s: %v", s.cfg.Iface, err)
 			s.stats.UpdateCounterBy("phc_read_error", 1)
