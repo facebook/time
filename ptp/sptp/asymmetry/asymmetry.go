@@ -87,11 +87,41 @@ type Config struct {
 	MaxPortChanges uint16
 }
 
+// Observation is one round of evidence about this host's clock. Each source
+// arrives on its own cadence -- grandmasters every sync tick, in-rack peers
+// whenever the peer delay probe runs -- so a corrector is given whichever
+// arrived and keeps what it weighs.
+type Observation struct {
+	// GMs is what each grandmaster reported, keyed by address. Set on a sync tick.
+	GMs map[netip.Addr]*GM
+	// Best is the currently selected grandmaster. Set alongside GMs.
+	Best netip.Addr
+	// Peers is what each in-rack peer reported. Set when a peer delay probe
+	// completes; an unusable exchange is left out rather than counted as
+	// agreement.
+	Peers []Peer
+	// At is when this round was measured.
+	At time.Time
+}
+
+// Peer is one in-rack measurement. Identity and measurement time are kept
+// separate from the offset so a corrector can drop duplicate or stale peers
+// before it counts a quorum.
+type Peer struct {
+	// Addr is the responder, which identifies the peer across probes.
+	Addr netip.Addr
+	// Offset is this host against that peer.
+	Offset time.Duration
+	// At is when the exchange was measured, not when it was handed over.
+	At time.Time
+}
+
 // Corrector decides whether any response port should move. Name identifies the
 // implementation in stats, so an experiment can attribute a host to its arm.
 type Corrector interface {
-	// Correct returns how many GMs had their port moved.
-	Correct(gms map[netip.Addr]*GM, best netip.Addr) int
+	// Observe takes one round of evidence and returns how many GMs had their
+	// port moved. A round carrying nothing the corrector weighs moves none.
+	Observe(obs Observation) int
 	Name() string
 }
 

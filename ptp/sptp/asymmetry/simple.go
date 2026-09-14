@@ -30,9 +30,13 @@ type Simple struct{ Config Config }
 // Name implements Corrector.
 func (s *Simple) Name() string { return "simple" }
 
-// Correct implements Corrector.
-func (s *Simple) Correct(gms map[netip.Addr]*GM, best netip.Addr) int {
+// Observe implements Corrector. Simple weighs what the other grandmasters report.
+func (s *Simple) Observe(obs Observation) int {
+	gms, best := obs.GMs, obs.Best
 	selected := gms[best]
+	if selected == nil && len(gms) == 0 {
+		return 0
+	}
 	if selected == nil {
 		log.Errorf("selected GM %v is not in the GM list", best)
 		return 0

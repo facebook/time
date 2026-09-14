@@ -103,6 +103,7 @@ type AsymmetryConfig struct {
 	MaxConsecutiveAsymmetry    uint16        `yaml:"max_consecutive_asymmetry"` // number of consecutive bad measurements after which we consider the GM to be using an Asymmetric path
 	MaxPortChanges             uint16        `yaml:"max_port_changes"`          // number of port changes after which we will consider the best GM to be using an Asymmetric path
 	Simple                     bool          `yaml:"simple"`                    // use simple asymmetry correction, which only changes port of the currently selected GM when the majority of clients are asymmetric
+	Rack                       bool          `yaml:"rack"`                      // correct from in-rack peer delay, which unlike GM offset a locked servo cannot hide
 }
 
 // Validate AsymmetryConfig is sane

@@ -18,7 +18,9 @@ package client
 
 import (
 	"net/netip"
+	"time"
 
+	"github.com/facebook/time/ptp/pdelay"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/sptp/asymmetry"
 )
@@ -33,10 +35,26 @@ func newCorrector(config AsymmetryConfig) asymmetry.Corrector {
 		MaxConsecutive: config.MaxConsecutiveAsymmetry,
 		MaxPortChanges: config.MaxPortChanges,
 	}
-	if config.Simple {
+	switch {
+	case config.Rack:
+		return &asymmetry.Rack{Config: c}
+	case config.Simple:
 		return &asymmetry.Simple{Config: c}
+	default:
+		return &asymmetry.Complex{Config: c}
 	}
-	return &asymmetry.Complex{Config: c}
+}
+
+// observePeers hands a completed multicast probe to the corrector.
+func (p *SPTP) observePeers(results pdelay.Results) {
+	peers := make([]asymmetry.Peer, 0, len(results))
+	for _, r := range results {
+		if r == nil || r.Error != nil || !r.Valid() {
+			continue
+		}
+		peers = append(peers, asymmetry.Peer{Addr: r.Responder, Offset: r.Offset(), At: r.Timestamp})
+	}
+	p.corrector.Observe(asymmetry.Observation{Peers: peers, At: time.Now()})
 }
 
 // correctAsymmetry hands the tick's measurements to the corrector and writes any
@@ -50,7 +68,7 @@ func (p *SPTP) correctAsymmetry(results map[netip.Addr]*RunResult, bestAddr neti
 	for addr, client := range p.clients {
 		gms[addr] = newGM(client, results[addr])
 	}
-	n := p.corrector.Correct(gms, bestAddr)
+	n := p.corrector.Observe(asymmetry.Observation{GMs: gms, Best: bestAddr, At: time.Now()})
 	for addr, gm := range gms {
 		client := p.clients[addr]
 		client.asymmetric = gm.Asymmetric

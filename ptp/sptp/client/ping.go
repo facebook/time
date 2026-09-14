@@ -216,6 +216,10 @@ func (p *SPTP) Ping(ctx context.Context, target netip.Addr) (pdelay.Results, err
 		}
 		res = append(res, &snapshot)
 	}
+	// only a multicast probe measures the rack; a unicast one says nothing about it
+	if req.multicast && p.corrector != nil {
+		p.observePeers(res)
+	}
 	return res, nil
 }
 

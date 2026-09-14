@@ -17,13 +17,30 @@ limitations under the License.
 package client
 
 import (
+	"errors"
 	"net/netip"
 	"testing"
 	"time"
 
+	"github.com/facebook/time/ptp/pdelay"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/stretchr/testify/require"
 )
+
+// a peer reporting us 3us off, which is past the threshold these tests use.
+// Each needs its own responder: Rack counts distinct peers, not exchanges.
+func peerResult(n byte) *pdelay.Result {
+	base := time.Now()
+	const offset = 3 * time.Microsecond
+	return &pdelay.Result{
+		Responder: netip.AddrFrom4([4]byte{10, 0, 0, n}),
+		T1:        base,
+		T2:        base.Add(100*time.Nanosecond + offset),
+		T3:        base.Add(200 * time.Nanosecond),
+		T4:        base.Add(300*time.Nanosecond - offset),
+		Timestamp: base,
+	}
+}
 
 func TestNewCorrector(t *testing.T) {
 	require.Nil(t, newCorrector(AsymmetryConfig{}), "disabled yields no corrector")
@@ -169,4 +186,47 @@ func TestCorrectAsymmetryCoversSilentClients(t *testing.T) {
 	require.Zero(t, getAlternateResponsePortTLV(p.clients[silent]).Offset,
 		"a GM with no result must still have its stale port offset cleared")
 	require.False(t, p.clients[silent].asymmetric, "and its stale flag cleared")
+}
+
+func TestNewCorrectorRack(t *testing.T) {
+	c := newCorrector(AsymmetryConfig{AsymmetryCorrectionEnabled: true, Rack: true})
+	require.Equal(t, "rack", c.Name())
+
+	// rack wins over simple, so a host cannot silently run two arms
+	c = newCorrector(AsymmetryConfig{AsymmetryCorrectionEnabled: true, Rack: true, Simple: true})
+	require.Equal(t, "rack", c.Name())
+}
+
+func TestObservePeersOnlyFeedsRack(t *testing.T) {
+	results := pdelay.Results{peerResult(1), peerResult(2), peerResult(3)}
+	best := netip.MustParseAddr("192.168.0.10")
+	clients := map[netip.Addr]*Client{best: {delayRequest: ReqDelay(ptp.ClockIdentity(1), 1)}}
+
+	p := &SPTP{
+		clients:   clients,
+		corrector: newCorrector(AsymmetryConfig{AsymmetryCorrectionEnabled: true, Rack: true, AsymmetryThreshold: time.Microsecond}),
+	}
+	p.observePeers(results)
+	require.Equal(t, 1, p.correctAsymmetry(map[netip.Addr]*RunResult{best: announceResult(0, ptp.ClockClass6, false)}, best))
+
+	// simple does not implement peerObserver, so the probe is simply ignored
+	q := &SPTP{
+		clients:   map[netip.Addr]*Client{best: {delayRequest: ReqDelay(ptp.ClockIdentity(1), 1)}},
+		corrector: newCorrector(AsymmetryConfig{AsymmetryCorrectionEnabled: true, Simple: true, AsymmetryThreshold: time.Microsecond}),
+	}
+	require.NotPanics(t, func() { q.observePeers(results) })
+}
+
+func TestObservePeersSkipsUnusable(t *testing.T) {
+	best := netip.MustParseAddr("192.168.0.10")
+	bad := peerResult(1)
+	bad.Error = errors.New("incomplete response")
+
+	p := &SPTP{
+		clients:   map[netip.Addr]*Client{best: {delayRequest: ReqDelay(ptp.ClockIdentity(1), 1)}},
+		corrector: newCorrector(AsymmetryConfig{AsymmetryCorrectionEnabled: true, Rack: true, AsymmetryThreshold: time.Microsecond}),
+	}
+	p.observePeers(pdelay.Results{bad, nil})
+	// one bad exchange must not become a reading, let alone a zero one
+	require.Zero(t, p.correctAsymmetry(map[netip.Addr]*RunResult{best: announceResult(0, ptp.ClockClass6, false)}, best))
 }

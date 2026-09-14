@@ -29,8 +29,12 @@ type Complex struct{ Config Config }
 // Name implements Corrector.
 func (c *Complex) Name() string { return "complex" }
 
-// Correct implements Corrector.
-func (c *Complex) Correct(gms map[netip.Addr]*GM, best netip.Addr) int {
+// Observe implements Corrector. Complex weighs its own per-GM port search.
+func (c *Complex) Observe(obs Observation) int {
+	gms, best := obs.GMs, obs.Best
+	if len(gms) == 0 {
+		return 0
+	}
 	c.correctOthers(gms, best)
 	if c.selectedIsAsymmetric(gms) {
 		c.correctSelected(gms, best)
