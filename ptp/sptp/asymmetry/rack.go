@@ -17,6 +17,7 @@ limitations under the License.
 package asymmetry
 
 import (
+	"math"
 	"net/netip"
 	"slices"
 	"sync"
@@ -31,6 +32,11 @@ const (
 	rackMaxAge = 5 * time.Minute
 	// one or two responders is not a rack
 	rackMinPeers = 3
+	// 1.2533/1.349: the median's standard error in deviations, over the IQR's
+	// width in the same, so the deviation itself never has to be estimated
+	medianStdErrFactor = 0.9291
+	// how far from zero the median must sit before a port moves
+	rackSigmas = 3.0
 )
 
 // Rack moves the selected GM's port when in-rack peers agree this host's clock
@@ -49,6 +55,9 @@ type Rack struct {
 	median   time.Duration
 	spread   time.Duration
 	measured time.Time
+	// peers is how many distinct responders the reading is drawn from; the median
+	// is only as well determined as its sample is large
+	peers int
 	// spent marks a reading already used to move a port. Sync ticks are far more
 	// frequent than probes, so without this one observation would move the port
 	// again on every tick until the next probe replaced it.
@@ -106,6 +115,7 @@ func (r *Rack) observePeers(peers []Peer) {
 		lo = 0
 	}
 	r.spread = sorted[len(sorted)-1-lo] - sorted[lo]
+	r.peers = len(sorted)
 	r.measured = measured
 	r.spent = false
 }
@@ -125,8 +135,22 @@ func (r *Rack) verdict(now time.Time) (median time.Duration, quiet, known bool, 
 	if r.measured.IsZero() || now.Sub(r.measured) > rackMaxAge {
 		return 0, false, false, r.measured
 	}
-	quiet = r.median.Abs() <= r.Config.Threshold || r.spread >= r.median.Abs()
+	quiet = r.median.Abs() <= r.Config.Threshold || !r.decided()
 	return r.median, quiet, true, r.measured
+}
+
+// decided reports whether the peers place the median far enough from zero to act
+// on. Comparing the spread directly to the median ignores how many peers were
+// asked, which both blocks a wide-spread rack where many peers still agree on a
+// centre -- switches that do not correct residence time spread every offset by
+// microseconds -- and acts on a bare quorum that happens to look tight.
+func (r *Rack) decided() bool {
+	if r.peers < rackMinPeers {
+		return false
+	}
+	// standard error of a median, with the IQR standing in for the deviation
+	stderr := medianStdErrFactor * float64(r.spread) / math.Sqrt(float64(r.peers))
+	return math.Abs(float64(r.median)) > rackSigmas*stderr
 }
 
 // takeBias returns the reading and marks it spent in one step, so a probe landing

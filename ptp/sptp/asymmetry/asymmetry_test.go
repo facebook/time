@@ -527,3 +527,52 @@ func TestRackVerdictKeepsMeasuredWhenUnusable(t *testing.T) {
 	_, _, _, never := (&Rack{}).verdict(now)
 	require.True(t, never.IsZero(), "and zero when nothing ever probed")
 }
+
+// a switch that does not correct residence time spreads every peer offset by
+// microseconds, which the old spread-against-median guard read as disagreement
+// and refused to act on however many peers agreed on a centre
+func TestRackActsOnWideSpreadWithManyPeers(t *testing.T) {
+	now := time.Now()
+	offsets := make([]time.Duration, 0, 45)
+	for i := range 45 {
+		offsets = append(offsets, 2000+time.Duration((i%9)*600-2400))
+	}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
+	r.Observe(Observation{Peers: peersAt(now, offsets...)})
+
+	_, _, known, _ := r.verdict(now)
+	require.True(t, known)
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+	require.Equal(t, 1, r.Observe(Observation{GMs: gms, Best: addrA}),
+		"45 peers centred on 2us is a verdict even when the spread exceeds it")
+}
+
+// and the converse: a bare quorum is weak evidence however tidy it looks
+func TestRackHoldsOnThinQuorumWithLooseSpread(t *testing.T) {
+	now := time.Now()
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
+	r.Observe(Observation{Peers: peersAt(now, 1000, 1500, 2000)})
+
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}),
+		"three peers spanning 1us do not place the median")
+	require.Zero(t, gms[addrA].PortOffset)
+}
+
+// sample size is what separates them: the same spread decides with enough peers
+func TestRackDecidedScalesWithPeerCount(t *testing.T) {
+	now := time.Now()
+	thin := &Rack{Config: Config{Threshold: time.Microsecond}}
+	thin.Observe(Observation{Peers: peersAt(now, 1000, 1500, 2000)})
+	_, thinQuiet, _, _ := thin.verdict(now)
+	require.True(t, thinQuiet)
+
+	wide := make([]time.Duration, 0, 40)
+	for i := range 40 {
+		wide = append(wide, 1500+time.Duration((i%5)*250-500))
+	}
+	many := &Rack{Config: Config{Threshold: time.Microsecond}}
+	many.Observe(Observation{Peers: peersAt(now, wide...)})
+	_, manyQuiet, _, _ := many.verdict(now)
+	require.False(t, manyQuiet, "same centre, same spread, more peers")
+}
