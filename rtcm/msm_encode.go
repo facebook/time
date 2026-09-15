@@ -68,6 +68,12 @@ const (
 	invalidFineRate  = -1 << 14 // DF404
 )
 
+// DF419 carries the GLONASS frequency channel as k+7; 15 means unknown.
+const (
+	glonassFreqMax     = 13
+	glonassFreqUnknown = 15
+)
+
 // GNSS signal wavelengths in meters, keyed by u-blox sigID.
 var signalWavelength = map[uint8]map[uint8]float64{
 	GnssGPS:     {0: speedOfLight / 1575.42e6, 3: speedOfLight / 1227.60e6, 4: speedOfLight / 1227.60e6, 6: speedOfLight / 1176.45e6, 7: speedOfLight / 1176.45e6},
@@ -112,6 +118,9 @@ var (
 	// satellite the receiver never acquired, this is corrupt data.
 	nonFinitePseudoranges atomic.Uint64
 
+	// weakSignals counts observations dropped by the minimum CNO threshold.
+	weakSignals atomic.Uint64
+
 	voidedRoughRanges     atomic.Uint64
 	voidedRoughRates      atomic.Uint64
 	voidedFinePRs         atomic.Uint64
@@ -119,6 +128,21 @@ var (
 	voidedFineRates       atomic.Uint64
 	receiverFlaggedPhases atomic.Uint64
 )
+
+// minCNO is the carrier-to-noise floor in dB-Hz; observations below it are not
+// encoded. Zero disables the filter.
+var minCNO uint
+
+// SetMinCNO sets the carrier-to-noise floor in dB-Hz. Zero disables filtering.
+func SetMinCNO(cno uint) {
+	minCNO = cno
+}
+
+// WeakSignals returns the cumulative number of observations dropped for
+// falling below the minimum CNO.
+func WeakSignals() uint64 {
+	return weakSignals.Load()
+}
 
 // DroppedSats returns the cumulative number of satellites dropped to fit the
 // RTCM3 length field and the 64-bit cell mask.
@@ -211,6 +235,13 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 		// magnitude check or corrupt data is discarded as a ghost, uncounted.
 		if !isFinite(obs[i].PrMes) {
 			nonFinitePseudoranges.Add(1)
+			continue
+		}
+		// Below this the receiver still reports a pseudorange but rarely a
+		// usable carrier phase, and casters score those cells as cycle slips.
+		// Kept after the finite check so corrupt data stays counted as corrupt.
+		if minCNO > 0 && uint(obs[i].CNO) < minCNO {
+			weakSignals.Add(1)
 			continue
 		}
 		if obs[i].PrMes <= 0 {
@@ -312,12 +343,17 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 		// one value, or they can disagree by a 1/1024 ms quantum: 292.8 m.
 		roughUnits uint32
 		set        bool
+		freqID     uint8
 	}
 	satData := make([]satInfo, numSat)
 	for i := range satData {
 		satData[i].roughUnits = invalidRoughUnits
+		satData[i].freqID = glonassFreqUnknown
 	}
 	for _, c := range cells {
+		if gnssID == GnssGLONASS && c.obs.FreqID <= glonassFreqMax {
+			satData[c.satIdx].freqID = c.obs.FreqID
+		}
 		if !satData[c.satIdx].set {
 			rangeMs := c.obs.PrMes / speedOfLight * 1000.0 // convert m to light-ms
 			if roughUnits := quantizeRoughRange(rangeMs); roughUnits != invalidRoughUnits {
@@ -376,8 +412,13 @@ func EncodeMSM7(stationID uint16, gnssID uint8, epochMs uint32, obs []RawxObserv
 		w.WriteBits(satData[i].roughUnits>>10, 8)
 	}
 
-	// Satellite data: extended info (4 bits per sat)
-	for range numSat {
+	// Satellite data: extended info (4 bits per sat). DF419 for GLONASS,
+	// reserved elsewhere.
+	for i := range numSat {
+		if gnssID == GnssGLONASS {
+			w.WriteBits(uint32(satData[i].freqID), 4)
+			continue
+		}
 		w.WriteBits(0, 4)
 	}
 

@@ -72,6 +72,7 @@ type config struct {
 	ephInterval       time.Duration
 	monitoringPort    int
 	ntripVersion      int
+	minCNO            uint
 	dryRun            bool
 	chunked           bool
 	rawxStats         bool
@@ -116,9 +117,13 @@ func main() {
 		"NTRIP v2 only: send body using HTTP chunked transfer encoding")
 	flag.DurationVar(&cfg.ephInterval, "ephemeris-interval", 8*time.Second,
 		"how often to re-send cached ephemeris (1019) to the caster")
+	flag.UintVar(&cfg.minCNO, "min-cno", 28,
+		"drop observations below this carrier-to-noise density in dB-Hz (0 disables)")
 	flag.BoolVar(&cfg.rawxStats, "rawx-stats", false,
 		"read the socket and report the GNSS/signal breakdown of raw RAWX observations, then exit")
 	flag.Parse()
+
+	rtcm.SetMinCNO(cfg.minCNO)
 
 	if cfg.parse != "" {
 		if err := parseStream(cfg.parse); err != nil {
@@ -476,6 +481,7 @@ func streamFrames(
 					"gpsTowMs", gpsTowMs,
 					"frames_sent", frameCount,
 					"dropped_sats", rtcm.DroppedSats(),
+					"weak_signals", rtcm.WeakSignals(),
 					"non_finite_pseudoranges", rtcm.NonFinitePseudoranges(),
 					"voided_rough_ranges", rtcm.VoidedRoughRanges(),
 					"voided_rough_rates", rtcm.VoidedRoughRates(),

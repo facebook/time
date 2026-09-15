@@ -33,6 +33,7 @@ type decodedMSM7 struct {
 	sigs               []int // 1-based signal IDs from the signal mask
 	cells              []bool
 	roughInt, roughMod []uint32
+	extInfo            []uint32
 	roughRate          []int32
 	finePR, finePhase  []int32
 	lock, half, cnr    []uint32
@@ -91,7 +92,7 @@ func decodeMSM7(t *testing.T, frame []byte) decodedMSM7 {
 		d.roughInt = append(d.roughInt, r.ReadBits(8))
 	}
 	for range nsat {
-		r.ReadBits(4) // extended satellite info
+		d.extInfo = append(d.extInfo, r.ReadBits(4))
 	}
 	for range nsat {
 		d.roughMod = append(d.roughMod, r.ReadBits(10))
@@ -1060,4 +1061,103 @@ func TestEncodeMSM7EncodesValuesAtFieldLimits(t *testing.T) {
 
 		require.Equal(t, int32(maxFinePR), d.finePR[1], "DF405 still encodes")
 	})
+}
+
+func TestEncodeMSM7MinCNOFiltersWeakSignals(t *testing.T) {
+	t.Cleanup(func() { SetMinCNO(0) })
+
+	const stationID, epochMs = uint16(7), uint32(288093000)
+	const rangeM = 22000000.0
+	obs := []RawxObservation{
+		gpsObs(1, rangeM, carrierPhaseCycles(GnssGPS, 0, 0, rangeM), -500, 45),
+		gpsObs(2, rangeM, carrierPhaseCycles(GnssGPS, 0, 0, rangeM), -500, 20),
+	}
+
+	SetMinCNO(0)
+	frame, err := EncodeMSM7(stationID, GnssGPS, epochMs, obs)
+	require.NoError(t, err)
+	require.Len(t, decodeMSM7(t, frame).sats, 2, "filter disabled keeps the weak satellite")
+
+	before := WeakSignals()
+	SetMinCNO(30)
+	frame, err = EncodeMSM7(stationID, GnssGPS, epochMs, obs)
+	require.NoError(t, err)
+	require.Len(t, decodeMSM7(t, frame).sats, 1, "CNO 20 is below the floor")
+	require.Equal(t, before+1, WeakSignals())
+}
+
+func TestEncodeMSM7MinCNODropsEveryObservation(t *testing.T) {
+	t.Cleanup(func() { SetMinCNO(0) })
+
+	const rangeM = 22000000.0
+	SetMinCNO(40)
+	_, err := EncodeMSM7(7, GnssGPS, 288093000, []RawxObservation{
+		gpsObs(1, rangeM, carrierPhaseCycles(GnssGPS, 0, 0, rangeM), -500, 20),
+	})
+	require.ErrorIs(t, err, ErrNoObservations)
+}
+
+// DF419 carries the GLONASS frequency channel the phase math was computed on;
+// zeroing it makes the caster recompute phase on the wrong wavelength.
+func TestEncodeMSM7EncodesGlonassFrequencyChannel(t *testing.T) {
+	const rangeM = 19500000.0
+	obs := []RawxObservation{
+		{
+			PrMes: rangeM, CpMes: carrierPhaseCycles(GnssGLONASS, 0, 5, rangeM), DoMes: 1500,
+			GnssID: GnssGLONASS, SvID: 3, SigID: 0, FreqID: 5,
+			Locktime: 63000, CNO: 44, PrValid: true, CpValid: true, HalfCyc: true,
+		},
+		{
+			PrMes: rangeM, CpMes: carrierPhaseCycles(GnssGLONASS, 0, 1, rangeM), DoMes: -2000,
+			GnssID: GnssGLONASS, SvID: 7, SigID: 0, FreqID: 1,
+			Locktime: 63000, CNO: 41, PrValid: true, CpValid: true, HalfCyc: true,
+		},
+	}
+
+	frame, err := EncodeMSM7(7, GnssGLONASS, 288093000, obs)
+	require.NoError(t, err)
+	d := decodeMSM7(t, frame)
+	require.Equal(t, []int{3, 7}, d.sats)
+	require.Equal(t, []uint32{5, 1}, d.extInfo, "DF419 carries each satellite's frequency channel")
+}
+
+func TestEncodeMSM7GlonassUnknownFrequencyChannel(t *testing.T) {
+	const rangeM = 19500000.0
+	obs := []RawxObservation{{
+		PrMes: rangeM, CpMes: carrierPhaseCycles(GnssGLONASS, 0, 0, rangeM), DoMes: 1500,
+		GnssID: GnssGLONASS, SvID: 3, SigID: 0, FreqID: 255,
+		Locktime: 63000, CNO: 44, PrValid: true, CpValid: true, HalfCyc: true,
+	}}
+
+	frame, err := EncodeMSM7(7, GnssGLONASS, 288093000, obs)
+	require.NoError(t, err)
+	require.Equal(t, []uint32{glonassFreqUnknown}, decodeMSM7(t, frame).extInfo)
+}
+
+// Extended satellite info is reserved outside GLONASS.
+func TestEncodeMSM7ExtendedInfoZeroForNonGlonass(t *testing.T) {
+	const rangeM = 22000000.0
+	frame, err := EncodeMSM7(7, GnssGPS, 288093000, []RawxObservation{
+		gpsObs(1, rangeM, carrierPhaseCycles(GnssGPS, 0, 0, rangeM), -500, 45),
+	})
+	require.NoError(t, err)
+	require.Equal(t, []uint32{0}, decodeMSM7(t, frame).extInfo)
+}
+
+// A corrupt pseudorange must stay visible as corrupt even when its CNO is weak.
+func TestEncodeMSM7WeakCorruptPseudorangeCountsAsNonFinite(t *testing.T) {
+	t.Cleanup(func() { SetMinCNO(0) })
+	SetMinCNO(30)
+
+	const rangeM = 22000000.0
+	weakCorrupt := gpsObs(2, math.Inf(1), carrierPhaseCycles(GnssGPS, 0, 0, rangeM), -500, 20)
+	beforeWeak, beforeCorrupt := WeakSignals(), NonFinitePseudoranges()
+
+	_, err := EncodeMSM7(7, GnssGPS, 288093000, []RawxObservation{
+		gpsObs(1, rangeM, carrierPhaseCycles(GnssGPS, 0, 0, rangeM), -500, 45),
+		weakCorrupt,
+	})
+	require.NoError(t, err)
+	require.Equal(t, beforeCorrupt+1, NonFinitePseudoranges())
+	require.Equal(t, beforeWeak, WeakSignals(), "corrupt data is not charged to the CNO floor")
 }
