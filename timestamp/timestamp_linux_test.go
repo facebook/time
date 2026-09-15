@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"syscall"
 	"testing"
 	"time"
 	"unsafe"
@@ -68,6 +69,8 @@ func Test_ReadTXtimestamp(t *testing.T) {
 	require.ErrorContains(t, err, errStr)
 	require.GreaterOrEqual(t, duration, time.Duration(AttemptsTXTS)*TimeoutTXTS)
 
+	oldAttempts, oldTimeout := AttemptsTXTS, TimeoutTXTS
+	t.Cleanup(func() { AttemptsTXTS, TimeoutTXTS = oldAttempts, oldTimeout })
 	AttemptsTXTS = 10
 	TimeoutTXTS = 5 * time.Millisecond
 
@@ -88,6 +91,64 @@ func Test_ReadTXtimestamp(t *testing.T) {
 	require.NotEqual(t, time.Time{}, txts)
 	require.Equal(t, 1, attempts)
 	require.Nil(t, err)
+}
+
+func errQueueSocket(t *testing.T) int {
+	t.Helper()
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+
+	connFd, err := ConnFd(conn)
+	require.NoError(t, err)
+	require.NoError(t, EnableSWTimestamps(connFd))
+	return connFd
+}
+
+func TestWaitForHWTSReportsTimeout(t *testing.T) {
+	connFd := errQueueSocket(t)
+
+	oldTimeout := TimeoutTXTS
+	t.Cleanup(func() { TimeoutTXTS = oldTimeout })
+	TimeoutTXTS = 100 * time.Millisecond
+
+	start := time.Now()
+	err := waitForHWTS(connFd)
+	elapsed := time.Since(start)
+
+	require.ErrorIs(t, err, syscall.ETIMEDOUT)
+	require.GreaterOrEqual(t, elapsed, TimeoutTXTS)
+}
+
+func TestWaitForHWTSSharesOneDeadlineAcrossEINTR(t *testing.T) {
+	connFd := errQueueSocket(t)
+
+	oldTimeout := TimeoutTXTS
+	t.Cleanup(func() { TimeoutTXTS = oldTimeout })
+	TimeoutTXTS = 100 * time.Millisecond
+
+	// interrupting far more often than the deadline allows: a loop that shares one
+	// deadline gives up part way through, a loop that restarts the timeout never does
+	const interrupts = 100
+	const perCall = 10 * time.Millisecond
+	var budgets []time.Duration
+	poll := func(_ []unix.PollFd, timeout *unix.Timespec, _ *unix.Sigset_t) (int, error) {
+		budgets = append(budgets, time.Duration(timeout.Nano()))
+		time.Sleep(perCall)
+		if len(budgets) >= interrupts {
+			return 0, nil
+		}
+		return -1, syscall.EINTR
+	}
+
+	require.ErrorIs(t, pollForHWTS(connFd, poll), syscall.ETIMEDOUT)
+
+	require.NotEmpty(t, budgets)
+	require.Less(t, len(budgets), interrupts)
+	require.LessOrEqual(t, budgets[0], TimeoutTXTS)
+	for i := 1; i < len(budgets); i++ {
+		require.Less(t, budgets[i], budgets[i-1])
+	}
 }
 
 func Test_scmDataToTime(t *testing.T) {

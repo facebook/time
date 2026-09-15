@@ -228,17 +228,39 @@ func SeqIDSocketControlMessage(seqID uint32, soob []byte) {
 	binary.NativeEndian.PutUint32(data, seqID)
 }
 
+// pollFunc matches unix.Ppoll so tests can drive the EINTR restart path
+type pollFunc func(fds []unix.PollFd, timeout *unix.Timespec, sigmask *unix.Sigset_t) (int, error)
+
 func waitForHWTS(connFd int) error {
-	// Wait until TX timestamp is ready
+	return pollForHWTS(connFd, unix.Ppoll)
+}
+
+// pollForHWTS waits until the TX timestamp is ready, for at most TimeoutTXTS.
+// unix.Poll is deliberately not used: it takes whole milliseconds as an int and
+// passes anything negative to ppoll as "no timeout", so a lossy conversion there
+// would reintroduce the unbounded wait this deadline exists to prevent.
+func pollForHWTS(connFd int, poll pollFunc) error {
 	fds := []unix.PollFd{{Fd: int32(connFd), Events: unix.POLLERR, Revents: 0}} //nolint:gosec // fd is always small
+	// a restarted poll must share one deadline, otherwise every EINTR grants
+	// another full TimeoutTXTS and the caller's attempt budget bounds nothing
+	deadline := time.Now().Add(TimeoutTXTS)
 	for {
-		n, err := unix.Poll(fds, int(TimeoutTXTS.Milliseconds()))
-		if !errors.Is(err, syscall.EINTR) {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return syscall.ETIMEDOUT
+		}
+		timeout := unix.NsecToTimespec(remaining.Nanoseconds())
+		n, err := poll(fds, &timeout, nil)
+		if errors.Is(err, syscall.EINTR) {
+			continue
+		}
+		if err != nil {
 			return err
 		}
 		if n == 0 {
 			return syscall.ETIMEDOUT
 		}
+		return nil
 	}
 }
 
