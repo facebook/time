@@ -101,7 +101,7 @@ type AsymmetryConfig struct {
 	AsymmetryCorrectionEnabled bool          `yaml:"correction_enabled"`        // Enable asymmetry correction
 	AsymmetryThreshold         time.Duration `yaml:"threshold"`                 // threshold after which we consider a GM to be using an Asymmetric path
 	MaxConsecutiveAsymmetry    uint16        `yaml:"max_consecutive_asymmetry"` // number of consecutive bad measurements after which we consider the GM to be using an Asymmetric path
-	MaxPortChanges             uint16        `yaml:"max_port_changes"`          // number of port changes after which we will consider the best GM to be using an Asymmetric path
+	MaxPortChanges             uint16        `yaml:"max_port_changes"`          // complex: port offset after which the best GM is blamed instead; rack: moves one search may spend, zero spends none
 	Simple                     bool          `yaml:"simple"`                    // use simple asymmetry correction, which only changes port of the currently selected GM when the majority of clients are asymmetric
 	Rack                       bool          `yaml:"rack"`                      // correct from in-rack peer delay, which unlike GM offset a locked servo cannot hide
 }
@@ -161,7 +161,9 @@ func DefaultConfig() *Config {
 		ListenAddress: "::",
 		Asymmetry: AsymmetryConfig{
 			MaxConsecutiveAsymmetry: 10,
-			// a zero would make any single bumped GM condemn the selected one
+			// complex reads this as a blame trigger, where zero would let any single
+			// bumped GM condemn the selected one; rack reads it as a search budget,
+			// where zero disables the search. Neither wants the Go zero value.
 			MaxPortChanges: 4,
 		},
 	}

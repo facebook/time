@@ -272,7 +272,7 @@ func TestObserveToleratesEitherSource(t *testing.T) {
 
 // Rack needs peer evidence from an earlier round to act on a later GM round
 func TestRackActsAcrossRounds(t *testing.T) {
-	r := &Rack{Config: Config{Threshold: time.Microsecond}}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
 	now := time.Now()
 
 	require.Zero(t, r.Observe(Observation{Peers: peersAt(now, 3000, 3100, 3200)}))
@@ -348,8 +348,151 @@ func TestRackSpendsEachReadingOnce(t *testing.T) {
 	require.Equal(t, uint16(2), gms[addrA].PortOffset)
 }
 
-// a port offset only picks a send worker, so past MaxPortChanges the search has
-// seen every distinct return path and moving again achieves nothing
+// a reading measures the path we were on when it was taken. Carrying it across a
+// failover would let one GM's evidence finish another GM's search, which reopens
+// the refund a flapping grandmaster could otherwise exploit.
+func TestRackReadingDoesNotSurviveGrandmasterChange(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 1}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true), addrB: gm(0, true)}
+
+	spend := func(best netip.Addr) int {
+		moves := 0
+		for range 6 {
+			r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+			moves += r.Observe(Observation{GMs: gms, Best: best})
+		}
+		return moves
+	}
+	require.Equal(t, 1, spend(addrA), "addrA spends its budget on a bad path")
+
+	// a healthy reading taken while following addrB
+	r.Observe(Observation{Peers: peersAt(time.Now(), -10, 0, 10)})
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrB}))
+
+	// flip back to addrA before any new probe: addrB's reading must not settle it
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}))
+	require.Zero(t, spend(addrA), "addrA is still spent")
+}
+
+// a rack that cannot agree on anything can still produce a median near zero.
+// Settling on the point estimate alone would hand the budget back on a reading
+// that says nothing, which is the same hole as settling on any quiet verdict.
+func TestRackUndecidedProbeCentredNearZeroDoesNotRefill(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 1}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+
+	spend := func() int {
+		moves := 0
+		for range 6 {
+			r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+			moves += r.Observe(Observation{GMs: gms, Best: addrA})
+		}
+		return moves
+	}
+	require.Equal(t, 1, spend(), "first episode spends its budget")
+
+	// median +100ns, but the peers span 40us: the centre means nothing
+	r.Observe(Observation{Peers: peersAt(time.Now(), -20000000, 100, 20000000)})
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}))
+
+	require.Zero(t, spend(), "a centre nobody agrees on is not a settled rack")
+}
+
+// and the converse: a rack that does agree on a small median must still settle,
+// including a perfectly synchronised one, which is never "decided"
+func TestRackTightlyAgreedSmallMedianSettles(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 1}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+
+	spend := func() int {
+		moves := 0
+		for range 6 {
+			r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+			moves += r.Observe(Observation{GMs: gms, Best: addrA})
+		}
+		return moves
+	}
+	require.Equal(t, 1, spend(), "first episode spends its budget")
+
+	r.Observe(Observation{Peers: peersAt(time.Now(), -10, 0, 10)})
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}))
+
+	require.Equal(t, 1, spend(), "a rack that agrees we are fine ends the episode")
+}
+
+// the freshness window has to outlive the gap between probes. At exactly one
+// period a reading expires before its replacement lands, so a genuinely bad path
+// reports healthy for part of every cycle and correction stops.
+func TestRackReadingSurvivesUntilTheNextProbe(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
+	now := time.Now()
+	r.Observe(Observation{Peers: peersAt(now, 3000, 3100, 3200)})
+
+	// one probe period plus collection time and scheduler jitter
+	_, _, known, _ := r.verdict(now.Add(6 * time.Minute))
+	require.True(t, known, "a reading must outlast the gap to its replacement")
+
+	_, _, known, _ = r.verdict(now.Add(rackMaxAge + time.Second))
+	require.False(t, known, "but a probe that stopped arriving must stop steering")
+}
+
+// the rack measures the path we are following and nothing else, so a GM we
+// failed away from must not keep its old verdict for the life of the daemon
+func TestRackClearsVerdictOnGrandmasterWeLeft(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true), addrB: gm(0, true)}
+
+	r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+	require.Equal(t, 1, r.Observe(Observation{GMs: gms, Best: addrA}))
+	require.True(t, gms[addrA].Asymmetric)
+
+	// failing over drops the reading, so nothing is known about either path
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrB}))
+	require.False(t, gms[addrA].Asymmetric, "we know nothing about the one we left")
+
+	// a fresh probe measures the path we are on now
+	r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+	require.Equal(t, 1, r.Observe(Observation{GMs: gms, Best: addrB}))
+	require.True(t, gms[addrB].Asymmetric, "the path we are on now is bad")
+	require.False(t, gms[addrA].Asymmetric, "and the one we left stays unjudged")
+}
+
+// the Go zero value has to be the safe one: an operator reaching for zero to
+// freeze a fleet, or a config that simply omits the field, must get no moves
+func TestRackZeroBudgetDisablesTheSearch(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+
+	moves := 0
+	for range 5 {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+		moves += r.Observe(Observation{GMs: gms, Best: addrA})
+	}
+	require.Zero(t, moves, "a zero budget moves nothing")
+	require.Zero(t, gms[addrA].PortOffset)
+	require.True(t, gms[addrA].Asymmetric, "but the bad path is still reported")
+}
+
+// a host straddling the threshold must not refund its budget every other probe.
+// Settling and moving on one bound would leave the search unbounded for exactly
+// the population the corrector targets.
+func TestRackStraddlingThresholdStillExhausts(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 2}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+
+	moves := 0
+	for range 10 {
+		// alternate just over and just under the move threshold
+		r.Observe(Observation{Peers: peersAt(time.Now(), 1100, 1150, 1200)})
+		moves += r.Observe(Observation{GMs: gms, Best: addrA})
+		r.Observe(Observation{Peers: peersAt(time.Now(), 900, 950, 1000)})
+		moves += r.Observe(Observation{GMs: gms, Best: addrA})
+	}
+	require.Equal(t, 2, moves, "the budget binds despite repeated sub-threshold probes")
+}
+
+// the budget bounds effort, not coverage: offsets are hashed to send workers, so
+// a search samples with replacement and never proves it tried them all and moving again achieves nothing
 func TestRackStopsAtMaxPortChanges(t *testing.T) {
 	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 2}}
 	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
@@ -359,8 +502,8 @@ func TestRackStopsAtMaxPortChanges(t *testing.T) {
 		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
 		moves += r.Observe(Observation{GMs: gms, Best: addrA})
 	}
-	require.Equal(t, 3, moves, "offsets 1..3, then the budget is spent")
-	require.Equal(t, uint16(3), gms[addrA].PortOffset)
+	require.Equal(t, 2, moves, "MaxPortChanges of 2 buys exactly two moves")
+	require.Equal(t, uint16(2), gms[addrA].PortOffset)
 }
 
 // a probe below quorum must be dropped on arrival, not stored and rejected
@@ -417,13 +560,13 @@ func TestRackSpreadIsDirectionSymmetric(t *testing.T) {
 func TestRackTakeBiasRejectsReplacedReading(t *testing.T) {
 	r := rackOf(3000, 3100, 3200)
 	stale := time.Now().Add(-time.Second)
-	require.False(t, r.takeBias(stale), "a reading that is no longer current cannot be spent")
+	require.False(t, r.takeBias(addrA, stale), "a reading that is no longer current cannot be spent")
 
 	r.mu.RLock()
-	current := r.measured
+	current := r.reading.at
 	r.mu.RUnlock()
-	require.True(t, r.takeBias(current))
-	require.False(t, r.takeBias(current), "and only once")
+	require.True(t, r.takeBias(addrA, current))
+	require.False(t, r.takeBias(addrA, current), "and only once")
 }
 
 // quorum counts distinct peers, not exchanges: one chatty peer answering three
@@ -469,14 +612,108 @@ func TestRackKeepsAsymmetricWhileBiasPersists(t *testing.T) {
 
 // and an exhausted search budget must not report healthy either
 func TestRackKeepsAsymmetricWhenBudgetExhausted(t *testing.T) {
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 0}}
-	r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
-
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 1}}
 	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
-	gms[addrA].PortOffset = 5
 
-	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}), "budget spent")
-	require.True(t, gms[addrA].Asymmetric, "but the path is still bad")
+	// each probe buys one move, so spend the budget through the real path
+	moves := 0
+	for range 6 {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+		moves += r.Observe(Observation{GMs: gms, Best: addrA})
+	}
+	require.Equal(t, 1, moves, "MaxPortChanges of 1 buys exactly one move")
+	require.True(t, gms[addrA].Asymmetric, "the path is still bad after the search gives up")
+}
+
+// the budget bounds one search, not the daemon's life. Without a reset a host
+// that searched this morning would sit deaf to a fault appearing tonight.
+func TestRackBudgetResetsWhenRackGoesQuiet(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 1}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+
+	spend := func() int {
+		moves := 0
+		for range 6 {
+			r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+			moves += r.Observe(Observation{GMs: gms, Best: addrA})
+		}
+		return moves
+	}
+	require.Equal(t, 1, spend(), "first episode spends its budget")
+	require.Zero(t, spend(), "and stays spent while the rack still objects")
+
+	// the rack goes quiet: the search worked, or the fault moved on
+	r.Observe(Observation{Peers: peersAt(time.Now(), 10, 11, 12)})
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}))
+
+	require.Equal(t, 1, spend(), "a later fault gets a full budget again")
+}
+
+// quiet is also true when the peers cannot agree. Treating that as the end of an
+// episode would let one noisy probe refill the budget of a host that never
+// settles, which is the whole population the budget exists to bound.
+func TestRackUndecidedProbeDoesNotRefillBudget(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 1}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+
+	spend := func() int {
+		moves := 0
+		for range 6 {
+			r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+			moves += r.Observe(Observation{GMs: gms, Best: addrA})
+		}
+		return moves
+	}
+	require.Equal(t, 1, spend(), "first episode spends its budget")
+
+	// a wide probe: still biased, but the peers no longer place the median
+	r.Observe(Observation{Peers: peersAt(time.Now(), -4000, 3000, 9000)})
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}))
+
+	require.Zero(t, spend(), "an undecided reading is not a settled one")
+}
+
+// each grandmaster is reached over its own path, so failing over to one nobody
+// has searched must not inherit the spent budget of the one we left
+func TestRackBudgetIsPerGrandmaster(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 1}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true), addrB: gm(0, true)}
+
+	spend := func(best netip.Addr) int {
+		moves := 0
+		for range 6 {
+			r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+			moves += r.Observe(Observation{GMs: gms, Best: best})
+		}
+		return moves
+	}
+	require.Equal(t, 1, spend(addrA), "addrA spends its budget")
+	require.Zero(t, spend(addrA), "and stays spent")
+	require.Equal(t, 1, spend(addrB), "addrB has its own path and its own budget")
+}
+
+// settling while following one GM says nothing about the others. Clearing them
+// too would give a known-bad path a fresh budget every time the host fails back
+// to it, so a flapping grandmaster would fund an unbounded search.
+func TestRackSettleDoesNotRefundOtherGrandmasters(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 1}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true), addrB: gm(0, true)}
+
+	spend := func(best netip.Addr) int {
+		moves := 0
+		for range 6 {
+			r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+			moves += r.Observe(Observation{GMs: gms, Best: best})
+		}
+		return moves
+	}
+	require.Equal(t, 1, spend(addrA), "addrA spends its budget on a bad path")
+
+	// fail over to addrB, whose path turns out to be fine
+	r.Observe(Observation{Peers: peersAt(time.Now(), 10, 11, 12)})
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrB}))
+
+	require.Zero(t, spend(addrA), "failing back finds addrA still spent")
 }
 
 // at the minimum quorum there is nothing left to compare once both sides are
@@ -505,7 +742,7 @@ func TestRackClearsAsymmetricWhenEvidenceAgesOut(t *testing.T) {
 
 	// the probe stops; the reading ages past rackMaxAge
 	r.mu.Lock()
-	r.measured = time.Now().Add(-2 * rackMaxAge)
+	r.reading.at = time.Now().Add(-2 * rackMaxAge)
 	r.mu.Unlock()
 
 	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}))

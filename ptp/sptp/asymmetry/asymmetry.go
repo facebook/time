@@ -79,11 +79,17 @@ func (g *GM) ResetPort() {
 
 // Config tunes the corrections.
 type Config struct {
-	// Threshold above which an offset is suspicious.
+	// Threshold above which an offset is suspicious. Simple and Complex read it
+	// against a grandmaster offset, Rack against the in-rack peer median; the two
+	// cannot be tuned apart.
 	Threshold time.Duration
 	// MaxConsecutive measurements a GM may look asymmetric before its port moves.
+	// Complex only.
 	MaxConsecutive uint16
-	// MaxPortChanges a GM may accumulate before the selected GM is blamed instead.
+	// MaxPortChanges means different things per corrector: to Complex, the port
+	// offset a GM may reach before the selected GM is blamed instead; to Rack, the
+	// number of moves one search may spend, where zero spends none. Simple ignores
+	// it.
 	MaxPortChanges uint16
 }
 

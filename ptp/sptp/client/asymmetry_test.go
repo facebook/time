@@ -203,13 +203,18 @@ func TestObservePeersOnlyFeedsRack(t *testing.T) {
 	clients := map[netip.Addr]*Client{best: {delayRequest: ReqDelay(ptp.ClockIdentity(1), 1)}}
 
 	p := &SPTP{
-		clients:   clients,
-		corrector: newCorrector(AsymmetryConfig{AsymmetryCorrectionEnabled: true, Rack: true, AsymmetryThreshold: time.Microsecond}),
+		clients: clients,
+		corrector: newCorrector(AsymmetryConfig{
+			AsymmetryCorrectionEnabled: true,
+			Rack:                       true,
+			AsymmetryThreshold:         time.Microsecond,
+			MaxPortChanges:             4,
+		}),
 	}
 	p.observePeers(results)
 	require.Equal(t, 1, p.correctAsymmetry(map[netip.Addr]*RunResult{best: announceResult(0, ptp.ClockClass6, false)}, best))
 
-	// simple does not implement peerObserver, so the probe is simply ignored
+	// simple acts on grandmasters only, so a peers-only round is a no-op for it
 	q := &SPTP{
 		clients:   map[netip.Addr]*Client{best: {delayRequest: ReqDelay(ptp.ClockIdentity(1), 1)}},
 		corrector: newCorrector(AsymmetryConfig{AsymmetryCorrectionEnabled: true, Simple: true, AsymmetryThreshold: time.Microsecond}),

@@ -27,9 +27,13 @@ import (
 )
 
 const (
-	// the probe is driven from outside, so a reading that stopped arriving must
-	// not keep steering corrections
-	rackMaxAge = 5 * time.Minute
+	// the probe is driven from outside on a five-minute cadence, and its reading
+	// is stamped when the first response landed -- before the probe has finished
+	// collecting. A window equal to the period therefore expires before its
+	// replacement arrives, and the corrector reports healthy for part of every
+	// cycle. Three periods rides out two missed probes; path asymmetry persists
+	// for hours, so a reading that old is still worth acting on.
+	rackMaxAge = 15 * time.Minute
 	// one or two responders is not a rack
 	rackMinPeers = 3
 	// 1.2533/1.349: the median's standard error in deviations, over the IQR's
@@ -37,6 +41,11 @@ const (
 	medianStdErrFactor = 0.9291
 	// how far from zero the median must sit before a port moves
 	rackSigmas = 3.0
+	// an episode ends at a fraction of the move threshold, not at the threshold
+	// itself. Sharing one bound would let a host straddling it alternate between
+	// moving and settling on every probe, refunding the budget before it could
+	// ever bind -- and that host is exactly the one this corrector is for.
+	rackSettleFraction = 2
 )
 
 // Rack moves the selected GM's port when in-rack peers agree this host's clock
@@ -51,16 +60,34 @@ const (
 type Rack struct {
 	Config Config
 
-	mu       sync.RWMutex
-	median   time.Duration
-	spread   time.Duration
-	measured time.Time
-	// peers is how many distinct responders the reading is drawn from; the median
-	// is only as well determined as its sample is large
+	mu      sync.RWMutex
+	reading reading
+	// searched counts moves in the current episode, per grandmaster. The port
+	// offset is monotonic for the life of the daemon, so budgeting against it
+	// would let a host search once and sit inert for days, deaf to any later
+	// fault. Keyed by GM because each is reached over its own path: failing over
+	// to one nobody has searched must not inherit a spent budget.
+	searched map[netip.Addr]uint16
+}
+
+// reading is one rack measurement. What the peers said, when, which path it
+// describes, and whether it has already been acted on -- all replaced together
+// by observePeers, and meaningless apart, because a measurement of this host's
+// clock only means something in the context of the path it was taken over.
+type reading struct {
+	median time.Duration
+	spread time.Duration
+	// peers is how many distinct responders it is drawn from; the median is only
+	// as well determined as its sample is large
 	peers int
-	// spent marks a reading already used to move a port. Sync ticks are far more
-	// frequent than probes, so without this one observation would move the port
-	// again on every tick until the next probe replaced it.
+	at    time.Time
+	// under is the grandmaster whose path this measured. Failing over re-steers
+	// the clock, so the reading then describes a route we are no longer on: not
+	// enough to move the new GM's port, and not enough to call its search done.
+	under netip.Addr
+	// spent marks it as having already justified a move. Sync ticks outnumber
+	// probes by orders of magnitude, so without this one measurement would move
+	// the port on every tick until the next probe replaced it.
 	spent bool
 }
 
@@ -103,21 +130,25 @@ func (r *Rack) observePeers(peers []Peer) {
 	}
 	slices.Sort(sorted)
 
+	// spread between symmetric quantiles, so a wild peer counts the same whether
+	// it sits high or low. Integer division does the right thing at a thin quorum
+	// on its own: below eight peers it trims less than a quartile, and at the
+	// three-peer floor it trims nothing and reports the full span, which errs
+	// towards holding rather than moving on three noisy peers.
+	lo := len(sorted) / 4
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.median = sorted[len(sorted)/2]
-	// spread between symmetric quantiles, so a wild peer counts the same whether
-	// it sits high or low. Trimming is dropped when it would leave nothing to
-	// compare: at a thin quorum the full span is the honest answer, and it errs
-	// towards holding rather than moving a port on three noisy peers.
-	lo := len(sorted) / 4
-	if len(sorted)-1-lo <= lo {
-		lo = 0
+	// replaced whole: a measurement and the path it describes cannot be updated
+	// apart, and the new one has not been acted on. under is carried over because
+	// only correct() learns which GM we are following.
+	r.reading = reading{
+		median: sorted[len(sorted)/2],
+		spread: sorted[len(sorted)-1-lo] - sorted[lo],
+		peers:  len(sorted),
+		at:     measured,
+		under:  r.reading.under,
 	}
-	r.spread = sorted[len(sorted)-1-lo] - sorted[lo]
-	r.peers = len(sorted)
-	r.measured = measured
-	r.spent = false
 }
 
 // verdict describes the path the rack currently sees. known is false when there
@@ -132,49 +163,115 @@ func (r *Rack) verdict(now time.Time) (median time.Duration, quiet, known bool, 
 	defer r.mu.RUnlock()
 	// a stored reading always cleared quorum; observePeers is the only writer.
 	// measured is returned even when unusable, so a stale arm can say how stale.
-	if r.measured.IsZero() || now.Sub(r.measured) > rackMaxAge {
-		return 0, false, false, r.measured
+	if r.reading.at.IsZero() || now.Sub(r.reading.at) > rackMaxAge {
+		return 0, false, false, r.reading.at
 	}
-	quiet = r.median.Abs() <= r.Config.Threshold || !r.decided()
-	return r.median, quiet, true, r.measured
+	quiet = r.reading.median.Abs() <= r.Config.Threshold || !r.decidedLocked()
+	return r.reading.median, quiet, true, r.reading.at
+}
+
+// stderrLocked is the standard error of the stored median, with the trimmed span
+// standing in for the deviation. Callers must hold at least the read lock.
+func (r *Rack) stderrLocked() float64 {
+	return medianStdErrFactor * float64(r.reading.spread) / math.Sqrt(float64(r.reading.peers))
+}
+
+// settled reports whether the peers put the median entirely inside the settle
+// band, interval and all. Testing the point estimate alone would let a rack that
+// cannot agree on anything -- peers at -20us, +100ns, +20us -- refund the budget
+// on the strength of a median that happens to land near zero.
+//
+// decided() is not the test to use here: it asks whether the median is far FROM
+// zero, so a perfectly synchronised host would never qualify.
+func (r *Rack) settled() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.reading.peers < rackMinPeers {
+		return false
+	}
+	band := float64(r.Config.Threshold / rackSettleFraction)
+	return math.Abs(float64(r.reading.median))+rackSigmas*r.stderrLocked() <= band
 }
 
 // decided reports whether the peers place the median far enough from zero to act
-// on. Comparing the spread directly to the median ignores how many peers were
+// on. Callers must hold at least the read lock; verdict is the only one today. Comparing the spread directly to the median ignores how many peers were
 // asked, which both blocks a wide-spread rack where many peers still agree on a
 // centre -- switches that do not correct residence time spread every offset by
 // microseconds -- and acts on a bare quorum that happens to look tight.
-func (r *Rack) decided() bool {
-	if r.peers < rackMinPeers {
+func (r *Rack) decidedLocked() bool {
+	if r.reading.peers < rackMinPeers {
 		return false
 	}
-	// standard error of a median, with the IQR standing in for the deviation
-	stderr := medianStdErrFactor * float64(r.spread) / math.Sqrt(float64(r.peers))
-	return math.Abs(float64(r.median)) > rackSigmas*stderr
+	// below eight peers the trimmed span is wider than a true IQR, so the estimate
+	// errs high and the corrector holds rather than moves
+	return math.Abs(float64(r.reading.median)) > rackSigmas*r.stderrLocked()
 }
 
 // takeBias returns the reading and marks it spent in one step, so a probe landing
 // mid-decision cannot have its fresh reading consumed by the move this one made.
-func (r *Rack) takeBias(measured time.Time) bool {
+func (r *Rack) takeBias(gm netip.Addr, measured time.Time) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.spent || !r.measured.Equal(measured) {
+	if r.reading.spent || !r.reading.at.Equal(measured) {
 		return false
 	}
-	r.spent = true
+	r.reading.spent = true
+	if r.searched == nil {
+		r.searched = make(map[netip.Addr]uint16, 1)
+	}
+	r.searched[gm]++
 	return true
 }
 
+// exhausted reports whether this episode has used its whole search budget. A
+// MaxPortChanges of N permits exactly N moves, so zero is a usable detect-only
+// setting rather than one that still moves once.
+func (r *Rack) exhausted(gm netip.Addr) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.searched[gm] >= r.Config.MaxPortChanges
+}
+
+// settle ends the current episode for one grandmaster. A small median says the
+// path we are following is fine; it is no evidence about the others, so clearing
+// them would hand a known-bad path a fresh budget on every failover back to it.
+func (r *Rack) settle(gm netip.Addr) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.searched, gm)
+}
+
+// rebind drops the stored reading when the selected GM changes. The reading is
+// evidence about one path: it can neither justify moving a different GM's port
+// nor declare that GM's search finished.
+func (r *Rack) rebind(best netip.Addr) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.reading.under == best {
+		return
+	}
+	if r.reading.under.IsValid() {
+		// discard rather than re-label: the measurement belongs to the old route
+		r.reading = reading{}
+	}
+	r.reading.under = best
+}
+
 func (r *Rack) correct(gms map[netip.Addr]*GM, best netip.Addr) int {
+	// before anything reads the reading, make sure it belongs to this GM
+	r.rebind(best)
 	// Asymmetric describes the path, not whether we acted on it, so a spent or
 	// exhausted reading still reports the fault. Only a fresh reading showing a
 	// quiet rack clears it.
 	now := time.Now()
 	median, quiet, known, measured := r.verdict(now)
-	if selected := gms[best]; selected != nil {
-		// evidence of a bad path, not a record of having acted: a spent or
-		// budget-exhausted reading still reports it, and no evidence is not evidence
-		selected.Asymmetric = known && !quiet
+	// the rack only measures the path we are actually following, so every other
+	// GM's verdict is stale the moment we fail over. Clearing them keeps this the
+	// same "no evidence is not evidence" rule applied to the selected one, whose
+	// flag is evidence of a bad path rather than a record of having acted: a spent
+	// or budget-exhausted reading still reports it.
+	for addr, gm := range gms {
+		gm.Asymmetric = addr == best && known && !quiet
 	}
 	if !known {
 		// an arm with no reading looks exactly like a quiet one from the outside;
@@ -183,6 +280,13 @@ func (r *Rack) correct(gms map[netip.Addr]*GM, best netip.Addr) int {
 		return 0
 	}
 	if quiet {
+		// ending an episode needs positive evidence that the path is good, which is
+		// narrower than quiet. quiet is also true when the peers cannot agree, and
+		// "we cannot tell" is not evidence the search worked -- including when an
+		// undecided rack happens to centre near zero.
+		if r.settled() {
+			r.settle(best)
+		}
 		return 0
 	}
 	selected := gms[best]
@@ -190,17 +294,21 @@ func (r *Rack) correct(gms map[netip.Addr]*GM, best netip.Addr) int {
 		log.Errorf("selected GM %v is not in the GM list", best)
 		return 0
 	}
-	// a port offset only picks a ptp4u send worker, so past MaxPortChanges every
-	// distinct return path has been tried and moving again just reshuffles among
-	// paths already known to be bad
-	if selected.PortOffset > r.Config.MaxPortChanges {
-		log.Debugf("selected GM %s exhausted %d port changes, rack bias %v persists",
-			best, selected.PortOffset, median)
+	// the offset is hashed to a send worker rather than indexing one, so a search
+	// samples paths with replacement and never proves it has seen them all. The
+	// budget is a bound on effort, not evidence of exhaustive coverage.
+	if r.exhausted(best) {
+		log.Debugf("selected GM %s exhausted the search, rack bias %v persists", best, median)
 		return 0
 	}
-	if !r.takeBias(measured) {
+	if !r.takeBias(best, measured) {
 		return 0
 	}
+	// the offset is not reset when an episode settles: it IS the path we landed
+	// on, so zeroing it would put the host back on the one the search just moved
+	// off. It only ever climbs, which is harmless -- ptp4u hashes it to pick a
+	// worker rather than indexing, so every value is an equally valid path and a
+	// wrap lands on one too.
 	selected.MovePort()
 	selected.Asymmetric = true
 	log.Infof("rack says we are %v off - selected GM %s new port offset: %d", median, best, selected.PortOffset)
