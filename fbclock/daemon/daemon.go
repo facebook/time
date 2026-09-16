@@ -34,6 +34,8 @@ import (
 	"github.com/facebook/time/fbclock/stats"
 
 	"github.com/facebook/time/leapsectz"
+	"github.com/facebook/time/ntp/chrony"
+	ntp "github.com/facebook/time/ntp/protocol"
 	"github.com/facebook/time/phc"
 	"github.com/facebook/time/ptp/linearizability"
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -43,12 +45,16 @@ const (
 	utcOffsetOriginalS int32  = 10    // UTC-TAI offset was 10s before leap seconds started (1972)
 	leapDurationS      uint64 = 62500 // 17.36 hours https://chrony-project.org/doc/4.6/chrony.conf.html
 	monPrefix          string = "linearizability."
+	// nsPerSecondPerPPM converts a frequency error in PPM into ns of drift per
+	// second: 1 PPM = 1e-6 s/s = 1000 ns/s.
+	nsPerSecondPerPPM float64 = 1000.0
 )
 
 var errNotEnoughData = errors.New("not enough data points")
 var errNoTestResults = errors.New("no test results")
 var errNoPHC = errors.New("phc error")
 var errCorrectness = errors.New("sanity checking data point error")
+var errNoLeapData = errors.New("no leap second data to build a TAI anchor from")
 
 // defaultTargets is a list of targets if no available
 var defaultTargets = []string{"::1", "::2", "::3"}
@@ -99,12 +105,15 @@ func (d *DataPoint) SanityCheck() error {
 	return nil
 }
 
-// DataFetcher is the data fetcher interface
+// DataFetcher is the data fetcher interface. Implementations embed it and
+// implement only the methods their mode uses.
 type DataFetcher interface {
 	//function to gm data
 	FetchGMs(cfg *Config) (targest []string, err error)
 	//function to fetch stats
 	FetchStats(cfg *Config) (*DataPoint, error)
+	//function to fetch the time source's own error estimate, chrony mode only
+	FetchTracking(cfg *Config) (*chrony.Tracking, error)
 }
 
 // Daemon is a component of fbclock that
@@ -121,6 +130,9 @@ type Daemon struct {
 
 	// function to get PHC time from configured PHC device
 	getPHCTime func() (time.Time, error)
+	// getSysTime reads CLOCK_REALTIME, the clock chronyd steers. chrony mode
+	// only, standing in for the PTP path's PHC read.
+	getSysTime func() (time.Time, error)
 	// getPHCAndSysTime returns PHC time, system time, system clock id, and the
 	// PHC↔sys round-trip delay observed during the read (uncertainty bound).
 	// Uses the MONOTONIC_RAW preferred path (existing behavior) for the primary
@@ -271,13 +283,22 @@ func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
 		cfg:   cfg,
 		l:     l,
 	}
-	if cfg.SPTP {
+	switch {
+	case cfg.Chrony:
+		// only ever calls FetchTracking; no M/W math
+		s.DataFetcher = &ChronyFetcher{}
+	case cfg.SPTP:
 		s.DataFetcher = &HTTPFetcher{}
-	} else {
+	default:
 		s.DataFetcher = &SockFetcher{}
 	}
 
-	if err := s.setupPHC(cfg.Iface); err != nil {
+	if cfg.Chrony {
+		// chronyd steers the system clock and the PHC is left unsteered here, so
+		// we anchor on the system clock and never open the device. The PHC
+		// accessors stay nil; readClocks routes around them.
+		s.getSysTime = func() (time.Time, error) { return time.Now(), nil }
+	} else if err := s.setupPHC(cfg.Iface); err != nil {
 		return nil, err
 	}
 	// calculated values
@@ -300,6 +321,17 @@ func New(cfg *Config, stats stats.Server, l Logger) (*Daemon, error) {
 	s.stats.SetCounter("master_offset_ns.60.abs_max", 0)
 	s.stats.SetCounter("path_delay_ns.60.abs_max", 0)
 	s.stats.SetCounter("freq_adj_ppb.60.abs_max", 0)
+	if cfg.Chrony {
+		// values collected from chronyd
+		s.stats.SetCounter("error_bound_ns", 0)
+		s.stats.SetCounter("holdover_multiplier_ns", 0)
+		s.stats.SetCounter("current_correction_ns", 0)
+		s.stats.SetCounter("root_delay_ns", 0)
+		s.stats.SetCounter("root_dispersion_ns", 0)
+		s.stats.SetCounter("skew_ppb", 0)
+		s.stats.SetCounter("freq_ppb", 0)
+		s.stats.SetCounter("chrony_ref_time_ns", 0)
+	}
 	return s, nil
 }
 
@@ -423,6 +455,94 @@ func (s *Daemon) calculateSHMData(data *DataPoint, leaps []leapsectz.LeapSecond)
 		UTCOffsetPreS:        clockSmearing.utcOffsetPreS,
 		UTCOffsetPostS:       clockSmearing.utcOffsetPostS,
 	}, nil
+}
+
+// calculateSHMDataChrony computes the error bound from chronyd's own error
+// model, the way ClockBound does, bypassing the ring buffer and M/W pipeline:
+//
+//	ErrorBound = |CurrentCorrection| + RootDispersion + RootDelay/2
+//
+// asOf is the anchor read taken at fetch time and published as IngressTimeNS
+// (ClockBound's as_of). Not chronyd's RefTime: RootDispersion already covers
+// the age of the last update, so RefTime would count that staleness twice.
+func (s *Daemon) calculateSHMDataChrony(tracking *chrony.Tracking, asOf time.Time, leaps []leapsectz.LeapSecond) (*fbclock.Data, error) {
+	// chronyd has no usable source, so its error model says nothing about our clock
+	if tracking.LeapStatus == ntp.LeapAlarm {
+		return nil, fmt.Errorf("%w: chronyd is not synchronised", errCorrectness)
+	}
+	if tracking.RefTime.UnixNano() <= 0 {
+		return nil, fmt.Errorf("%w: chronyd reference time is not set", errCorrectness)
+	}
+	// chronyd reports every term in seconds
+	errorBoundS := math.Abs(tracking.CurrentCorrection) + tracking.RootDispersion + tracking.RootDelay/2
+	errorBoundNS := errorBoundS * float64(time.Second)
+	if errorBoundNS < 1 {
+		return nil, fmt.Errorf("%w: error bound is %v", errCorrectness, errorBoundS)
+	}
+
+	// how fast the bound grows without fresh data. SkewPPM is optimistically
+	// small early after startup, so floor it at the configured max drift rate.
+	holdoverNS := math.Max(tracking.SkewPPM, s.cfg.MaxDriftRate) * nsPerSecondPerPPM
+
+	clockSmearing := leapSecondSmearing(leaps)
+	return &fbclock.Data{
+		IngressTimeNS: asOf.UnixNano(),
+		// bounds round outward
+		ErrorBoundNS:         uint64(math.Ceil(errorBoundNS)),
+		HoldoverMultiplierNS: holdoverNS,
+		SmearingStartS:       clockSmearing.smearingStartS,
+		SmearingEndS:         clockSmearing.smearingEndS,
+		UTCOffsetPreS:        clockSmearing.utcOffsetPreS,
+		UTCOffsetPostS:       clockSmearing.utcOffsetPostS,
+	}, nil
+}
+
+// doWorkChrony is the chrony-mode counterpart of doWork, with no ring buffer
+// aggregates. It writes nothing to the v1 segment: a v1 client reads the PHC
+// and differences it against IngressTimeNS, which is meaningless with an
+// unsteered PHC, so chrony mode is v2 only (enforced by EvalAndValidate).
+func (s *Daemon) doWorkChrony(tracking *chrony.Tracking) error {
+	s.stats.SetCounter("current_correction_ns", int64(tracking.CurrentCorrection*float64(time.Second)))
+	s.stats.SetCounter("root_delay_ns", int64(tracking.RootDelay*float64(time.Second)))
+	s.stats.SetCounter("root_dispersion_ns", int64(tracking.RootDispersion*float64(time.Second)))
+	s.stats.SetCounter("skew_ppb", int64(tracking.SkewPPM*1000))
+	s.stats.SetCounter("freq_ppb", int64(tracking.FreqPPM*1000))
+	s.stats.SetCounter("master_offset_ns", int64(tracking.LastOffset*float64(time.Second)))
+	// UnixNano is out of range for the zero Time chronyd sends before its first
+	// sync, so only report a reference time it actually set
+	if refTimeNS := tracking.RefTime.UnixNano(); refTimeNS > 0 {
+		s.stats.SetCounter("chrony_ref_time_ns", refTimeNS)
+	}
+
+	// stamp the anchor while the tracking data is fresh: this is the instant the
+	// bound describes
+	sysNow, err := s.getSysTime()
+	if err != nil {
+		return fmt.Errorf("failed to read system clock: %w", err)
+	}
+	// unlike the PTP path we cannot proceed without this: it is what turns the
+	// system clock reading into the TAI anchor clients expect
+	leaps, err := leapSeconds()
+	if err != nil {
+		return fmt.Errorf("%w: %w", errNoLeapData, err)
+	}
+	// anchors are TAI, the system clock is UTC
+	s.state.leaps.Store(&leaps)
+	asOf := sysNow.Add(time.Duration(currentUTCOffsetS(leaps, sysNow)) * time.Second)
+
+	// same value we publish to shm, so the counter cannot disagree with clients
+	s.stats.SetCounter("ingress_time_ns", asOf.UnixNano())
+	log.Debugf("Age of chronyd reference time: %dns", asOf.UnixNano()-tracking.RefTime.UnixNano())
+
+	d, err := s.calculateSHMDataChrony(tracking, asOf, leaps)
+	if err != nil {
+		return err
+	}
+	s.state.setLastStoredData(d)
+	// saturate like the SHM writer, so the counter matches what clients read
+	s.stats.SetCounter("error_bound_ns", int64(fbclock.Uint64ToUint32(d.ErrorBoundNS)))
+	s.stats.SetCounter("holdover_multiplier_ns", int64(d.HoldoverMultiplierNS))
+	return nil
 }
 
 func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
@@ -605,9 +725,28 @@ func (s *Daemon) meanCoeffPPB(prev, cur *fbclock.DataV2) int64 {
 	return s.state.getMeanCoeffPPB(coefPPB)
 }
 
-// readClocks samples the clocks a DataV2 record is built from. A seam for time
-// sources that discipline a clock other than the PHC.
+// readClocks samples the anchor and extrapolation-base clocks for a DataV2
+// record, plus the base clock id and read delay.
+//
+// PTP reads the PHC against MONOTONIC_RAW. chrony anchors on the system clock
+// shifted into TAI, extrapolated against that same clock in UTC: the two differ
+// by a constant, so CoefPPB is 0, and a REALTIME base keeps populateDataV2 off
+// the realtime anchor section (another PHC read).
 func (s *Daemon) readClocks() (time.Time, time.Time, uint32, time.Duration, error) {
+	if s.cfg.Chrony {
+		// resolved per sample, not cached, so the offset changes at the leap
+		// instant rather than at the next chrony poll
+		leaps := s.state.leaps.Load()
+		if leaps == nil {
+			return time.Time{}, time.Time{}, 0, 0, errNoLeapData
+		}
+		sysNow, err := s.getSysTime()
+		if err != nil {
+			return time.Time{}, time.Time{}, 0, 0, err
+		}
+		offsetS := currentUTCOffsetS(*leaps, sysNow)
+		return sysNow.Add(time.Duration(offsetS) * time.Second), sysNow, unix.CLOCK_REALTIME, 0, nil
+	}
 	return s.getPHCAndSysTime()
 }
 
@@ -682,6 +821,32 @@ func (s *Daemon) populateDataV2(shmv2 *fbclock.Shm) {
 	}
 }
 
+// runChrony is the chrony-mode main loop: poll chronyd and publish the bound.
+func (s *Daemon) runChrony() error {
+	ticker := time.NewTicker(s.cfg.Interval)
+	defer ticker.Stop()
+	for ; true; <-ticker.C { // first run without delay, then at interval
+		tracking, err := s.FetchTracking(s.cfg)
+		if err != nil {
+			log.Error(err)
+			s.stats.UpdateCounterBy("data_error", 1)
+			continue
+		}
+		s.stats.SetCounter("data_error", 0)
+		if err := s.doWorkChrony(tracking); err != nil {
+			if errors.Is(err, errCorrectness) {
+				log.Warning(err)
+			} else {
+				log.Error(err)
+			}
+			s.stats.UpdateCounterBy("processing_error", 1)
+			continue
+		}
+		s.stats.SetCounter("processing_error", 0)
+	}
+	return nil
+}
+
 // Run a daemon
 func (s *Daemon) Run(ctx context.Context) error {
 	shm, err := fbclock.OpenFBClockSHMv1()
@@ -690,7 +855,8 @@ func (s *Daemon) Run(ctx context.Context) error {
 	}
 	defer shm.Close()
 
-	if s.cfg.LinearizabilityTestInterval != 0 {
+	// no grandmasters to compare in chrony mode
+	if s.cfg.LinearizabilityTestInterval != 0 && !s.cfg.Chrony {
 		go s.runLinearizabilityTests(ctx)
 	}
 
@@ -701,6 +867,10 @@ func (s *Daemon) Run(ctx context.Context) error {
 		}
 		defer shmv2.Close()
 		go s.populateDataV2(shmv2)
+	}
+
+	if s.cfg.Chrony {
+		return s.runChrony()
 	}
 
 	ticker := time.NewTicker(s.cfg.Interval)

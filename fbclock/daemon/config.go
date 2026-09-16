@@ -40,12 +40,32 @@ type Config struct {
 	BootDelay                      time.Duration // postpone startup by this time after boot
 	EnableDataV2                   bool          // enable fbclock data v2
 	GradualWindow                  bool          // publish a widened window from the first sample after restart (default off)
+	Chrony                         bool          // denotes chrony mode: error bound comes from chrony's own error model
+	MaxDriftRate                   float64       // floor for the holdover multiplier, in PPM
 	// kFactors is the precomputed warm-up tolerance-factor table k[2..RingSize], looked up per tick.
 	kFactors []float64
 }
 
 // EvalAndValidate makes sure config is valid and evaluates expressions for further use.
 func (c *Config) EvalAndValidate() error {
+	// chrony takes the bound from chronyd, so no ring buffer or M/W config applies
+	if c.Chrony {
+		// chrony anchors on the system clock, which only v2 can express; a v1
+		// client would bound an unsteered PHC instead
+		if !c.EnableDataV2 {
+			return fmt.Errorf("bad config: 'chrony' requires 'enabledatav2'")
+		}
+		// a zero floor lets the holdover multiplier be zero when chronyd reports
+		// no skew, and a bound that never widens under-reports once chrony data
+		// stops arriving
+		if c.MaxDriftRate <= 0 {
+			return fmt.Errorf("bad config: 'maxdriftrate' must be positive")
+		}
+		if c.Interval <= 0 || c.Interval > time.Minute {
+			return fmt.Errorf("bad config: 'interval' must be between 0 and 1 minute")
+		}
+		return nil
+	}
 	if c.PTPClientAddress == "" {
 		return fmt.Errorf("bad config: 'ptpclientaddress'")
 	}

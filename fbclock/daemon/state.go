@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 
 	"github.com/facebook/time/fbclock"
+	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/ptp/linearizability"
 )
 
@@ -37,6 +38,10 @@ type daemonState struct {
 
 	lastIngressTimeNS int64
 	lastStoredData    atomic.Pointer[fbclock.Data]
+	// leaps is the tzdata the chrony anchor's TAI-UTC offset comes from. The
+	// records rather than the offset, so the 10ms v2 populator resolves the
+	// offset for the instant it samples and switches exactly at a leap.
+	leaps atomic.Pointer[[]leapsectz.LeapSecond]
 }
 
 // coefPPBRingSize is the number of extrapolation coefficients averaged into the
