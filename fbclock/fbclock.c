@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 #include "fbclock.h"
+#include <assert.h> // for static_assert in C11
 #include <fcntl.h> // For O_* constants
 #include <linux/ptp_clock.h>
 #include <stdint.h>
@@ -28,6 +29,20 @@ limitations under the License.
 #ifdef __aarch64__
 #include <arm_acle.h>
 #endif
+
+// This file implements the seqlock, so it must see the real atomics. Defining
+// FBCLOCK_CGO here would also leave the assert below comparing a type with
+// itself.
+#ifdef FBCLOCK_CGO
+#error "FBCLOCK_CGO is only for cgo's view of the header, never for fbclock.c"
+#endif
+
+// fbclock.h hands cgo a plain uint_fast64_t in place of atomic_uint64 so it can
+// convert the shm structs. That is only sound while the two lay out the same.
+static_assert(
+    sizeof(atomic_uint64) == sizeof(uint_fast64_t) &&
+        alignof(atomic_uint64) == alignof(uint_fast64_t),
+    "atomic_uint64 must match its base type's layout; see FBCLOCK_CGO in fbclock.h");
 
 #if defined(__GNUC__) && !defined(__OPTIMIZE__)
 #define fbclock_debug_print(fmt, ...)  \
