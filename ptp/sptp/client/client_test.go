@@ -184,7 +184,9 @@ func TestClientTimeoutReleasesGoroutine(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 		stacks, left = exchangeGoroutines()
 	}
-	require.Equal(t, before, left, "exchange goroutines still parked after their timeout:\n%s", stacks)
+	// Only an increase is a leak: tests share a process, so an earlier test's
+	// goroutine can finish during this one and drop the count below the baseline.
+	require.LessOrEqual(t, left, before, "exchange goroutines still parked after their timeout:\n%s", stacks)
 }
 
 func exchangeGoroutines() (string, int) {
