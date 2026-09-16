@@ -21,6 +21,10 @@ package fbclock
 /*
 #cgo LDFLAGS: -lrt
 
+// cgo compiles each preamble as its own translation unit, so every file that
+// includes the header needs this, not just fbclock.go. See FBCLOCK_CGO there.
+#define FBCLOCK_CGO 1
+
 #include "fbclock.h" // @oss-only
 // @fb-only: #include "time/fbclock/fbclock.h"
 
