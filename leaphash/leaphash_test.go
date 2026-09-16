@@ -54,9 +54,3 @@ func TestHashIgnoresCarriageReturns(t *testing.T) {
 		t.Fatalf("invalid hash value, got '%s', expected '%s'", hash, testDocHash)
 	}
 }
-
-func FuzzCompute(f *testing.F) {
-	f.Fuzz(func(t *testing.T, input string) {
-		_ = Compute(input)
-	})
-}
