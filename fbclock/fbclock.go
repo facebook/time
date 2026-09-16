@@ -22,6 +22,10 @@ package fbclock
 #cgo LDFLAGS: -lrt
 #cgo amd64 CFLAGS: -msse4.2
 
+// Scoped to this preamble on purpose: a #cgo CFLAGS define would also reach
+// fbclock.c, which needs the real atomics. See FBCLOCK_CGO in fbclock.h.
+#define FBCLOCK_CGO 1
+
 #include "fbclock.h" // @oss-only
 // @fb-only: #include "time/fbclock/fbclock.h"
 

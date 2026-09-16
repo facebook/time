@@ -16,7 +16,19 @@ limitations under the License.
 
 #pragma once
 
-#if defined(__cplusplus) && !defined(__clang__)
+#include <stdint.h> /* for proper fixed width types */
+
+// Only the cgo preambles in fbclock.go and shmem.go define FBCLOCK_CGO. cgo
+// builds its Go types from DWARF, and Go's debug/dwarf has no model for
+// DW_TAG_atomic_type, which clang 21 emits where clang 19 folded the atomic
+// into its base integer; every struct reachable from fbclock_lib then fails to
+// convert. Go needs the size and field offsets of the shm structs; it must
+// never touch seq or crc itself, so a plain base type serves it. fbclock.c
+// static_asserts that the substitution is layout-identical. The Rust bindings
+// solve the same problem with --opaque-type; see this directory's BUCK.
+#if defined(FBCLOCK_CGO)
+typedef uint_fast64_t atomic_uint64;
+#elif defined(__cplusplus) && !defined(__clang__)
 #include <atomic>
 typedef std::atomic_uint_fast64_t atomic_uint64;
 #else
@@ -24,7 +36,6 @@ typedef std::atomic_uint_fast64_t atomic_uint64;
 typedef atomic_uint_fast64_t atomic_uint64;
 #endif
 
-#include <stdint.h> /* for proper fixed width types */
 #ifndef __cplusplus
 #include <stdalign.h> /* for alignas in C; alignas is a keyword in C++ */
 #endif
