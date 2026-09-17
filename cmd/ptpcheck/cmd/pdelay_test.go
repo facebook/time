@@ -166,12 +166,18 @@ func TestRunPeriodicProbeCountOne(t *testing.T) {
 	defer srv.Close()
 
 	var got []*pdelay.Result
-	OnProbeResult = func(results []*pdelay.Result) { got = results }
+	var gotServer string
+	OnProbeResult = func(results []*pdelay.Result, server string) {
+		got, gotServer = results, server
+	}
 	t.Cleanup(func() { OnProbeResult = nil })
 
 	err := RunPeriodicProbe(t.Context(), ProbeConfig{Server: srv.URL, Count: 1, Timeout: DefaultPingTimeout})
 	require.NoError(t, err)
 	require.Len(t, got, 2, "the callback must receive every responder")
+	// anything the callback reads back must describe the sptp that was probed,
+	// not whichever one a fresh lookup happens to resolve
+	require.Equal(t, srv.URL, gotServer)
 
 	require.True(t, got[0].Valid())
 	require.NoError(t, got[0].Error)
@@ -187,7 +193,7 @@ func TestRunPeriodicProbeCountOneTransportError(t *testing.T) {
 	defer srv.Close()
 
 	called := false
-	OnProbeResult = func([]*pdelay.Result) { called = true }
+	OnProbeResult = func([]*pdelay.Result, string) { called = true }
 	t.Cleanup(func() { OnProbeResult = nil })
 
 	// cron reads the exit code, so a probe that never landed must not look healthy

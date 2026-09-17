@@ -104,8 +104,10 @@ func (c ProbeConfig) multicastGroup() string {
 	return ptp.PDelayMulticastIPv6
 }
 
-// ProbeResultCallback is called with all measurement results after each probe cycle
-type ProbeResultCallback func(results []*pdelay.Result)
+// ProbeResultCallback is called with all measurement results after each probe
+// cycle. server is the sptp the probe went to, so anything the callback reads
+// back describes the same instance.
+type ProbeResultCallback func(results []*pdelay.Result, server string)
 
 // OnProbeResult is an optional callback that gets called with all results from each probe cycle.
 // Set this from external packages (e.g., internal) to add custom logging.
@@ -168,7 +170,7 @@ func RunPeriodicProbe(ctx context.Context, cfg ProbeConfig) error {
 
 		// Call callback with all results from this cycle
 		if OnProbeResult != nil {
-			OnProbeResult(results)
+			OnProbeResult(results, checker.GetServerAddress(cfg.Server, checker.FlavourSPTP))
 		}
 	}
 	// exiting 0 with no rows would leave the ptp_pdelay dataset quiet and every
