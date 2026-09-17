@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,25 +36,36 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func getFreePort() (int, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
+// The kernel hands a closed ephemeral port straight back out, so two callers can
+// otherwise be given the same one and the second server dies on bind. Remember
+// what we have issued. Bind ::1, the address the servers actually listen on.
+var (
+	issuedPortsMu sync.Mutex
+	issuedPorts   = map[int]bool{}
+)
 
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return 0, err
+func getFreePort(t *testing.T) int {
+	t.Helper()
+	issuedPortsMu.Lock()
+	defer issuedPortsMu.Unlock()
+	for range 100 {
+		l, err := net.Listen("tcp", "[::1]:0")
+		require.NoError(t, err)
+		port := l.Addr().(*net.TCPAddr).Port
+		require.NoError(t, l.Close())
+		if !issuedPorts[port] {
+			issuedPorts[port] = true
+			return port
+		}
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
+	t.Fatal("no unused ephemeral port after 100 attempts")
+	return 0
 }
 
 func TestJSONStats(t *testing.T) {
 	stats, err := NewJSONStats()
 	require.NoError(t, err)
-	port, err := getFreePort()
-	require.Nil(t, err, "Failed to allocate port")
+	port := getFreePort(t)
 	url := fmt.Sprintf("http://localhost:%d", port)
 	go stats.Start("::1", port, time.Second, nil)
 	time.Sleep(time.Second)
@@ -98,8 +110,7 @@ func TestJSONStats(t *testing.T) {
 func TestHeaders(t *testing.T) {
 	stats, err := NewJSONStats()
 	require.NoError(t, err)
-	port, err := getFreePort()
-	require.Nil(t, err, "Failed to allocate port")
+	port := getFreePort(t)
 	url := fmt.Sprintf("http://localhost:%d", port)
 	go stats.Start("::1", port, time.Second, nil)
 	time.Sleep(time.Second)
@@ -136,8 +147,7 @@ func httpDo(t *testing.T, method, url string) (*http.Response, error) {
 
 func pingTestServer(t *testing.T, pinger Pinger) (string, *JSONStats) {
 	t.Helper()
-	port, err := getFreePort()
-	require.NoError(t, err)
+	port := getFreePort(t)
 	stats, err := NewJSONStats()
 	require.NoError(t, err)
 	go stats.Start("::1", port, time.Minute, pinger)
@@ -402,8 +412,7 @@ func mustPingServer(t *testing.T, pinger Pinger) string {
 }
 
 func TestStartBindsConfiguredHostOnly(t *testing.T) {
-	port, err := getFreePort()
-	require.NoError(t, err)
+	port := getFreePort(t)
 	stats, err := NewJSONStats()
 	require.NoError(t, err)
 	go stats.Start("::1", port, time.Minute, nil)
@@ -425,8 +434,7 @@ func TestStartBindsConfiguredHostOnly(t *testing.T) {
 // the default bind must serve ::1 and refuse IPv4, which is what keeps /ping
 // off-box; consumers moved to [::1] in the preceding diff
 func TestStartDefaultHostIsLoopbackOnly(t *testing.T) {
-	port, err := getFreePort()
-	require.NoError(t, err)
+	port := getFreePort(t)
 	stats, err := NewJSONStats()
 	require.NoError(t, err)
 	go stats.Start(DefaultConfig().MonitoringHost, port, time.Minute, nil)
@@ -450,8 +458,7 @@ func TestStartHostDefaulting(t *testing.T) {
 	require.Equal(t, "::1", DefaultConfig().MonitoringHost)
 
 	for _, host := range []string{"", "::1"} {
-		port, err := getFreePort()
-		require.NoError(t, err)
+		port := getFreePort(t)
 		stats, err := NewJSONStats()
 		require.NoError(t, err)
 		go stats.Start(host, port, time.Minute, nil)
