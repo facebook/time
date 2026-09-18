@@ -43,11 +43,9 @@ func TestNewPeerFromNTP(t *testing.T) {
 		{
 			name: "empty should give error",
 			p: &control.NTPControlMsg{
-				NTPControlMsgHead: control.NTPControlMsgHead{
-					VnMode: control.MakeVnMode(3, control.Mode),
-					REMOp:  control.OpReadVariables,
-				},
-				Data: []uint8(""),
+				VnMode: control.MakeVnMode(3, control.Mode),
+				REMOp:  control.OpReadVariables,
+				Data:   []uint8(""),
 			},
 			want:    nil,
 			wantErr: true,
@@ -55,22 +53,20 @@ func TestNewPeerFromNTP(t *testing.T) {
 		{
 			name: "valid packet",
 			p: &control.NTPControlMsg{
-				NTPControlMsgHead: control.NTPControlMsgHead{
-					VnMode: control.MakeVnMode(3, control.Mode),
-					REMOp:  control.OpReadVariables,
-					Status: (&control.PeerStatusWord{
-						PeerStatus: control.PeerStatus{
-							Broadcast:   false,
-							Reachable:   true,
-							AuthEnabled: false,
-							AuthOK:      false,
-							Configured:  true,
-						},
-						PeerSelection:    4,
-						PeerEventCounter: 1,
-						PeerEventCode:    2,
-					}).Word(),
-				},
+				VnMode: control.MakeVnMode(3, control.Mode),
+				REMOp:  control.OpReadVariables,
+				Status: (&control.PeerStatusWord{
+					PeerStatus: control.PeerStatus{
+						Broadcast:   false,
+						Reachable:   true,
+						AuthEnabled: false,
+						AuthOK:      false,
+						Configured:  true,
+					},
+					PeerSelection:    4,
+					PeerEventCounter: 1,
+					PeerEventCode:    2,
+				}).Word(),
 				Data: []uint8("stratum=3,offset=0.1,hpoll=1024,ppoll=10"),
 			},
 			want: &Peer{

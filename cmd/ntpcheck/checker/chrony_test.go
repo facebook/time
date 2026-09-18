@@ -45,21 +45,17 @@ func (c *fakeChronyClient) Communicate(packet chrony.RequestPacket) (chrony.Resp
 var (
 	refTime       = time.Unix(1587738257, 0)
 	replyTracking = &chrony.ReplyTracking{
-		Tracking: chrony.Tracking{
-			RefID:      123456,
-			RefTime:    refTime,
-			IPAddr:     net.ParseIP("192.168.0.1"),
-			Stratum:    3,
-			LeapStatus: 0,
-			LastOffset: 0.001,
-		},
+		RefID:      123456,
+		RefTime:    refTime,
+		IPAddr:     net.ParseIP("192.168.0.1"),
+		Stratum:    3,
+		LeapStatus: 0,
+		LastOffset: 0.001,
 	}
 
 	replyServerStats = &chrony.ReplyServerStats{
-		ServerStats: chrony.ServerStats{
-			NTPHits:  1234,
-			NTPDrops: 5678,
-		},
+		NTPHits:  1234,
+		NTPDrops: 5678,
 	}
 
 	replySources = &chrony.ReplySources{
@@ -67,68 +63,52 @@ var (
 	}
 
 	replySD0 = &chrony.ReplySourceData{
-		SourceData: chrony.SourceData{
-			IPAddr:         &chrony.IPAddr{IP: chrony.IPToBytes(net.ParseIP("192.168.0.2")), Family: chrony.IPAddrInet4},
-			Flags:          chrony.NTPFlagsTests,
-			Poll:           10,
-			Stratum:        2,
-			State:          chrony.SourceStateSync,
-			Mode:           chrony.SourceModePeer,
-			Reachability:   255,
-			OrigLatestMeas: -0.03,
-		},
+		IPAddr:         &chrony.IPAddr{IP: chrony.IPToBytes(net.ParseIP("192.168.0.2")), Family: chrony.IPAddrInet4},
+		Flags:          chrony.NTPFlagsTests,
+		Poll:           10,
+		Stratum:        2,
+		State:          chrony.SourceStateSync,
+		Mode:           chrony.SourceModePeer,
+		Reachability:   255,
+		OrigLatestMeas: -0.03,
 	}
 
 	replySD1 = &chrony.ReplySourceData{
-		SourceData: chrony.SourceData{
-			IPAddr:         &chrony.IPAddr{IP: chrony.IPToBytes(net.ParseIP("192.168.0.4")), Family: chrony.IPAddrInet4},
-			Flags:          chrony.NTPFlagsTests,
-			Poll:           11,
-			Stratum:        2,
-			State:          chrony.SourceStateCandidate,
-			Mode:           chrony.SourceModePeer,
-			Reachability:   200,
-			OrigLatestMeas: -0.02,
-		},
+		IPAddr:         &chrony.IPAddr{IP: chrony.IPToBytes(net.ParseIP("192.168.0.4")), Family: chrony.IPAddrInet4},
+		Flags:          chrony.NTPFlagsTests,
+		Poll:           11,
+		Stratum:        2,
+		State:          chrony.SourceStateCandidate,
+		Mode:           chrony.SourceModePeer,
+		Reachability:   200,
+		OrigLatestMeas: -0.02,
 	}
 
 	replyNTPData0 = &chrony.ReplyNTPData2{
-		NTPData2: chrony.NTPData2{
-			NTPData: chrony.NTPData{
-				RefID:          123456,
-				RefTime:        refTime,
-				Leap:           0,
-				Poll:           10,
-				Offset:         0.03,
-				Stratum:        2,
-				PeerDispersion: 0.01,
-				LocalAddr:      net.ParseIP("192.168.0.1"),
-			},
-		},
+		RefID:          123456,
+		RefTime:        refTime,
+		Leap:           0,
+		Poll:           10,
+		Offset:         0.03,
+		Stratum:        2,
+		PeerDispersion: 0.01,
+		LocalAddr:      net.ParseIP("192.168.0.1"),
 	}
 	replyNTPData1 = &chrony.ReplyNTPData2{
-		NTPData2: chrony.NTPData2{
-			NTPData: chrony.NTPData{
-				RefID:          654321,
-				RefTime:        refTime,
-				Leap:           0,
-				Poll:           11,
-				Offset:         0.02,
-				Stratum:        2,
-				PeerDispersion: 0.02,
-				LocalAddr:      net.ParseIP("192.168.0.1"),
-			},
-		},
+		RefID:          654321,
+		RefTime:        refTime,
+		Leap:           0,
+		Poll:           11,
+		Offset:         0.02,
+		Stratum:        2,
+		PeerDispersion: 0.02,
+		LocalAddr:      net.ParseIP("192.168.0.1"),
 	}
 	replyNTPSourceName0 = &chrony.ReplyNTPSourceName{
-		NTPSourceName: chrony.NTPSourceName{
-			Name: "ntp_peer001.sample.facebook.com",
-		},
+		Name: "ntp_peer001.sample.facebook.com",
 	}
 	replyNTPSourceName1 = &chrony.ReplyNTPSourceName{
-		NTPSourceName: chrony.NTPSourceName{
-			Name: "",
-		},
+		Name: "",
 	}
 )
 
