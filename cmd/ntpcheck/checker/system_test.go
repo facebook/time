@@ -97,9 +97,11 @@ func TestNewSystemVariablesFromNTP(t *testing.T) {
 		{
 			name: "packet with empty data should give error",
 			p: &control.NTPControlMsg{
-				VnMode: vnMode,
-				REMOp:  control.OpReadVariables,
-				Data:   []uint8(""),
+				NTPControlMsgHead: control.NTPControlMsgHead{
+					VnMode: vnMode,
+					REMOp:  control.OpReadVariables,
+				},
+				Data: []uint8(""),
 			},
 			want:    nil,
 			wantErr: true,
@@ -107,9 +109,11 @@ func TestNewSystemVariablesFromNTP(t *testing.T) {
 		{
 			name: "valid system variables",
 			p: &control.NTPControlMsg{
-				VnMode: vnMode,
-				REMOp:  control.OpReadVariables,
-				Data:   []uint8("leap=1,stratum=3,rootdelay=3,rootdisp=1,refid=0001E240,reftime=0x12345,offset=10,frequency=100"),
+				NTPControlMsgHead: control.NTPControlMsgHead{
+					VnMode: vnMode,
+					REMOp:  control.OpReadVariables,
+				},
+				Data: []uint8("leap=1,stratum=3,rootdelay=3,rootdisp=1,refid=0001E240,reftime=0x12345,offset=10,frequency=100"),
 			},
 			want: &SystemVariables{
 				Leap:      1,

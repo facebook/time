@@ -73,31 +73,37 @@ func TestNTPCheckRun(t *testing.T) {
 	prepdOutputs := []*control.NTPControlMsg{
 		// system status
 		{
-			VnMode: vnMode,
-			REMOp:  control.MakeREMOp(true, false, false, control.OpReadStatus),
-			Status: (&control.SystemStatusWord{
-				LI:                 0, // add_sec
-				ClockSource:        6, // ntp
-				SystemEventCounter: 0,
-				SystemEventCode:    5, // clock_sync
-			}).Word(),
-			Count: uint16(len(assocData)),
-			Data:  assocData,
+			NTPControlMsgHead: control.NTPControlMsgHead{
+				VnMode: vnMode,
+				REMOp:  control.MakeREMOp(true, false, false, control.OpReadStatus),
+				Status: (&control.SystemStatusWord{
+					LI:                 0, // add_sec
+					ClockSource:        6, // ntp
+					SystemEventCounter: 0,
+					SystemEventCode:    5, // clock_sync
+				}).Word(),
+				Count: uint16(len(assocData)),
+			},
+			Data: assocData,
 		},
 		// read system variables
 		{
-			VnMode:        vnMode,
-			REMOp:         control.MakeREMOp(true, false, false, control.OpReadVariables),
-			AssociationID: 0,
-			Data:          []uint8("stratum=3,offset=0.1,hpoll=1024,ppoll=10,refid=0001E240,reftime=0x01"),
+			NTPControlMsgHead: control.NTPControlMsgHead{
+				VnMode:        vnMode,
+				REMOp:         control.MakeREMOp(true, false, false, control.OpReadVariables),
+				AssociationID: 0,
+			},
+			Data: []uint8("stratum=3,offset=0.1,hpoll=1024,ppoll=10,refid=0001E240,reftime=0x01"),
 		},
 		// read peer variables
 		{
-			VnMode:        vnMode,
-			REMOp:         control.MakeREMOp(true, false, false, control.OpReadVariables),
-			AssociationID: 2,
-			Status:        psWordBinary,
-			Data:          []uint8("reach=255,srcadr=192.168.0.4,dstadr=10.3.2.4,stratum=2,offset=20,hpoll=11,ppoll=11,refid=20012210,reftime=0x02"),
+			NTPControlMsgHead: control.NTPControlMsgHead{
+				VnMode:        vnMode,
+				REMOp:         control.MakeREMOp(true, false, false, control.OpReadVariables),
+				AssociationID: 2,
+				Status:        psWordBinary,
+			},
+			Data: []uint8("reach=255,srcadr=192.168.0.4,dstadr=10.3.2.4,stratum=2,offset=20,hpoll=11,ppoll=11,refid=20012210,reftime=0x02"),
 		},
 	}
 
@@ -145,10 +151,12 @@ func TestNTPCheckServerStats(t *testing.T) {
 	prepdOutputs := []*control.NTPControlMsg{
 		// read server variables
 		{
-			VnMode:        vnMode,
-			REMOp:         control.MakeREMOp(true, false, false, control.OpReadVariables),
-			AssociationID: 0,
-			Data:          []uint8("ss_received=1234,ss_badformat=5670,ss_badauth=5,ss_declined=1,ss_restricted=1,ss_limited=1"),
+			NTPControlMsgHead: control.NTPControlMsgHead{
+				VnMode:        vnMode,
+				REMOp:         control.MakeREMOp(true, false, false, control.OpReadVariables),
+				AssociationID: 0,
+			},
+			Data: []uint8("ss_received=1234,ss_badformat=5670,ss_badauth=5,ss_declined=1,ss_restricted=1,ss_limited=1"),
 		},
 	}
 

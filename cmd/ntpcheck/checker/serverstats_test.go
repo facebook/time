@@ -55,9 +55,11 @@ func TestNewServerStatsFromNTP(t *testing.T) {
 		{
 			name: "packet with empty data should give error",
 			p: &control.NTPControlMsg{
-				VnMode: vnMode,
-				REMOp:  control.OpReadVariables,
-				Data:   []uint8(""),
+				NTPControlMsgHead: control.NTPControlMsgHead{
+					VnMode: vnMode,
+					REMOp:  control.OpReadVariables,
+				},
+				Data: []uint8(""),
 			},
 			want:    nil,
 			wantErr: true,
@@ -65,9 +67,11 @@ func TestNewServerStatsFromNTP(t *testing.T) {
 		{
 			name: "valid packet should give no error",
 			p: &control.NTPControlMsg{
-				VnMode: vnMode,
-				REMOp:  control.OpReadVariables,
-				Data:   []uint8("ss_received=1234,ss_badformat=5670,ss_badauth=5,ss_declined=1,ss_restricted=1,ss_limited=1"),
+				NTPControlMsgHead: control.NTPControlMsgHead{
+					VnMode: vnMode,
+					REMOp:  control.OpReadVariables,
+				},
+				Data: []uint8("ss_received=1234,ss_badformat=5670,ss_badauth=5,ss_declined=1,ss_restricted=1,ss_limited=1"),
 			},
 			want: &ServerStats{
 				PacketsReceived: 1234,
