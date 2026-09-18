@@ -35,14 +35,10 @@ func newCorrector(config AsymmetryConfig) asymmetry.Corrector {
 		MaxConsecutive: config.MaxConsecutiveAsymmetry,
 		MaxPortChanges: config.MaxPortChanges,
 	}
-	switch {
-	case config.Rack:
+	if config.Rack {
 		return &asymmetry.Rack{Config: c}
-	case config.Simple:
-		return &asymmetry.Simple{Config: c}
-	default:
-		return &asymmetry.Complex{Config: c}
 	}
+	return &asymmetry.Simple{Config: c}
 }
 
 // observePeers hands a completed multicast probe to the corrector.
@@ -60,10 +56,9 @@ func (p *SPTP) observePeers(results pdelay.Results) {
 // correctAsymmetry hands the tick's measurements to the corrector and writes any
 // decision back onto the clients.
 func (p *SPTP) correctAsymmetry(results map[netip.Addr]*RunResult, bestAddr netip.Addr) int {
-	// every configured GM, not just the ones that answered: the complex path
-	// clears stale state on GMs it is no longer searching, which it can only do
-	// for a GM it can see. A result naming an address we never configured, which
-	// a malformed packet can produce, has no GM to carry it.
+	// every configured GM, not just the ones that answered: a corrector can only
+	// clear stale state on a GM it can see. A result naming an address we never
+	// configured, which a malformed packet can produce, has no GM to carry it.
 	gms := make(map[netip.Addr]*asymmetry.GM, len(p.clients))
 	for addr, client := range p.clients {
 		gms[addr] = newGM(client, results[addr])
@@ -84,9 +79,6 @@ func applyPortActions(client *Client, gm *asymmetry.GM) {
 	tlv := getAlternateResponsePortTLV(client)
 	if tlv == nil {
 		return
-	}
-	if gm.PortReset {
-		tlv.Offset = 0
 	}
 	if gm.PortMoved {
 		tlv.Offset++

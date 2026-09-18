@@ -111,66 +111,8 @@ func TestSimpleAloneWithSelected(t *testing.T) {
 	require.Zero(t, s.Observe(Observation{GMs: gms, Best: addrA}), "nothing to corroborate against")
 }
 
-func TestComplexMovesEachGMIndependently(t *testing.T) {
-	c := &Complex{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
-	gms := map[netip.Addr]*GM{
-		addrA: gm(0, true),
-		addrB: gm(5*time.Microsecond, true),
-		addrC: gm(0, true),
-	}
-	require.Equal(t, 1, c.Observe(Observation{GMs: gms, Best: addrA}), "only B looks asymmetric")
-	require.True(t, gms[addrB].Asymmetric)
-	require.False(t, gms[addrC].Asymmetric)
-	require.Zero(t, gms[addrA].PortOffset, "the selected GM is untouched")
-}
-
-func TestComplexBlamesSelectedAfterMaxPortChanges(t *testing.T) {
-	c := &Complex{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 2}}
-	b := gm(5*time.Microsecond, true)
-	b.PortOffset = 3 // already searched past the limit
-	gms := map[netip.Addr]*GM{addrA: gm(0, true), addrB: b}
-
-	c.Observe(Observation{GMs: gms, Best: addrA})
-	require.Equal(t, uint16(1), gms[addrA].PortOffset, "selected GM is blamed")
-	require.Zero(t, b.PortOffset, "the others are reset so the search restarts")
-}
-
-func TestComplexResetsStreakWhenClean(t *testing.T) {
-	c := &Complex{Config: Config{Threshold: time.Microsecond, MaxConsecutive: 5, MaxPortChanges: 9}}
-	b := gm(10*time.Nanosecond, true)
-	b.Streak = 4
-	c.Observe(Observation{GMs: map[netip.Addr]*GM{addrA: gm(0, true), addrB: b}, Best: addrA})
-	require.Zero(t, b.Streak)
-	require.False(t, b.Asymmetric)
-}
-
 func TestCorrectorNames(t *testing.T) {
 	require.Equal(t, "simple", (&Simple{}).Name())
-	require.Equal(t, "complex", (&Complex{}).Name())
-}
-
-// the complex path can move a GM's port and then, in the same round, stop
-// searching it and reset; the reset has to win or the port lands on 1 not 0
-func TestResetPortCancelsMove(t *testing.T) {
-	g := gm(0, true)
-	g.MovePort()
-	g.ResetPort()
-
-	require.True(t, g.PortReset)
-	require.False(t, g.PortMoved, "a reset in the same round cancels the move")
-	require.Zero(t, g.PortOffset)
-}
-
-func TestComplexResetLandsOnZero(t *testing.T) {
-	c := &Complex{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 2}}
-	// suspicious and already past the search limit, so it is moved then blamed away
-	b := gm(5*time.Microsecond, true)
-	b.PortOffset = 3
-	b.Streak = 99
-
-	c.Observe(Observation{GMs: map[netip.Addr]*GM{addrA: gm(0, true), addrB: b}, Best: addrA})
-	require.Zero(t, b.PortOffset)
-	require.False(t, b.PortMoved, "the reset must not leave a pending move behind")
 }
 
 // peersAt turns bare offsets into distinct responders, as a real probe would
@@ -258,7 +200,6 @@ func TestObserveToleratesEitherSource(t *testing.T) {
 
 	for _, c := range []Corrector{
 		&Simple{Config: Config{Threshold: time.Microsecond}},
-		&Complex{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}},
 		&Rack{Config: Config{Threshold: time.Microsecond}},
 	} {
 		t.Run(c.Name(), func(t *testing.T) {
@@ -297,25 +238,6 @@ func TestSimpleUnjudgeableIsNotSuspicion(t *testing.T) {
 	require.Zero(t, gms[addrA].PortOffset)
 }
 
-// a GM that says nothing keeps the streak it earned, so an intermittent GM can
-// still reach the grace limit
-func TestComplexSilentGMKeepsStreak(t *testing.T) {
-	c := &Complex{Config: Config{Threshold: time.Microsecond, MaxConsecutive: 2, MaxPortChanges: 9}}
-	b := gm(5*time.Microsecond, true)
-	b.Streak = 2
-
-	silent := gm(0, false)
-	silent.Streak = 2
-	c.Observe(Observation{GMs: map[netip.Addr]*GM{addrA: gm(0, true), addrC: silent}, Best: addrA})
-	require.Equal(t, 2, silent.Streak, "silence must not clear the streak")
-
-	// and an answered clean measurement still does
-	clean := gm(10*time.Nanosecond, true)
-	clean.Streak = 2
-	c.Observe(Observation{GMs: map[netip.Addr]*GM{addrA: gm(0, true), addrC: clean}, Best: addrA})
-	require.Zero(t, clean.Streak)
-}
-
 // the decision is recorded, never applied; the caller owns the mutation
 func TestPortActionsAreRecordedNotApplied(t *testing.T) {
 	g := gm(0, true)
@@ -324,10 +246,6 @@ func TestPortActionsAreRecordedNotApplied(t *testing.T) {
 	g.MovePort()
 	require.True(t, g.PortMoved)
 	require.Equal(t, uint16(1), g.PortOffset, "the view advances so a later check sees it")
-
-	g.ResetPort()
-	require.True(t, g.PortReset)
-	require.Zero(t, g.PortOffset)
 }
 
 // sync ticks outnumber peer probes by orders of magnitude, so one reading must

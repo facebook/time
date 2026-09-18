@@ -42,20 +42,11 @@ func peerResult(n byte) *pdelay.Result {
 	}
 }
 
-func TestNewCorrector(t *testing.T) {
-	require.Nil(t, newCorrector(AsymmetryConfig{}), "disabled yields no corrector")
-
-	for _, tt := range []struct {
-		simple bool
-		want   string
-	}{
-		{true, "simple"},
-		{false, "complex"},
-	} {
-		c := newCorrector(AsymmetryConfig{AsymmetryCorrectionEnabled: true, Simple: tt.simple})
-		require.NotNil(t, c)
-		require.Equal(t, tt.want, c.Name())
-	}
+func TestNewCorrectorPicksRackOrSimple(t *testing.T) {
+	require.Nil(t, newCorrector(AsymmetryConfig{}))
+	require.Equal(t, "simple", newCorrector(AsymmetryConfig{AsymmetryCorrectionEnabled: true}).Name())
+	require.Equal(t, "simple", newCorrector(AsymmetryConfig{AsymmetryCorrectionEnabled: true, Simple: true}).Name())
+	require.Equal(t, "rack", newCorrector(AsymmetryConfig{AsymmetryCorrectionEnabled: true, Rack: true}).Name())
 }
 
 func TestGetAlternateResponsePortTLV(t *testing.T) {
@@ -108,11 +99,6 @@ func TestApplyPortActions(t *testing.T) {
 	applyPortActions(client, g)
 	require.Equal(t, uint16(1), tlv.Offset)
 
-	g = newGM(client, nil)
-	g.ResetPort()
-	applyPortActions(client, g)
-	require.Zero(t, tlv.Offset)
-
 	require.NotPanics(t, func() { applyPortActions(&Client{}, newGM(client, nil)) }, "no TLV to apply to")
 }
 
@@ -149,43 +135,12 @@ func TestCorrectAsymmetryWritesBack(t *testing.T) {
 		other: announceResult(9*time.Microsecond, ptp.ClockClass6, false),
 	}
 
+	// simple needs the streak to mature before it acts
+	require.Zero(t, p.correctAsymmetry(results, best))
+	require.Equal(t, 1, p.clients[best].asymmetryCounter, "streak must reach the client")
 	require.Equal(t, 1, p.correctAsymmetry(results, best))
-	require.True(t, p.clients[other].asymmetric, "verdict must reach the client")
-	require.Equal(t, 1, p.clients[other].asymmetryCounter, "streak must reach the client")
-}
-
-// the complex path clears stale state on GMs it stops searching, so a GM that
-// produced no result this tick still has to be visible to it
-func TestCorrectAsymmetryCoversSilentClients(t *testing.T) {
-	best := netip.MustParseAddr("192.168.0.10")
-	silent := netip.MustParseAddr("192.168.0.11")
-	loud := netip.MustParseAddr("192.168.0.12")
-
-	p := &SPTP{
-		clients: map[netip.Addr]*Client{
-			best:   {delayRequest: ReqDelay(ptp.ClockIdentity(1), 1)},
-			silent: {delayRequest: ReqDelay(ptp.ClockIdentity(2), 1), asymmetric: true},
-			loud:   {delayRequest: ReqDelay(ptp.ClockIdentity(3), 1)},
-		},
-		corrector: newCorrector(AsymmetryConfig{
-			AsymmetryCorrectionEnabled: true,
-			AsymmetryThreshold:         time.Microsecond,
-			MaxPortChanges:             2,
-		}),
-	}
-	// the silent GM was left mid-search with an offset past the limit
-	getAlternateResponsePortTLV(p.clients[silent]).Offset = 5
-	getAlternateResponsePortTLV(p.clients[loud]).Offset = 5
-
-	// only the loud GM reports; the silent one is absent from results entirely
-	p.correctAsymmetry(map[netip.Addr]*RunResult{
-		best: announceResult(0, ptp.ClockClass6, false),
-		loud: announceResult(9*time.Microsecond, ptp.ClockClass6, false),
-	}, best)
-
-	require.Zero(t, getAlternateResponsePortTLV(p.clients[silent]).Offset,
-		"a GM with no result must still have its stale port offset cleared")
-	require.False(t, p.clients[silent].asymmetric, "and its stale flag cleared")
+	require.Equal(t, uint16(1), getAlternateResponsePortTLV(p.clients[best]).Offset,
+		"the port move must reach the client")
 }
 
 func TestNewCorrectorRack(t *testing.T) {

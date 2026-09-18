@@ -49,11 +49,9 @@ type GM struct {
 
 	// PortOffset is the current response-port offset.
 	PortOffset uint16
-	// PortMoved is whether this correction asked the port to advance, and
-	// PortReset whether it asked for the offset to be cleared. The caller applies
-	// them, so the decision stays separate from the mutation.
+	// PortMoved is whether this correction asked the port to advance. The caller
+	// applies it, so the decision stays separate from the mutation.
 	PortMoved bool
-	PortReset bool
 
 	// Asymmetric marks this GM as suspected during the current tick.
 	Asymmetric bool
@@ -68,28 +66,17 @@ func (g *GM) MovePort() {
 	g.PortOffset++
 }
 
-// ResetPort records that this GM's response port should return to zero. It
-// cancels a move recorded earlier in the same round, which the complex path does
-// when it stops searching a GM and blames the selected one instead.
-func (g *GM) ResetPort() {
-	g.PortReset = true
-	g.PortMoved = false
-	g.PortOffset = 0
-}
-
 // Config tunes the corrections.
 type Config struct {
-	// Threshold above which an offset is suspicious. Simple and Complex read it
+	// Threshold above which an offset is suspicious. Simple reads it
 	// against a grandmaster offset, Rack against the in-rack peer median; the two
 	// cannot be tuned apart.
 	Threshold time.Duration
 	// MaxConsecutive measurements a GM may look asymmetric before its port moves.
-	// Complex only.
 	MaxConsecutive uint16
-	// MaxPortChanges means different things per corrector: to Complex, the port
-	// offset a GM may reach before the selected GM is blamed instead; to Rack, the
-	// number of moves one search may spend, where zero spends none. Simple ignores
-	// it.
+	// MaxPortChanges is how many moves one search may spend; zero spends none.
+	// Rack only -- simple moves the selected port whenever the grandmasters are
+	// unanimous, without a budget.
 	MaxPortChanges uint16
 }
 
