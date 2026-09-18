@@ -1,6 +1,6 @@
 module github.com/facebook/time
 
-go 1.26.0
+go 1.27.0
 
 require (
 	github.com/Knetic/govaluate v3.0.0+incompatible
