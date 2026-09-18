@@ -35,7 +35,6 @@ import (
 
 	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/ntp/chrony"
-	ntp "github.com/facebook/time/ntp/protocol"
 	"github.com/facebook/time/phc"
 	"github.com/facebook/time/ptp/linearizability"
 	ptp "github.com/facebook/time/ptp/protocol"
@@ -213,7 +212,7 @@ func noTestResults(targets []string) map[string]linearizability.TestResult {
 	return r
 }
 
-// currentUTCOffsetS returns the TAI-UTC offset in effect at now, from the same
+// CurrentUTCOffsetS returns the TAI-UTC offset in effect at now, from the same
 // tzdata leaps that fill the smear fields. fbclock anchors are TAI and
 // fbclock_gettime_utc subtracts this, so the chrony anchor must include it.
 //
@@ -221,7 +220,7 @@ func noTestResults(targets []string) map[string]linearizability.TestResult {
 // older than every record falls back to the oldest, which is the same floor the
 // client applies: fbclock_apply_smear subtracts utc_offset_pre_s, published from
 // that record, so the UTC round trip stays exact even there.
-func currentUTCOffsetS(leaps []leapsectz.LeapSecond, now time.Time) int32 {
+func CurrentUTCOffsetS(leaps []leapsectz.LeapSecond, now time.Time) int32 {
 	// newest first: the offset is set by the most recent leap already in effect.
 	// Tleap counts in TAI, so undo the corrections to get the UTC instant.
 	for _, l := range slices.Backward(leaps) {
@@ -457,38 +456,23 @@ func (s *Daemon) calculateSHMData(data *DataPoint, leaps []leapsectz.LeapSecond)
 	}, nil
 }
 
-// calculateSHMDataChrony computes the error bound from chronyd's own error
-// model, the way ClockBound does, bypassing the ring buffer and M/W pipeline:
-//
-//	ErrorBound = |CurrentCorrection| + RootDispersion + RootDelay/2
+// calculateSHMDataChrony builds what chrony mode publishes to shared memory:
+// the bound and holdover rate from ChronyBound, the leap-second fields from
+// tzdata. No ring buffer and no M/W expressions, unlike the PTP path.
 //
 // asOf is the anchor read taken at fetch time and published as IngressTimeNS
 // (ClockBound's as_of). Not chronyd's RefTime: RootDispersion already covers
 // the age of the last update, so RefTime would count that staleness twice.
 func (s *Daemon) calculateSHMDataChrony(tracking *chrony.Tracking, asOf time.Time, leaps []leapsectz.LeapSecond) (*fbclock.Data, error) {
-	// chronyd has no usable source, so its error model says nothing about our clock
-	if tracking.LeapStatus == ntp.LeapAlarm {
-		return nil, fmt.Errorf("%w: chronyd is not synchronised", errCorrectness)
+	errorBoundNS, holdoverNS, err := ChronyBound(tracking, s.cfg.MaxDriftRate)
+	if err != nil {
+		return nil, err
 	}
-	if tracking.RefTime.UnixNano() <= 0 {
-		return nil, fmt.Errorf("%w: chronyd reference time is not set", errCorrectness)
-	}
-	// chronyd reports every term in seconds
-	errorBoundS := math.Abs(tracking.CurrentCorrection) + tracking.RootDispersion + tracking.RootDelay/2
-	errorBoundNS := errorBoundS * float64(time.Second)
-	if errorBoundNS < 1 {
-		return nil, fmt.Errorf("%w: error bound is %v", errCorrectness, errorBoundS)
-	}
-
-	// how fast the bound grows without fresh data. SkewPPM is optimistically
-	// small early after startup, so floor it at the configured max drift rate.
-	holdoverNS := math.Max(tracking.SkewPPM, s.cfg.MaxDriftRate) * nsPerSecondPerPPM
 
 	clockSmearing := leapSecondSmearing(leaps)
 	return &fbclock.Data{
-		IngressTimeNS: asOf.UnixNano(),
-		// bounds round outward
-		ErrorBoundNS:         uint64(math.Ceil(errorBoundNS)),
+		IngressTimeNS:        asOf.UnixNano(),
+		ErrorBoundNS:         errorBoundNS,
 		HoldoverMultiplierNS: holdoverNS,
 		SmearingStartS:       clockSmearing.smearingStartS,
 		SmearingEndS:         clockSmearing.smearingEndS,
@@ -528,7 +512,7 @@ func (s *Daemon) doWorkChrony(tracking *chrony.Tracking) error {
 	}
 	// anchors are TAI, the system clock is UTC
 	s.state.leaps.Store(&leaps)
-	asOf := sysNow.Add(time.Duration(currentUTCOffsetS(leaps, sysNow)) * time.Second)
+	asOf := sysNow.Add(time.Duration(CurrentUTCOffsetS(leaps, sysNow)) * time.Second)
 
 	// same value we publish to shm, so the counter cannot disagree with clients
 	s.stats.SetCounter("ingress_time_ns", asOf.UnixNano())
@@ -744,7 +728,7 @@ func (s *Daemon) readClocks() (time.Time, time.Time, uint32, time.Duration, erro
 		if err != nil {
 			return time.Time{}, time.Time{}, 0, 0, err
 		}
-		offsetS := currentUTCOffsetS(*leaps, sysNow)
+		offsetS := CurrentUTCOffsetS(*leaps, sysNow)
 		return sysNow.Add(time.Duration(offsetS) * time.Second), sysNow, unix.CLOCK_REALTIME, 0, nil
 	}
 	return s.getPHCAndSysTime()
