@@ -647,12 +647,13 @@ func (p *SPTP) reprioritize(bestAddr netip.Addr) {
 
 // portChanges is how many times asymmetry correction has moved this GM's response
 // port. The process-wide counter cannot say which GM was corrected.
+// moves in the current search, not the TLV offset: the offset names the path
+// the host settled on, so it never returns to zero and cannot say "done".
 func (p *SPTP) portChanges(addr netip.Addr) uint16 {
-	tlv := getAlternateResponsePortTLV(p.clients[addr])
-	if tlv == nil {
+	if p.corrector == nil {
 		return 0
 	}
-	return tlv.Offset
+	return p.corrector.PortMoves(addr)
 }
 
 func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {

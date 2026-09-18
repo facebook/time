@@ -25,7 +25,14 @@ import (
 // Simple moves the selected GM's port only when every other GM agrees something
 // is wrong. One GM looking bad says something about that GM; all of them looking
 // bad says something about us.
-type Simple struct{ Config Config }
+type Simple struct {
+	Config Config
+
+	moves searchCounter
+}
+
+// PortMoves implements Corrector.
+func (s *Simple) PortMoves(gm netip.Addr) uint16 { return s.moves.count(gm) }
 
 // Name implements Corrector.
 func (s *Simple) Name() string { return "simple" }
@@ -35,8 +42,11 @@ func (s *Simple) Observe(obs Observation) int {
 	gms, best := obs.GMs, obs.Best
 	selected := gms[best]
 	if selected == nil && len(gms) == 0 {
+		// a peer-only observation says nothing about grandmasters; dropping counts
+		// here would clear a search still running
 		return 0
 	}
+	s.moves.keepOnly(gms)
 	if selected == nil {
 		log.Errorf("selected GM %v is not in the GM list", best)
 		return 0
@@ -44,6 +54,7 @@ func (s *Simple) Observe(obs Observation) int {
 	if !s.selectedIsAsymmetric(gms, best, selected) {
 		return 0
 	}
+	s.moves.charge(best)
 	selected.Streak = 0
 	selected.MovePort()
 	log.Infof("Selected GM %s asymmetric - new port offset: %d", best, selected.PortOffset)
@@ -69,12 +80,15 @@ func (s *Simple) selectedIsAsymmetric(gms map[netip.Addr]*GM, best netip.Addr, s
 			asymmetric++
 		}
 	}
-	// with only the selected GM answering there is nothing to corroborate against
+	// nothing to corroborate against. No evidence the search ended, so the count
+	// stands -- unlike the branch below, where they agree and it is over.
 	if others == 0 || silent == others {
 		return false
 	}
 	if asymmetric != others {
 		selected.Streak = max(selected.Streak-1, 0)
+		// they agree, so whatever search was running is over
+		s.moves.clear(best)
 		return false
 	}
 	if selected.Streak <= int(s.Config.MaxConsecutive) {

@@ -41,11 +41,6 @@ const (
 	medianStdErrFactor = 0.9291
 	// how far from zero the median must sit before a port moves
 	rackSigmas = 3.0
-	// an episode ends at a fraction of the move threshold, not at the threshold
-	// itself. Sharing one bound would let a host straddling it alternate between
-	// moving and settling on every probe, refunding the budget before it could
-	// ever bind -- and that host is exactly the one this corrector is for.
-	rackSettleFraction = 2
 )
 
 // Rack moves the selected GM's port when in-rack peers agree this host's clock
@@ -67,7 +62,7 @@ type Rack struct {
 	// would let a host search once and sit inert for days, deaf to any later
 	// fault. Keyed by GM because each is reached over its own path: failing over
 	// to one nobody has searched must not inherit a spent budget.
-	searched map[netip.Addr]uint16
+	searched searchCounter
 }
 
 // reading is one rack measurement. What the peers said, when, which path it
@@ -176,21 +171,21 @@ func (r *Rack) stderrLocked() float64 {
 	return medianStdErrFactor * float64(r.reading.spread) / math.Sqrt(float64(r.reading.peers))
 }
 
-// settled reports whether the peers put the median entirely inside the settle
-// band, interval and all. Testing the point estimate alone would let a rack that
-// cannot agree on anything -- peers at -20us, +100ns, +20us -- refund the budget
-// on the strength of a median that happens to land near zero.
-//
-// decided() is not the test to use here: it asks whether the median is far FROM
-// zero, so a perfectly synchronised host would never qualify.
-func (r *Rack) settled() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+// judge reads one reading once: settled is the threshold, convict also needs it
+// unspent and the rack's own uncertainty under that threshold. Two calls would
+// let a probe land between them and answer about different readings.
+func (r *Rack) judge() (settled, convict bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.reading.peers < rackMinPeers {
-		return false
+		return false, false
 	}
-	band := float64(r.Config.Threshold / rackSettleFraction)
-	return math.Abs(float64(r.reading.median))+rackSigmas*r.stderrLocked() <= band
+	settled = r.reading.median.Abs() <= r.Config.Threshold
+	if !settled || r.reading.spent || rackSigmas*r.stderrLocked() > float64(r.Config.Threshold) {
+		return settled, false
+	}
+	r.reading.spent = true
+	return true, true
 }
 
 // decided reports whether the peers place the median far enough from zero to act
@@ -216,10 +211,7 @@ func (r *Rack) takeBias(gm netip.Addr, measured time.Time) bool {
 		return false
 	}
 	r.reading.spent = true
-	if r.searched == nil {
-		r.searched = make(map[netip.Addr]uint16, 1)
-	}
-	r.searched[gm]++
+	r.searched.charge(gm)
 	return true
 }
 
@@ -227,51 +219,83 @@ func (r *Rack) takeBias(gm netip.Addr, measured time.Time) bool {
 // MaxPortChanges of N permits exactly N moves, so zero is a usable detect-only
 // setting rather than one that still moves once.
 func (r *Rack) exhausted(gm netip.Addr) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.searched[gm] >= r.Config.MaxPortChanges
+	return r.searched.count(gm) >= r.Config.MaxPortChanges
 }
+
+// correctOthers searches the paths we are not following. Only reached from the
+// quiet branch, so the rack has already said our own clock is inside the
+// threshold and a bad local clock cannot convict all four.
+func (r *Rack) correctOthers(gms map[netip.Addr]*GM, best netip.Addr) int {
+	moved := 0
+	for addr, gm := range gms {
+		if addr == best || !gm.Answered || !gm.Judgeable {
+			continue
+		}
+		if gm.Offset.Abs() <= r.Config.Threshold {
+			// this path is good now, so its search is over and the next fault on it
+			// starts with a full budget rather than inheriting an exhausted one
+			gm.Asymmetric = false
+			r.settle(addr)
+			continue
+		}
+		gm.Asymmetric = true
+		if r.exhausted(addr) {
+			continue
+		}
+		r.searched.charge(addr)
+		gm.MovePort()
+		moved++
+		log.Infof("GM %s off by %v against a quiet rack - new port offset: %d", addr, gm.Offset, gm.PortOffset)
+	}
+	return moved
+}
+
+// PortMoves implements Corrector.
+func (r *Rack) PortMoves(gm netip.Addr) uint16 { return r.searched.count(gm) }
 
 // settle ends the current episode for one grandmaster. A small median says the
 // path we are following is fine; it is no evidence about the others, so clearing
 // them would hand a known-bad path a fresh budget on every failover back to it.
-func (r *Rack) settle(gm netip.Addr) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.searched, gm)
-}
+func (r *Rack) settle(gm netip.Addr) { r.searched.clear(gm) }
 
 // rebind drops the stored reading when the selected GM changes. The reading is
 // evidence about one path: it can neither justify moving a different GM's port
 // nor declare that GM's search finished.
-func (r *Rack) rebind(best netip.Addr) {
+// rebind reports whether the selected grandmaster changed.
+func (r *Rack) rebind(best netip.Addr) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.reading.under == best {
-		return
+		return false
 	}
 	if r.reading.under.IsValid() {
 		// discard rather than re-label: the measurement belongs to the old route
 		r.reading = reading{}
 	}
 	r.reading.under = best
+	return true
 }
 
 func (r *Rack) correct(gms map[netip.Addr]*GM, best netip.Addr) int {
 	// before anything reads the reading, make sure it belongs to this GM
-	r.rebind(best)
+	movedGM := r.rebind(best)
+	r.searched.keepOnly(gms)
 	// Asymmetric describes the path, not whether we acted on it, so a spent or
 	// exhausted reading still reports the fault. Only a fresh reading showing a
 	// quiet rack clears it.
 	now := time.Now()
 	median, quiet, known, measured := r.verdict(now)
-	// the rack only measures the path we are actually following, so every other
-	// GM's verdict is stale the moment we fail over. Clearing them keeps this the
-	// same "no evidence is not evidence" rule applied to the selected one, whose
-	// flag is evidence of a bad path rather than a record of having acted: a spent
-	// or budget-exhausted reading still reports it.
+	// the others carry across ticks and correctOthers owns them, so clearing them
+	// every tick would flap them false whenever no fresh reading arrived. Failing
+	// over is the exception: a verdict reached while we followed a GM says nothing
+	// once we no longer do.
 	for addr, gm := range gms {
-		gm.Asymmetric = addr == best && known && !quiet
+		switch {
+		case addr == best:
+			gm.Asymmetric = known && !quiet
+		case movedGM:
+			gm.Asymmetric = false
+		}
 	}
 	if !known {
 		// an arm with no reading looks exactly like a quiet one from the outside;
@@ -280,14 +304,19 @@ func (r *Rack) correct(gms map[netip.Addr]*GM, best netip.Addr) int {
 		return 0
 	}
 	if quiet {
-		// ending an episode needs positive evidence that the path is good, which is
-		// narrower than quiet. quiet is also true when the peers cannot agree, and
-		// "we cannot tell" is not evidence the search worked -- including when an
-		// undecided rack happens to centre near zero.
-		if r.settled() {
+		// settled, not merely quiet: quiet is also true when the peers cannot agree,
+		// and a clock we cannot vouch for turns every GM's offset back into a
+		// statement about us. Only reached when the selected path needs nothing, so
+		// our own clock comes first and the two never contend for one reading.
+		others := 0
+		settled, convict := r.judge()
+		if settled {
+			if convict {
+				others = r.correctOthers(gms, best)
+			}
 			r.settle(best)
 		}
-		return 0
+		return others
 	}
 	selected := gms[best]
 	if selected == nil {

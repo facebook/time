@@ -26,7 +26,9 @@ limitations under the License.
 package asymmetry
 
 import (
+	"maps"
 	"net/netip"
+	"sync"
 	"time"
 )
 
@@ -115,7 +117,49 @@ type Corrector interface {
 	// Observe takes one round of evidence and returns how many GMs had their
 	// port moved. A round carrying nothing the corrector weighs moves none.
 	Observe(obs Observation) int
+	// ports tried for gm in the current search; zero means settled
+	PortMoves(gm netip.Addr) uint16
 	Name() string
+}
+
+// searchCounter counts ports tried per grandmaster since its path last looked
+// good. Every corrector needs exactly this and each hand-rolled copy grew its
+// own way of stranding a count, so there is one.
+type searchCounter struct {
+	mu sync.RWMutex
+	n  map[netip.Addr]uint16
+}
+
+func (c *searchCounter) count(gm netip.Addr) uint16 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.n[gm]
+}
+
+func (c *searchCounter) charge(gm netip.Addr) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.n == nil {
+		c.n = make(map[netip.Addr]uint16, 1)
+	}
+	c.n[gm]++
+}
+
+func (c *searchCounter) clear(gm netip.Addr) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.n, gm)
+}
+
+// keepOnly drops grandmasters that are no longer configured, so a GM we stopped
+// selecting cannot strand a count for the life of the daemon.
+func (c *searchCounter) keepOnly(gms map[netip.Addr]*GM) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	maps.DeleteFunc(c.n, func(addr netip.Addr, _ uint16) bool {
+		_, ok := gms[addr]
+		return !ok
+	})
 }
 
 // suspicious is a judgeable measurement that is too far off. A GM that answered
