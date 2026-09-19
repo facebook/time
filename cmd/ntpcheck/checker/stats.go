@@ -36,6 +36,7 @@ type NTPStats struct {
 	Frequency             float64 `json:"ntp.sys.frequency"`                   // clock frequency in PPM
 	Offset                float64 `json:"ntp.sys.offset"`                      // tracking clock offset in MS
 	RootDelay             float64 `json:"ntp.sys.root_delay"`                  // tracking root delay in MS
+	RootDisp              float64 `json:"ntp.sys.root_disp"`                   // tracking root dispersion in MS
 	StatError             bool    `json:"ntp.stat.error"`                      // error reported in Leap Status
 	Correction            float64 `json:"ntp.correction"`                      // current correction
 	PeerCount             int     `json:"ntp.peer.count"`                      // number of upstream peers
@@ -147,6 +148,7 @@ func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 		PeerOffset:            offset,
 		Offset:                r.SysVars.Offset,
 		RootDelay:             r.SysVars.RootDelay,
+		RootDisp:              r.SysVars.RootDisp,
 		PeerStratum:           stratum,
 		Frequency:             r.SysVars.Frequency,
 		Correction:            r.Correction,

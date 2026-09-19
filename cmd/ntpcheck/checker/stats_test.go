@@ -67,6 +67,7 @@ func TestNTPStatsNoSysPeer(t *testing.T) {
 	s := SystemVariables{
 		Offset:    0.003,
 		RootDelay: 3.14,
+		RootDisp:  2.72,
 	}
 	r := &NTPCheckResult{
 		SysVars: &s,
@@ -102,6 +103,7 @@ func TestNTPStatsNoSysPeer(t *testing.T) {
 		PeerCount:             2,
 		Offset:                s.Offset,
 		RootDelay:             s.RootDelay,
+		RootDisp:              s.RootDisp,
 		OffsetComparedToPeers: 0.015,
 	}
 	require.Equal(t, want, stats)
@@ -154,6 +156,7 @@ func TestNTPStatsWithSysPeer(t *testing.T) {
 	s := SystemVariables{
 		Offset:    0.003,
 		RootDelay: 3.14,
+		RootDisp:  2.72,
 	}
 	r := &NTPCheckResult{
 		SysVars: &s,
@@ -189,6 +192,7 @@ func TestNTPStatsWithSysPeer(t *testing.T) {
 		PeerCount:             2,
 		Offset:                s.Offset,
 		RootDelay:             s.RootDelay,
+		RootDisp:              s.RootDisp,
 		OffsetComparedToPeers: r.Peers[1].Offset - r.Peers[0].Offset,
 	}
 	require.Equal(t, want, stats)
@@ -198,6 +202,7 @@ func TestNTPStatsWithSysPeerAndNoSelect(t *testing.T) {
 	s := SystemVariables{
 		Offset:    0.003,
 		RootDelay: 3.14,
+		RootDisp:  2.72,
 	}
 	r := &NTPCheckResult{
 		SysVars: &s,
@@ -234,6 +239,7 @@ func TestNTPStatsWithSysPeerAndNoSelect(t *testing.T) {
 		PeerCount:             2,
 		Offset:                s.Offset,
 		RootDelay:             s.RootDelay,
+		RootDisp:              s.RootDisp,
 		OffsetComparedToPeers: r.Peers[1].Offset - r.Peers[0].Offset,
 	}
 	require.Equal(t, want, stats)
