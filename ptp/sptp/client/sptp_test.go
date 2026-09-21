@@ -1153,7 +1153,7 @@ func TestReadPacketBufKeepsUnstampedPacket(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, unix.Bind(fd, &unix.SockaddrInet6{Addr: [16]byte{15: 1}}))
 	// the promoted-field form embedlit wants is go1.27; github.com/facebook/time is go1.26
-	conn := &UDPConnTS{UDPConn: UDPConn{connFd: fd}} //nolint:modernize
+	conn := &UDPConnTS{UDPConn: UDPConn{connFd: fd}}
 	defer conn.Close()
 
 	local, err := unix.Getsockname(fd)
@@ -1172,4 +1172,72 @@ func TestReadPacketBufKeepsUnstampedPacket(t *testing.T) {
 	require.NotNil(t, saddr)
 	_, err = conn.RXTimestamp(oob, boob)
 	require.ErrorIs(t, err, timestamp.ErrNoTimestamp, "a general message is never stamped")
+}
+
+func TestStepClock(t *testing.T) {
+	now := time.Unix(1789992261, 0)
+	wrap := time.Duration(1 << 48)
+
+	t.Run("SmallStepStaysRelative", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockClock := NewMockClock(ctrl)
+		mockClock.EXPECT().Step(time.Second).Return(nil)
+
+		p := &SPTP{clock: mockClock}
+		require.NoError(t, p.stepClock(time.Second))
+	})
+
+	t.Run("LargeStepRebasesAbsolutely", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockClock := NewMockClock(ctrl)
+		gomock.InOrder(
+			mockClock.EXPECT().Time().Return(now, nil),
+			mockClock.EXPECT().SetTime(now.Add(wrap)).Return(nil),
+			mockClock.EXPECT().Time().Return(now.Add(wrap), nil),
+		)
+
+		p := &SPTP{clock: mockClock}
+		require.NoError(t, p.stepClock(wrap))
+	})
+
+	t.Run("LargeStepErrorsWhenClockDidNotMove", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockClock := NewMockClock(ctrl)
+		gomock.InOrder(
+			mockClock.EXPECT().Time().Return(now, nil),
+			mockClock.EXPECT().SetTime(now.Add(wrap)).Return(nil),
+			mockClock.EXPECT().Time().Return(now, nil),
+		)
+
+		p := &SPTP{clock: mockClock}
+		require.ErrorContains(t, p.stepClock(wrap), "clock rejected absolute set")
+	})
+
+	// a monotonic reading would make Sub ignore the wall clock SetTime moves, so
+	// every large step would report rejection even after succeeding
+	t.Run("SettableClocksReturnWallOnlyTime", func(t *testing.T) {
+		for name, c := range map[string]Clock{"sys": &SysClock{}, "freerunning": &FreeRunningClock{}} {
+			got, err := c.Time()
+			require.NoError(t, err, name)
+			require.Equal(t, got.Round(0), got, name)
+		}
+	})
+
+	t.Run("FreeRunningClockReflectsSetTime", func(t *testing.T) {
+		c := &FreeRunningClock{}
+		target := time.Now().Round(0).Add(wrap)
+		require.NoError(t, c.SetTime(target))
+
+		got, err := c.Time()
+		require.NoError(t, err)
+		require.WithinDuration(t, target, got, time.Second)
+	})
+
+	t.Run("FreeRunningClockAcceptsLargeStep", func(t *testing.T) {
+		p := &SPTP{clock: &FreeRunningClock{}}
+		require.NoError(t, p.stepClock(wrap))
+	})
 }

@@ -108,6 +108,20 @@ func (mr *MockClockMockRecorder) SetSync() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSync", reflect.TypeOf((*MockClock)(nil).SetSync))
 }
 
+// SetTime mocks base method.
+func (m *MockClock) SetTime(t time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetTime", t)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetTime indicates an expected call of SetTime.
+func (mr *MockClockMockRecorder) SetTime(t interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTime", reflect.TypeOf((*MockClock)(nil).SetTime), t)
+}
+
 // Step mocks base method.
 func (m *MockClock) Step(step time.Duration) error {
 	m.ctrl.T.Helper()
@@ -120,4 +134,19 @@ func (m *MockClock) Step(step time.Duration) error {
 func (mr *MockClockMockRecorder) Step(step interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Step", reflect.TypeOf((*MockClock)(nil).Step), step)
+}
+
+// Time mocks base method.
+func (m *MockClock) Time() (time.Time, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Time")
+	ret0, _ := ret[0].(time.Time)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Time indicates an expected call of Time.
+func (mr *MockClockMockRecorder) Time() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Time", reflect.TypeOf((*MockClock)(nil).Time))
 }

@@ -790,9 +790,8 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 	log.Infof("[%s gmid:%s] offset %10d servo %s freq %+7.0f path delay %10d (%6d:%6d)", bestAddr, bm.Announce.GrandmasterIdentity, bmOffset, state.String(), -freqAdj, bmDelay, bm.C2SDelay, bm.S2CDelay)
 	switch state {
 	case servo.StateJump:
-		log.Infof("stepping clock by %v", -bm.Offset)
-		if err := p.clock.Step(-bm.Offset); err != nil {
-			log.Errorf("failed to step freq by %v: %v", -bm.Offset, err)
+		if err := p.stepClock(-bm.Offset); err != nil {
+			log.Errorf("failed to step clock by %v: %v", -bm.Offset, err)
 			return err
 		}
 	case servo.StateLocked:
@@ -808,6 +807,34 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 	}
 	if p.corrector != nil && !isSpike && !isBadTick && p.pi.IsStable(bmOffset) {
 		p.stats.IncPortChangeCount(p.correctAsymmetry(results, bestAddr))
+	}
+	return nil
+}
+
+func (p *SPTP) stepClock(step time.Duration) error {
+	// a relative step is silently discarded when the PHC counter has wrapped; only an absolute set rebases it
+	const absStepThreshold = time.Hour
+
+	if step.Abs() < absStepThreshold {
+		log.Infof("stepping clock by %v", step)
+		return p.clock.Step(step)
+	}
+
+	before, err := p.clock.Time()
+	if err != nil {
+		return err
+	}
+	target := before.Add(step)
+	log.Warningf("offset %v is beyond a relative step, setting clock to %v", step, target)
+	if err := p.clock.SetTime(target); err != nil {
+		return err
+	}
+	after, err := p.clock.Time()
+	if err != nil {
+		return err
+	}
+	if off := after.Sub(target).Abs(); off > time.Second {
+		return fmt.Errorf("clock rejected absolute set, still off by %v", off)
 	}
 	return nil
 }

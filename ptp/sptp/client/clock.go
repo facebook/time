@@ -31,6 +31,8 @@ import (
 type Clock interface {
 	AdjFreqPPB(freq float64) error
 	Step(step time.Duration) error
+	Time() (time.Time, error)
+	SetTime(t time.Time) error
 	FrequencyPPB() (float64, error)
 	MaxFreqPPB() (float64, error)
 	SetSync() error
@@ -65,6 +67,16 @@ func (p *PHC) AdjFreqPPB(freqPPB float64) error {
 // Step jumps time on PHC
 func (p *PHC) Step(step time.Duration) error {
 	return p.dev.Step(step)
+}
+
+// Time returns current PHC time
+func (p *PHC) Time() (time.Time, error) {
+	return p.dev.Time()
+}
+
+// SetTime sets PHC to an absolute time
+func (p *PHC) SetTime(t time.Time) error {
+	return p.dev.SetTime(t)
 }
 
 // FrequencyPPB returns current PHC frequency
@@ -108,6 +120,22 @@ func (c *SysClock) Step(step time.Duration) error {
 	return err
 }
 
+// Time returns current system time
+func (c *SysClock) Time() (time.Time, error) {
+	// Round(0) strips the monotonic reading, which Sub would otherwise use in
+	// preference to the wall clock that SetTime moves
+	return time.Now().Round(0), nil
+}
+
+// SetTime sets the system clock to an absolute time
+func (c *SysClock) SetTime(t time.Time) error {
+	ts, err := unix.TimeToTimespec(t)
+	if err != nil {
+		return err
+	}
+	return unix.ClockSettime(unix.CLOCK_REALTIME, &ts)
+}
+
 // FrequencyPPB returns current PHC frequency
 func (c *SysClock) FrequencyPPB() (float64, error) {
 	freqPPB, state, err := clock.FrequencyPPB(unix.CLOCK_REALTIME)
@@ -127,7 +155,9 @@ func (c *SysClock) MaxFreqPPB() (float64, error) {
 }
 
 // FreeRunningClock is a dummy clock that does nothing
-type FreeRunningClock struct{}
+type FreeRunningClock struct {
+	offset time.Duration
+}
 
 // AdjFreqPPB adjusts PHC frequency
 func (c *FreeRunningClock) AdjFreqPPB(_ float64) error {
@@ -136,6 +166,17 @@ func (c *FreeRunningClock) AdjFreqPPB(_ float64) error {
 
 // Step jumps time on PHC
 func (c *FreeRunningClock) Step(_ time.Duration) error {
+	return nil
+}
+
+// Time returns current system time shifted by whatever SetTime was last asked for
+func (c *FreeRunningClock) Time() (time.Time, error) {
+	return time.Now().Round(0).Add(c.offset), nil
+}
+
+// SetTime records the requested time without touching any real clock
+func (c *FreeRunningClock) SetTime(t time.Time) error {
+	c.offset = time.Until(t)
 	return nil
 }
 
