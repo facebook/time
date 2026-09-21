@@ -91,7 +91,7 @@ func (s *Simple) selectedIsAsymmetric(gms map[netip.Addr]*GM, best netip.Addr, s
 		s.moves.clear(best)
 		return false
 	}
-	if selected.Streak <= int(s.Config.MaxConsecutive) {
+	if selected.Streak <= int(s.Config.confirmations()) {
 		selected.Streak++
 		return false
 	}

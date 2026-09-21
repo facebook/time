@@ -84,6 +84,45 @@ type reading struct {
 	// probes by orders of magnitude, so without this one measurement would move
 	// the port on every tick until the next probe replaced it.
 	spent bool
+	// consecutive probes that claimed the same thing; counts probes, not the sync
+	// ticks that vastly outnumber them
+	agreed uint16
+}
+
+// claim is what one probe concluded about our own clock.
+type claim uint8
+
+const (
+	// over the threshold, but the peers do not agree closely enough to say so
+	unsure claim = iota
+	innocent
+	biasedHigh
+	biasedLow
+)
+
+func (c claim) accuses() bool { return c == biasedHigh || c == biasedLow }
+
+func (r reading) claim(threshold time.Duration) claim {
+	if r.peers < rackMinPeers {
+		return unsure
+	}
+	// scaled by how many peers were asked, so a wide rack where many still agree
+	// on a centre is usable and a bare quorum that looks tight is not
+	doubt := rackSigmas * medianStdErrFactor * float64(r.spread) / math.Sqrt(float64(r.peers))
+	switch {
+	case r.median.Abs() <= threshold:
+		// clearing our own clock needs the rack tighter than the threshold itself;
+		// accusing it only needs the median told apart from zero
+		if doubt > float64(threshold) {
+			return unsure
+		}
+		return innocent
+	case math.Abs(float64(r.median)) <= doubt:
+		return unsure
+	case r.median > 0:
+		return biasedHigh
+	}
+	return biasedLow
 }
 
 // Name implements Corrector.
@@ -134,16 +173,27 @@ func (r *Rack) observePeers(peers []Peer) {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	// replaced whole: a measurement and the path it describes cannot be updated
-	// apart, and the new one has not been acted on. under is carried over because
-	// only correct() learns which GM we are following.
-	r.reading = reading{
-		median: sorted[len(sorted)/2],
-		spread: sorted[len(sorted)-1-lo] - sorted[lo],
+	median := sorted[len(sorted)/2]
+	spread := sorted[len(sorted)-1-lo] - sorted[lo]
+	next := reading{
+		median: median,
+		spread: spread,
 		peers:  len(sorted),
 		at:     measured,
-		under:  r.reading.under,
+		// only correct() learns which GM we are following
+		under: r.reading.under,
+		// one claim made repeatedly, not several separate crossings
+		agreed: 1,
 	}
+	// After, not just within the window: a replayed or equal-stamped batch is the
+	// same probe again, and must not count as another agreement
+	if next.claim(r.Config.Threshold) == r.reading.claim(r.Config.Threshold) &&
+		measured.After(r.reading.at) && measured.Sub(r.reading.at) <= rackMaxAge {
+		next.agreed = min(r.reading.agreed+1, r.Config.confirmations())
+	}
+	// replaced whole: a measurement and the path it describes cannot be updated
+	// apart, and the new one has not been acted on
+	r.reading = next
 }
 
 // verdict describes the path the rack currently sees. known is false when there
@@ -153,27 +203,20 @@ func (r *Rack) observePeers(peers []Peer) {
 //
 // Whether the reading was already spent is deliberately not part of this: a spent
 // reading still describes a bad path, it just cannot justify another move.
-func (r *Rack) verdict(now time.Time) (median time.Duration, quiet, known bool, measured time.Time) {
+func (r *Rack) verdict(now time.Time) (median time.Duration, quiet, confirmed, known bool, measured time.Time) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	// a stored reading always cleared quorum; observePeers is the only writer.
 	// measured is returned even when unusable, so a stale arm can say how stale.
 	if r.reading.at.IsZero() || now.Sub(r.reading.at) > rackMaxAge {
-		return 0, false, false, r.reading.at
+		return 0, false, false, false, r.reading.at
 	}
-	quiet = r.reading.median.Abs() <= r.Config.Threshold || !r.decidedLocked()
-	return r.reading.median, quiet, true, r.reading.at
-}
-
-// stderrLocked is the standard error of the stored median, with the trimmed span
-// standing in for the deviation. Callers must hold at least the read lock.
-func (r *Rack) stderrLocked() float64 {
-	return medianStdErrFactor * float64(r.reading.spread) / math.Sqrt(float64(r.reading.peers))
+	return r.reading.median, !r.reading.claim(r.Config.Threshold).accuses(), r.confirmedLocked(), true, r.reading.at
 }
 
 // judge reads one reading once: settled is the threshold, convict also needs it
-// unspent and the rack's own uncertainty under that threshold. Two calls would
-// let a probe land between them and answer about different readings.
+// unspent and confirmed. Two calls would let a probe land between them and
+// answer about different readings.
 func (r *Rack) judge() (settled, convict bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -181,25 +224,15 @@ func (r *Rack) judge() (settled, convict bool) {
 		return false, false
 	}
 	settled = r.reading.median.Abs() <= r.Config.Threshold
-	if !settled || r.reading.spent || rackSigmas*r.stderrLocked() > float64(r.Config.Threshold) {
+	if !settled || r.reading.spent || r.reading.claim(r.Config.Threshold) != innocent || !r.confirmedLocked() {
 		return settled, false
 	}
 	r.reading.spent = true
 	return true, true
 }
 
-// decided reports whether the peers place the median far enough from zero to act
-// on. Callers must hold at least the read lock; verdict is the only one today. Comparing the spread directly to the median ignores how many peers were
-// asked, which both blocks a wide-spread rack where many peers still agree on a
-// centre -- switches that do not correct residence time spread every offset by
-// microseconds -- and acts on a bare quorum that happens to look tight.
-func (r *Rack) decidedLocked() bool {
-	if r.reading.peers < rackMinPeers {
-		return false
-	}
-	// below eight peers the trimmed span is wider than a true IQR, so the estimate
-	// errs high and the corrector holds rather than moves
-	return math.Abs(float64(r.reading.median)) > rackSigmas*r.stderrLocked()
+func (r *Rack) confirmedLocked() bool {
+	return r.reading.agreed >= r.Config.confirmations()
 }
 
 // takeBias returns the reading and marks it spent in one step, so a probe landing
@@ -284,7 +317,7 @@ func (r *Rack) correct(gms map[netip.Addr]*GM, best netip.Addr) int {
 	// exhausted reading still reports the fault. Only a fresh reading showing a
 	// quiet rack clears it.
 	now := time.Now()
-	median, quiet, known, measured := r.verdict(now)
+	median, quiet, confirmed, known, measured := r.verdict(now)
 	// the others carry across ticks and correctOthers owns them, so clearing them
 	// every tick would flap them false whenever no fresh reading arrived. Failing
 	// over is the exception: a verdict reached while we followed a GM says nothing
@@ -317,6 +350,11 @@ func (r *Rack) correct(gms map[netip.Addr]*GM, best netip.Addr) int {
 			r.settle(best)
 		}
 		return others
+	}
+	// mid-search a sign flip is the search sampling, not the bias going away
+	if !confirmed && r.searched.count(best) == 0 {
+		log.Debugf("rack bias %v on %s not yet confirmed, holding", median, best)
+		return 0
 	}
 	selected := gms[best]
 	if selected == nil {

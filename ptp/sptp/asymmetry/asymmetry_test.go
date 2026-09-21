@@ -128,10 +128,126 @@ func peersAt(at time.Time, offsets ...time.Duration) []Peer {
 	return peers
 }
 
+// what cfgen renders for the rack arm
+const rackStreak = 3
+
 func rackOf(offsets ...time.Duration) *Rack {
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
-	r.Observe(Observation{Peers: peersAt(time.Now(), offsets...)})
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
+	seed(r, offsets...)
 	return r
+}
+
+// a claim only counts once consecutive probes have repeated it
+func seed(r *Rack, offsets ...time.Duration) {
+	at := time.Now()
+	for i := range rackStreak {
+		r.Observe(Observation{Peers: peersAt(at.Add(time.Duration(i)*time.Minute), offsets...)})
+	}
+}
+
+func TestRackWaitsForConsecutiveReadings(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+
+	for i := 1; i < rackStreak; i++ {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+		require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}), "reading %d is not yet a trend", i)
+		require.Zero(t, gms[addrA].PortOffset)
+	}
+
+	r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+	require.Equal(t, 1, r.Observe(Observation{GMs: gms, Best: addrA}))
+	require.Equal(t, uint16(1), gms[addrA].PortOffset)
+}
+
+func TestRackStreakNeedsOneBiasNotThreeCrossings(t *testing.T) {
+	gms := func() map[netip.Addr]*GM { return map[netip.Addr]*GM{addrA: gm(0, true)} }
+
+	t.Run("AlternatingSignIsNotOneBias", func(t *testing.T) {
+		r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
+		for _, sign := range []time.Duration{1, -1, 1} {
+			r.Observe(Observation{Peers: peersAt(time.Now(), sign*3000, sign*3100, sign*3200)})
+		}
+		g := gms()
+		require.Zero(t, r.Observe(Observation{GMs: g, Best: addrA}), "+3us, -3us, +3us is noise, not a bias")
+		require.Zero(t, g[addrA].PortOffset)
+	})
+
+	t.Run("UndecidedReadingsDoNotConfirm", func(t *testing.T) {
+		r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
+		for range rackStreak - 1 {
+			r.Observe(Observation{Peers: peersAt(time.Now(), -9000, -4000, 1000, 3000, 6000, 11000, 15000)})
+		}
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+		g := gms()
+		require.Zero(t, r.Observe(Observation{GMs: g, Best: addrA}), "undecided readings cannot confirm a decided one")
+	})
+
+	t.Run("StaleReadingsDoNotChain", func(t *testing.T) {
+		r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
+		old := time.Now().Add(-2 * rackMaxAge)
+		for range rackStreak - 1 {
+			r.Observe(Observation{Peers: peersAt(old, 3000, 3100, 3200)})
+		}
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+		g := gms()
+		require.Zero(t, r.Observe(Observation{GMs: g, Best: addrA}), "a gap longer than the window restarts the count")
+	})
+}
+
+func TestRackConfirmsOnlyTheFirstMoveOfASearch(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10, MaxConsecutive: rackStreak}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+
+	for range rackStreak {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+	}
+	require.Equal(t, 1, r.Observe(Observation{GMs: gms, Best: addrA}), "confirmed, so the search starts")
+
+	r.Observe(Observation{Peers: peersAt(time.Now(), -3000, -3100, -3200)})
+	require.Equal(t, 1, r.Observe(Observation{GMs: gms, Best: addrA}), "a sign flip mid-search is the search working")
+	require.Equal(t, uint16(2), gms[addrA].PortOffset)
+
+	r.Observe(Observation{Peers: peersAt(time.Now(), 10, 20, 30)})
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}))
+	r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}), "settled, so one reading is not enough again")
+	require.Equal(t, uint16(2), gms[addrA].PortOffset)
+}
+
+func TestConfirmationsFallBackWhenUnset(t *testing.T) {
+	require.Equal(t, uint16(defaultConfirmations), Config{}.confirmations(),
+		"zero is unset, not move-on-the-first, which would turn the check off")
+	require.Equal(t, uint16(7), Config{MaxConsecutive: 7}.confirmations())
+}
+
+func TestRackRepeatedProbeDoesNotConfirm(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+
+	at := time.Now()
+	for range rackStreak * 2 {
+		r.Observe(Observation{Peers: peersAt(at, 3000, 3100, 3200)})
+	}
+
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}), "one probe replayed is still one probe")
+	require.Zero(t, gms[addrA].PortOffset)
+}
+
+func TestRackStreakRestartsAfterAQuietReading(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
+	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
+
+	for range rackStreak - 1 {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+	}
+	r.Observe(Observation{Peers: peersAt(time.Now(), 10, 20, 30)})
+	for range rackStreak - 1 {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+	}
+
+	require.Zero(t, r.Observe(Observation{GMs: gms, Best: addrA}), "one quiet reading restarts the count")
+	require.Zero(t, gms[addrA].PortOffset)
 }
 
 func TestRackMovesPortWhenPeersAgree(t *testing.T) {
@@ -173,12 +289,12 @@ func TestRackRejectsStaleAndThin(t *testing.T) {
 
 	r := &Rack{Config: Config{Threshold: time.Microsecond}}
 	r.Observe(Observation{Peers: peersAt(now.Add(-2*rackMaxAge), 3000, 3100, 3200)})
-	_, _, ok, _ := r.verdict(now)
+	_, _, _, ok, _ := r.verdict(now)
 	require.False(t, ok, "the probe runs outside sptp and can stop")
 
 	thin := &Rack{Config: Config{Threshold: time.Microsecond}}
 	thin.Observe(Observation{Peers: peersAt(now, 3000, 3100)})
-	_, _, ok, _ = thin.verdict(now)
+	_, _, _, ok, _ = thin.verdict(now)
 	require.False(t, ok, "two responders is not a rack")
 }
 
@@ -213,10 +329,12 @@ func TestObserveToleratesEitherSource(t *testing.T) {
 
 // Rack needs peer evidence from an earlier round to act on a later GM round
 func TestRackActsAcrossRounds(t *testing.T) {
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
 	now := time.Now()
 
-	require.Zero(t, r.Observe(Observation{Peers: peersAt(now, 3000, 3100, 3200)}))
+	for i := range rackStreak {
+		require.Zero(t, r.Observe(Observation{Peers: peersAt(now.Add(time.Duration(i)*time.Minute), 3000, 3100, 3200)}))
+	}
 
 	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
 	require.Equal(t, 1, r.Observe(Observation{GMs: gms, Best: addrA, At: now}))
@@ -318,25 +436,27 @@ func TestRackTightlyAgreedSmallMedianSettles(t *testing.T) {
 // period a reading expires before its replacement lands, so a genuinely bad path
 // reports healthy for part of every cycle and correction stops.
 func TestRackReadingSurvivesUntilTheNextProbe(t *testing.T) {
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
 	now := time.Now()
 	r.Observe(Observation{Peers: peersAt(now, 3000, 3100, 3200)})
 
 	// one probe period plus collection time and scheduler jitter
-	_, _, known, _ := r.verdict(now.Add(6 * time.Minute))
+	_, _, _, known, _ := r.verdict(now.Add(6 * time.Minute))
 	require.True(t, known, "a reading must outlast the gap to its replacement")
 
-	_, _, known, _ = r.verdict(now.Add(rackMaxAge + time.Second))
+	_, _, _, known, _ = r.verdict(now.Add(rackMaxAge + time.Second))
 	require.False(t, known, "but a probe that stopped arriving must stop steering")
 }
 
 // the rack measures the path we are following and nothing else, so a GM we
 // failed away from must not keep its old verdict for the life of the daemon
 func TestRackClearsVerdictOnGrandmasterWeLeft(t *testing.T) {
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
 	gms := map[netip.Addr]*GM{addrA: gm(0, true), addrB: gm(0, true)}
 
-	r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+	for range rackStreak {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+	}
 	require.Equal(t, 1, r.Observe(Observation{GMs: gms, Best: addrA}))
 	require.True(t, gms[addrA].Asymmetric)
 
@@ -345,7 +465,9 @@ func TestRackClearsVerdictOnGrandmasterWeLeft(t *testing.T) {
 	require.False(t, gms[addrA].Asymmetric, "we know nothing about the one we left")
 
 	// a fresh probe measures the path we are on now
-	r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+	for range rackStreak {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200)})
+	}
 	require.Equal(t, 1, r.Observe(Observation{GMs: gms, Best: addrB}))
 	require.True(t, gms[addrB].Asymmetric, "the path we are on now is bad")
 	require.False(t, gms[addrA].Asymmetric, "and the one we left stays unjudged")
@@ -390,7 +512,7 @@ func TestRackThinProbeKeepsLastReading(t *testing.T) {
 
 	r.Observe(Observation{Peers: peersAt(now, 9000, 9100)})
 
-	median, _, ok, _ := r.verdict(now)
+	median, _, _, ok, _ := r.verdict(now)
 	require.True(t, ok, "the earlier full reading is still actionable")
 	require.Equal(t, 3100*time.Nanosecond, median, "and was not overwritten")
 
@@ -416,16 +538,16 @@ func TestRackClearsAsymmetricWhenRackIsQuiet(t *testing.T) {
 // so the same outlier either side yields the same verdict
 func TestRackSpreadIsDirectionSymmetric(t *testing.T) {
 	now := time.Now()
-	cfg := Config{Threshold: time.Microsecond, MaxPortChanges: 4}
+	cfg := Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}
 
 	high := &Rack{Config: cfg}
 	high.Observe(Observation{Peers: peersAt(now, 3000, 3100, 3200, 90000)})
-	_, highQuiet, ok, _ := high.verdict(now)
+	_, highQuiet, _, ok, _ := high.verdict(now)
 	require.True(t, ok)
 
 	low := &Rack{Config: cfg}
 	low.Observe(Observation{Peers: peersAt(now, -90000, 3000, 3100, 3200)})
-	_, lowQuiet, ok, _ := low.verdict(now)
+	_, lowQuiet, _, ok, _ := low.verdict(now)
 	require.True(t, ok)
 
 	require.Equal(t, highQuiet, lowQuiet)
@@ -450,14 +572,14 @@ func TestRackTakeBiasRejectsReplacedReading(t *testing.T) {
 func TestRackQuorumCountsDistinctPeers(t *testing.T) {
 	now := time.Now()
 	one := netip.MustParseAddr("10.0.0.1")
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
 	r.Observe(Observation{Peers: []Peer{
 		{Addr: one, Offset: 3000, At: now},
 		{Addr: one, Offset: 3100, At: now.Add(time.Second)},
 		{Addr: one, Offset: 3200, At: now.Add(2 * time.Second)},
 	}})
 
-	_, _, known, _ := r.verdict(now.Add(2 * time.Second))
+	_, _, _, known, _ := r.verdict(now.Add(2 * time.Second))
 	require.False(t, known, "three exchanges with one peer is not a quorum")
 }
 
@@ -468,7 +590,7 @@ func TestRackAgesByMeasurementTime(t *testing.T) {
 	// handed over now, but measured well beyond the staleness window
 	r.Observe(Observation{Peers: peersAt(now.Add(-2*rackMaxAge), 3000, 3100, 3200)})
 
-	_, _, known, _ := r.verdict(now)
+	_, _, _, known, _ := r.verdict(now)
 	require.False(t, known, "an old exchange is stale however recently it arrived")
 }
 
@@ -633,11 +755,11 @@ func TestRackVerdictKeepsMeasuredWhenUnusable(t *testing.T) {
 	r := &Rack{Config: Config{Threshold: time.Microsecond}}
 	r.Observe(Observation{Peers: peersAt(stale, 3000, 3100, 3200)})
 
-	_, _, known, measured := r.verdict(now)
+	_, _, _, known, measured := r.verdict(now)
 	require.False(t, known)
 	require.Equal(t, stale.Unix(), measured.Unix(), "how stale, not just that it is stale")
 
-	_, _, _, never := (&Rack{}).verdict(now)
+	_, _, _, _, never := (&Rack{}).verdict(now)
 	require.True(t, never.IsZero(), "and zero when nothing ever probed")
 }
 
@@ -650,10 +772,12 @@ func TestRackActsOnWideSpreadWithManyPeers(t *testing.T) {
 	for i := range 45 {
 		offsets = append(offsets, 2000+time.Duration((i%9)*600-2400))
 	}
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
-	r.Observe(Observation{Peers: peersAt(now, offsets...)})
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
+	for i := range rackStreak {
+		r.Observe(Observation{Peers: peersAt(now.Add(time.Duration(i)*time.Minute), offsets...)})
+	}
 
-	_, _, known, _ := r.verdict(now)
+	_, _, _, known, _ := r.verdict(now)
 	require.True(t, known)
 	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
 	require.Equal(t, 1, r.Observe(Observation{GMs: gms, Best: addrA}),
@@ -663,7 +787,7 @@ func TestRackActsOnWideSpreadWithManyPeers(t *testing.T) {
 // and the converse: a bare quorum is weak evidence however tidy it looks
 func TestRackHoldsOnThinQuorumWithLooseSpread(t *testing.T) {
 	now := time.Now()
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4}}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
 	r.Observe(Observation{Peers: peersAt(now, 1000, 1500, 2000)})
 
 	gms := map[netip.Addr]*GM{addrA: gm(0, true)}
@@ -677,7 +801,7 @@ func TestRackDecidedScalesWithPeerCount(t *testing.T) {
 	now := time.Now()
 	thin := &Rack{Config: Config{Threshold: time.Microsecond}}
 	thin.Observe(Observation{Peers: peersAt(now, 1000, 1500, 2000)})
-	_, thinQuiet, _, _ := thin.verdict(now)
+	_, thinQuiet, _, _, _ := thin.verdict(now)
 	require.True(t, thinQuiet)
 
 	wide := make([]time.Duration, 0, 40)
@@ -686,18 +810,20 @@ func TestRackDecidedScalesWithPeerCount(t *testing.T) {
 	}
 	many := &Rack{Config: Config{Threshold: time.Microsecond}}
 	many.Observe(Observation{Peers: peersAt(now, wide...)})
-	_, manyQuiet, _, _ := many.verdict(now)
+	_, manyQuiet, _, _, _ := many.verdict(now)
 	require.False(t, manyQuiet, "same centre, same spread, more peers")
 }
 
 // One threshold. Under it the host is settled and the search count clears;
 // over it the corrector keeps working.
 func TestRackSettlesAtThreshold(t *testing.T) {
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10}}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10, MaxConsecutive: rackStreak}}
 	gm := netip.MustParseAddr("2401:db00::1")
 	gms := map[netip.Addr]*GM{gm: {Answered: true, Judgeable: true}}
 
-	r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200), GMs: gms, Best: gm})
+	for range rackStreak {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200), GMs: gms, Best: gm})
+	}
 	require.Equal(t, uint16(1), r.PortMoves(gm), "over threshold, the search advances")
 
 	r.Observe(Observation{Peers: peersAt(time.Now(), 400, 500, 600), GMs: gms, Best: gm})
@@ -706,7 +832,7 @@ func TestRackSettlesAtThreshold(t *testing.T) {
 
 // One threshold, the same one everywhere: a path over 1us gets searched.
 func TestRackConvictsOtherGMsOverThreshold(t *testing.T) {
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10}}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10, MaxConsecutive: rackStreak}}
 	best := netip.MustParseAddr("2401:db00::1")
 	bad := netip.MustParseAddr("2401:db00::2")
 	near := netip.MustParseAddr("2401:db00::3")
@@ -717,7 +843,9 @@ func TestRackConvictsOtherGMsOverThreshold(t *testing.T) {
 	}
 
 	// our own clock sits at ~890ns against the rack, well short of perfect
-	r.Observe(Observation{Peers: peersAt(time.Now(), 700, 890, 1000), GMs: gms, Best: best})
+	for range rackStreak {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 700, 890, 1000), GMs: gms, Best: best})
+	}
 
 	require.Equal(t, uint16(1), gms[bad].PortOffset, "over threshold")
 	require.Equal(t, uint16(1), gms[near].PortOffset, "1.5us is over 1us too")
@@ -726,8 +854,10 @@ func TestRackConvictsOtherGMsOverThreshold(t *testing.T) {
 
 // The ports move once per probe, not once per sync tick. Ticks outnumber probes
 // by orders of magnitude, so without this a GM burns its whole budget in seconds.
-func TestRackCorrectsOthersOncePerReading(t *testing.T) {
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10}}
+// Clearing our own clock is the same kind of claim as accusing it, so one quiet
+// probe is not grounds to spend another GM's budget either.
+func TestRackDoesNotConvictOthersOnASingleQuietProbe(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10, MaxConsecutive: rackStreak}}
 	best := netip.MustParseAddr("2401:db00::1")
 	bad := netip.MustParseAddr("2401:db00::2")
 	gms := map[netip.Addr]*GM{
@@ -735,7 +865,27 @@ func TestRackCorrectsOthersOncePerReading(t *testing.T) {
 		bad:  {Answered: true, Judgeable: true, Offset: 3962 * time.Nanosecond},
 	}
 
+	for i := 1; i < rackStreak; i++ {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 10, 20, 30)})
+		require.Zero(t, r.Observe(Observation{GMs: gms, Best: best}), "quiet probe %d is not yet a trend", i)
+		require.Zero(t, gms[bad].PortOffset)
+	}
+
 	r.Observe(Observation{Peers: peersAt(time.Now(), 10, 20, 30)})
+	require.Equal(t, 1, r.Observe(Observation{GMs: gms, Best: best}))
+	require.Equal(t, uint16(1), gms[bad].PortOffset, "confirmed quiet, so the others are on the hook")
+}
+
+func TestRackCorrectsOthersOncePerReading(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10, MaxConsecutive: rackStreak}}
+	best := netip.MustParseAddr("2401:db00::1")
+	bad := netip.MustParseAddr("2401:db00::2")
+	gms := map[netip.Addr]*GM{
+		best: {Answered: true, Judgeable: true, Offset: 17 * time.Nanosecond},
+		bad:  {Answered: true, Judgeable: true, Offset: 3962 * time.Nanosecond},
+	}
+
+	seed(r, 10, 20, 30)
 	for range 20 {
 		r.Observe(Observation{GMs: gms, Best: best})
 	}
@@ -747,7 +897,7 @@ func TestRackCorrectsOthersOncePerReading(t *testing.T) {
 // selected GM's is. Without it a GM that exhausts its search is deaf to every
 // later fault, which is the whole reason the budget is per episode.
 func TestRackRefundsOtherGMWhenItsPathComesGood(t *testing.T) {
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 2}}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 2, MaxConsecutive: 1}}
 	best := netip.MustParseAddr("2401:db00::1")
 	bad := netip.MustParseAddr("2401:db00::2")
 	gms := map[netip.Addr]*GM{
@@ -775,7 +925,7 @@ func TestRackRefundsOtherGMWhenItsPathComesGood(t *testing.T) {
 // A GM that drops out of the list has no search left to report. Leaving the
 // count behind would strand it non-zero for as long as the daemon runs.
 func TestSimpleClearsWhenSelectedLeavesTheList(t *testing.T) {
-	s := &Simple{Config: Config{Threshold: time.Microsecond, MaxConsecutive: 0}}
+	s := &Simple{Config: Config{Threshold: time.Microsecond, MaxConsecutive: 1}}
 	best := netip.MustParseAddr("2401:db00::1")
 	other := netip.MustParseAddr("2401:db00::2")
 	gms := map[netip.Addr]*GM{
@@ -796,7 +946,7 @@ func TestSimpleClearsWhenSelectedLeavesTheList(t *testing.T) {
 // A convicted GM stays flagged between probes. The flag carries across ticks, so
 // clearing it on every tick would flap it false whenever there is no new reading.
 func TestRackKeepsOtherGMFlaggedBetweenProbes(t *testing.T) {
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10}}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10, MaxConsecutive: rackStreak}}
 	best := netip.MustParseAddr("2401:db00::1")
 	bad := netip.MustParseAddr("2401:db00::2")
 	gms := map[netip.Addr]*GM{
@@ -804,7 +954,7 @@ func TestRackKeepsOtherGMFlaggedBetweenProbes(t *testing.T) {
 		bad:  {Answered: true, Judgeable: true, Offset: 4 * time.Microsecond},
 	}
 
-	r.Observe(Observation{Peers: peersAt(time.Now(), 10, 20, 30)})
+	seed(r, 10, 20, 30)
 	r.Observe(Observation{GMs: gms, Best: best})
 	require.True(t, gms[bad].Asymmetric, "convicted")
 
@@ -818,7 +968,7 @@ func TestRackKeepsOtherGMFlaggedBetweenProbes(t *testing.T) {
 // A rack that cannot agree is quiet but says nothing about our clock, so it is
 // no grounds to spend another GM's budget.
 func TestRackDoesNotConvictOthersWhenPeersDisagree(t *testing.T) {
-	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10}}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 10, MaxConsecutive: rackStreak}}
 	best := netip.MustParseAddr("2401:db00::1")
 	bad := netip.MustParseAddr("2401:db00::2")
 	gms := map[netip.Addr]*GM{
@@ -826,8 +976,12 @@ func TestRackDoesNotConvictOthersWhenPeersDisagree(t *testing.T) {
 		bad:  {Answered: true, Judgeable: true, Offset: 4 * time.Microsecond},
 	}
 
-	// peers scattered so wide the median means nothing, yet it lands near zero
-	r.Observe(Observation{Peers: peersAt(time.Now(), -40000, 100, 40000), GMs: gms, Best: best})
+	// peers scattered so wide the median means nothing, yet it lands near zero.
+	// Repeated, so it is the rack's own spread that blocks this and not the
+	// confirmation count.
+	for range rackStreak {
+		r.Observe(Observation{Peers: peersAt(time.Now(), -40000, 100, 40000), GMs: gms, Best: best})
+	}
 
 	require.Zero(t, gms[bad].PortOffset, "an unmeasurable rack convicts nobody")
 }
@@ -835,7 +989,7 @@ func TestRackDoesNotConvictOthersWhenPeersDisagree(t *testing.T) {
 // Peer probes reach every corrector, grandmaster map empty. Simple must not read
 // that as "these GMs are gone" and clear a search it is still running.
 func TestSimpleKeepsSearchAcrossPeerObservations(t *testing.T) {
-	s := &Simple{Config: Config{Threshold: time.Microsecond, MaxConsecutive: 0}}
+	s := &Simple{Config: Config{Threshold: time.Microsecond, MaxConsecutive: 1}}
 	best := netip.MustParseAddr("2401:db00::1")
 	other := netip.MustParseAddr("2401:db00::2")
 	gms := map[netip.Addr]*GM{

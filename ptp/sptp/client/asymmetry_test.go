@@ -128,6 +128,7 @@ func TestCorrectAsymmetryWritesBack(t *testing.T) {
 			AsymmetryCorrectionEnabled: true,
 			AsymmetryThreshold:         time.Microsecond,
 			MaxPortChanges:             4,
+			MaxConsecutiveAsymmetry:    1,
 		}),
 	}
 	results := map[netip.Addr]*RunResult{
@@ -138,6 +139,7 @@ func TestCorrectAsymmetryWritesBack(t *testing.T) {
 	// simple needs the streak to mature before it acts
 	require.Zero(t, p.correctAsymmetry(results, best))
 	require.Equal(t, 1, p.clients[best].asymmetryCounter, "streak must reach the client")
+	require.Zero(t, p.correctAsymmetry(results, best))
 	require.Equal(t, 1, p.correctAsymmetry(results, best))
 	require.Equal(t, uint16(1), getAlternateResponsePortTLV(p.clients[best]).Offset,
 		"the port move must reach the client")
@@ -164,9 +166,13 @@ func TestObservePeersOnlyFeedsRack(t *testing.T) {
 			Rack:                       true,
 			AsymmetryThreshold:         time.Microsecond,
 			MaxPortChanges:             4,
+			MaxConsecutiveAsymmetry:    3,
 		}),
 	}
-	p.observePeers(results)
+	// rebuilt each round: the corrector counts distinct probes, not repeated ones
+	for range 3 {
+		p.observePeers(pdelay.Results{peerResult(1), peerResult(2), peerResult(3)})
+	}
 	require.Equal(t, 1, p.correctAsymmetry(map[netip.Addr]*RunResult{best: announceResult(0, ptp.ClockClass6, false)}, best))
 
 	// simple acts on grandmasters only, so a peers-only round is a no-op for it

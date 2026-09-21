@@ -75,11 +75,25 @@ type Config struct {
 	// cannot be tuned apart.
 	Threshold time.Duration
 	// MaxConsecutive measurements a GM may look asymmetric before its port moves.
+	// Zero means unset, not "move on the first": see Config.confirmations.
+	// Simple counts sync ticks, rack counts pdelay readings, so the same number
+	// is seconds for one and minutes for the other.
 	MaxConsecutive uint16
 	// MaxPortChanges is how many moves one search may spend; zero spends none.
 	// Rack only -- simple moves the selected port whenever the grandmasters are
 	// unanimous, without a budget.
 	MaxPortChanges uint16
+}
+
+// defaultConfirmations applies when a config omits MaxConsecutive. A zero would
+// leave every single measurement confirmed, quietly turning the check off.
+const defaultConfirmations = 3
+
+func (c Config) confirmations() uint16 {
+	if c.MaxConsecutive == 0 {
+		return defaultConfirmations
+	}
+	return c.MaxConsecutive
 }
 
 // Observation is one round of evidence about this host's clock. Each source
