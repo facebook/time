@@ -545,3 +545,31 @@ func FuzzParse(f *testing.F) {
 		}
 	})
 }
+
+// The last two published leaps. Nleap 27 plus the 10s offset of 1972 is 37.
+var offsetTestLeaps = []LeapSecond{
+	{Tleap: 1435708825, Nleap: 26},
+	{Tleap: 1483228826, Nleap: 27},
+}
+
+func TestUTCOffsetS(t *testing.T) {
+	latest := offsetTestLeaps[1]
+	tests := []struct {
+		name  string
+		leaps []LeapSecond
+		now   time.Time
+		want  int32
+	}{
+		{"today", offsetTestLeaps, time.Unix(1758400000, 0), 37},
+		{"the instant the 2017 leap takes effect", offsetTestLeaps, latest.Time(), 37},
+		{"one second before it", offsetTestLeaps, latest.Time().Add(-time.Second), 36},
+		// Before any leap, TAI-UTC was the 1972 offset, not the oldest record's.
+		{"before the table begins", offsetTestLeaps, time.Unix(0, 0), 10},
+		{"empty table", nil, time.Unix(1758400000, 0), 10},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, UTCOffsetS(tc.leaps, tc.now))
+		})
+	}
+}

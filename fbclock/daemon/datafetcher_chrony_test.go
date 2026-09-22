@@ -90,7 +90,6 @@ func TestFetchTrackingTimeout(t *testing.T) {
 // leap2017 is that leap instant: Tleap-Nleap+1 of the record below.
 const (
 	testUTCOffsetS = 37
-	leap2015       = 1435708800
 	leap2017       = 1483228800
 )
 
@@ -116,25 +115,6 @@ func newChronyTestDaemon(t *testing.T, cfg *Config, st stats.Server) *Daemon {
 		l:           &testLogger{samples: []*LogSample{}},
 		DataFetcher: &ChronyFetcher{},
 		getSysTime:  func() (time.Time, error) { return testSysTime, nil },
-	}
-}
-
-func TestCurrentUTCOffsetS(t *testing.T) {
-	testCases := []struct {
-		name string
-		now  time.Time
-		want int32
-	}{
-		{name: "long after the latest leap", now: testSysTime, want: 37},
-		{name: "one second before the leap", now: time.Unix(leap2017-1, 0), want: 36},
-		{name: "at the leap instant", now: time.Unix(leap2017, 0), want: 37},
-		// older than every record: floors at the same offset the client subtracts
-		{name: "before every record we hold", now: time.Unix(leap2015-1, 0), want: 36},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.want, CurrentUTCOffsetS(testLeaps, tc.now))
-		})
 	}
 }
 

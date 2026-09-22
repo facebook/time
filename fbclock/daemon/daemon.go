@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"slices"
 	"sync"
 	"time"
 
@@ -210,25 +209,6 @@ func noTestResults(targets []string) map[string]linearizability.TestResult {
 		r[target] = linearizability.SPTPHTTPTestResult{Error: errNoTestResults}
 	}
 	return r
-}
-
-// CurrentUTCOffsetS returns the TAI-UTC offset in effect at now, from the same
-// tzdata leaps that fill the smear fields. fbclock anchors are TAI and
-// fbclock_gettime_utc subtracts this, so the chrony anchor must include it.
-//
-// leaps must be non-empty, which leapSeconds() guarantees or errors. An instant
-// older than every record falls back to the oldest, which is the same floor the
-// client applies: fbclock_apply_smear subtracts utc_offset_pre_s, published from
-// that record, so the UTC round trip stays exact even there.
-func CurrentUTCOffsetS(leaps []leapsectz.LeapSecond, now time.Time) int32 {
-	// newest first: the offset is set by the most recent leap already in effect.
-	// Tleap counts in TAI, so undo the corrections to get the UTC instant.
-	for _, l := range slices.Backward(leaps) {
-		if now.Unix() >= int64(l.Tleap)-int64(l.Nleap)+1 {
-			return l.Nleap + utcOffsetOriginalS
-		}
-	}
-	return leaps[0].Nleap + utcOffsetOriginalS
 }
 
 // setupPHC opens the PHC device backing iface and installs the clock accessors
@@ -512,7 +492,7 @@ func (s *Daemon) doWorkChrony(tracking *chrony.Tracking) error {
 	}
 	// anchors are TAI, the system clock is UTC
 	s.state.leaps.Store(&leaps)
-	asOf := sysNow.Add(time.Duration(CurrentUTCOffsetS(leaps, sysNow)) * time.Second)
+	asOf := sysNow.Add(time.Duration(leapsectz.UTCOffsetS(leaps, sysNow)) * time.Second)
 
 	// same value we publish to shm, so the counter cannot disagree with clients
 	s.stats.SetCounter("ingress_time_ns", asOf.UnixNano())
@@ -728,7 +708,7 @@ func (s *Daemon) readClocks() (time.Time, time.Time, uint32, time.Duration, erro
 		if err != nil {
 			return time.Time{}, time.Time{}, 0, 0, err
 		}
-		offsetS := CurrentUTCOffsetS(*leaps, sysNow)
+		offsetS := leapsectz.UTCOffsetS(*leaps, sysNow)
 		return sysNow.Add(time.Duration(offsetS) * time.Second), sysNow, unix.CLOCK_REALTIME, 0, nil
 	}
 	return s.getPHCAndSysTime()

@@ -24,8 +24,12 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
 	"time"
 )
+
+// utcOffsetOriginalS is TAI-UTC before leap seconds began in 1972.
+const utcOffsetOriginalS int32 = 10
 
 // leapFile is a file containing leap second information
 var leapFile = "/usr/share/zoneinfo/right/UTC"
@@ -85,6 +89,19 @@ func Parse(srcfile string) ([]LeapSecond, error) {
 	defer f.Close()
 
 	return parseVx(f)
+}
+
+// UTCOffsetS returns TAI-UTC in effect at t. leaps must be ordered oldest
+// first, as Parse returns it. Instants before the first record, and an empty
+// table, give the offset that stood before leap seconds began.
+func UTCOffsetS(leaps []LeapSecond, t time.Time) int32 {
+	// Newest first: the offset is set by the most recent leap already in effect.
+	for _, l := range slices.Backward(leaps) {
+		if !t.Before(l.Time()) {
+			return l.Nleap + utcOffsetOriginalS
+		}
+	}
+	return utcOffsetOriginalS
 }
 
 // Latest returns the latest leap second from srcfile. Pass "" to use default file
