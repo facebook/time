@@ -17,6 +17,8 @@ limitations under the License.
 package asymmetry
 
 import (
+	"cmp"
+	"maps"
 	"math"
 	"net/netip"
 	"slices"
@@ -24,6 +26,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/facebook/time/ptp/sptp/client/measurement"
 )
 
 const (
@@ -36,6 +40,15 @@ const (
 	rackMaxAge = 15 * time.Minute
 	// one or two responders is not a rack
 	rackMinPeers = 3
+	// the grandmaster path's window, but fed by every peer of every probe, so it
+	// fills on the first round instead of over minutes
+	pathDelayFilterLength = 59
+	// pathDelayFloorPercentile takes the running estimate from the low end of the
+	// window rather than its middle, so contamination cannot define the baseline
+	pathDelayFloorPercentile = 0.1
+	// pathDelayDiscardMultiplier bounds a peer against the rack's filtered
+	// transit: far above it is its own timestamping, not the rack.
+	pathDelayDiscardMultiplier = 2
 	// 1.2533/1.349: the median's standard error in deviations, over the IQR's
 	// width in the same, so the deviation itself never has to be estimated
 	medianStdErrFactor = 0.9291
@@ -53,6 +66,11 @@ const (
 //
 // The peer delay probe is driven from outside; Rack neither schedules nor logs it.
 type Rack struct {
+	// delays is the path delay window across probes, and pathDelay the running
+	// estimate taken from it, exactly as the grandmaster path keeps per server
+	delays    *measurement.Window
+	pathDelay time.Duration
+
 	Config Config
 
 	mu      sync.RWMutex
@@ -138,24 +156,76 @@ func (r *Rack) Observe(obs Observation) int {
 	return r.correct(obs.GMs, obs.Best)
 }
 
+// delay screens one peer against the running estimate and folds it in when
+// usable, as measurements.delay and applyDelay do per grandmaster.
+func (r *Rack) delay(newDelay time.Duration) bool {
+	if r.delays == nil {
+		r.delays = measurement.NewWindow(pathDelayFilterLength)
+	}
+	// transit is never zero or less, so it is not a measurement of anything
+	if newDelay <= 0 {
+		return false
+	}
+	// keep the first real sample whatever it is, or the estimate never starts
+	if !math.IsNaN(r.delays.LastSample()) &&
+		!measurement.PathDelayInRange(newDelay, pathDelayDiscardMultiplier*r.pathDelay, 0, r.pathDelay, r.delays.Full()) {
+		log.Debugf("path delay %v outside (0, %dx %v] - filtering out", newDelay, pathDelayDiscardMultiplier, r.pathDelay)
+		return false
+	}
+	r.delays.Add(float64(newDelay))
+	// the low end, not the middle: a rack contaminates in whole probes, so a
+	// median moves with the bad peers and raises the bound meant to reject them
+	r.pathDelay = time.Duration(r.delays.Percentile(pathDelayFloorPercentile))
+	return true
+}
+
+// screen folds a probe into the estimate and returns the peers that survived it.
+func (r *Rack) screen(byDelay []Peer) []Peer {
+	return slices.DeleteFunc(slices.Clone(byDelay), func(p Peer) bool { return !r.delay(p.PathDelay) })
+}
+
 func (r *Rack) observePeers(peers []Peer) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	// one reading per responder: a peer answering twice is still one opinion, and
 	// counting both would let a single chatty peer reach quorum on its own
 	newest := make(map[netip.Addr]Peer, len(peers))
+	probed := time.Time{}
 	for _, p := range peers {
+		if p.At.After(probed) {
+			probed = p.At
+		}
 		if prev, seen := newest[p.Addr]; !seen || p.At.After(prev.At) {
 			newest[p.Addr] = p
 		}
 	}
+	// shortest first: the window takes its first sample unconditionally, so the
+	// lowest seeds it and the kept set does not depend on map order
+	byDelay := slices.SortedFunc(maps.Values(newest), func(a, b Peer) int {
+		return cmp.Compare(a.PathDelay, b.PathDelay)
+	})
+	kept := r.screen(byDelay)
+	// a full probe screened below quorum is one rack-wide bad round if the last
+	// reading still stands, and the transit having moved once that has aged out
+	if len(kept) < rackMinPeers && len(byDelay) >= rackMinPeers {
+		log.Warningf("rack screened %d of %d peers below quorum against floor %v",
+			len(byDelay)-len(kept), len(byDelay), r.pathDelay)
+		if r.delays == nil || !r.delays.Full() || probed.Sub(r.reading.at) <= rackMaxAge {
+			return
+		}
+		log.Warningf("rack path delay floor %v stale for longer than %v - relearning", r.pathDelay, rackMaxAge)
+		r.delays, r.pathDelay = nil, 0
+		kept = r.screen(byDelay)
+	}
 	// a probe below quorum is not a reading, and must not clobber the last one
 	// that was: bias would then reject the thin result and leave a still-bad path
 	// uncorrected until the next full probe
-	if len(newest) < rackMinPeers {
+	if len(kept) < rackMinPeers {
 		return
 	}
-	sorted := make([]time.Duration, 0, len(newest))
+	sorted := make([]time.Duration, 0, len(kept))
 	measured := time.Time{}
-	for _, p := range newest {
+	for _, p := range kept {
 		sorted = append(sorted, p.Offset)
 		// the round is only as fresh as its newest exchange
 		if p.At.After(measured) {
@@ -171,8 +241,6 @@ func (r *Rack) observePeers(peers []Peer) {
 	// towards holding rather than moving on three noisy peers.
 	lo := len(sorted) / 4
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	median := sorted[len(sorted)/2]
 	spread := sorted[len(sorted)-1-lo] - sorted[lo]
 	next := reading{

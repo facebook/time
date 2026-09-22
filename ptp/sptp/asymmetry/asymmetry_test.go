@@ -17,6 +17,7 @@ limitations under the License.
 package asymmetry
 
 import (
+	"fmt"
 	"net/netip"
 	"testing"
 	"time"
@@ -115,14 +116,42 @@ func TestCorrectorNames(t *testing.T) {
 	require.Equal(t, "simple", (&Simple{}).Name())
 }
 
+// uniformPeers is a rack of ten responders that all see one ToR hop.
+func uniformPeers(at time.Time) []Peer {
+	peers := make([]Peer, 0, 10)
+	for i := range 10 {
+		peers = append(peers, Peer{Addr: netip.AddrFrom4([4]byte{10, 0, 0, byte(i + 1)}),
+			Offset: 100 * time.Nanosecond, PathDelay: 500 * time.Nanosecond, At: at})
+	}
+	return peers
+}
+
+// step moves every peer to one transit, as a rack-wide event does.
+func step(peers []Peer, pathDelay time.Duration, at time.Time) {
+	for i := range peers {
+		peers[i].PathDelay = pathDelay
+		peers[i].At = at
+	}
+}
+
+// fillWindow probes until the path delay window is full and the floor settled.
+func fillWindow(r *Rack, peers []Peer, base time.Time) {
+	for i := range 8 {
+		step(peers, peers[0].PathDelay, base.Add(time.Duration(i)*time.Minute))
+		r.observePeers(peers)
+	}
+}
+
 // peersAt turns bare offsets into distinct responders, as a real probe would
 func peersAt(at time.Time, offsets ...time.Duration) []Peer {
 	peers := make([]Peer, 0, len(offsets))
 	for i, o := range offsets {
 		peers = append(peers, Peer{
-			Addr:   netip.AddrFrom4([4]byte{10, 0, 0, byte(i + 1)}),
-			Offset: o,
-			At:     at,
+			Addr: netip.AddrFrom4([4]byte{10, 0, 0, byte(i + 1)}),
+			// one ToR hop, the same for every peer unless a case says otherwise
+			PathDelay: 500 * time.Nanosecond,
+			Offset:    o,
+			At:        at,
 		})
 	}
 	return peers
@@ -1005,4 +1034,221 @@ func TestSimpleKeepsSearchAcrossPeerObservations(t *testing.T) {
 
 	s.Observe(Observation{Peers: peersAt(time.Now(), 10, 20, 30)})
 	require.Equal(t, searching, s.PortMoves(best), "a peer probe must not end the search")
+}
+
+func TestRackScreensPeersFarAboveTheRackFloor(t *testing.T) {
+	// a rack whose peers all agree, plus two answering with their own bad
+	// timestamping: inflated path delay carries an inflated offset
+	base := time.Now()
+	peers := make([]Peer, 0, 12)
+	for i := range 10 {
+		peers = append(peers, Peer{Addr: netip.MustParseAddr(fmt.Sprintf("10.0.0.%d", i+1)),
+			Offset: 100 * time.Nanosecond, PathDelay: 500 * time.Nanosecond, At: base})
+	}
+	for i := range 2 {
+		peers = append(peers, Peer{Addr: netip.MustParseAddr(fmt.Sprintf("10.0.1.%d", i+1)),
+			Offset: 9 * time.Microsecond, PathDelay: 9 * time.Microsecond, At: base})
+	}
+	r := rackOf(time.Microsecond)
+	// the window gates on Full, exactly as the grandmaster path does, so feed it
+	// until the running estimate is established
+	for i := range 6 {
+		for j := range peers {
+			peers[j].At = base.Add(time.Duration(i) * time.Minute)
+		}
+		r.observePeers(peers)
+	}
+	require.Equal(t, 10, r.reading.peers, "the two liars must not reach the reading")
+	require.Equal(t, 100*time.Nanosecond, r.reading.median)
+	require.Equal(t, innocent, r.reading.claim(time.Microsecond),
+		"without the screen the median would be dragged over the threshold")
+}
+
+func TestRackKeepsEveryPeerWhenPathDelayIsUniform(t *testing.T) {
+	// W400C has no transparent clock, so its path delay is large but uniform --
+	// legitimate, and the screen must not touch it
+	base := time.Now()
+	peers := make([]Peer, 0, 10)
+	for i := range 10 {
+		peers = append(peers, Peer{Addr: netip.MustParseAddr(fmt.Sprintf("10.0.0.%d", i+1)),
+			Offset: 100 * time.Nanosecond, PathDelay: 2164 * time.Nanosecond, At: base})
+	}
+	r := rackOf(time.Microsecond)
+	for i := range 6 {
+		for j := range peers {
+			peers[j].At = base.Add(time.Duration(i) * time.Minute)
+		}
+		r.observePeers(peers)
+	}
+	require.Equal(t, 10, r.reading.peers)
+}
+
+func TestRackBuildsPathDelayFromProbesBelowQuorum(t *testing.T) {
+	// two responders cannot carry a reading, but their path delays are still
+	// measurements of fixed wire and must reach the window
+	base := time.Now()
+	thin := []Peer{
+		{Addr: netip.MustParseAddr("10.0.0.1"), Offset: 100 * time.Nanosecond, PathDelay: 500 * time.Nanosecond, At: base},
+		{Addr: netip.MustParseAddr("10.0.0.2"), Offset: 100 * time.Nanosecond, PathDelay: 500 * time.Nanosecond, At: base},
+	}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
+	r.observePeers(thin)
+	require.Zero(t, r.reading.peers, "two peers is not a reading")
+	require.Equal(t, 500*time.Nanosecond, r.pathDelay, "but the estimate still learned from them")
+}
+
+func TestRackRelearnsPathDelayAfterTheRackMoves(t *testing.T) {
+	// a rack rehomed behind a switch with no transparent clock steps every peer
+	// at once. Held to the old floor the screen rejects all of them forever, and
+	// the rack goes quiet with nothing saying why
+	base := time.Now()
+	peers := uniformPeers(base)
+	r := rackOf(time.Microsecond)
+	fillWindow(r, peers, base)
+	require.True(t, r.delays.Full())
+	require.Equal(t, 500*time.Nanosecond, r.pathDelay)
+
+	step(peers, 2500*time.Nanosecond, base.Add(9*time.Minute))
+	r.observePeers(peers)
+	require.Equal(t, 500*time.Nanosecond, r.pathDelay, "the last reading still stands, so the floor does too")
+
+	step(peers, 2500*time.Nanosecond, base.Add(9*time.Minute+rackMaxAge))
+	r.observePeers(peers)
+	require.Equal(t, 2500*time.Nanosecond, r.pathDelay, "once it ages out the transit has moved")
+	require.Equal(t, 10, r.reading.peers, "and the probe is a reading, not a lockout")
+}
+
+func TestRackDropsAnAllPeerSpikeWithoutRebaselining(t *testing.T) {
+	// one rack-wide bad round must not become the new floor: adopting it would
+	// widen the screen to let the very measurements it exists to reject back in
+	base := time.Now()
+	peers := uniformPeers(base)
+	r := rackOf(time.Microsecond)
+	fillWindow(r, peers, base)
+	before := r.reading
+
+	step(peers, 9*time.Microsecond, base.Add(9*time.Minute))
+	r.observePeers(peers)
+	require.Equal(t, 500*time.Nanosecond, r.pathDelay, "the spike is not the baseline")
+	require.Equal(t, before, r.reading, "and it never reached the reading")
+
+	step(peers, 500*time.Nanosecond, base.Add(10*time.Minute))
+	r.observePeers(peers)
+	require.Equal(t, 500*time.Nanosecond, r.pathDelay)
+	require.Equal(t, 10, r.reading.peers, "the rack recovers on the next honest probe")
+}
+
+func TestRackRelearnsWhenScreeningLeavesTooFewPeers(t *testing.T) {
+	// a step leaving one or two peers under the old bound is still a step; gating
+	// relearn on zero survivors would keep the rack quiet on exactly those racks
+	base := time.Now()
+	peers := uniformPeers(base)
+	r := rackOf(time.Microsecond)
+	fillWindow(r, peers, base)
+
+	step(peers, 2500*time.Nanosecond, base.Add(9*time.Minute))
+	peers[0].PathDelay = 900 * time.Nanosecond
+	peers[1].PathDelay = 900 * time.Nanosecond
+	before := r.reading
+	r.observePeers(peers)
+	require.Equal(t, 500*time.Nanosecond, r.pathDelay, "two survivors are still below quorum")
+	require.Equal(t, before, r.reading, "and a sub-quorum probe does not replace the reading")
+
+	for i := range peers {
+		peers[i].At = base.Add(9*time.Minute + rackMaxAge)
+	}
+	r.observePeers(peers)
+	require.NotEqual(t, 500*time.Nanosecond, r.pathDelay, "the stale floor is dropped")
+	require.Equal(t, 10, r.reading.peers, "and the rack reads again instead of going quiet")
+}
+
+func TestRackStepSurvivesThinProbesBetweenRejections(t *testing.T) {
+	// the probe is driven from outside and can come back thin; a thin probe is no
+	// evidence the floor is good, so it must not hold off the relearn
+	base := time.Now()
+	peers := uniformPeers(base)
+	r := rackOf(time.Microsecond)
+	fillWindow(r, peers, base)
+
+	step(peers, 2500*time.Nanosecond, base.Add(9*time.Minute))
+	r.observePeers(peers)
+
+	thin := append([]Peer(nil), peers[:2]...)
+	step(thin, 2500*time.Nanosecond, base.Add(9*time.Minute+rackMaxAge))
+	r.observePeers(thin)
+	require.Equal(t, 500*time.Nanosecond, r.pathDelay, "a thin probe is not evidence either way")
+
+	step(peers, 2500*time.Nanosecond, base.Add(10*time.Minute+rackMaxAge))
+	r.observePeers(peers)
+	require.Equal(t, 2500*time.Nanosecond, r.pathDelay, "the step is still seen")
+	require.Equal(t, 10, r.reading.peers)
+}
+
+func TestRackFloorIsTheLowEndNotTheMiddle(t *testing.T) {
+	// a rack contaminates in whole probes, so the middle of the window moves with
+	// the bad peers and raises the very bound meant to reject them
+	base := time.Now()
+	peers := make([]Peer, 0, 10)
+	for i := range 10 {
+		pd := 500 * time.Nanosecond
+		if i >= 4 {
+			pd = 1500 * time.Nanosecond
+		}
+		peers = append(peers, Peer{Addr: netip.AddrFrom4([4]byte{10, 0, 0, byte(i + 1)}),
+			Offset: 100 * time.Nanosecond, PathDelay: pd, At: base})
+	}
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
+	r.observePeers(peers)
+	require.Equal(t, 500*time.Nanosecond, r.pathDelay, "the window median here is 1500ns")
+}
+
+func TestRackKeepsEstimateWhenOnlySomePeersStep(t *testing.T) {
+	// the inverse of the step: a subset moving is contamination, and rebuilding
+	// the estimate off it is the failure the screen exists to prevent
+	base := time.Now()
+	peers := uniformPeers(base)
+	r := rackOf(time.Microsecond)
+	fillWindow(r, peers, base)
+	for j := range peers[:4] {
+		peers[j].PathDelay = 2500 * time.Nanosecond
+	}
+	for j := range peers {
+		peers[j].At = base.Add(9 * time.Minute)
+	}
+	r.observePeers(peers)
+	require.Equal(t, 500*time.Nanosecond, r.pathDelay)
+	require.Equal(t, 6, r.reading.peers, "the four that stepped are screened out")
+}
+
+func TestRackScreensPeersInTheSameOrderEveryTime(t *testing.T) {
+	// the window takes its first sample unconditionally, so map iteration order
+	// would let whichever peer Go visited first set the baseline for the rest
+	base := time.Now()
+	peers := make([]Peer, 0, 12)
+	peers = append(peers,
+		Peer{Addr: netip.MustParseAddr("10.0.0.1"), Offset: 100, PathDelay: 9 * time.Microsecond, At: base},
+		Peer{Addr: netip.MustParseAddr("10.0.0.2"), Offset: 100, PathDelay: 8 * time.Microsecond, At: base},
+	)
+	for i := range 10 {
+		peers = append(peers, Peer{
+			Addr: netip.AddrFrom4([4]byte{10, 0, 1, byte(i + 1)}),
+			// 600ns is the honest floor here; the two above are ~15x it
+			Offset: 100, PathDelay: 600 * time.Nanosecond, At: base,
+		})
+	}
+	seen := make([]time.Duration, 0, 20)
+	for range 20 {
+		r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 4, MaxConsecutive: rackStreak}}
+		for i := range 6 {
+			for j := range peers {
+				peers[j].At = base.Add(time.Duration(i) * time.Minute)
+			}
+			r.observePeers(peers)
+		}
+		seen = append(seen, r.pathDelay)
+	}
+	for _, v := range seen {
+		require.Equal(t, seen[0], v, "same peers must always give the same estimate")
+	}
+	require.Equal(t, 600*time.Nanosecond, seen[0], "and it must be the floor, not a contaminated peer")
 }

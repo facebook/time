@@ -121,6 +121,9 @@ type Peer struct {
 	Addr netip.Addr
 	// Offset is this host against that peer.
 	Offset time.Duration
+	// PathDelay is transit to that peer. The clock offset cancels in it, so the
+	// rack uses it to judge whether Offset is real.
+	PathDelay time.Duration
 	// At is when the exchange was measured, not when it was handed over.
 	At time.Time
 }

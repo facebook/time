@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/facebook/time/ptp/pdelay"
+
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/sptp/asymmetry"
 )
@@ -48,7 +49,7 @@ func (p *SPTP) observePeers(results pdelay.Results) {
 		if r == nil || r.Error != nil || !r.Valid() {
 			continue
 		}
-		peers = append(peers, asymmetry.Peer{Addr: r.Responder, Offset: r.Offset(), At: r.Timestamp})
+		peers = append(peers, asymmetry.Peer{Addr: r.Responder, Offset: r.Offset(), PathDelay: r.PathDelay(), At: r.Timestamp})
 	}
 	p.corrector.Observe(asymmetry.Observation{Peers: peers, At: time.Now()})
 }
