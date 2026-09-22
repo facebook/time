@@ -14,14 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+// Package measurements holds the path delay window and the screen applied to
+// it, shared by the grandmaster path, which learns its estimate across time,
+// and the in-rack peer path, which learns it across peers.
+package measurement
 
 import (
 	"math"
 	"sort"
+	"time"
 )
 
-type slidingWindow struct {
+type Window struct {
 	size        int
 	currentSize int
 	sum         float64
@@ -29,11 +33,11 @@ type slidingWindow struct {
 	sorted      []float64
 }
 
-func newSlidingWindow(size int) *slidingWindow {
+func NewWindow(size int) *Window {
 	if size < 1 {
 		size = 1
 	}
-	w := &slidingWindow{
+	w := &Window{
 		size:    size,
 		samples: make([]float64, size),
 		sorted:  make([]float64, size),
@@ -45,7 +49,7 @@ func newSlidingWindow(size int) *slidingWindow {
 	return w
 }
 
-func (w *slidingWindow) add(sample float64) {
+func (w *Window) Add(sample float64) {
 	if !w.Full() {
 		w.currentSize++
 	} else {
@@ -59,11 +63,11 @@ func (w *slidingWindow) add(sample float64) {
 	w.sum += sample
 }
 
-func (w *slidingWindow) lastSample() float64 {
+func (w *Window) LastSample() float64 {
 	return w.samples[0]
 }
 
-func (w *slidingWindow) allSamples() []float64 {
+func (w *Window) allSamples() []float64 {
 	for j, v := range w.samples {
 		if !math.IsNaN(v) {
 			w.sorted[j] = v
@@ -80,7 +84,7 @@ func mean(data []float64) float64 {
 	return sum / float64(len(data))
 }
 
-func (w *slidingWindow) median() float64 {
+func (w *Window) Median() float64 {
 	c := w.allSamples()
 	sort.Float64s(c)
 	l := len(c)
@@ -92,10 +96,30 @@ func (w *slidingWindow) median() float64 {
 	return c[l/2]
 }
 
-func (w *slidingWindow) mean() float64 {
+func (w *Window) Mean() float64 {
 	return w.sum / float64(w.currentSize)
 }
 
-func (w *slidingWindow) Full() bool {
+func (w *Window) Full() bool {
 	return w.currentSize == w.size
+}
+
+// Percentile returns the pth (0..1) smallest sample, NaN when empty.
+func (w *Window) Percentile(p float64) float64 {
+	c := w.allSamples()
+	if len(c) == 0 {
+		return math.NaN()
+	}
+	sort.Float64s(c)
+	return c[min(max(int(p*float64(len(c))), 0), len(c)-1)]
+}
+
+// PathDelayInRange reports whether a path delay is usable: at or above the
+// floor, and not a spike over the running estimate once there is enough history
+// to judge. Negative falls out of the floor rather than needing its own case.
+func PathDelayInRange(delay, ceiling, below, from time.Duration, full bool) bool {
+	if delay < below {
+		return false
+	}
+	return delay <= from || delay <= ceiling || ceiling <= below || !full
 }

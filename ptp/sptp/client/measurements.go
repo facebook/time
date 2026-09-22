@@ -26,6 +26,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/ptp/sptp/client/measurement"
 )
 
 var errNotEnoughData = fmt.Errorf("not enough data")
@@ -82,7 +83,7 @@ type measurements struct {
 	currentUTCoffset time.Duration
 	data             map[uint16]*mData
 	lastData         *mData
-	delaysWindow     *slidingWindow
+	delaysWindow     *measurement.Window
 	pathDelay        time.Duration
 }
 
@@ -155,7 +156,7 @@ func (m *measurements) addT4(seq uint16, ts time.Time) {
 // delay evaluates the latest path delay and applies filter logic
 // It returns false if delay is bad and wasn't used
 func (m *measurements) delay(newDelay time.Duration) bool {
-	lastDelay := m.delaysWindow.lastSample()
+	lastDelay := m.delaysWindow.LastSample()
 	maxPathDelay := time.Duration(m.cfg.PathDelayDiscardMultiplier) * m.pathDelay
 	// we want to have at least one sample recorded, even if it doesn't meet the filter, otherwise we'll never sync
 	if math.IsNaN(lastDelay) || !m.cfg.PathDelayDiscardFilterEnabled {
@@ -169,8 +170,7 @@ func (m *measurements) delay(newDelay time.Duration) bool {
 		log.Warningf("[%s gmid:%s] low path delay %v not in range (%v, %v) - filtering out", m.server, m.lastData.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
 		return false
 		// TODO: look at this logic again
-	} else if newDelay > m.cfg.PathDelayDiscardFrom && newDelay > maxPathDelay && maxPathDelay > m.cfg.PathDelayDiscardBelow && m.delaysWindow.Full() {
-		// Ignore spikes above maxPathDelay starting from m.cfg.PathDelayDiscardFrom
+	} else if !measurement.PathDelayInRange(newDelay, maxPathDelay, m.cfg.PathDelayDiscardBelow, m.cfg.PathDelayDiscardFrom, m.delaysWindow.Full()) {
 		log.Warningf("[%s gmid:%s] path delay %v not in range (%v, %v) - filtering out", m.server, m.lastData.announce.GrandmasterIdentity, newDelay, m.cfg.PathDelayDiscardBelow, maxPathDelay)
 		return false
 	} else if m.lastData.c1 < 0 || m.lastData.c2 < 0 || m.lastData.c1 > maxCorrectionField || m.lastData.c2 > maxCorrectionField {
@@ -184,13 +184,13 @@ func (m *measurements) delay(newDelay time.Duration) bool {
 }
 
 func (m *measurements) applyDelay(newDelay time.Duration) {
-	m.delaysWindow.add(float64(newDelay))
+	m.delaysWindow.Add(float64(newDelay))
 
 	switch m.cfg.PathDelayFilter {
 	case FilterMedian:
-		m.pathDelay = time.Duration(m.delaysWindow.median())
+		m.pathDelay = time.Duration(m.delaysWindow.Median())
 	case FilterMean:
-		m.pathDelay = time.Duration(m.delaysWindow.mean())
+		m.pathDelay = time.Duration(m.delaysWindow.Mean())
 	default:
 		m.pathDelay = newDelay
 	}
@@ -250,6 +250,6 @@ func newMeasurements(server netip.Addr, cfg *MeasurementConfig) *measurements {
 		server:       server,
 		cfg:          cfg,
 		data:         map[uint16]*mData{},
-		delaysWindow: newSlidingWindow(cfg.PathDelayFilterLength),
+		delaysWindow: measurement.NewWindow(cfg.PathDelayFilterLength),
 	}
 }
