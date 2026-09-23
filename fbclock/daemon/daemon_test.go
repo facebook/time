@@ -681,10 +681,11 @@ func TestDaemonDoWork(t *testing.T) {
 	require.Error(t, err, "data point fails sanity check")
 	// check that we have proper stats reported
 	c = stats.Get()
-	require.Equal(t, int64(0), c["ingress_time_ns"], "ingress_time_ns after bad data")
-	require.Equal(t, int64(d.MasterOffsetNS), c["master_offset_ns"], "master_offset_ns after bad data")
-	require.Equal(t, int64(d.PathDelayNS), c["path_delay_ns"], "path_delay_ns after bad data")
-	require.Equal(t, int64(d.FreqAdjustmentPPB), c["freq_adj_ppb"], "freq_adj_ppb after bad data")
+	require.Equal(t, int64(startTime+61*time.Second), c["ingress_time_ns"], "ingress_time_ns after bad data")
+	require.Equal(t, int64(23), c["master_offset_ns"], "master_offset_ns after bad data")
+	require.Equal(t, int64(213), c["path_delay_ns"], "path_delay_ns after bad data")
+	require.Equal(t, int64(212131), c["freq_adj_ppb"], "freq_adj_ppb after bad data")
+	require.Equal(t, int64(0), c["clock_accuracy_ns"], "clock_accuracy_ns after bad data")
 	require.Equal(t, int64(48), c["m_ns"], "m_ns after bad data")
 	require.Equal(t, int64(48), c["w_ns"], "w_ns after bad data")
 	require.Equal(t, int64(64), c["drift_ppb"], "drift_ppb after bad data")
@@ -699,6 +700,79 @@ func TestDaemonDoWork(t *testing.T) {
 	require.Equal(t, want.IngressTimeNS, got.IngressTimeNS)
 	require.Equal(t, want.ErrorBoundNS, got.ErrorBoundNS)
 	require.InDelta(t, want.HoldoverMultiplierNS, got.HoldoverMultiplierNS, 0.001)
+}
+
+func TestPublishRawDataPointGauges(t *testing.T) {
+	accepted := DataPoint{
+		IngressTimeNS:     1647359186979431900,
+		MasterOffsetNS:    23,
+		PathDelayNS:       213,
+		FreqAdjustmentPPB: 212131,
+		ClockAccuracyNS:   25,
+		ServoState:        2,
+	}
+	require.NoError(t, accepted.SanityCheck())
+
+	base := DataPoint{
+		IngressTimeNS:     accepted.IngressTimeNS + int64(time.Second),
+		MasterOffsetNS:    31,
+		PathDelayNS:       217,
+		FreqAdjustmentPPB: 212137,
+		ClockAccuracyNS:   29,
+		ServoState:        2,
+	}
+	require.NoError(t, base.SanityCheck())
+
+	gauges := func(data DataPoint) map[string]int64 {
+		return map[string]int64{
+			"ingress_time_ns":   data.IngressTimeNS,
+			"master_offset_ns":  int64(data.MasterOffsetNS),
+			"path_delay_ns":     int64(data.PathDelayNS),
+			"freq_adj_ppb":      int64(data.FreqAdjustmentPPB),
+			"clock_accuracy_ns": int64(data.ClockAccuracyNS),
+		}
+	}
+
+	zeroIngress, zeroOffset, zeroDelay, zeroFreq := base, base, base, base
+	zeroIngress.IngressTimeNS = 0
+	zeroOffset.MasterOffsetNS = 0
+	zeroDelay.PathDelayNS = 0
+	zeroFreq.FreqAdjustmentPPB = 0
+	zeroAccuracy, unlocked, unknownAccuracy := base, base, base
+	zeroAccuracy.ClockAccuracyNS = 0
+	unlocked.ServoState = 1
+	unknownAccuracy.ClockAccuracyNS = float64(ptp.ClockAccuracyUnknown.Duration())
+
+	testCases := []struct {
+		name      string
+		data      DataPoint
+		wantError string
+		heldGauge string
+	}{
+		{"zero ingress time", zeroIngress, "ingress time is 0", "ingress_time_ns"},
+		{"zero master offset", zeroOffset, "master offset is 0", "master_offset_ns"},
+		{"zero path delay", zeroDelay, "path delay is 0", "path_delay_ns"},
+		{"zero frequency adjustment", zeroFreq, "frequency adjustment is 0", "freq_adj_ppb"},
+		{"zero clock accuracy", zeroAccuracy, "clock accuracy is 0", ""},
+		{"unlocked servo", unlocked, "servo state is 1, not locked", ""},
+		{"unknown clock accuracy", unknownAccuracy, "clock accuracy is unknown", ""},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			st := stats.NewStats()
+			s := newTestDaemon(&Config{RingSize: 1}, st)
+			s.publishRawDataPointGauges(&accepted)
+
+			require.EqualError(t, tc.data.SanityCheck(), tc.wantError)
+			s.publishRawDataPointGauges(&tc.data)
+
+			want := gauges(tc.data)
+			if tc.heldGauge != "" {
+				want[tc.heldGauge] = gauges(accepted)[tc.heldGauge]
+			}
+			require.Equal(t, want, st.Get())
+		})
+	}
 }
 
 func TestLeapSecondSmearing(t *testing.T) {
@@ -757,8 +831,23 @@ func TestNoPHC(t *testing.T) {
 	s := newTestDaemon(cfg, stats)
 	s.getPHCTime = func() (time.Time, error) { return time.Time{}, errNoPHC }
 
-	err := s.doWork(&fbclock.Shm{}, &DataPoint{})
+	sample := &DataPoint{
+		IngressTimeNS:     1647359186979431900,
+		MasterOffsetNS:    23,
+		PathDelayNS:       213,
+		FreqAdjustmentPPB: 212131,
+		ClockAccuracyNS:   25,
+		ServoState:        2,
+	}
+	err := s.doWork(&fbclock.Shm{}, sample)
 	require.ErrorIs(t, err, errNoPHC)
+
+	got := stats.Get()
+	require.Equal(t, sample.IngressTimeNS, got["ingress_time_ns"])
+	require.Equal(t, int64(sample.MasterOffsetNS), got["master_offset_ns"])
+	require.Equal(t, int64(sample.PathDelayNS), got["path_delay_ns"])
+	require.Equal(t, int64(sample.FreqAdjustmentPPB), got["freq_adj_ppb"])
+	require.Equal(t, int64(sample.ClockAccuracyNS), got["clock_accuracy_ns"])
 }
 
 func TestCoeffV2(t *testing.T) {

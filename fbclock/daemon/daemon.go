@@ -395,6 +395,25 @@ func (s *Daemon) calcDriftPPB() (float64, error) {
 	return drift, nil
 }
 
+// These are the raw gauges that predate per-field validation. Derived gauges
+// below update only after calculateSHMData accepts the complete sample.
+func (s *Daemon) publishRawDataPointGauges(data *DataPoint) {
+	if data.IngressTimeNS != 0 {
+		s.stats.SetCounter("ingress_time_ns", data.IngressTimeNS)
+	}
+	if data.MasterOffsetNS != 0 {
+		s.stats.SetCounter("master_offset_ns", int64(data.MasterOffsetNS))
+	}
+	if data.PathDelayNS != 0 {
+		s.stats.SetCounter("path_delay_ns", int64(data.PathDelayNS))
+	}
+	if data.FreqAdjustmentPPB != 0 {
+		s.stats.SetCounter("freq_adj_ppb", int64(data.FreqAdjustmentPPB))
+	}
+	// Zero means the client has no usable accuracy bound for this tick.
+	s.stats.SetCounter("clock_accuracy_ns", int64(data.ClockAccuracyNS))
+}
+
 func (s *Daemon) calculateSHMData(data *DataPoint, leaps []leapsectz.LeapSecond) (*fbclock.Data, error) {
 	if err := data.SanityCheck(); err != nil {
 		s.stats.UpdateCounterBy("data_sanity_check_error", 1)
@@ -511,11 +530,7 @@ func (s *Daemon) doWorkChrony(tracking *chrony.Tracking) error {
 
 func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 	// push stats
-	s.stats.SetCounter("master_offset_ns", int64(data.MasterOffsetNS))
-	s.stats.SetCounter("path_delay_ns", int64(data.PathDelayNS))
-	s.stats.SetCounter("ingress_time_ns", data.IngressTimeNS)
-	s.stats.SetCounter("freq_adj_ppb", int64(data.FreqAdjustmentPPB))
-	s.stats.SetCounter("clock_accuracy_ns", int64(data.ClockAccuracyNS))
+	s.publishRawDataPointGauges(data)
 	// try and calculate how long ago was the ingress time
 	// use clock_gettime as the fastest and widely available method
 	phcTime, err := s.getPHCTime()

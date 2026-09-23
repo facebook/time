@@ -222,14 +222,21 @@ func TestFetchStatsSpikeFilteredGM(t *testing.T) {
 	spikeTickCounters(t, dp)
 }
 
-// spikeTickCounters pins what a spike-filtered tick costs once Run() stops
-// short-circuiting on the fetch error and hands the point to doWork.
 func spikeTickCounters(t *testing.T, dp *DataPoint) {
 	t.Helper()
 	cfg := &Config{Interval: time.Second, RingSize: 30}
 	st := stats.NewStats()
 	s := newTestDaemon(cfg, st)
 	s.getPHCTime = func() (time.Time, error) { return time.Unix(0, 1647359186979431900), nil }
+	withheld := map[string]int64{
+		"master_offset_ns": 23,
+		"path_delay_ns":    213,
+		"ingress_time_ns":  1647359186979431900,
+	}
+	for k, v := range withheld {
+		st.SetCounter(k, v)
+	}
+	st.SetCounter("clock_accuracy_ns", 25)
 
 	tmpFile, err := os.CreateTemp("", "datafetcher_http_test")
 	require.NoError(t, err)
@@ -243,11 +250,10 @@ func spikeTickCounters(t *testing.T, dp *DataPoint) {
 	c := st.Get()
 	require.Equal(t, int64(1), c["data_sanity_check_error"])
 	require.Equal(t, int64(212131), c["freq_adj_ppb"])
-	// Same contract TestDaemonDoWork pins for a ptp4l hiccup: a rejected point
-	// still zeroes the raw gauges. Nothing derived from the ring buffer moves.
-	for _, k := range []string{"master_offset_ns", "path_delay_ns", "ingress_time_ns", "clock_accuracy_ns"} {
-		require.Equal(t, int64(0), c[k], k)
+	for k, v := range withheld {
+		require.Equal(t, v, c[k], k)
 	}
+	require.Equal(t, int64(0), c["clock_accuracy_ns"])
 	for _, k := range []string{"m_ns", "w_ns", "drift_ppb", "master_offset_ns.60.abs_max"} {
 		require.Zero(t, c[k], k)
 	}
