@@ -42,9 +42,15 @@ Offset = ((T2 - T1 - CFReq) - (T4 - T3 - CFResp)) / 2
 package pdelay
 
 import (
+	"errors"
 	"net/netip"
 	"time"
 )
+
+// ErrIncompleteResponse marks a Result whose timestamps never all arrived, for
+// which Offset and PathDelay both return 0. UnmarshalJSON restores it by
+// identity, so errors.Is holds for a Result read back over the wire too.
+var ErrIncompleteResponse = errors.New("incomplete response")
 
 // Result represents the result of a peer delay measurement
 type Result struct {

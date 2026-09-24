@@ -198,7 +198,7 @@ func runMulticastProbe(ctx context.Context, cfg ProbeConfig) ([]*pdelay.Result, 
 		// the scuba logger branches on Error, so an incomplete measurement must
 		// carry one rather than be recorded as a real zero offset
 		if result.Error == nil && !result.Valid() {
-			result.Error = errors.New("incomplete response")
+			result.Error = pdelay.ErrIncompleteResponse
 		}
 		if result.Error != nil {
 			fmt.Printf("%-*s %v\n", addrW, result.Responder, result.Error)

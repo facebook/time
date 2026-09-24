@@ -366,7 +366,7 @@ func TestPingIncompleteResponseIsReported(t *testing.T) {
 	res, err := p.Ping(ctx, pingPeer)
 	require.NoError(t, err)
 	require.Len(t, res, 1)
-	require.EqualError(t, res[0].Error, "incomplete response")
+	require.ErrorIs(t, res[0].Error, pdelay.ErrIncompleteResponse)
 }
 
 func TestPingRejectsConcurrentCalls(t *testing.T) {

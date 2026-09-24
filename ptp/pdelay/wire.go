@@ -59,7 +59,12 @@ func (r *Result) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &in); err != nil {
 		return err
 	}
-	if in.Error != "" {
+	// the sentinel has to come back by identity: rebuilding it from the message
+	// would make errors.Is false for every Result that crossed the wire, which
+	// in production is all of them
+	if in.Error == ErrIncompleteResponse.Error() {
+		fresh.Error = ErrIncompleteResponse
+	} else if in.Error != "" {
 		fresh.Error = errors.New(in.Error)
 	}
 	*r = fresh

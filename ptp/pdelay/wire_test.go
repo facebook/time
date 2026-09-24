@@ -69,16 +69,31 @@ func TestResultRoundTrip(t *testing.T) {
 	require.Equal(t, in.Offset(), got.Offset())
 }
 
-// error is the only field that does not marshal as itself
+// error is the only field that does not marshal as itself, so the sentinel has
+// to be matched by identity on the far side, not just by message
 func TestResultRoundTripError(t *testing.T) {
 	in := &Result{
 		Responder: netip.MustParseAddr("2401:db00::1"),
-		Error:     errors.New("incomplete response"),
+		Error:     ErrIncompleteResponse,
 	}
 
 	got := roundTrip(t, in)
+	require.ErrorIs(t, got.Error, ErrIncompleteResponse)
 	require.EqualError(t, got.Error, "incomplete response")
 	require.False(t, got.Valid())
+}
+
+// every other message stays an opaque error, so the sentinel keeps meaning one
+// specific failure rather than any failure whose text happens to arrive
+func TestResultRoundTripOtherError(t *testing.T) {
+	in := &Result{
+		Responder: netip.MustParseAddr("2401:db00::1"),
+		Error:     errors.New("connection timeout"),
+	}
+
+	got := roundTrip(t, in)
+	require.EqualError(t, got.Error, "connection timeout")
+	require.NotErrorIs(t, got.Error, ErrIncompleteResponse)
 }
 
 // a zero Responder and zero timestamps must survive the trip untouched

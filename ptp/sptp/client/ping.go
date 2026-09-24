@@ -212,7 +212,7 @@ func (p *SPTP) Ping(ctx context.Context, target netip.Addr) (pdelay.Results, err
 		snapshot := *r
 		snapshot.T1 = t1
 		if !snapshot.Valid() {
-			snapshot.Error = errors.New("incomplete response")
+			snapshot.Error = pdelay.ErrIncompleteResponse
 		}
 		res = append(res, &snapshot)
 	}

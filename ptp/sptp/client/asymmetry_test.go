@@ -17,7 +17,6 @@ limitations under the License.
 package client
 
 import (
-	"errors"
 	"net/netip"
 	"testing"
 	"time"
@@ -186,7 +185,7 @@ func TestObservePeersOnlyFeedsRack(t *testing.T) {
 func TestObservePeersSkipsUnusable(t *testing.T) {
 	best := netip.MustParseAddr("192.168.0.10")
 	bad := peerResult(1)
-	bad.Error = errors.New("incomplete response")
+	bad.Error = pdelay.ErrIncompleteResponse
 
 	p := &SPTP{
 		clients:   map[netip.Addr]*Client{best: {delayRequest: ReqDelay(ptp.ClockIdentity(1), 1)}},
