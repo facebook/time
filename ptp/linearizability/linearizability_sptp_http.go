@@ -46,11 +46,9 @@ func (tr SPTPHTTPTestResult) Good() (bool, error) {
 	if tr.Error != nil {
 		return false, tr.Error
 	}
+	// A GM that is not Locked is no evidence our clock is fine, so this is still a
+	// failure. ProcessMonitoringResults only alarms when every GM fails.
 	if math.Abs(tr.Offset) > float64(tr.Config.LinearizabilityTestMaxGMOffset.Nanoseconds()) {
-		if tr.ClockClass != ptp.ClockClass6 {
-			log.Warningf("linearizability test against %v ignored because the clock class is not Locked", tr.Config.Server)
-			return true, nil
-		}
 		return false, nil
 	}
 	return true, nil

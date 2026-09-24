@@ -65,6 +65,17 @@ func TestSPTPHTTPTestResultGood(t *testing.T) {
 			want:    true,
 			wantErr: false,
 		},
+		{
+			name: "fail - GM not locked",
+			in: SPTPHTTPTestResult{
+				Config:     SPTPHTTPTestConfig{Server: "time01", LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
+				Offset:     float64(time.Millisecond.Nanoseconds()),
+				ClockClass: 52,
+				Error:      nil,
+			},
+			want:    false,
+			wantErr: false,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -104,14 +115,14 @@ func TestSPTPHTTPTestResultExplain(t *testing.T) {
 			want: "linearizability test against \"time01\" failed because the offset 1000000.00ns is > 3µs",
 		},
 		{
-			name: "pass",
+			name: "fail - GM not locked",
 			in: SPTPHTTPTestResult{
 				Config:     SPTPHTTPTestConfig{Server: "time01", LinearizabilityTestMaxGMOffset: 3 * time.Microsecond},
 				Offset:     float64(time.Millisecond.Nanoseconds()),
 				ClockClass: 52,
 				Error:      nil,
 			},
-			want: "linearizability test against \"time01\" passed",
+			want: "linearizability test against \"time01\" failed because the offset 1000000.00ns is > 3µs",
 		},
 		{
 			name: "pass",
