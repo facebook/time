@@ -22,25 +22,27 @@ import (
 	"sort"
 	"time"
 
+	"github.com/facebook/time/ntp/chrony"
 	ntp "github.com/facebook/time/ntp/protocol"
 	log "github.com/sirupsen/logrus"
 )
 
 // NTPStats are metrics for upstream reporting
 type NTPStats struct {
-	PeerDelay             float64 `json:"ntp.peer.delay"`                      // sys.peer delay in ms
-	PeerPoll              int     `json:"ntp.peer.poll"`                       // sys.peer poll in seconds
-	PeerJitter            float64 `json:"ntp.peer.jitter"`                     // sys.peer jitter in ms
-	PeerOffset            float64 `json:"ntp.peer.offset"`                     // sys.peer offset in ms
-	PeerStratum           int     `json:"ntp.peer.stratum"`                    // sys.peer stratum
-	Frequency             float64 `json:"ntp.sys.frequency"`                   // clock frequency in PPM
-	Offset                float64 `json:"ntp.sys.offset"`                      // tracking clock offset in MS
-	RootDelay             float64 `json:"ntp.sys.root_delay"`                  // tracking root delay in MS
-	RootDisp              float64 `json:"ntp.sys.root_disp"`                   // tracking root dispersion in MS
-	StatError             bool    `json:"ntp.stat.error"`                      // error reported in Leap Status
-	Correction            float64 `json:"ntp.correction"`                      // current correction
-	PeerCount             int     `json:"ntp.peer.count"`                      // number of upstream peers
-	OffsetComparedToPeers float64 `json:"ntp.sys.offset_selected_vs_peers_ms"` // sys peer offset vs median peer offset in ms
+	PeerDelay             float64  `json:"ntp.peer.delay"`                      // sys.peer delay in ms
+	PeerPoll              int      `json:"ntp.peer.poll"`                       // sys.peer poll in seconds
+	PeerJitter            float64  `json:"ntp.peer.jitter"`                     // sys.peer jitter in ms
+	PeerOffset            float64  `json:"ntp.peer.offset"`                     // sys.peer offset in ms
+	PeerStratum           int      `json:"ntp.peer.stratum"`                    // sys.peer stratum
+	Frequency             float64  `json:"ntp.sys.frequency"`                   // clock frequency in PPM
+	Offset                float64  `json:"ntp.sys.offset"`                      // tracking clock offset in MS
+	RootDelay             float64  `json:"ntp.sys.root_delay"`                  // tracking root delay in MS
+	RootDisp              float64  `json:"ntp.sys.root_disp"`                   // tracking root dispersion in MS
+	StatError             bool     `json:"ntp.stat.error"`                      // error reported in Leap Status
+	Correction            float64  `json:"ntp.correction"`                      // current correction
+	PeerCount             int      `json:"ntp.peer.count"`                      // number of upstream peers
+	OffsetComparedToPeers float64  `json:"ntp.sys.offset_selected_vs_peers_ms"` // sys peer offset vs median peer offset in ms
+	OffsetVsPHC           *float64 `json:"ntp.sys.offset_vs_phc_ms,omitempty"`  // system clock (TAI) minus PHC in ms, only while NTP steers the clock
 }
 
 type averages struct {
@@ -155,6 +157,11 @@ func NewNTPStats(r *NTPCheckResult) (*NTPStats, error) {
 		StatError:             r.LI == ntp.LeapAlarm, // that's how ntpstat defines unsynchronized
 		PeerCount:             len(r.Peers),
 		OffsetComparedToPeers: offsetComparedToPeers,
+	}
+	// Only while an NTP server steers the clock. Steered from the PHC (use_ptp), the clock
+	// reads zero against its own reference even when the PHC is wrong (S688955).
+	if r.ClockSource == chrony.ClockSourceNTP {
+		output.OffsetVsPHC = r.PHCOffsetMS
 	}
 	return &output, nil
 }

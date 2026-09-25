@@ -36,6 +36,8 @@ type NTPCheckResult struct {
 	SysVars *SystemVariables
 	// map of peers with data from PeerStatusWord and Peer Variables
 	Peers map[uint16]*Peer
+	// system clock (TAI) minus the PHC in ms, nil without a reading
+	PHCOffsetMS *float64
 }
 
 // FindSysPeer returns sys.peer (main source of NTP information for server)

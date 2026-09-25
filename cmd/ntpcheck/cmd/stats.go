@@ -18,14 +18,44 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"math"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/facebook/time/cmd/ntpcheck/checker"
+	"github.com/facebook/time/leapsectz"
+	"github.com/facebook/time/phc"
 )
+
+// fbclock's copy of the PHC sptp disciplines, not whichever NIC comes first
+var ptpDevice = "/dev/fbclock/ptp"
+
+// readPHC measures the system clock (TAI) against the PHC in ms, nil without a reading.
+func readPHC() *float64 {
+	// EXTENDED is what the fbclock library reads the PHC with, so every PTP host supports it
+	sysoff, err := phc.TimeAndOffsetFromDevice(ptpDevice, phc.MethodIoctlSysOffsetExtendedRealTimeClock)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		log.Warningf("reading %s: %v", ptpDevice, err)
+		return nil
+	}
+	// the PHC keeps TAI; without the table every reading is 37s out
+	leaps, err := leapsectz.Parse("")
+	if err != nil {
+		log.Warningf("reading leap second table: %v", err)
+		return nil
+	}
+	offset := sysoff.Offset + time.Duration(leapsectz.UTCOffsetS(leaps, sysoff.SysTime))*time.Second
+	ms := float64(offset) / float64(time.Millisecond)
+	return &ms
+}
 
 func printStats(r *checker.NTPCheckResult, legacy bool) error {
 	type ntpStatsLegacy struct {
@@ -70,11 +100,16 @@ var statsCmd = &cobra.Command{
 	Short: "Print NTP stats in JSON format",
 	Run: func(_ *cobra.Command, _ []string) {
 		ConfigureVerbosity()
-
+		// before the check, so it lands within ms of the tracking read
+		var phcOffset *float64
+		if server == "" {
+			phcOffset = readPHC()
+		}
 		result, err := checker.RunCheck(server)
 		if err != nil {
 			log.Fatal(err)
 		}
+		result.PHCOffsetMS = phcOffset
 		err = printStats(result, legacyOutput)
 		if err != nil {
 			log.Fatal(err)

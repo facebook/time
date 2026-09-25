@@ -19,6 +19,7 @@ package checker
 import (
 	"testing"
 
+	"github.com/facebook/time/ntp/chrony"
 	"github.com/facebook/time/ntp/control"
 	"github.com/stretchr/testify/require"
 )
@@ -319,4 +320,34 @@ func TestMedianOffset(t *testing.T) {
 	}
 	medianOffset := medianOffset(peers)
 	require.Equal(t, float64(4), medianOffset)
+}
+
+func TestNTPStatsOffsetVsPHC(t *testing.T) {
+	// sys peer 45us from a candidate at 10us, so the peers say 35us on every host
+	peers := map[uint16]*Peer{
+		0: {Selection: control.SelCandidate, Offset: 0.010, Stratum: 1, HPoll: 10, PPoll: 4},
+		1: {Selection: control.SelSYSPeer, Offset: 0.045, Stratum: 1, HPoll: 10, PPoll: 4},
+	}
+	behind, ahead, drifting := -0.009, 0.0001, 0.02
+	tests := []struct {
+		name        string
+		clockSource string
+		phcOffset   *float64
+		want        *float64
+	}{
+		{name: "no PHC reading", clockSource: chrony.ClockSourceNTP, want: nil},
+		{name: "NTP-steered clock against the PHC", clockSource: chrony.ClockSourceNTP, phcOffset: &behind, want: &behind},
+		{name: "chrony steering from the PHC", clockSource: chrony.ClockSourceLocal, phcOffset: &ahead, want: nil},
+		{name: "no source in sync", phcOffset: &drifting, want: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stats, err := NewNTPStats(&NTPCheckResult{
+				SysVars: &SystemVariables{}, Peers: peers, ClockSource: tt.clockSource, PHCOffsetMS: tt.phcOffset,
+			})
+			require.NoError(t, err)
+			require.InDelta(t, 0.035, stats.OffsetComparedToPeers, 1e-12)
+			require.Equal(t, tt.want, stats.OffsetVsPHC)
+		})
+	}
 }
