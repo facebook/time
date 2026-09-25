@@ -17,19 +17,19 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"sort"
 	"time"
 
 	"github.com/facebook/time/cmd/ptpcheck/checker"
+	"github.com/facebook/time/cmd/ptpcheck/render"
 	"github.com/facebook/time/phc"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/sptp/stats"
 
-	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -81,37 +81,22 @@ func sourcesRunPTP4l(server string, noDNS bool, domainNumber uint8) error {
 	} else {
 		currentTime = time.Now()
 	}
-	table := tablewriter.NewTable(os.Stdout,
-		tablewriter.WithRendition(tw.Rendition{
-			Symbols: tw.NewSymbols(tw.StyleASCII),
-		}),
-		tablewriter.WithHeaderAutoFormat(tw.Off),
-	)
-	table.Configure(func(cfg *tablewriter.Config) {
-		cfg.Row.Alignment.PerColumn = []tw.Align{
-			tw.AlignLeft,  // SELECTED
-			tw.AlignLeft,  // IDENTITY
-			tw.AlignLeft,  // ADDRESS
-			tw.AlignLeft,  // STATE
-			tw.AlignLeft,  // CLOCK
-			tw.AlignLeft,  // VARIANCE
-			tw.AlignLeft,  // P1:P2
-			tw.AlignRight, // OFFSET(NS)
-			tw.AlignRight, // DELAY(NS)
-			tw.AlignLeft,  // LAST SYNC
-		}
-	})
-	table.Header(
-		"SELECTED", "IDENTITY", "ADDRESS", "STATE", "CLOCK", "VARIANCE", "P1:P2", "OFFSET(NS)", "DELAY(NS)", "LAST SYNC",
-	)
+	table := render.Table(os.Stdout, []tw.Align{
+		tw.AlignLeft,  // SELECTED
+		tw.AlignLeft,  // IDENTITY
+		tw.AlignLeft,  // ADDRESS
+		tw.AlignLeft,  // STATE
+		tw.AlignLeft,  // CLOCK
+		tw.AlignLeft,  // VARIANCE
+		tw.AlignLeft,  // P1:P2
+		tw.AlignRight, // OFFSET(NS)
+		tw.AlignRight, // DELAY(NS)
+		tw.AlignLeft,  // LAST SYNC
+	}, "SELECTED", "IDENTITY", "ADDRESS", "STATE", "CLOCK", "VARIANCE", "P1:P2", "OFFSET(NS)", "DELAY(NS)", "LAST SYNC")
+	ctx, cancel := context.WithTimeout(context.Background(), render.Timeout)
+	defer cancel()
 	for _, entry := range tlv.UnicastMasterTable.UnicastMasters {
-		address := entry.Address.String()
-		if !noDNS {
-			names, err := net.LookupAddr(address)
-			if err == nil && len(names) > 0 {
-				address = names[0]
-			}
-		}
+		address := render.Addr(ctx, entry.Address.String(), noDNS)
 
 		val := []string{
 			fmt.Sprintf("%v", entry.Selected),
@@ -163,38 +148,23 @@ func sourcesRunSPTP(address string, noDNS bool) error {
 }
 
 func sourcesRenderSPTP(w io.Writer, umt stats.Stats, noDNS bool) error {
-	table := tablewriter.NewTable(w,
-		tablewriter.WithRendition(tw.Rendition{
-			Symbols: tw.NewSymbols(tw.StyleASCII),
-		}),
-		tablewriter.WithHeaderAutoFormat(tw.Off),
-	)
-	table.Configure(func(cfg *tablewriter.Config) {
-		cfg.Row.Alignment.PerColumn = []tw.Align{
-			tw.AlignLeft,  // SELECTED
-			tw.AlignLeft,  // IDENTITY
-			tw.AlignLeft,  // ADDRESS
-			tw.AlignLeft,  // CLOCK
-			tw.AlignLeft,  // VARIANCE
-			tw.AlignLeft,  // P1:P2:P3
-			tw.AlignRight, // OFFSET(NS)
-			tw.AlignRight, // DELAY(NS)
-			tw.AlignLeft,  // CF TX:RX(NS)
-			tw.AlignLeft,  // ERROR
-		}
-	})
-	table.Header(
-		"SELECTED", "IDENTITY", "ADDRESS", "CLOCK", "VARIANCE", "P1:P2:P3", "OFFSET(NS)", "DELAY(NS)", "CF TX:RX(NS)", "ERROR",
-	)
+	ctx, cancel := context.WithTimeout(context.Background(), render.Timeout)
+	defer cancel()
+	table := render.Table(w, []tw.Align{
+		tw.AlignLeft,  // SELECTED
+		tw.AlignLeft,  // IDENTITY
+		tw.AlignLeft,  // ADDRESS
+		tw.AlignLeft,  // CLOCK
+		tw.AlignLeft,  // VARIANCE
+		tw.AlignLeft,  // P1:P2:P3
+		tw.AlignRight, // OFFSET(NS)
+		tw.AlignRight, // DELAY(NS)
+		tw.AlignLeft,  // CF TX:RX(NS)
+		tw.AlignLeft,  // ERROR
+	}, "SELECTED", "IDENTITY", "ADDRESS", "CLOCK", "VARIANCE", "P1:P2:P3", "OFFSET(NS)", "DELAY(NS)", "CF TX:RX(NS)", "ERROR")
 
 	for _, gm := range umt {
-		address := gm.GMAddress
-		if !noDNS {
-			names, err := net.LookupAddr(address)
-			if err == nil && len(names) > 0 {
-				address = names[0]
-			}
-		}
+		address := render.Addr(ctx, gm.GMAddress, noDNS)
 
 		val := []string{
 			fmt.Sprintf("%v", gm.Selected),
