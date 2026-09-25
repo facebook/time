@@ -34,6 +34,11 @@ import (
 // opsfiles/.../fb_fbagent/files/default/collectors/ptp/ptp_fbclock.sh.
 var collectorFilter = regexp.MustCompile(`(earliest_ns|latest_ns|requests)`)
 
+var fbclockBinSample = &fbclock.TrueTime{
+	Earliest: time.Unix(0, 1790343749019905602),
+	Latest:   time.Unix(0, 1790343749019907266),
+}
+
 // Every key one run can print, built the way fbclockRun builds it.
 func stdoutKeys(t *testing.T) []string {
 	t.Helper()
@@ -92,6 +97,52 @@ func TestFbclockStdoutSurvivesCollectorFilter(t *testing.T) {
 		require.NoError(t, dec.Decode(&v))
 	}
 	require.Equal(t, keys, order)
+}
+
+// fbagent collectors still run it without -j.
+func TestFbclockJSONByDefault(t *testing.T) {
+	f := fbclockCmd.Flags().ShorthandLookup("j")
+	require.NotNil(t, f)
+	require.Equal(t, "json", f.Name)
+	require.Equal(t, "true", f.DefValue)
+}
+
+func TestFbclockPrintText(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, fbclockPrintText(&buf, fbclockBinSample))
+	require.Equal(t, "TrueTime:\n\tEarliest: 1790343749019905602\n\tLatest: 1790343749019907266\n\tWOU=1664 ns\n", buf.String())
+}
+
+func TestFbclockPrintJSON(t *testing.T) {
+	var buf bytes.Buffer
+	s := fbclock.Stats{Requests: 1, WOUAvg: 1664, WOUMax: 1664, WOUlt10us: 1}
+	require.NoError(t, fbclockPrintJSON(&buf, fbclockBinSample, s, "p.", ".1"))
+	got := map[string]int64{}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, map[string]int64{
+		"p.earliest_ns":         1790343749019905602,
+		"p.latest_ns":           1790343749019907266,
+		"p.wou_ns":              1664,
+		"p.wou_ns.avg.1":        1664,
+		"p.wou_ns.max.1":        1664,
+		"p.wou_lt_10us.sum.1":   1,
+		"p.wou_lt_100us.sum.1":  0,
+		"p.wou_lt_1000us.sum.1": 0,
+		"p.wou_ge_1000us.sum.1": 0,
+		"p.errors.sum.1":        0,
+		"p.requests.sum.1":      1,
+	}, got)
+}
+
+// A run where every call failed still emits JSON, so the collector records errors.sum.
+func TestFbclockPrintJSONNoSample(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, fbclockPrintJSON(&buf, nil, fbclock.Stats{Requests: 1, Errors: 1}, "p.", ".1"))
+	got := map[string]int64{}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, int64(1), got["p.errors.sum.1"])
+	require.NotContains(t, got, "p.wou_ns")
+	require.NotContains(t, got, "p.earliest_ns")
 }
 
 func TestFormatErrorCauses(t *testing.T) {

@@ -19,7 +19,9 @@ package cmd
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"slices"
@@ -35,6 +37,7 @@ var (
 	fbclockRequestsFlag int64
 	fbclockDurationFlag time.Duration
 	fbclockUTCFlag      bool
+	fbclockJSONFlag     bool
 )
 
 func init() {
@@ -42,6 +45,7 @@ func init() {
 	fbclockCmd.Flags().Int64VarP(&fbclockRequestsFlag, "requests", "r", 1, "number of requests to fbclock")
 	fbclockCmd.Flags().DurationVarP(&fbclockDurationFlag, "duration", "t", 1*time.Second, "spread the requests over this duration")
 	fbclockCmd.Flags().BoolVarP(&fbclockUTCFlag, "utc", "", false, "get UTC time (TAI is default)")
+	fbclockCmd.Flags().BoolVarP(&fbclockJSONFlag, "json", "j", true, "JSON output")
 }
 
 // formatErrorCauses orders by count, then by message so runs are comparable.
@@ -75,7 +79,28 @@ func fbclockMetrics(s fbclock.Stats, prefix, suffix string, out map[string]int64
 	out[prefix+"requests.sum"+suffix] = s.Requests
 }
 
-func fbclockRun(requests int64, duration time.Duration, utc bool) error {
+func fbclockPrintJSON(w io.Writer, last *fbclock.TrueTime, s fbclock.Stats, prefix, suffix string) error {
+	out := map[string]int64{}
+	if last != nil {
+		fbclockSample(last, prefix, out)
+	}
+	fbclockMetrics(s, prefix, suffix, out)
+	toPrint, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(w, string(toPrint))
+	return err
+}
+
+// Byte-identical to fbclock-bin output.
+func fbclockPrintText(w io.Writer, tt *fbclock.TrueTime) error {
+	_, err := fmt.Fprintf(w, "TrueTime:\n\tEarliest: %d\n\tLatest: %d\n\tWOU=%d ns\n",
+		tt.Earliest.UnixNano(), tt.Latest.UnixNano(), tt.Latest.Sub(tt.Earliest).Nanoseconds())
+	return err
+}
+
+func fbclockRun(requests int64, duration time.Duration, utc, jsonOut bool) error {
 	prefix := "ptp.fbclock_synthetic.api."
 	suffix := fmt.Sprintf(".%d", int(duration.Seconds()))
 
@@ -112,25 +137,24 @@ func fbclockRun(requests int64, duration time.Duration, utc bool) error {
 	}
 
 	sc := &fbclock.StatsCollector{}
-	out := map[string]int64{}
+	var last *fbclock.TrueTime
 	for range int(requests) {
 		r := <-c
 		sc.Update(r.tt, r.err)
-		if r.err != nil {
-			continue
+		if r.err == nil {
+			last = r.tt
 		}
-		// what we got (latest sample)
-		fbclockSample(r.tt, prefix, out)
 	}
 
 	s := sc.Stats()
-	fbclockMetrics(s, prefix, suffix, out)
-
-	toPrint, err := json.Marshal(out)
-	if err != nil {
-		return err
+	switch {
+	case jsonOut:
+		err = fbclockPrintJSON(os.Stdout, last, s, prefix, suffix)
+	case last != nil:
+		err = fbclockPrintText(os.Stdout, last)
+	default:
+		err = errors.New("no clock.GetTime call succeeded")
 	}
-	fmt.Println(string(toPrint))
 
 	if requests > 1 {
 		fmt.Fprintf(os.Stderr, "Running clock.GetTime %d times over %v. Average WOU size is: %d\n", requests, duration, s.WOUAvg)
@@ -140,7 +164,7 @@ func fbclockRun(requests int64, duration time.Duration, utc bool) error {
 		fmt.Fprintf(os.Stderr, "%d of %d clock.GetTime calls failed:\n%s",
 			s.Errors, s.Requests, formatErrorCauses(sc.ErrorCauses()))
 	}
-	return nil
+	return err
 }
 
 var fbclockCmd = &cobra.Command{
@@ -157,7 +181,7 @@ var fbclockCmd = &cobra.Command{
 			log.Fatal("duration must be 0 or positive")
 		}
 
-		if err := fbclockRun(fbclockRequestsFlag, fbclockDurationFlag, fbclockUTCFlag); err != nil {
+		if err := fbclockRun(fbclockRequestsFlag, fbclockDurationFlag, fbclockUTCFlag, fbclockJSONFlag); err != nil {
 			log.Fatal(err)
 		}
 
