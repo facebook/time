@@ -1252,3 +1252,78 @@ func TestRackScreensPeersInTheSameOrderEveryTime(t *testing.T) {
 	}
 	require.Equal(t, 600*time.Nanosecond, seen[0], "and it must be the floor, not a contaminated peer")
 }
+
+// The move count alone reads the same at 0 moves and at a spent budget, so the
+// state is driven through a real search rather than a hand-set counter.
+func TestRackSearchStateTracksTheEpisode(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 2, MaxConsecutive: rackStreak}}
+	gm := netip.MustParseAddr("2401:db00::1")
+	gms := map[netip.Addr]*GM{gm: {Answered: true, Judgeable: true}}
+	require.Equal(t, SearchSettled, r.Search(gm, gms[gm]), "nothing has happened yet")
+
+	for range rackStreak {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200), GMs: gms, Best: gm})
+	}
+	require.Equal(t, SearchSearching, r.Search(gm, gms[gm]), "one of two moves spent")
+
+	for range rackStreak {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200), GMs: gms, Best: gm})
+	}
+	require.Equal(t, uint16(2), r.PortMoves(gm))
+	require.Equal(t, SearchExhausted, r.Search(gm, gms[gm]), "budget spent and the rack still objects")
+
+	r.Observe(Observation{Peers: peersAt(time.Now(), 400, 500, 600), GMs: gms, Best: gm})
+	require.Equal(t, SearchSettled, r.Search(gm, gms[gm]), "a quiet rack refunds the episode")
+}
+
+// Simple spends no budget, so it has no exhausted state to report.
+func TestSimpleSearchStateNeverExhausts(t *testing.T) {
+	s := &Simple{Config: Config{Threshold: time.Microsecond, MaxConsecutive: 1}}
+	gm := netip.MustParseAddr("2401:db00::1")
+	other := netip.MustParseAddr("2401:db00::2")
+	require.Equal(t, SearchSettled, s.Search(gm, gm2(0)))
+
+	gms := map[netip.Addr]*GM{gm: gm2(9000), other: gm2(9000)}
+	for range 40 {
+		s.Observe(Observation{GMs: gms, Best: gm})
+	}
+	require.Greater(t, s.PortMoves(gm), uint16(1), "simple keeps moving without a budget")
+	require.Equal(t, SearchSearching, s.Search(gm, gms[gm]), "and never calls itself exhausted")
+}
+
+func gm2(offsetNS int) *GM {
+	return &GM{Offset: time.Duration(offsetNS) * time.Nanosecond, Answered: true, Judgeable: true}
+}
+
+// Only the selected path is searched at a time, so a secondary GM that the rack
+// has already convicted spends nothing. Reporting that as settled says the path
+// is fine when the corrector is merely busy elsewhere.
+func TestRackSearchStateConvictedSecondaryIsNotSettled(t *testing.T) {
+	r := &Rack{Config: Config{Threshold: time.Microsecond, MaxPortChanges: 64, MaxConsecutive: rackStreak}}
+	best := netip.MustParseAddr("2401:db00::1")
+	bad := netip.MustParseAddr("2401:db00::2")
+	gms := map[netip.Addr]*GM{
+		best: {Answered: true, Judgeable: true},
+		bad:  {Answered: true, Judgeable: true, Offset: 2490 * time.Nanosecond},
+	}
+
+	// the rack objects, so the selected path is the one being searched
+	for range rackStreak {
+		r.Observe(Observation{Peers: peersAt(time.Now(), 3000, 3100, 3200), GMs: gms, Best: best})
+	}
+	require.NotZero(t, r.PortMoves(best), "the selected path is searching")
+	require.Zero(t, r.PortMoves(bad), "and the others are not charged while it does")
+
+	require.Equal(t, SearchAsymmetric, r.Search(bad, gms[bad]),
+		"convicted but unspent is waiting its turn, not settled")
+	require.Equal(t, SearchSettled, r.Search(bad, gm2(0)), "and an unaccused idle GM is settled")
+}
+
+// Simple has no budget, so a GM it has not moved is the only place its verdict shows.
+func TestSimpleSearchStateReportsAsymmetric(t *testing.T) {
+	s := &Simple{Config: Config{Threshold: time.Microsecond, MaxConsecutive: 1}}
+	gm := netip.MustParseAddr("2401:db00::1")
+	require.Equal(t, SearchAsymmetric, s.Search(gm, gm2(2000)))
+	require.Equal(t, SearchSettled, s.Search(gm, gm2(0)))
+	require.Equal(t, SearchUnknown, s.Search(gm, &GM{Answered: true}), "unjudgeable names no state")
+}

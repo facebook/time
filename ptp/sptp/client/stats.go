@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/facebook/time/ptp/sptp/asymmetry"
 	gmstats "github.com/facebook/time/ptp/sptp/stats"
 	"github.com/shirou/gopsutil/v4/process"
 )
@@ -244,12 +245,14 @@ func (s *Stats) CollectSysStats() {
 	s.gcPauseTotalNs = int64(s.memstats.PauseTotalNs)
 }
 
-func runResultToGMStats(address netip.Addr, r *RunResult, p3 int, selected bool, servoState int, portChanges uint16) *gmstats.Stat {
+func runResultToGMStats(address netip.Addr, r *RunResult, p3 int, selected bool, servoState int, portChanges uint16, search asymmetry.SearchState) *gmstats.Stat {
 	s := &gmstats.Stat{
 		GMAddress: address.String(),
 		Priority3: uint8(p3),
 	}
 	s.PortChangeCount = uint64(portChanges)
+	state := int(search)
+	s.SearchState = &state
 
 	if r.Error != nil {
 		s.GMPresent = 0

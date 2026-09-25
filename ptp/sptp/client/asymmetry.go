@@ -86,11 +86,15 @@ func applyPortActions(client *Client, gm *asymmetry.GM) {
 	}
 }
 
+// A result naming an address we never configured has no client to carry state,
+// which is not the same as a client that answered with nothing.
 func newGM(client *Client, result *RunResult) *asymmetry.GM {
-	gm := &asymmetry.GM{
-		Asymmetric: client.asymmetric,
-		Streak:     client.asymmetryCounter,
+	gm := &asymmetry.GM{}
+	if client == nil {
+		return gm
 	}
+	gm.Asymmetric = client.asymmetric
+	gm.Streak = client.asymmetryCounter
 	if tlv := getAlternateResponsePortTLV(client); tlv != nil {
 		gm.PortOffset = tlv.Offset
 	}

@@ -34,6 +34,20 @@ type Simple struct {
 // PortMoves implements Corrector.
 func (s *Simple) PortMoves(gm netip.Addr) uint16 { return s.moves.count(gm) }
 
+// Search implements Corrector. Simple spends no budget, so it never exhausts one.
+func (s *Simple) Search(addr netip.Addr, gm *GM) SearchState {
+	switch {
+	case !gm.judgeable():
+		return SearchUnknown
+	case s.moves.count(addr) > 0:
+		return SearchSearching
+	case gm.suspicious(s.Config.Threshold):
+		return SearchAsymmetric
+	default:
+		return SearchSettled
+	}
+}
+
 // Name implements Corrector.
 func (s *Simple) Name() string { return "simple" }
 

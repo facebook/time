@@ -25,11 +25,19 @@ import (
 	"time"
 
 	ptp "github.com/facebook/time/ptp/protocol"
+	"github.com/facebook/time/ptp/sptp/asymmetry"
 	gmstats "github.com/facebook/time/ptp/sptp/stats"
 	"github.com/facebook/time/servo"
 
 	"github.com/stretchr/testify/require"
 )
+
+// unknownWire is how an sptp that has a corrector but nothing to say reports:
+// present on the wire, so a reader can tell it from an older sptp's omission.
+func unknownWire() *int {
+	v := int(asymmetry.SearchUnknown)
+	return &v
+}
 
 func TestRunResultToStatsError(t *testing.T) {
 	r := &RunResult{
@@ -37,20 +45,21 @@ func TestRunResultToStatsError(t *testing.T) {
 		Error:  fmt.Errorf("ooops"),
 	}
 	want := &gmstats.Stat{
-		GMAddress: "192.168.0.10",
-		Priority3: 1,
-		Error:     "ooops",
+		GMAddress:   "192.168.0.10",
+		Priority3:   1,
+		Error:       "ooops",
+		SearchState: unknownWire(),
 	}
 
 	t.Run("not selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, false, 0, 0)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, false, 0, 0, asymmetry.SearchUnknown)
 		require.Equal(t, want, got)
 	})
 
 	// A grandmaster we could not reach must never be published as selected,
 	// whatever the caller passes.
 	t.Run("selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, true, int(servo.StateFilter), 0)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 1, true, int(servo.StateFilter), 0, asymmetry.SearchUnknown)
 		require.Equal(t, want, got)
 	})
 }
@@ -58,20 +67,21 @@ func TestRunResultToStatsError(t *testing.T) {
 func TestRunResultToStatsNoMeasurement(t *testing.T) {
 	r := &RunResult{Server: netip.MustParseAddr("192.168.0.10")}
 	want := &gmstats.Stat{
-		GMAddress: "192.168.0.10",
-		Priority3: 3,
-		Error:     "Measurement is missing on RunResult",
+		GMAddress:   "192.168.0.10",
+		Priority3:   3,
+		Error:       "Measurement is missing on RunResult",
+		SearchState: unknownWire(),
 	}
 
 	t.Run("not selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false, int(servo.StateFilter), 0)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false, int(servo.StateFilter), 0, asymmetry.SearchUnknown)
 		require.Equal(t, want, got)
 	})
 
 	want.Selected = true
 	want.ServoState = int(servo.StateFilter)
 	t.Run("selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true, int(servo.StateFilter), 0)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true, int(servo.StateFilter), 0, asymmetry.SearchUnknown)
 		require.Equal(t, want, got)
 	})
 }
@@ -132,16 +142,17 @@ func TestRunResultToStats(t *testing.T) {
 		CorrectionFieldTX: int64(4 * time.Microsecond),
 		S2CDelay:          10000,
 		C2SDelay:          11000,
+		SearchState:       unknownWire(),
 	}
 
 	t.Run("not selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false, 2, 0)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, false, 2, 0, asymmetry.SearchUnknown)
 		require.Equal(t, want, got)
 	})
 	want.Selected = true
 	want.ServoState = 2
 	t.Run("selected", func(t *testing.T) {
-		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true, 2, 0)
+		got := runResultToGMStats(netip.MustParseAddr("192.168.0.10"), r, 3, true, 2, 0, asymmetry.SearchUnknown)
 		require.Equal(t, want, got)
 	})
 }
@@ -273,7 +284,51 @@ func TestGetCountersDuringCounterUpdates(t *testing.T) {
 func TestRunResultToGMStatsPortChangeCount(t *testing.T) {
 	r := &RunResult{Measurement: &MeasurementResult{Announce: ptp.Announce{}}}
 	require.Equal(t, uint64(3), runResultToGMStats(
-		netip.MustParseAddr("2401:db00::1"), r, 1, true, 0, 3).PortChangeCount)
+		netip.MustParseAddr("2401:db00::1"), r, 1, true, 0, 3, asymmetry.SearchSearching).PortChangeCount)
 	require.Zero(t, runResultToGMStats(
-		netip.MustParseAddr("2401:db00::1"), r, 1, true, 0, 0).PortChangeCount)
+		netip.MustParseAddr("2401:db00::1"), r, 1, true, 0, 0, asymmetry.SearchUnknown).PortChangeCount)
+}
+
+// the count alone cannot separate a search still running from one that gave up,
+// so the corrector's own verdict rides alongside it
+// The zero state is the one that must still be sent: a reader distinguishes an
+// sptp predating the field from one reporting unknown only by its presence.
+func TestRunResultToGMStatsSendsZeroSearchState(t *testing.T) {
+	r := &RunResult{Measurement: &MeasurementResult{Announce: ptp.Announce{}}}
+	got := runResultToGMStats(netip.MustParseAddr("2401:db00::1"), r, 1, true, 0, 64, asymmetry.SearchUnknown)
+	require.Equal(t, unknownWire(), got.SearchState)
+}
+
+// A measurement the corrector would refuse to judge must not be published as a
+// verdict: a rejected delay carries an offset, but it is not a small one.
+func TestSearchStateRejectsUnjudgeableMeasurement(t *testing.T) {
+	addr := netip.MustParseAddr("2401:db00::1")
+	p := &SPTP{
+		corrector: &asymmetry.Rack{Config: asymmetry.Config{Threshold: time.Microsecond}},
+		clients:   map[netip.Addr]*Client{addr: {}},
+	}
+
+	require.Equal(t, asymmetry.SearchUnknown, p.searchState(addr, nil), "no result is not a settled search")
+	require.Equal(t, asymmetry.SearchUnknown, p.searchState(netip.MustParseAddr("2401:db00::9"),
+		&RunResult{Measurement: &MeasurementResult{Announce: announceOf(ptp.ClockClass6)}}),
+		"an address we never configured has no client to judge")
+	require.Equal(t, asymmetry.SearchUnknown, p.searchState(addr, &RunResult{}), "and neither is a missing measurement")
+	require.Equal(t, asymmetry.SearchUnknown, p.searchState(addr,
+		&RunResult{Measurement: &MeasurementResult{Offset: 9 * time.Microsecond, BadDelay: true,
+			Announce: announceOf(ptp.ClockClass6)}}),
+		"a rejected delay is unjudgeable, not asymmetric")
+	require.Equal(t, asymmetry.SearchUnknown, p.searchState(addr,
+		&RunResult{Measurement: &MeasurementResult{Offset: 9 * time.Microsecond,
+			Announce: announceOf(ptp.ClockClass52)}}),
+		"a clock class we do not follow is unjudgeable too")
+	require.Equal(t, asymmetry.SearchAsymmetric, p.searchState(addr,
+		&RunResult{Measurement: &MeasurementResult{Offset: 9 * time.Microsecond,
+			Announce: announceOf(ptp.ClockClass6)}}),
+		"the same offset on a good measurement is a real fault")
+}
+
+func announceOf(c ptp.ClockClass) ptp.Announce {
+	a := ptp.Announce{}
+	a.GrandmasterClockQuality.ClockClass = c
+	return a
 }

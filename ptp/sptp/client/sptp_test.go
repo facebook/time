@@ -426,8 +426,8 @@ func TestRunInternalAllDead(t *testing.T) {
 	mockStatsServer.EXPECT().SetGmsAvailable(0).Times(2)
 	mockStatsServer.EXPECT().SetTickDuration(gomock.Any())
 	mockStatsServer.EXPECT().IncTXDelayReq().Times(4)
-	mockStatsServer.EXPECT().SetGMStats(&gmstats.Stat{GMAddress: "192.168.0.10", Error: context.DeadlineExceeded.Error(), Priority3: 1}).Times(2)
-	mockStatsServer.EXPECT().SetGMStats(&gmstats.Stat{GMAddress: "192.168.0.11", Error: context.DeadlineExceeded.Error(), Priority3: 2}).Times(2)
+	mockStatsServer.EXPECT().SetGMStats(&gmstats.Stat{GMAddress: "192.168.0.10", Error: context.DeadlineExceeded.Error(), Priority3: 1, SearchState: unknownWire()}).Times(2)
+	mockStatsServer.EXPECT().SetGMStats(&gmstats.Stat{GMAddress: "192.168.0.11", Error: context.DeadlineExceeded.Error(), Priority3: 2, SearchState: unknownWire()}).Times(2)
 	mockStatsServer.EXPECT().SetServoState(int(servo.StateHoldover)).Times(2)
 
 	p := &SPTP{

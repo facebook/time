@@ -136,7 +136,41 @@ type Corrector interface {
 	Observe(obs Observation) int
 	// ports tried for gm in the current search; zero means settled
 	PortMoves(gm netip.Addr) uint16
+	// Search is what those moves mean, which the count alone cannot say. The
+	// judged GM comes from the same tick, so reported state and correction
+	// cannot disagree about whether a path is suspicious.
+	Search(addr netip.Addr, gm *GM) SearchState
 	Name() string
+}
+
+// SearchState is how a grandmaster's search is going. Wire-visible, so append.
+type SearchState uint8
+
+const (
+	// SearchUnknown is the zero value, which an sptp predating the field sends.
+	SearchUnknown SearchState = iota
+	SearchAsymmetric
+	SearchSearching
+	SearchSettled
+	SearchExhausted
+	searchStateMax
+)
+
+// SearchStateNamed reports whether v is a state this build knows how to name.
+func SearchStateNamed(v int) bool { return v >= 0 && v < int(searchStateMax) }
+
+func (s SearchState) String() string {
+	switch s {
+	case SearchAsymmetric:
+		return "asymmetric"
+	case SearchSearching:
+		return "searching"
+	case SearchSettled:
+		return "settled"
+	case SearchExhausted:
+		return "exhausted"
+	}
+	return "unknown"
 }
 
 // searchCounter counts ports tried per grandmaster since its path last looked
@@ -182,5 +216,8 @@ func (c *searchCounter) keepOnly(gms map[netip.Addr]*GM) {
 // suspicious is a judgeable measurement that is too far off. A GM that answered
 // with something unjudgeable is evidence of a good path, exactly as before.
 func (g *GM) suspicious(threshold time.Duration) bool {
-	return g.Answered && g.Judgeable && g.Offset.Abs() > threshold
+	return g.judgeable() && g.Offset.Abs() > threshold
 }
+
+// judgeable reports whether this GM produced a measurement worth weighing.
+func (g *GM) judgeable() bool { return g != nil && g.Answered && g.Judgeable }

@@ -656,11 +656,20 @@ func (p *SPTP) portChanges(addr netip.Addr) uint16 {
 	return p.corrector.PortMoves(addr)
 }
 
+// searchState asks the corrector about the same GM it was given this tick, so a
+// reported state cannot disagree with the correction that produced it.
+func (p *SPTP) searchState(addr netip.Addr, res *RunResult) asymmetry.SearchState {
+	if p.corrector == nil {
+		return asymmetry.SearchUnknown
+	}
+	return p.corrector.Search(addr, newGM(p.clients[addr], res))
+}
+
 func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 	var state servo.State
 	defer func() {
 		for addr, res := range results {
-			s := runResultToGMStats(addr, res, p.priorities[addr], addr == p.bestGM, int(state), p.portChanges(addr))
+			s := runResultToGMStats(addr, res, p.priorities[addr], addr == p.bestGM, int(state), p.portChanges(addr), p.searchState(addr, res))
 			p.stats.SetGMStats(s)
 		}
 	}()

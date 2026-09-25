@@ -354,6 +354,22 @@ func (r *Rack) correctOthers(gms map[netip.Addr]*GM, best netip.Addr) int {
 // PortMoves implements Corrector.
 func (r *Rack) PortMoves(gm netip.Addr) uint16 { return r.searched.count(gm) }
 
+// Search implements Corrector. A suspicious GM not yet charged is waiting its turn, not settled.
+func (r *Rack) Search(addr netip.Addr, gm *GM) SearchState {
+	switch n := r.searched.count(addr); {
+	case !gm.judgeable():
+		return SearchUnknown
+	case n == 0 && gm.suspicious(r.Config.Threshold):
+		return SearchAsymmetric
+	case n == 0:
+		return SearchSettled
+	case n >= r.Config.MaxPortChanges:
+		return SearchExhausted
+	default:
+		return SearchSearching
+	}
+}
+
 // settle ends the current episode for one grandmaster. A small median says the
 // path we are following is fine; it is no evidence about the others, so clearing
 // them would hand a known-bad path a fresh budget on every failover back to it.

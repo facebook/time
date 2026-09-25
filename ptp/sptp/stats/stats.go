@@ -53,7 +53,11 @@ type Stat struct {
 	C2SDelay          int64            `json:"client_server_delay"`
 	S2CDelay          int64            `json:"server_client_delay"`
 	PortChangeCount   uint64           `json:"port_change_count"`
-	ServoState        int              `json:"servo_state"`
+	// SearchState is an asymmetry.SearchState. Nil means an sptp predating the
+	// field, which is not the same as the explicit unknown a host running no
+	// correction reports.
+	SearchState *int `json:"search_state,omitempty"`
+	ServoState  int  `json:"servo_state"`
 }
 
 // Stats is a list of Stat
