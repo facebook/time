@@ -52,11 +52,11 @@ func serviceStatsRunPTP4l(address string, domainNumber uint8) error {
 }
 
 func serviceStatsRunSPTP(address string) error {
-	sysStats, err := stats.FetchSysStats(address)
+	counters, err := stats.FetchCounters(address)
 	if err != nil {
 		return err
 	}
-	str, err := json.Marshal(sysStats)
+	str, err := json.Marshal(counters)
 	if err != nil {
 		return fmt.Errorf("marshaling json: %w", err)
 	}
@@ -64,6 +64,8 @@ func serviceStatsRunSPTP(address string) error {
 	return nil
 }
 
+// serviceStatsRun output is scraped into fleet monitoring, so dropping a counter
+// here removes it from every host rather than just from this command.
 func serviceStatsRun(address string, domainNumber uint8) error {
 	f := checker.GetFlavour()
 	address = checker.GetServerAddress(address, f)
