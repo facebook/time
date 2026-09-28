@@ -99,12 +99,12 @@ func TestFbclockStdoutSurvivesCollectorFilter(t *testing.T) {
 	require.Equal(t, keys, order)
 }
 
-// fbagent collectors still run it without -j.
-func TestFbclockJSONByDefault(t *testing.T) {
+// The fbagent collector passes -j.
+func TestFbclockTextByDefault(t *testing.T) {
 	f := fbclockCmd.Flags().ShorthandLookup("j")
 	require.NotNil(t, f)
 	require.Equal(t, "json", f.Name)
-	require.Equal(t, "true", f.DefValue)
+	require.Equal(t, "false", f.DefValue)
 }
 
 func TestFbclockPrintText(t *testing.T) {

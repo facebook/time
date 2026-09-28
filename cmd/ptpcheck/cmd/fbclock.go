@@ -45,7 +45,7 @@ func init() {
 	fbclockCmd.Flags().Int64VarP(&fbclockRequestsFlag, "requests", "r", 1, "number of requests to fbclock")
 	fbclockCmd.Flags().DurationVarP(&fbclockDurationFlag, "duration", "t", 1*time.Second, "spread the requests over this duration")
 	fbclockCmd.Flags().BoolVarP(&fbclockUTCFlag, "utc", "", false, "get UTC time (TAI is default)")
-	fbclockCmd.Flags().BoolVarP(&fbclockJSONFlag, "json", "j", true, "JSON output")
+	fbclockCmd.Flags().BoolVarP(&fbclockJSONFlag, "json", "j", false, "JSON output")
 }
 
 // formatErrorCauses orders by count, then by message so runs are comparable.
