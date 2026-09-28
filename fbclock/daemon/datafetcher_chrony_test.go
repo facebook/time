@@ -345,6 +345,23 @@ func TestReadClocksChronyLeapBoundary(t *testing.T) {
 	}
 }
 
+// The anchor steps 1s at the leap and the REALTIME base doesn't: ~1e11 ppb over one 10ms tick.
+func TestMeanCoeffPPBChronyLeap(t *testing.T) {
+	cfg := &Config{Chrony: true, Interval: time.Second, MaxDriftRate: 50, EnableDataV2: true}
+	s := newChronyTestDaemon(t, cfg, stats.NewStats())
+	s.state.leaps.Store(&testLeaps)
+
+	var prev fbclock.DataV2
+	for _, now := range []time.Time{time.Unix(leap2017, 0).Add(-10 * time.Millisecond), time.Unix(leap2017, 0)} {
+		s.getSysTime = func() (time.Time, error) { return now, nil }
+		ref, base, _, _, err := s.readClocks()
+		require.NoError(t, err)
+		cur := fbclock.DataV2{PHCTimeNS: ref.UnixNano(), SysclockTimeNS: base.UnixNano()}
+		require.Zero(t, s.meanCoeffPPB(&prev, &cur))
+		prev = cur
+	}
+}
+
 func TestReadClocksPTPUnaffected(t *testing.T) {
 	cfg := &Config{Interval: time.Second, EnableDataV2: true}
 	s := newChronyTestDaemon(t, cfg, stats.NewStats())
@@ -366,12 +383,15 @@ func TestDoWorkChronyUnsyncedRefTime(t *testing.T) {
 	st := stats.NewStats()
 	s := newChronyTestDaemon(t, cfg, st)
 	st.SetCounter("chrony_ref_time_ns", 1)
+	st.SetCounter("ingress_time_ns", 1)
 
 	// before its first sync chronyd sends the zero Time, whose UnixNano is a
 	// large negative sentinel rather than 0
 	tracking := &chrony.Tracking{RootDispersion: time.Microsecond.Seconds()}
 	require.ErrorIs(t, s.doWorkChrony(tracking), errCorrectness)
 	require.Equal(t, int64(1), st.Get()["chrony_ref_time_ns"])
+	// nothing was stored, so the counter must not advance past what clients read
+	require.Equal(t, int64(1), st.Get()["ingress_time_ns"])
 }
 
 func TestDoWorkChronySysClockError(t *testing.T) {

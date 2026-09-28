@@ -513,15 +513,15 @@ func (s *Daemon) doWorkChrony(tracking *chrony.Tracking) error {
 	s.state.leaps.Store(&leaps)
 	asOf := sysNow.Add(time.Duration(leapsectz.UTCOffsetS(leaps, sysNow)) * time.Second)
 
-	// same value we publish to shm, so the counter cannot disagree with clients
-	s.stats.SetCounter("ingress_time_ns", asOf.UnixNano())
-	log.Debugf("Age of chronyd reference time: %dns", asOf.UnixNano()-tracking.RefTime.UnixNano())
+	log.Debugf("Age of chronyd reference time: %dns", sysNow.UnixNano()-tracking.RefTime.UnixNano())
 
 	d, err := s.calculateSHMDataChrony(tracking, asOf, leaps)
 	if err != nil {
 		return err
 	}
 	s.state.setLastStoredData(d)
+	// same value we publish to shm, so the counter cannot disagree with clients
+	s.stats.SetCounter("ingress_time_ns", asOf.UnixNano())
 	// saturate like the SHM writer, so the counter matches what clients read
 	s.stats.SetCounter("error_bound_ns", int64(fbclock.Uint64ToUint32(d.ErrorBoundNS)))
 	s.stats.SetCounter("holdover_multiplier_ns", int64(d.HoldoverMultiplierNS))
@@ -691,9 +691,10 @@ func calcCoeffPPB(prev, cur *fbclock.DataV2) (int64, error) {
 	return coefPPB, err
 }
 
-// meanCoefPPB returns 0 on first sample and mean coefficient in other cases
+// meanCoeffPPB returns 0 on first sample and in chrony mode, mean coefficient in other cases
 func (s *Daemon) meanCoeffPPB(prev, cur *fbclock.DataV2) int64 {
-	if prev.SysclockTimeNS == 0 {
+	// anchor and base are one clock in chrony mode; its 1s leap step would read as ~1e11 ppb
+	if s.cfg.Chrony || prev.SysclockTimeNS == 0 {
 		return 0
 	}
 	coefPPB, err := calcCoeffPPB(prev, cur)
