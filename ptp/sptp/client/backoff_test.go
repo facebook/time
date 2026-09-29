@@ -17,6 +17,7 @@ limitations under the License.
 package client
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -107,6 +108,38 @@ func TestBackoffExponential(t *testing.T) {
 
 	b.reset()
 	require.False(t, b.active(), "exponential backoff is not active after reset")
+}
+
+func TestBackoffSkipErrNamesCause(t *testing.T) {
+	cfg := BackoffConfig{Mode: backoffLinear, Step: 10, MaxValue: 60}
+	require.NoError(t, cfg.Validate())
+	b := newBackoff(cfg)
+	require.Equal(t, errBackoff, b.skipErr(), "nothing has failed yet, so there is no cause to name")
+
+	cause := errors.New("timed out waiting for DELAY_RESP")
+	require.Equal(t, 10*time.Second, b.fail(cause), "fail extends the backoff exactly as inc does")
+	require.True(t, b.active(), "a failed exchange arms the backoff")
+
+	skip := b.skipErr()
+	require.ErrorIs(t, skip, errBackoff, "a skipped tick still reads as a backoff")
+	require.ErrorIs(t, skip, cause, "and still names the failure that armed it")
+	require.Equal(t, "backoff for faulty GM: timed out waiting for DELAY_RESP", skip.Error())
+
+	skipped := 0
+	for b.active() {
+		b.dec(time.Second)
+		skipped++
+		require.ErrorIs(t, b.skipErr(), cause, "every skipped tick names the cause, not just the first")
+	}
+	require.Equal(t, 10, skipped, "a 10s backoff at the production 1s interval skips ten ticks")
+
+	later := errors.New("connection refused")
+	require.Equal(t, 20*time.Second, b.fail(later))
+	require.ErrorIs(t, b.skipErr(), later, "the newest failure is the one named")
+	require.NotErrorIs(t, b.skipErr(), cause, "and it replaces the previous one rather than joining it")
+
+	b.reset()
+	require.Equal(t, errBackoff, b.skipErr(), "a successful exchange forgets the cause")
 }
 
 func TestBackoffRound(t *testing.T) {

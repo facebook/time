@@ -591,7 +591,7 @@ func (p *SPTP) handleExchangeError(addr netip.Addr, err error, tickDuration time
 		log.Debugf("[%s] backoff %s", addr, b)
 	} else {
 		log.Errorf("[%s] error: %+v", addr, err)
-		b := p.backoff[addr].inc()
+		b := p.backoff[addr].fail(err)
 		if b != 0 {
 			log.Warningf("[%s] backoff extended by %s", addr, b)
 		}
@@ -861,7 +861,7 @@ func (p *SPTP) runInternal(ctx context.Context) error {
 				lock.Lock()
 				results[addr] = &RunResult{
 					Server: addr,
-					Error:  errBackoff,
+					Error:  p.backoff[addr].skipErr(),
 				}
 				lock.Unlock()
 				continue

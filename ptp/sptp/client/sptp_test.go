@@ -458,6 +458,73 @@ func TestRunInternalAllDead(t *testing.T) {
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
+func TestRunInternalBackoffNamesFailureCause(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	// A watchdog, not a schedule: the loop stops on the first skipped tick below.
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	firstTick := &gmstats.Stat{
+		GMAddress:   "192.168.0.10",
+		Error:       context.DeadlineExceeded.Error(),
+		Priority3:   1,
+		SearchState: unknownWire(),
+	}
+	skippedTick := &gmstats.Stat{
+		GMAddress:   "192.168.0.10",
+		Error:       "backoff for faulty GM: context deadline exceeded",
+		Priority3:   1,
+		SearchState: unknownWire(),
+	}
+
+	mockEventConn := NewMockUDPConnWithTS(ctrl)
+	mockEventConn.EXPECT().ConnFd().Return(0)
+	mockEventConn.EXPECT().WriteToWithTS(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	mockClock := NewMockClock(ctrl)
+	mockClock.EXPECT().AdjFreqPPB((float64(0))).MinTimes(3)
+	mockServo := NewMockServo(ctrl)
+	mockServo.EXPECT().SyncInterval(float64(1))
+	mockServo.EXPECT().GetState().Return(servo.StateLocked).MinTimes(2)
+	mockServo.EXPECT().MeanFreq().MinTimes(3)
+	mockServo.EXPECT().SetLastFreq(float64(0)).MinTimes(2)
+	mockStatsServer := NewMockStatsServer(ctrl)
+	mockStatsServer.EXPECT().SetGmsTotal(1).MinTimes(2)
+	mockStatsServer.EXPECT().SetGmsAvailable(0).MinTimes(2)
+	mockStatsServer.EXPECT().SetTickDuration(gomock.Any()).MinTimes(1)
+	mockStatsServer.EXPECT().IncTXDelayReq()
+	mockStatsServer.EXPECT().SetGMStats(firstTick)
+	mockStatsServer.EXPECT().SetGMStats(skippedTick).MinTimes(1).Do(func(*gmstats.Stat) { cancel() })
+	mockStatsServer.EXPECT().SetServoState(int(servo.StateHoldover)).MinTimes(2)
+
+	p := &SPTP{
+		clock: mockClock,
+		pi:    mockServo,
+		stats: mockStatsServer,
+		cfg: &Config{
+			Iface:    "lo",
+			Interval: time.Second,
+			Servers: map[string]int{
+				"192.168.0.10": 1,
+			},
+			Measurement: MeasurementConfig{
+				PathDelayFilterLength:         59,
+				PathDelayFilter:               "median",
+				PathDelayDiscardFilterEnabled: true,
+				PathDelayDiscardBelow:         2 * time.Microsecond,
+			},
+			// cfgen's production shape: tick 1 arms a 10s backoff, so tick 2 is skipped
+			Backoff:         BackoffConfig{Mode: backoffLinear, Step: 10, MaxValue: 60},
+			ExchangeTimeout: 100 * time.Millisecond,
+		},
+		eventConns: []UDPConnWithTS{mockEventConn},
+	}
+	err := p.initClients()
+	require.NoError(t, err)
+	err = p.runInternal(ctx)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
 func TestRunFiltered(t *testing.T) {
 	ts, err := time.Parse(time.RFC3339, "2021-05-21T13:32:05+01:00")
 	require.Nil(t, err)

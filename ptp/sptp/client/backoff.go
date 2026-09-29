@@ -18,6 +18,7 @@ package client
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"time"
 )
@@ -36,6 +37,7 @@ type backoff struct {
 	// state
 	counter int
 	value   time.Duration
+	skip    error
 }
 
 func (b *backoff) active() bool {
@@ -45,6 +47,21 @@ func (b *backoff) active() bool {
 func (b *backoff) reset() {
 	b.value = 0
 	b.counter = 0
+	b.skip = nil
+}
+
+// skip has to keep wrapping errBackoff: handleExchangeError reads anything else as a
+// fresh failure, so every skipped tick would extend the backoff instead of draining it.
+func (b *backoff) fail(cause error) time.Duration {
+	b.skip = fmt.Errorf("%w: %w", errBackoff, cause)
+	return b.inc()
+}
+
+func (b *backoff) skipErr() error {
+	if b.skip == nil {
+		return errBackoff
+	}
+	return b.skip
 }
 
 func (b *backoff) dec(d time.Duration) time.Duration {
