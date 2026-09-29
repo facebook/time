@@ -191,9 +191,6 @@ func EnableHWTimestamps(connFd int, iface *net.Interface) error {
 		return err
 	}
 
-	// Bind socket to the interface
-	_ = unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_BINDTODEVICE, iface.Index)
-
 	return unix.SetsockoptInt(connFd, unix.SOL_SOCKET, unix.SO_SELECT_ERR_QUEUE, 1)
 }
 
