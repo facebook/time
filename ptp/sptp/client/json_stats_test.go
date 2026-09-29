@@ -24,7 +24,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"sync"
 	"testing"
 	"time"
 
@@ -36,38 +35,57 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// The kernel hands a closed ephemeral port straight back out, so two callers can
-// otherwise be given the same one and the second server dies on bind. Remember
-// what we have issued. Bind ::1, the address the servers actually listen on.
-var (
-	issuedPortsMu sync.Mutex
-	issuedPorts   = map[int]bool{}
-)
-
-func getFreePort(t *testing.T) int {
+// Returns the listener still holding the port; a released ephemeral port goes straight back into the pool.
+func testListener(t *testing.T, host string) (net.Listener, int) {
 	t.Helper()
-	issuedPortsMu.Lock()
-	defer issuedPortsMu.Unlock()
-	for range 100 {
-		l, err := net.Listen("tcp", "[::1]:0")
-		require.NoError(t, err)
-		port := l.Addr().(*net.TCPAddr).Port
-		require.NoError(t, l.Close())
-		if !issuedPorts[port] {
-			issuedPorts[port] = true
-			return port
-		}
+	l, err := listen(host, 0)
+	require.NoError(t, err)
+	return l, l.Addr().(*net.TCPAddr).Port
+}
+
+// Guards both halves: the port stays held from the moment it is chosen, and serve uses that listener.
+func TestServeUsesTheListenerItIsGiven(t *testing.T) {
+	l, port := testListener(t, "::1")
+
+	stolen, err := net.Listen("tcp", fmt.Sprintf("[::1]:%d", port))
+	if stolen != nil {
+		stolen.Close()
 	}
-	t.Fatal("no unused ephemeral port after 100 attempts")
-	return 0
+	require.Error(t, err, "the port must stay held from the moment it is chosen")
+
+	stats, err := NewJSONStats()
+	require.NoError(t, err)
+	go stats.serve(l, time.Minute, nil)
+
+	require.Eventually(t, func() bool {
+		resp, err := httpGet(t, fmt.Sprintf("http://[::1]:%d/", port))
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		return true
+	}, 5*time.Second, 10*time.Millisecond, "serve must use the listener it was handed")
+}
+
+// held stays referenced for the whole test: a listener nobody holds is closed
+// by the runtime finalizer on its socket, which hands the port straight back.
+func TestListenFailsOnHeldPort(t *testing.T) {
+	held, port := testListener(t, "::1")
+	defer held.Close()
+
+	l, err := listen("::1", port)
+	if l != nil {
+		l.Close()
+	}
+	require.Error(t, err, "listen must report a port it cannot bind")
 }
 
 func TestJSONStats(t *testing.T) {
 	stats, err := NewJSONStats()
 	require.NoError(t, err)
-	port := getFreePort(t)
+	l, port := testListener(t, "::1")
 	url := fmt.Sprintf("http://localhost:%d", port)
-	go stats.Start("::1", port, time.Second, nil)
+	go stats.serve(l, time.Second, nil)
 	time.Sleep(time.Second)
 
 	stats.SetTickDuration(time.Millisecond)
@@ -110,9 +128,9 @@ func TestJSONStats(t *testing.T) {
 func TestHeaders(t *testing.T) {
 	stats, err := NewJSONStats()
 	require.NoError(t, err)
-	port := getFreePort(t)
+	l, port := testListener(t, "::1")
 	url := fmt.Sprintf("http://localhost:%d", port)
-	go stats.Start("::1", port, time.Second, nil)
+	go stats.serve(l, time.Second, nil)
 	time.Sleep(time.Second)
 
 	c := http.Client{
@@ -147,10 +165,10 @@ func httpDo(t *testing.T, method, url string) (*http.Response, error) {
 
 func pingTestServer(t *testing.T, pinger Pinger) (string, *JSONStats) {
 	t.Helper()
-	port := getFreePort(t)
+	l, port := testListener(t, "::1")
 	stats, err := NewJSONStats()
 	require.NoError(t, err)
-	go stats.Start("::1", port, time.Minute, pinger)
+	go stats.serve(l, time.Minute, pinger)
 	url := fmt.Sprintf("http://localhost:%d", port)
 	require.Eventually(t, func() bool {
 		resp, err := httpGet(t, url)
@@ -411,11 +429,11 @@ func mustPingServer(t *testing.T, pinger Pinger) string {
 	return url
 }
 
-func TestStartBindsConfiguredHostOnly(t *testing.T) {
-	port := getFreePort(t)
+func TestListenBindsConfiguredHostOnly(t *testing.T) {
+	l, port := testListener(t, "::1")
 	stats, err := NewJSONStats()
 	require.NoError(t, err)
-	go stats.Start("::1", port, time.Minute, nil)
+	go stats.serve(l, time.Minute, nil)
 
 	v6 := fmt.Sprintf("http://[::1]:%d/", port)
 	require.Eventually(t, func() bool {
@@ -433,11 +451,11 @@ func TestStartBindsConfiguredHostOnly(t *testing.T) {
 
 // the default bind must serve ::1 and refuse IPv4, which is what keeps /ping
 // off-box; consumers moved to [::1] in the preceding diff
-func TestStartDefaultHostIsLoopbackOnly(t *testing.T) {
-	port := getFreePort(t)
+func TestListenDefaultHostIsLoopbackOnly(t *testing.T) {
+	l, port := testListener(t, DefaultConfig().MonitoringHost)
 	stats, err := NewJSONStats()
 	require.NoError(t, err)
-	go stats.Start(DefaultConfig().MonitoringHost, port, time.Minute, nil)
+	go stats.serve(l, time.Minute, nil)
 
 	require.Eventually(t, func() bool {
 		resp, err := httpGet(t, fmt.Sprintf("http://[::1]:%d/", port))
@@ -454,14 +472,14 @@ func TestStartDefaultHostIsLoopbackOnly(t *testing.T) {
 
 // the default keeps the server on-box; an empty host must not fall through to
 // net.JoinHostPort's wildcard bind
-func TestStartHostDefaulting(t *testing.T) {
+func TestListenHostDefaulting(t *testing.T) {
 	require.Equal(t, "::1", DefaultConfig().MonitoringHost)
 
 	for _, host := range []string{"", "::1"} {
-		port := getFreePort(t)
+		l, port := testListener(t, host)
 		stats, err := NewJSONStats()
 		require.NoError(t, err)
-		go stats.Start(host, port, time.Minute, nil)
+		go stats.serve(l, time.Minute, nil)
 
 		require.Eventually(t, func() bool {
 			resp, err := httpGet(t, fmt.Sprintf("http://[::1]:%d/", port))

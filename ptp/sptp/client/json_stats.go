@@ -50,6 +50,20 @@ func NewJSONStats() (*JSONStats, error) {
 
 // Start runs http server and initializes maps
 func (s JSONStats) Start(monitoringhost string, monitoringport int, interval time.Duration, pinger Pinger) {
+	l, err := listen(monitoringhost, monitoringport)
+	if err != nil {
+		log.Fatalf("Failed to start listener: %v", err)
+	}
+	s.serve(l, interval, pinger)
+}
+
+func listen(monitoringhost string, monitoringport int) (net.Listener, error) {
+	addr := net.JoinHostPort(cmp.Or(monitoringhost, DefaultConfig().MonitoringHost), strconv.Itoa(monitoringport))
+	log.Infof("Starting http json server on %s", addr)
+	return net.Listen("tcp", addr)
+}
+
+func (s JSONStats) serve(l net.Listener, interval time.Duration, pinger Pinger) {
 	// collect stats forever
 	go func() {
 		for range time.Tick(interval) {
@@ -62,15 +76,12 @@ func (s JSONStats) Start(monitoringhost string, monitoringport int, interval tim
 	mux.HandleFunc("/", s.handleRootRequest)
 	mux.HandleFunc("/counters", s.handleCountersRequest)
 	mux.HandleFunc("/ping", s.pingHandler(pinger))
-	addr := net.JoinHostPort(cmp.Or(monitoringhost, DefaultConfig().MonitoringHost), strconv.Itoa(monitoringport))
-	log.Infof("Starting http json server on %s", addr)
 	server := &http.Server{
-		Addr:         addr,
 		ReadTimeout:  time.Second,
 		WriteTimeout: time.Second,
 		Handler:      mux,
 	}
-	if err := server.ListenAndServe(); err != nil {
+	if err := server.Serve(l); err != nil {
 		log.Fatalf("Failed to start listener: %v", err)
 	}
 }
