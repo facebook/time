@@ -93,7 +93,7 @@ func fbclockPrintJSON(w io.Writer, last *fbclock.TrueTime, s fbclock.Stats, pref
 	return err
 }
 
-// Byte-identical to fbclock-bin output.
+// fbclock-bin's output format, kept for anyone scripting against it.
 func fbclockPrintText(w io.Writer, tt *fbclock.TrueTime) error {
 	_, err := fmt.Fprintf(w, "TrueTime:\n\tEarliest: %d\n\tLatest: %d\n\tWOU=%d ns\n",
 		tt.Earliest.UnixNano(), tt.Latest.UnixNano(), tt.Latest.Sub(tt.Earliest).Nanoseconds())

@@ -72,14 +72,8 @@ Stateful part of fbclock (TrueTime service).
 go install github.com/facebook/time/cmd/fbclock-daemon@latest
 ```
 
-## fbclock-bin
-Simple binary written in C that uses client part of fbclock service.
-
-### Quick Installation
-```console
-cd cmd/fbclock-bin
-make
-```
+## ptpcheck fbclock
+Client part of fbclock: prints TrueTime read through the fbclock C library, `-j` for JSON. See [ptpcheck](#ptpcheck) for installation.
 
 # Calnex
 Command line tool for a Calnex Sentinel device

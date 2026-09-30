@@ -34,7 +34,7 @@ As a preprequisite, you need working PTP client set up with [**ptp4l**](https://
 
 - build the daemon `go build github.com/facebook/time/fbclock/daemon`
 - run it as root (it needs permissions to talk to ptp4l, and get frequency from PHC)
-- build the example client CLI (`cd cmd/fbclock-bin && make`), use it to exercise the API and get the current PHC time
+- build the client CLI (`go build github.com/facebook/time/cmd/ptpcheck`), run `ptpcheck fbclock` to exercise the API and get the current PHC time
 
 C API can be used to build a client in any language. Clients don't need special permissions except for read access to SHM path and PHC device.
 
