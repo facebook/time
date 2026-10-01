@@ -332,6 +332,11 @@ int fbclock_init_with_options(
     fbclock_lib* lib,
     const char* shm_path,
     const fbclock_options* options) {
+  // Where /run/fbclock isn't mounted, read the same file under its old name.
+  if (shm_path != NULL && strcmp(shm_path, FBCLOCK_PATH) == 0 &&
+      access(shm_path, F_OK) != 0) {
+    shm_path = FBCLOCK_LEGACY_PATH;
+  }
   lib->dev_fd = -1;
   lib->shm_fd = -1;
   lib->shmp = NULL;

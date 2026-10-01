@@ -144,13 +144,13 @@ func openFBClockShmLinked(realPath, dirLinkPath string, ver int) (*Shm, error) {
 
 // OpenFBClockSHM returns opened POSIX shared mem used by fbclock
 func OpenFBClockSHM() (*Shm, error) {
-	return openFBClockShmLinked(C.FBCLOCK_PATH, C.FBCLOCK_DIR_PATH, 2)
+	return openFBClockShmLinked(C.FBCLOCK_LEGACY_PATH, C.FBCLOCK_DIR_PATH, 2)
 }
 
 // OpenFBClockSHMv2 returns opened POSIX shared mem used by fbclock
 func OpenFBClockSHMv2() (*Shm, error) {
 	// TODO: remove this once all call sites are updated to use v2
-	return openFBClockShmLinked(C.FBCLOCK_PATH, C.FBCLOCK_DIR_PATH, 2)
+	return openFBClockShmLinked(C.FBCLOCK_LEGACY_PATH, C.FBCLOCK_DIR_PATH, 2)
 }
 
 // OpenFBClockSHMv1 returns opened POSIX shared mem used by fbclock

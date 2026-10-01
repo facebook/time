@@ -149,13 +149,18 @@ typedef struct fbclock_shmdata_v2 {
 #define FBCLOCK_SHMDATA_SIZE sizeof(fbclock_shmdata)
 #define FBCLOCK_SHMDATA_V2_SIZE sizeof(fbclock_shmdata_v2)
 #define FBCLOCK_PATH_V1 "/run/fbclock_data_v1"
-#define FBCLOCK_PATH "/run/fbclock_data_v2"
+// Where the daemon writes the v2 segment. Binaries built before FBCLOCK_PATH
+// moved to FBCLOCK_DIR_PATH still read it here.
+#define FBCLOCK_LEGACY_PATH "/run/fbclock_data_v2"
 // Hardlinks to the flat shmem files above live here, so consumers can
 // bind-mount the directory (present even before the file exists) instead of the
 // file.
 #define FBCLOCK_DIR "/run/fbclock"
 #define FBCLOCK_DIR_PATH "/run/fbclock/data_v2"
 #define FBCLOCK_DIR_PATH_V1 "/run/fbclock/data_v1"
+// Default for clients. fbclock_init* falls back to FBCLOCK_LEGACY_PATH where
+// FBCLOCK_DIR isn't mounted.
+#define FBCLOCK_PATH "/run/fbclock/data_v2"
 #define FBCLOCK_POW2_16 ((double)(1ULL << 16))
 #define FBCLOCK_PTPPATH "/dev/fbclock/ptp"
 
