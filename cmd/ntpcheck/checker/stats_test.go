@@ -17,6 +17,9 @@ limitations under the License.
 package checker
 
 import (
+	"encoding/json"
+	"maps"
+	"slices"
 	"testing"
 
 	"github.com/facebook/time/ntp/chrony"
@@ -96,12 +99,9 @@ func TestNTPStatsNoSysPeer(t *testing.T) {
 	stats, err := NewNTPStats(r)
 	require.NoError(t, err)
 	want := &NTPStats{
-		PeerDelay:             2.61,
 		PeerOffset:            0.025,
 		PeerPoll:              1 << 4,
 		PeerStratum:           3,
-		PeerJitter:            3.55,
-		PeerCount:             2,
 		Offset:                s.Offset,
 		RootDelay:             s.RootDelay,
 		RootDisp:              s.RootDisp,
@@ -185,12 +185,9 @@ func TestNTPStatsWithSysPeer(t *testing.T) {
 	stats, err := NewNTPStats(r)
 	require.NoError(t, err)
 	want := &NTPStats{
-		PeerDelay:             3.21,
 		PeerOffset:            0.045,
 		PeerPoll:              1 << 4,
 		PeerStratum:           4,
-		PeerJitter:            4,
-		PeerCount:             2,
 		Offset:                s.Offset,
 		RootDelay:             s.RootDelay,
 		RootDisp:              s.RootDisp,
@@ -232,12 +229,9 @@ func TestNTPStatsWithSysPeerAndNoSelect(t *testing.T) {
 	stats, err := NewNTPStats(r)
 	require.NoError(t, err)
 	want := &NTPStats{
-		PeerDelay:             3.21,
 		PeerOffset:            0.045,
 		PeerPoll:              1 << 4,
 		PeerStratum:           1,
-		PeerJitter:            4,
-		PeerCount:             2,
 		Offset:                s.Offset,
 		RootDelay:             s.RootDelay,
 		RootDisp:              s.RootDisp,
@@ -350,4 +344,31 @@ func TestNTPStatsOffsetVsPHC(t *testing.T) {
 			require.Equal(t, tt.want, stats.OffsetVsPHC)
 		})
 	}
+}
+
+// Each key is an ODS time series on every host.
+func TestNTPStatsKeys(t *testing.T) {
+	peers := map[uint16]*Peer{
+		0: {Selection: control.SelSYSPeer, Offset: 0.045, Stratum: 1, HPoll: 10, PPoll: 4},
+	}
+	stats, err := NewNTPStats(&NTPCheckResult{
+		SysVars: &SystemVariables{}, Peers: peers, ClockSource: chrony.ClockSourceNTP, PHCOffsetMS: new(-0.009),
+	})
+	require.NoError(t, err)
+	out, err := json.Marshal(stats)
+	require.NoError(t, err)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(out, &got))
+	require.ElementsMatch(t, []string{
+		"ntp.correction",
+		"ntp.peer.offset",
+		"ntp.peer.poll",
+		"ntp.peer.stratum",
+		"ntp.sys.frequency",
+		"ntp.sys.offset",
+		"ntp.sys.offset_selected_vs_peers_ms",
+		"ntp.sys.offset_vs_phc_ms",
+		"ntp.sys.root_delay",
+		"ntp.sys.root_disp",
+	}, slices.Collect(maps.Keys(got)))
 }
