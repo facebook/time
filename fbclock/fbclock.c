@@ -17,12 +17,11 @@ limitations under the License.
 #include "fbclock.h"
 #include <assert.h> // for static_assert in C11
 #include <fcntl.h> // For O_* constants
-#include <linux/ptp_clock.h>
 #include <stdint.h>
 #include <stdio.h> // for printf and perror
 #include <string.h>
-#include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h> // close
 
@@ -78,28 +77,11 @@ static_assert(
 #define fbclock_crc64(a, b) ({ a ^ b; })
 #endif
 
-struct phc_time_res {
-  int64_t ts; // last ts got from PHC
-  int64_t delay; // mean delay of several requests
-};
-
 static inline uint64_t fbclock_clockdata_crc(fbclock_clockdata* value) {
   uint64_t counter = fbclock_crc64(0xFFFFFFFF, value->ingress_time_ns);
   counter = fbclock_crc64(counter, value->error_bound_ns);
   counter = fbclock_crc64(counter, value->holdover_multiplier_ns);
   return counter ^ 0xFFFFFFFF;
-}
-
-int ends_with(const char* str, const char* suffix) {
-  if (!str || !suffix) {
-    return 0;
-  }
-  size_t lenstr = strlen(str);
-  size_t lensuffix = strlen(suffix);
-  if (lensuffix > lenstr) {
-    return 0;
-  }
-  return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
 
 int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data) {
@@ -261,66 +243,9 @@ int fbclock_clockdata_load_data_realtime(
   return fbclock_section_load(&shmp->realtime, data, 1);
 }
 
-static inline int64_t fbclock_pct2ns(const struct ptp_clock_time* ptc) {
-  return (int64_t)(ptc->sec * NANOSECONDS_IN_SECONDS) + (int64_t)ptc->nsec;
-}
-
-static int fbclock_read_ptp_offset(int fd, struct phc_time_res* res) {
-  struct ptp_sys_offset pso = {.n_samples = 1};
-  int64_t min_delay = INT64_MAX, last_ts;
-
-  int r = ioctl(fd, PTP_SYS_OFFSET, &pso);
-  if (r) {
-    perror("PTP_SYS_OFFSET");
-    return -1;
-  }
-
-  for (unsigned i = 0; i < pso.n_samples; ++i) {
-    int64_t delay =
-        fbclock_pct2ns(&pso.ts[2 * i + 2]) - fbclock_pct2ns(&pso.ts[2 * i]);
-    min_delay = (delay < min_delay) ? delay : min_delay;
-    last_ts = fbclock_pct2ns(&pso.ts[2 * i + 1]);
-  }
-  res->ts = last_ts;
-  res->delay = min_delay;
-  if (min_delay < 0) {
-    perror("Negative request delay");
-    return -2;
-  }
-  return 0;
-}
-
-static int fbclock_read_ptp_offset_extended(int fd, struct phc_time_res* res) {
-  struct ptp_sys_offset_extended psoe = {.n_samples = 1};
-  int64_t min_delay = INT64_MAX;
-
-  int r = ioctl(fd, PTP_SYS_OFFSET_EXTENDED, &psoe);
-  if (r) {
-    perror("PTP_SYS_OFFSET_EXTENDED");
-    return -1;
-  }
-
-  for (unsigned i = 0; i < psoe.n_samples; ++i) {
-    int64_t delay =
-        fbclock_pct2ns(&psoe.ts[i][2]) - fbclock_pct2ns(&psoe.ts[i][0]);
-    min_delay = (delay < min_delay) ? delay : min_delay;
-  }
-  res->ts = fbclock_pct2ns(&psoe.ts[psoe.n_samples - 1][1]);
-  res->delay = min_delay;
-  if (min_delay < 0) {
-    perror("Negative request delay");
-    return -2;
-  }
-  return 0;
-}
-
 static void fbclock_close_fds(fbclock_lib* lib) {
   if (lib == NULL) {
     return;
-  }
-  if (lib->dev_fd >= 0) {
-    close(lib->dev_fd);
-    lib->dev_fd = -1;
   }
   if (lib->shm_fd >= 0) {
     close(lib->shm_fd);
@@ -329,7 +254,7 @@ static void fbclock_close_fds(fbclock_lib* lib) {
 }
 
 int fbclock_init_with_options(
-    fbclock_lib* lib,
+    fbclock_lib* _Nonnull lib,
     const char* shm_path,
     const fbclock_options* options) {
   // Where /run/fbclock isn't mounted, read the same file under its old name.
@@ -337,62 +262,47 @@ int fbclock_init_with_options(
       access(shm_path, F_OK) != 0) {
     shm_path = FBCLOCK_LEGACY_PATH;
   }
-  lib->dev_fd = -1;
   lib->shm_fd = -1;
-  lib->shmp = NULL;
   lib->shmp_v2 = NULL;
-  lib->ptp_path = FBCLOCK_PTPPATH;
   lib->max_wou_ns =
       (options != NULL) ? options->max_wou_ns : FBCLOCK_MAX_WOU_NS_UNSET;
   // No PTP device on this host -> fbclock unsupported here.
-  if (access(lib->ptp_path, F_OK) != 0) {
+  if (access(FBCLOCK_PTPPATH, F_OK) != 0) {
     return FBCLOCK_E_NOTSUP;
-  }
-  int ffd = open(lib->ptp_path, O_RDONLY);
-  if (ffd == -1) {
-    perror("open PTP device");
-    return FBCLOCK_E_PTP_OPEN;
   }
 
   int sfd = open(shm_path, O_RDONLY, 0);
   if (sfd == -1) {
     perror("open shmem device");
-    close(ffd);
     return FBCLOCK_E_SHMEM_OPEN;
   }
-  lib->dev_fd = ffd;
   lib->shm_fd = sfd;
 
-  lib->min_phc_delay = INT64_MAX;
-  struct ptp_sys_offset_extended psoe = {.n_samples = 1};
-
-  int r = ioctl(ffd, PTP_SYS_OFFSET_EXTENDED, &psoe);
-  if (!r) {
-    lib->gettime = fbclock_read_ptp_offset_extended;
-  } else {
-    lib->gettime = fbclock_read_ptp_offset;
+  struct stat st;
+  if (fstat(lib->shm_fd, &st) != 0) {
+    perror("fstat shmem device");
+    fbclock_close_fds(lib);
+    return FBCLOCK_E_SHMEM_OPEN;
+  }
+  // v1 or still-empty segment: reading it as v2 would SIGBUS.
+  if (st.st_size < (off_t)FBCLOCK_SHMDATA_V2_SIZE) {
+    fprintf(
+        stderr,
+        "fbclock: %s is %lld bytes, v2 needs %zu\n",
+        shm_path,
+        (long long)st.st_size,
+        (size_t)FBCLOCK_SHMDATA_V2_SIZE);
+    fbclock_close_fds(lib);
+    return FBCLOCK_E_SHMEM_OPEN;
   }
 
-  if (ends_with(shm_path, "_v2")) {
-    fbclock_debug_print("Using v2 shared memory with path %s\n", shm_path);
-    fbclock_shmdata_v2* shmp = mmap(
-        NULL, FBCLOCK_SHMDATA_V2_SIZE, PROT_READ, MAP_SHARED, lib->shm_fd, 0);
-    if (shmp == MAP_FAILED) {
-      fbclock_close_fds(lib);
-      return FBCLOCK_E_SHMEM_MAP_FAILED;
-    }
-    lib->shmp_v2 = shmp;
-    lib->shmp = NULL;
-  } else {
-    fbclock_shmdata* shmp =
-        mmap(NULL, FBCLOCK_SHMDATA_SIZE, PROT_READ, MAP_SHARED, lib->shm_fd, 0);
-    if (shmp == MAP_FAILED) {
-      fbclock_close_fds(lib);
-      return FBCLOCK_E_SHMEM_MAP_FAILED;
-    }
-    lib->shmp = shmp;
-    lib->shmp_v2 = NULL;
+  fbclock_shmdata_v2* shmp = mmap(
+      NULL, FBCLOCK_SHMDATA_V2_SIZE, PROT_READ, MAP_SHARED, lib->shm_fd, 0);
+  if (shmp == MAP_FAILED) {
+    fbclock_close_fds(lib);
+    return FBCLOCK_E_SHMEM_MAP_FAILED;
   }
+  lib->shmp_v2 = shmp;
   return FBCLOCK_E_NO_ERROR;
 }
 
@@ -405,7 +315,6 @@ int fbclock_is_ptp_host(void) {
 }
 
 int fbclock_destroy(fbclock_lib* lib) {
-  munmap(lib->shmp, FBCLOCK_SHMDATA_SIZE);
   munmap(lib->shmp_v2, FBCLOCK_SHMDATA_V2_SIZE);
   fbclock_close_fds(lib);
   return FBCLOCK_E_NO_ERROR;
@@ -439,33 +348,6 @@ int fbclock_check_max_wou(
       (truetime->latest_ns - truetime->earliest_ns) > max_wou_ns) {
     return FBCLOCK_E_WOU_TOO_BIG;
   }
-  return FBCLOCK_E_NO_ERROR;
-}
-
-int fbclock_calculate_time(
-    uint64_t error_bound_ns,
-    double h_value_ns,
-    fbclock_clockdata* state,
-    int64_t phctime_ns,
-    fbclock_truetime* truetime,
-    int time_standard) {
-  if (state->ingress_time_ns > phctime_ns) {
-    return FBCLOCK_E_PHC_IN_THE_PAST;
-  }
-  // check how far back since last SYNC message from GM (in seconds)
-  double seconds =
-      (double)(phctime_ns - state->ingress_time_ns) / NANOSECONDS_IN_SECONDS;
-
-  // UTC offset applied if time standard used is UTC (and not TAI)
-  if (time_standard == FBCLOCK_UTC) {
-    phctime_ns = fbclock_apply_utc_offset(state, phctime_ns);
-  }
-
-  // calculate the Window of Uncertainty (WOU) (in nanoseconds)
-  uint64_t wou_ns =
-      fbclock_window_of_uncertainty(seconds, error_bound_ns, h_value_ns);
-  truetime->earliest_ns = phctime_ns - wou_ns;
-  truetime->latest_ns = phctime_ns + wou_ns;
   return FBCLOCK_E_NO_ERROR;
 }
 
@@ -561,47 +443,6 @@ int fbclock_calculate_time_past_v2(
   return FBCLOCK_E_NO_ERROR;
 }
 
-int fbclock_gettime_tz(
-    fbclock_lib* lib,
-    fbclock_truetime* truetime,
-    int time_standard) {
-  struct phc_time_res res;
-  fbclock_clockdata state = {};
-  int rcode = fbclock_clockdata_load_data(lib->shmp, &state);
-  if (rcode != FBCLOCK_E_NO_ERROR) {
-    return rcode;
-  }
-
-  // cannot determine Truetime without these values
-  if (state.error_bound_ns == 0 || state.ingress_time_ns == 0) {
-    return FBCLOCK_E_NO_DATA;
-  }
-
-  // if the value is stored as UINT32_MAX then it's too big
-  if (state.error_bound_ns == UINT32_MAX ||
-      state.holdover_multiplier_ns == UINT32_MAX) {
-    return FBCLOCK_E_WOU_TOO_BIG;
-  }
-
-  if (lib->gettime(lib->dev_fd, &res)) {
-    return FBCLOCK_E_PTP_READ_OFFSET;
-  }
-  // store the minimal PHC request delay
-  if (res.delay < lib->min_phc_delay) {
-    lib->min_phc_delay = res.delay;
-  }
-  uint64_t error_bound = state.error_bound_ns + lib->min_phc_delay;
-  double h_value = (double)state.holdover_multiplier_ns / FBCLOCK_POW2_16;
-
-  // Compute the window, then enforce the caller's optional max-WOU policy.
-  rcode = fbclock_calculate_time(
-      error_bound, h_value, &state, res.ts, truetime, time_standard);
-  if (rcode != FBCLOCK_E_NO_ERROR) {
-    return rcode;
-  }
-  return fbclock_check_max_wou(lib->max_wou_ns, truetime);
-}
-
 int fbclock_gettime_tz_v2(
     fbclock_lib* lib,
     fbclock_truetime* truetime,
@@ -652,17 +493,11 @@ int fbclock_gettime_tz_v2(
 }
 
 int fbclock_gettime(fbclock_lib* lib, fbclock_truetime* truetime) {
-  if (lib->shmp_v2) {
-    return fbclock_gettime_tz_v2(lib, truetime, FBCLOCK_TAI);
-  }
-  return fbclock_gettime_tz(lib, truetime, FBCLOCK_TAI);
+  return fbclock_gettime_tz_v2(lib, truetime, FBCLOCK_TAI);
 }
 
 int fbclock_gettime_utc(fbclock_lib* lib, fbclock_truetime* truetime) {
-  if (lib->shmp_v2) {
-    return fbclock_gettime_tz_v2(lib, truetime, FBCLOCK_UTC);
-  }
-  return fbclock_gettime_tz(lib, truetime, FBCLOCK_UTC);
+  return fbclock_gettime_tz_v2(lib, truetime, FBCLOCK_UTC);
 }
 
 static int fbclock_gettime_past_tz_v2(
@@ -715,10 +550,6 @@ int fbclock_gettime_past(
     fbclock_lib* _Nonnull lib,
     int64_t ts_realtime_ns,
     fbclock_truetime* _Nonnull truetime) {
-  if (!lib->shmp_v2) {
-    // gettime_past is v2-only: v1 has no sysclock anchor to extrapolate from.
-    return FBCLOCK_E_NO_DATA;
-  }
   return fbclock_gettime_past_tz_v2(lib, ts_realtime_ns, truetime, FBCLOCK_TAI);
 }
 
@@ -726,9 +557,6 @@ int fbclock_gettime_past_utc(
     fbclock_lib* _Nonnull lib,
     int64_t ts_realtime_ns,
     fbclock_truetime* _Nonnull truetime) {
-  if (!lib->shmp_v2) {
-    return FBCLOCK_E_NO_DATA;
-  }
   return fbclock_gettime_past_tz_v2(lib, ts_realtime_ns, truetime, FBCLOCK_UTC);
 }
 
@@ -757,43 +585,6 @@ uint64_t fbclock_apply_smear(
                        (int64_t)multiplier * (int64_t)ramp_ns);
   }
   return time;
-}
-
-uint64_t fbclock_apply_utc_offset(
-    fbclock_clockdata* state,
-    int64_t phctime_ns) {
-  // Fixed offset is applied if tzdata information not in shared memory
-  if (state->utc_offset_pre_s == 0 && state->utc_offset_post_s == 0) {
-    phctime_ns += UTC_TAI_OFFSET_NS;
-    return (uint64_t)phctime_ns;
-  }
-
-  fbclock_debug_print(
-      "UTC-TAI Offset Before Leap Second Event: %d\n", state->utc_offset_pre_s);
-  fbclock_debug_print(
-      "UTC-TAI Offset After Leap Second Event: %d\n", state->utc_offset_post_s);
-  fbclock_debug_print(
-      "Clock Smearing Start Time (TAI): %lu\n", state->clock_smearing_start_s);
-  fbclock_debug_print(
-      "Clock Smearing End Time (TAI): %lu\n", state->clock_smearing_end_s);
-
-  // Multipler may be negative (if a negative leap second is applied)
-  int multiplier = state->utc_offset_post_s - state->utc_offset_pre_s;
-
-  // Switch to nanoseconds
-  uint64_t smear_end_ns = state->clock_smearing_end_s * NANOSECONDS_IN_SECONDS;
-  uint64_t smear_start_ns =
-      state->clock_smearing_start_s * NANOSECONDS_IN_SECONDS;
-  uint64_t offset_post_ns = state->utc_offset_post_s * NANOSECONDS_IN_SECONDS;
-  uint64_t offset_pre_ns = state->utc_offset_pre_s * NANOSECONDS_IN_SECONDS;
-
-  return fbclock_apply_smear(
-      phctime_ns,
-      offset_pre_ns,
-      offset_post_ns,
-      smear_start_ns,
-      smear_end_ns,
-      multiplier);
 }
 
 uint64_t fbclock_apply_utc_offset_v2(
@@ -845,7 +636,7 @@ const char* fbclock_strerror(int err_code) {
       err_info = "shmem open error";
       break;
     case FBCLOCK_E_PTP_READ_OFFSET:
-      err_info = "PTP PTP_SYS_OFFSET_EXTENDED ioctl error";
+      err_info = "system clock read error";
       break;
     case FBCLOCK_E_PTP_OPEN:
       err_info = "PTP device open error";

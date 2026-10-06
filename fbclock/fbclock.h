@@ -73,8 +73,6 @@ typedef atomic_uint_fast64_t atomic_uint64;
 extern "C" {
 #endif
 
-struct phc_time_res;
-
 typedef struct fbclock_clockdata {
   // PHC time when ptp client last time received sync message
   int64_t ingress_time_ns;
@@ -148,6 +146,8 @@ typedef struct fbclock_shmdata_v2 {
 
 #define FBCLOCK_SHMDATA_SIZE sizeof(fbclock_shmdata)
 #define FBCLOCK_SHMDATA_V2_SIZE sizeof(fbclock_shmdata_v2)
+// The daemon still writes v1 for binaries built before v2; fbclock_init reads
+// only v2.
 #define FBCLOCK_PATH_V1 "/run/fbclock_data_v1"
 // Where the daemon writes the v2 segment. Binaries built before FBCLOCK_PATH
 // moved to FBCLOCK_DIR_PATH still read it here.
@@ -179,6 +179,9 @@ typedef struct fbclock_truetime {
 // (error_bound/holdover saturate at UINT32_MAX, ~4.29s).
 #define FBCLOCK_MAX_WOU_NS_UNSET 0
 
+// fbclock_options and fbclock_lib have no stable binary layout: build fbclock
+// from the same version as its callers (from source or libfbclock.a).
+
 // Optional configuration passed to fbclock_init_with_options.
 typedef struct fbclock_options {
   // If non-zero, reject any reading whose window (latest_ns - earliest_ns)
@@ -189,14 +192,9 @@ typedef struct fbclock_options {
 
 // fbclock library
 typedef struct fbclock_lib {
-  char* ptp_path; // path to PHC clock device
   int shm_fd; // file descriptor of opened shared memory object
-  int dev_fd; // file descriptor of opened /dev/ptpN
-  int64_t min_phc_delay; // minimal PHC request delay observed
   uint64_t max_wou_ns; // caller's WOU cap (ns); 0 = none, see fbclock_options
-  fbclock_shmdata* shmp; // mmap-ed data
   fbclock_shmdata_v2* shmp_v2; // mmap-ed data
-  int (*gettime)(int, struct phc_time_res*); // pointer to gettime function
 } fbclock_lib;
 
 int fbclock_clockdata_store_data(uint32_t fd, fbclock_clockdata* data);
@@ -225,13 +223,6 @@ uint64_t fbclock_window_of_uncertainty(
 int fbclock_check_max_wou(
     uint64_t max_wou_ns,
     const fbclock_truetime* truetime);
-int fbclock_calculate_time(
-    uint64_t error_bound_ns,
-    double h_value_ns,
-    fbclock_clockdata* state,
-    int64_t phctime_ns,
-    fbclock_truetime* truetime,
-    int timezone);
 int fbclock_calculate_time_v2(
     uint64_t error_bound_ns,
     double h_value_ns,
@@ -246,7 +237,6 @@ int fbclock_calculate_time_past_v2(
     int64_t ts_realtime_ns,
     fbclock_truetime* _Nonnull truetime,
     int timezone);
-uint64_t fbclock_apply_utc_offset(fbclock_clockdata* state, int64_t phctime_ns);
 uint64_t fbclock_apply_utc_offset_v2(
     fbclock_clockdata_v2* state,
     int64_t phctime_ns);
@@ -260,10 +250,6 @@ uint64_t fbclock_apply_smear(
     uint64_t smear_start_ns,
     uint64_t smear_end_ns,
     int multiplier);
-int fbclock_gettime_tz(
-    fbclock_lib* lib,
-    fbclock_truetime* truetime,
-    int timezone);
 
 // methods we provide to end users
 int fbclock_init(fbclock_lib* lib, const char* shm_path);

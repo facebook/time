@@ -25,7 +25,7 @@ int fbclock_gettime_past(fbclock_lib* lib, int64_t ts_realtime_ns, fbclock_truet
 int fbclock_gettime_past_utc(fbclock_lib* lib, int64_t ts_realtime_ns, fbclock_truetime* truetime);
 ```
 
-`fbclock_gettime_past` translates a past CLOCK_REALTIME timestamp (e.g. a kernel SO_TIMESTAMPING software TX timestamp) into a PHC-domain [Earliest, Latest] window. The timestamp must be from the same host, within ±1s of the daemon's most recent snapshot. v2-only; returns `FBCLOCK_E_NO_DATA` on v1 hosts.
+`fbclock_gettime_past` translates a past CLOCK_REALTIME timestamp (e.g. a kernel SO_TIMESTAMPING software TX timestamp) into a PHC-domain [Earliest, Latest] window. The timestamp must be from the same host, within ±1s of the daemon's most recent snapshot.
 
 ## Usage
 
@@ -36,7 +36,7 @@ As a preprequisite, you need working PTP client set up with [**ptp4l**](https://
 - run it as root (it needs permissions to talk to ptp4l, and get frequency from PHC)
 - build the client CLI (`go build github.com/facebook/time/cmd/ptpcheck`), run `ptpcheck fbclock` to exercise the API and get the current PHC time
 
-C API can be used to build a client in any language. Clients don't need special permissions except for read access to SHM path and PHC device.
+C API can be used to build a client in any language. Clients don't need special permissions except for read access to SHM path.
 
 ## Math
 

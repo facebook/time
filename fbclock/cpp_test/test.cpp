@@ -19,7 +19,9 @@ limitations under the License.
 #include <string.h>
 #include <sys/mman.h>
 #include <time.h>
+#include <unistd.h>
 #include <cmath>
+#include <filesystem>
 #include <future>
 #include <iterator>
 #include <thread>
@@ -270,14 +272,67 @@ TEST(fbclockTest, test_gettime_past_uninitialized_primary_returns_no_data) {
   EXPECT_EQ(fbclock_gettime_past(&lib, 0, &truetime), FBCLOCK_E_NO_DATA);
 }
 
+static long open_fd_count() {
+  return std::distance(
+      std::filesystem::directory_iterator("/proc/self/fd"),
+      std::filesystem::directory_iterator{});
+}
+
+// Every segment is v2, whatever its name, and init opens nothing else.
+TEST(fbclockTest, test_init_maps_every_segment_as_v2) {
+  if (!fbclock_is_ptp_host()) {
+    GTEST_SKIP() << "needs " << FBCLOCK_PTPPATH;
+  }
+  char path[] = "/tmp/fbclock_testXXXXXX"; // no _v2 suffix
+  const int fd = mkstemp(path);
+  ASSERT_GE(fd, 0);
+  ASSERT_EQ(ftruncate(fd, FBCLOCK_SHMDATA_V2_SIZE), 0);
+  const long fds = open_fd_count();
+
+  fbclock_lib lib = {};
+  ASSERT_EQ(fbclock_init(&lib, path), FBCLOCK_E_NO_ERROR);
+  EXPECT_NE(lib.shmp_v2, nullptr);
+  // The segment's fd, and no PTP device.
+  EXPECT_EQ(open_fd_count(), fds + 1);
+  EXPECT_EQ(fbclock_destroy(&lib), FBCLOCK_E_NO_ERROR);
+
+  close(fd);
+  remove(path);
+}
+
+// An empty segment (the daemon is still creating it) or a v1 one is too short
+// to read as v2.
+TEST(fbclockTest, test_init_rejects_a_segment_shorter_than_v2) {
+  if (!fbclock_is_ptp_host()) {
+    GTEST_SKIP() << "needs " << FBCLOCK_PTPPATH;
+  }
+  char path[] = "/tmp/fbclock_testXXXXXX";
+  const int fd = mkstemp(path);
+  ASSERT_GE(fd, 0);
+  const long fds = open_fd_count();
+
+  for (const off_t size : {(off_t)0, (off_t)FBCLOCK_SHMDATA_SIZE}) {
+    ASSERT_EQ(ftruncate(fd, size), 0);
+    fbclock_lib lib = {};
+    testing::internal::CaptureStderr();
+    EXPECT_EQ(fbclock_init(&lib, path), FBCLOCK_E_SHMEM_OPEN)
+        << "size " << size;
+    EXPECT_NE(
+        testing::internal::GetCapturedStderr().find(path), std::string::npos);
+    EXPECT_EQ(lib.shmp_v2, nullptr);
+    EXPECT_EQ(open_fd_count(), fds);
+  }
+
+  close(fd);
+  remove(path);
+}
+
 TEST(fbclockTest, test_failed_init_leaves_fds_negative_and_destroy_safe) {
   fbclock_lib lib;
   memset(&lib, 0xFF, sizeof(lib));
   int err = fbclock_init(&lib, "/nonexistent/fbclock_shm_v2");
   ASSERT_NE(err, FBCLOCK_E_NO_ERROR);
-  EXPECT_EQ(lib.dev_fd, -1);
   EXPECT_EQ(lib.shm_fd, -1);
-  EXPECT_EQ(lib.shmp, nullptr);
   EXPECT_EQ(lib.shmp_v2, nullptr);
   EXPECT_EQ(fbclock_destroy(&lib), FBCLOCK_E_NO_ERROR);
 }
@@ -296,41 +351,6 @@ TEST(fbclockTest, test_window_of_uncertainty) {
       seconds, error_bound_ns, holdover_multiplier_ns);
 
   EXPECT_DOUBLE_EQ(wou, 677.0);
-}
-
-TEST(fbclockTest, test_fbclock_calculate_time) {
-  int err;
-  fbclock_truetime truetime;
-  fbclock_clockdata state = {
-      .ingress_time_ns = 1647269091803102957,
-  };
-  double error_bound = 172.0;
-  double h_value = 50.5;
-  // phc time is before ingress time, error
-  int64_t phctime_ns = 1647269082943150996;
-
-  err = fbclock_calculate_time(
-      error_bound, h_value, &state, phctime_ns, &truetime, FBCLOCK_TAI);
-  ASSERT_EQ(err, FBCLOCK_E_PHC_IN_THE_PAST);
-
-  // phc time is after ingress time, all good
-  state = {.ingress_time_ns = 1647269082943150996};
-  phctime_ns = 1647269091803102957;
-  err = fbclock_calculate_time(
-      error_bound, h_value, &state, phctime_ns, &truetime, FBCLOCK_TAI);
-  ASSERT_EQ(err, 0);
-
-  EXPECT_EQ(truetime.earliest_ns, 1647269091803102338);
-  EXPECT_EQ(truetime.latest_ns, 1647269091803103576);
-
-  // WOU is very big
-  error_bound = 1000.0;
-  phctime_ns += 6 * 3600 * 1000000000.0; // + 6 hours
-  err = fbclock_calculate_time(
-      error_bound, h_value, &state, phctime_ns, &truetime, FBCLOCK_TAI);
-  ASSERT_EQ(err, 0);
-  EXPECT_EQ(truetime.earliest_ns, 1647290691802010729);
-  EXPECT_EQ(truetime.latest_ns, 1647290691804195223);
 }
 
 TEST(fbclockTest, test_fbclock_calculate_time_v2) {
@@ -888,19 +908,22 @@ TEST(fbclockTest, test_fbclock_max_wou_on_calculated_window) {
   // Drive the same path the gettime functions use: compute a real window, then
   // apply the caller's max-WOU policy to it. Also confirms the midpoint of a
   // TAI window reconstructs the PHC point estimate it was built around.
-  fbclock_clockdata state = {.ingress_time_ns = 1647269082943150996};
-  int64_t phctime_ns = 1647269091803102957;
+  fbclock_clockdata_v2 state = {
+      .ingress_time_ns = 1647269082943150996,
+      .phc_time_ns = 1647269091803102957,
+      .sysclock_time_ns = 1000000000,
+  };
   double error_bound = 172.0;
   double h_value = 50.5;
 
   fbclock_truetime tt;
-  int err = fbclock_calculate_time(
-      error_bound, h_value, &state, phctime_ns, &tt, FBCLOCK_TAI);
+  int err = fbclock_calculate_time_v2(
+      error_bound, h_value, &state, state.sysclock_time_ns, &tt, FBCLOCK_TAI);
   ASSERT_EQ(err, FBCLOCK_E_NO_ERROR);
 
-  // TAI window is symmetric around phctime_ns, so the midpoint is that
+  // TAI window is symmetric around phc_time_ns, so the midpoint is that
   // estimate.
-  EXPECT_EQ(fbclock_truetime_midpoint_ns(&tt), (uint64_t)phctime_ns);
+  EXPECT_EQ(fbclock_truetime_midpoint_ns(&tt), (uint64_t)state.phc_time_ns);
 
   const uint64_t window = tt.latest_ns - tt.earliest_ns;
   ASSERT_GT(window, 1ULL);
