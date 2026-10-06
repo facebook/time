@@ -24,6 +24,7 @@ limitations under the License.
 #include <filesystem>
 #include <future>
 #include <iterator>
+#include <string>
 #include <thread>
 
 #include "../fbclock.h"
@@ -335,6 +336,123 @@ TEST(fbclockTest, test_failed_init_leaves_fds_negative_and_destroy_safe) {
   EXPECT_EQ(lib.shm_fd, -1);
   EXPECT_EQ(lib.shmp_v2, nullptr);
   EXPECT_EQ(fbclock_destroy(&lib), FBCLOCK_E_NO_ERROR);
+}
+
+// A host with no PTP device stays NOTSUP, segment or not, unless the caller
+// accepts NTP.
+TEST(fbclockTest, test_init_without_ptp_device_needs_the_ntp_source) {
+  if (fbclock_is_ptp_host()) {
+    GTEST_SKIP() << "needs a host without " << FBCLOCK_PTPPATH;
+  }
+  char path[] = "/tmp/fbclock_testXXXXXX";
+  const int fd = mkstemp(path);
+  ASSERT_GE(fd, 0);
+  ASSERT_EQ(ftruncate(fd, FBCLOCK_SHMDATA_V2_SIZE), 0);
+
+  fbclock_lib lib = {};
+  EXPECT_EQ(fbclock_init(&lib, path), FBCLOCK_E_NOTSUP);
+  const fbclock_options unset = {};
+  EXPECT_EQ(fbclock_init_with_options(&lib, path, &unset), FBCLOCK_E_NOTSUP);
+  const fbclock_options ptp = {.sources = FBCLOCK_SOURCE_PTP};
+  EXPECT_EQ(fbclock_init_with_options(&lib, path, &ptp), FBCLOCK_E_NOTSUP);
+
+  const fbclock_options ntp = {.sources = FBCLOCK_SOURCE_NTP};
+  // no segment yet: retryable, as on a PTP host before the daemon's first write
+  const std::string missing = std::string(path) + "_missing";
+  EXPECT_EQ(
+      fbclock_init_with_options(&lib, missing.c_str(), &ntp),
+      FBCLOCK_E_SHMEM_OPEN);
+  ASSERT_EQ(fbclock_init_with_options(&lib, path, &ntp), FBCLOCK_E_NO_ERROR);
+  EXPECT_NE(lib.shmp_v2, nullptr);
+  EXPECT_EQ(fbclock_destroy(&lib), FBCLOCK_E_NO_ERROR);
+
+  const fbclock_options any = {.sources = FBCLOCK_SOURCE_ANY};
+  ASSERT_EQ(fbclock_init_with_options(&lib, path, &any), FBCLOCK_E_NO_ERROR);
+  EXPECT_EQ(fbclock_destroy(&lib), FBCLOCK_E_NO_ERROR);
+
+  close(fd);
+  remove(path);
+}
+
+TEST(fbclockTest, test_init_ntp_source_reads_the_chrony_record) {
+  if (fbclock_is_ptp_host()) {
+    GTEST_SKIP() << "needs a host without " << FBCLOCK_PTPPATH;
+  }
+  char path[] = "/tmp/fbclock_testXXXXXX";
+  const int sfd_rw = mkstemp(path);
+  ASSERT_GE(sfd_rw, 0);
+  ASSERT_EQ(ftruncate(sfd_rw, FBCLOCK_SHMDATA_V2_SIZE), 0);
+
+  // A chrony-mode record: the anchor is the system clock in TAI and the base
+  // is CLOCK_REALTIME, so a reading is the system clock in TAI.
+  struct timespec ts = {};
+  ASSERT_EQ(clock_gettime(CLOCK_REALTIME, &ts), 0);
+  const int64_t realtime_ns = ts.tv_sec * 1000000000LL + ts.tv_nsec;
+  const uint32_t error_bound_ns = 100000;
+  const uint32_t holdover_ns_per_s = 50000; // 50 ppm
+  fbclock_clockdata_v2 data = {
+      .ingress_time_ns = realtime_ns - UTC_TAI_OFFSET_NS,
+      .error_bound_ns = error_bound_ns,
+      .holdover_multiplier_ns = (uint32_t)(holdover_ns_per_s * FBCLOCK_POW2_16),
+      .utc_offset_pre_s = 37,
+      .utc_offset_post_s = 37,
+      .clockId = CLOCK_REALTIME,
+      .phc_time_ns = realtime_ns - UTC_TAI_OFFSET_NS,
+      .sysclock_time_ns = realtime_ns,
+      .coef_ppb = 0,
+  };
+  ASSERT_EQ(fbclock_clockdata_store_data_v2(sfd_rw, &data), 0);
+
+  fbclock_lib lib = {};
+  const fbclock_options options = {.sources = FBCLOCK_SOURCE_NTP};
+  ASSERT_EQ(
+      fbclock_init_with_options(&lib, path, &options), FBCLOCK_E_NO_ERROR);
+
+  fbclock_truetime tt = {};
+  ASSERT_EQ(clock_gettime(CLOCK_REALTIME, &ts), 0);
+  const int64_t before_ns = ts.tv_sec * 1000000000LL + ts.tv_nsec;
+  ASSERT_EQ(fbclock_gettime(&lib, &tt), FBCLOCK_E_NO_ERROR);
+  ASSERT_EQ(clock_gettime(CLOCK_REALTIME, &ts), 0);
+  const int64_t after_ns = ts.tv_sec * 1000000000LL + ts.tv_nsec;
+
+  EXPECT_GE(
+      fbclock_truetime_midpoint_ns(&tt),
+      (uint64_t)(before_ns - UTC_TAI_OFFSET_NS));
+  EXPECT_LE(
+      fbclock_truetime_midpoint_ns(&tt),
+      (uint64_t)(after_ns - UTC_TAI_OFFSET_NS));
+  // Holdover runs from the record's time to the library's clock read, which is
+  // no later than after_ns; +1 for the library's rounding.
+  const uint64_t max_holdover_ns =
+      holdover_ns_per_s * (after_ns - realtime_ns) / 1000000000LL + 1;
+  const uint64_t window = tt.latest_ns - tt.earliest_ns;
+  EXPECT_GE(window, 2ULL * error_bound_ns);
+  EXPECT_LE(window, 2 * (error_bound_ns + max_holdover_ns));
+
+  EXPECT_EQ(fbclock_destroy(&lib), FBCLOCK_E_NO_ERROR);
+  close(sfd_rw);
+  remove(path);
+}
+
+// A PTP host serves PTP only, so a caller that accepts just NTP gets NOTSUP.
+TEST(fbclockTest, test_init_on_ptp_host_needs_the_ptp_source) {
+  if (!fbclock_is_ptp_host()) {
+    GTEST_SKIP() << "needs " << FBCLOCK_PTPPATH;
+  }
+  char path[] = "/tmp/fbclock_testXXXXXX";
+  const int fd = mkstemp(path);
+  ASSERT_GE(fd, 0);
+  ASSERT_EQ(ftruncate(fd, FBCLOCK_SHMDATA_V2_SIZE), 0);
+
+  fbclock_lib lib = {};
+  const fbclock_options ntp = {.sources = FBCLOCK_SOURCE_NTP};
+  EXPECT_EQ(fbclock_init_with_options(&lib, path, &ntp), FBCLOCK_E_NOTSUP);
+  const fbclock_options any = {.sources = FBCLOCK_SOURCE_ANY};
+  ASSERT_EQ(fbclock_init_with_options(&lib, path, &any), FBCLOCK_E_NO_ERROR);
+  EXPECT_EQ(fbclock_destroy(&lib), FBCLOCK_E_NO_ERROR);
+
+  close(fd);
+  remove(path);
 }
 
 TEST(fbclockTest, test_window_of_uncertainty) {

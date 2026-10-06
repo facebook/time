@@ -179,6 +179,13 @@ typedef struct fbclock_truetime {
 // (error_bound/holdover saturate at UINT32_MAX, ~4.29s).
 #define FBCLOCK_MAX_WOU_NS_UNSET 0
 
+// Flags for fbclock_options.sources, combined with |. A host with a PTP device
+// serves PTP; one without serves NTP.
+#define FBCLOCK_SOURCE_PTP (1 << 0)
+#define FBCLOCK_SOURCE_NTP (1 << 1)
+// Every source, including ones added later.
+#define FBCLOCK_SOURCE_ANY 0xFF
+
 // fbclock_options and fbclock_lib have no stable binary layout: build fbclock
 // from the same version as its callers (from source or libfbclock.a).
 
@@ -188,6 +195,9 @@ typedef struct fbclock_options {
   // exceeds this many ns with FBCLOCK_E_WOU_TOO_BIG. FBCLOCK_MAX_WOU_NS_UNSET
   // (0) keeps the default behavior.
   uint64_t max_wou_ns;
+  // Sources the caller accepts; 0 means FBCLOCK_SOURCE_PTP. NTP windows are
+  // orders of magnitude wider than PTP's.
+  uint8_t sources;
 } fbclock_options;
 
 // fbclock library

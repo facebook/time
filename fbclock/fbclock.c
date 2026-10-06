@@ -16,6 +16,7 @@ limitations under the License.
 
 #include "fbclock.h"
 #include <assert.h> // for static_assert in C11
+#include <errno.h>
 #include <fcntl.h> // For O_* constants
 #include <stdint.h>
 #include <stdio.h> // for printf and perror
@@ -266,8 +267,21 @@ int fbclock_init_with_options(
   lib->shmp_v2 = NULL;
   lib->max_wou_ns =
       (options != NULL) ? options->max_wou_ns : FBCLOCK_MAX_WOU_NS_UNSET;
-  // No PTP device on this host -> fbclock unsupported here.
+  const int sources = (options != NULL && options->sources != 0)
+      ? options->sources
+      : FBCLOCK_SOURCE_PTP;
+  int host_source = FBCLOCK_SOURCE_PTP;
   if (access(FBCLOCK_PTPPATH, F_OK) != 0) {
+    // only "not found" means no PTP device; any other error leaves it unknown
+    if (errno != ENOENT) {
+      perror("checking " FBCLOCK_PTPPATH);
+      return FBCLOCK_E_PTP_OPEN;
+    }
+    host_source = FBCLOCK_SOURCE_NTP;
+  }
+  // NOTSUP unless the caller accepts what this host serves (see the
+  // FBCLOCK_SOURCE_* flags)
+  if (!(sources & host_source)) {
     return FBCLOCK_E_NOTSUP;
   }
 
@@ -657,7 +671,7 @@ const char* fbclock_strerror(int err_code) {
       err_info = "shared memory data too old to extrapolate";
       break;
     case FBCLOCK_E_NOTSUP:
-      err_info = "PTP not supported on this host (no PTP device)";
+      err_info = "this host has no time source the caller accepts";
       break;
     case FBCLOCK_E_NO_ERROR:
       err_info = "no error";
