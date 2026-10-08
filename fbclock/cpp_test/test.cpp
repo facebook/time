@@ -281,9 +281,6 @@ static long open_fd_count() {
 
 // Every segment is v2, whatever its name, and init opens nothing else.
 TEST(fbclockTest, test_init_maps_every_segment_as_v2) {
-  if (!fbclock_is_ptp_host()) {
-    GTEST_SKIP() << "needs " << FBCLOCK_PTPPATH;
-  }
   char path[] = "/tmp/fbclock_testXXXXXX"; // no _v2 suffix
   const int fd = mkstemp(path);
   ASSERT_GE(fd, 0);
@@ -291,7 +288,9 @@ TEST(fbclockTest, test_init_maps_every_segment_as_v2) {
   const long fds = open_fd_count();
 
   fbclock_lib lib = {};
-  ASSERT_EQ(fbclock_init(&lib, path), FBCLOCK_E_NO_ERROR);
+  // ANY passes the source check on any host, PTP device or not
+  const fbclock_options any = {.sources = FBCLOCK_SOURCE_ANY};
+  ASSERT_EQ(fbclock_init_with_options(&lib, path, &any), FBCLOCK_E_NO_ERROR);
   EXPECT_NE(lib.shmp_v2, nullptr);
   // The segment's fd, and no PTP device.
   EXPECT_EQ(open_fd_count(), fds + 1);
@@ -304,19 +303,18 @@ TEST(fbclockTest, test_init_maps_every_segment_as_v2) {
 // An empty segment (the daemon is still creating it) or a v1 one is too short
 // to read as v2.
 TEST(fbclockTest, test_init_rejects_a_segment_shorter_than_v2) {
-  if (!fbclock_is_ptp_host()) {
-    GTEST_SKIP() << "needs " << FBCLOCK_PTPPATH;
-  }
   char path[] = "/tmp/fbclock_testXXXXXX";
   const int fd = mkstemp(path);
   ASSERT_GE(fd, 0);
   const long fds = open_fd_count();
+  // ANY passes the source check on any host, PTP device or not
+  const fbclock_options any = {.sources = FBCLOCK_SOURCE_ANY};
 
   for (const off_t size : {(off_t)0, (off_t)FBCLOCK_SHMDATA_SIZE}) {
     ASSERT_EQ(ftruncate(fd, size), 0);
     fbclock_lib lib = {};
     testing::internal::CaptureStderr();
-    EXPECT_EQ(fbclock_init(&lib, path), FBCLOCK_E_SHMEM_OPEN)
+    EXPECT_EQ(fbclock_init_with_options(&lib, path, &any), FBCLOCK_E_SHMEM_OPEN)
         << "size " << size;
     EXPECT_NE(
         testing::internal::GetCapturedStderr().find(path), std::string::npos);
@@ -434,19 +432,24 @@ TEST(fbclockTest, test_init_ntp_source_reads_the_chrony_record) {
   remove(path);
 }
 
-// A PTP host serves PTP only, so a caller that accepts just NTP gets NOTSUP.
-TEST(fbclockTest, test_init_on_ptp_host_needs_the_ptp_source) {
-  if (!fbclock_is_ptp_host()) {
-    GTEST_SKIP() << "needs " << FBCLOCK_PTPPATH;
-  }
+// Whatever the host, it serves only its own source: a caller that accepts just
+// the other one gets NOTSUP.
+TEST(fbclockTest, test_init_serves_only_the_hosts_source) {
+  const uint8_t host =
+      fbclock_is_ptp_host() ? FBCLOCK_SOURCE_PTP : FBCLOCK_SOURCE_NTP;
+  const uint8_t other =
+      host == FBCLOCK_SOURCE_PTP ? FBCLOCK_SOURCE_NTP : FBCLOCK_SOURCE_PTP;
   char path[] = "/tmp/fbclock_testXXXXXX";
   const int fd = mkstemp(path);
   ASSERT_GE(fd, 0);
   ASSERT_EQ(ftruncate(fd, FBCLOCK_SHMDATA_V2_SIZE), 0);
 
   fbclock_lib lib = {};
-  const fbclock_options ntp = {.sources = FBCLOCK_SOURCE_NTP};
-  EXPECT_EQ(fbclock_init_with_options(&lib, path, &ntp), FBCLOCK_E_NOTSUP);
+  const fbclock_options others = {.sources = other};
+  EXPECT_EQ(fbclock_init_with_options(&lib, path, &others), FBCLOCK_E_NOTSUP);
+  const fbclock_options mine = {.sources = host};
+  ASSERT_EQ(fbclock_init_with_options(&lib, path, &mine), FBCLOCK_E_NO_ERROR);
+  EXPECT_EQ(fbclock_destroy(&lib), FBCLOCK_E_NO_ERROR);
   const fbclock_options any = {.sources = FBCLOCK_SOURCE_ANY};
   ASSERT_EQ(fbclock_init_with_options(&lib, path, &any), FBCLOCK_E_NO_ERROR);
   EXPECT_EQ(fbclock_destroy(&lib), FBCLOCK_E_NO_ERROR);
