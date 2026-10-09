@@ -658,6 +658,83 @@ func TestProcessResultsSpikePublishesSelectedGMWithoutTheSpike(t *testing.T) {
 	}
 }
 
+// Missed Broadcom 48bit wraps leave the PHC whole wraps ahead or behind.
+func TestProcessResultsBroadcomWrapStepsEitherDirection(t *testing.T) {
+	wrap := time.Duration(1 << 48)
+	testCases := []struct {
+		name     string
+		offset   time.Duration
+		wantStep bool
+	}{
+		{name: "behind by a wrap", offset: -wrap, wantStep: true},
+		{name: "ahead by three wraps", offset: 3 * wrap, wantStep: true},
+		{name: "spike under a wrap is filtered", offset: 76 * time.Hour, wantStep: false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ts, err := time.Parse(time.RFC3339, "2021-05-21T13:32:05+01:00")
+			require.NoError(t, err)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockClock := NewMockClock(ctrl)
+			mockClock.EXPECT().AdjFreqPPB(float64(0))
+			mockServo := NewMockServo(ctrl)
+			mockServo.EXPECT().IsSpike(tc.offset.Nanoseconds()).Return(true)
+			mockServo.EXPECT().MeanFreq()
+			mockServo.EXPECT().SetLastFreq(float64(0))
+			if tc.wantStep {
+				gomock.InOrder(
+					mockClock.EXPECT().Time().Return(ts, nil),
+					mockClock.EXPECT().SetTime(ts.Add(-tc.offset)).Return(nil),
+					mockClock.EXPECT().Time().Return(ts.Add(-tc.offset), nil),
+				)
+			} else {
+				mockServo.EXPECT().GetState().Return(servo.StateLocked)
+			}
+			mockEventConn := NewMockUDPConnWithTS(ctrl)
+			mockEventConn.EXPECT().ConnFd().Return(0)
+
+			statsServer, err := NewStats()
+			require.NoError(t, err)
+
+			cfg := DefaultConfig()
+			cfg.Iface = "lo"
+			cfg.Servers = map[string]int{
+				"192.168.0.10": 1,
+			}
+			p := &SPTP{
+				clock:      mockClock,
+				pi:         mockServo,
+				stats:      statsServer,
+				cfg:        cfg,
+				eventConns: []UDPConnWithTS{mockEventConn},
+			}
+			require.NoError(t, p.initClients())
+
+			announce := announcePkt(0)
+			announce.GrandmasterIdentity = ptp.ClockIdentity(0x001)
+			announce.GrandmasterClockQuality = ptp.ClockQuality{
+				ClockClass:    ptp.ClockClass6,
+				ClockAccuracy: ptp.ClockAccuracyMicrosecond10,
+			}
+			results := map[netip.Addr]*RunResult{
+				netip.MustParseAddr("192.168.0.10"): {
+					Server: netip.MustParseAddr("192.168.0.10"),
+					Measurement: &MeasurementResult{
+						Delay:     299995 * time.Microsecond,
+						S2CDelay:  100,
+						C2SDelay:  110,
+						Offset:    tc.offset,
+						Timestamp: ts,
+						Announce:  *announce,
+					},
+				},
+			}
+			require.NoError(t, p.processResults(results))
+		})
+	}
+}
+
 func TestRunStalled(t *testing.T) {
 	ts, err := time.Parse(time.RFC3339, "2021-05-21T13:32:05+01:00")
 	require.Nil(t, err)

@@ -756,8 +756,8 @@ func (p *SPTP) processResults(results map[netip.Addr]*RunResult) error {
 	log.Debugf("[%s gmid:%s] best master", bestAddr, bm.Announce.GrandmasterIdentity)
 	isSpike := p.pi.IsSpike(bmOffset)
 
-	if isSpike && bm.Offset < -77*time.Hour {
-		// mitigate Broadcom 48bit overflow
+	if isSpike && bm.Offset.Abs() > 77*time.Hour {
+		// mitigate Broadcom 48bit overflow, in either direction
 		p.isStalled = true
 	}
 	var freqAdj float64
