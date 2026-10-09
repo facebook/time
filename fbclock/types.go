@@ -30,6 +30,17 @@ type TrueTime struct {
 	Latest   time.Time
 }
 
+// Sources is a set of fbclock.h's FBCLOCK_SOURCE_* flags, combined with |. A
+// host with a PTP device serves PTP; one without serves NTP.
+type Sources uint8
+
+// Options are caller options applied at init (see fbclock_options)
+type Options struct {
+	// Sources the caller accepts; 0 means SourcePTP. NTP windows are orders of
+	// magnitude wider than PTP's.
+	Sources Sources
+}
+
 // Data is a Go equivalent of what we want to store in shared memory for fbclock to use
 type Data struct {
 	IngressTimeNS        int64

@@ -35,9 +35,43 @@ import "C"
 
 import (
 	"fmt"
+	"strings"
 	"time"
 	"unsafe"
 )
+
+// Values for Options.Sources, from fbclock.h
+const (
+	SourcePTP Sources = C.FBCLOCK_SOURCE_PTP
+	SourceNTP Sources = C.FBCLOCK_SOURCE_NTP
+	// SourceAny accepts every source, including ones added later
+	SourceAny Sources = C.FBCLOCK_SOURCE_ANY
+)
+
+var sourceNames = map[string]Sources{"ptp": SourcePTP, "ntp": SourceNTP, "any": SourceAny}
+
+// String implements pflag.Value
+func (s Sources) String() string {
+	for name, v := range sourceNames {
+		if v == s {
+			return name
+		}
+	}
+	return fmt.Sprintf("0x%02x", uint8(s))
+}
+
+// Set implements pflag.Value
+func (s *Sources) Set(name string) error {
+	v, ok := sourceNames[strings.ToLower(name)]
+	if !ok {
+		return fmt.Errorf("use one of %s", s.Type())
+	}
+	*s = v
+	return nil
+}
+
+// Type implements pflag.Value
+func (s *Sources) Type() string { return "{ptp|ntp|any}" }
 
 func strerror(errCode C.int) string {
 	cStr := C.fbclock_strerror(errCode)
@@ -51,14 +85,7 @@ type FBClock struct {
 
 // NewFBClockCustom returns new FBClock wrapper with custom path
 func NewFBClockCustom(path string) (*FBClock, error) {
-	cFBClock := &C.fbclock_lib{}
-	cPath := C.CString(path)
-	defer C.free(unsafe.Pointer(cPath))
-	errCode := C.fbclock_init(cFBClock, cPath)
-	if errCode != 0 {
-		return nil, fmt.Errorf("initializing FBClock: %s", strerror(errCode))
-	}
-	return &FBClock{cFBClock: cFBClock}, nil
+	return newFBClock(path, nil)
 }
 
 // NewFBClock returns new FBClock wrapper
@@ -69,6 +96,24 @@ func NewFBClock() (*FBClock, error) {
 // NewFBClockV2 returns new FBClock wrapper using v2 data structure
 func NewFBClockV2() (*FBClock, error) {
 	return NewFBClockCustom(C.FBCLOCK_PATH)
+}
+
+// NewFBClockV2WithOptions is NewFBClockV2 with caller options
+func NewFBClockV2WithOptions(opts Options) (*FBClock, error) {
+	cOpts := C.fbclock_options{sources: C.uint8_t(opts.Sources)}
+	return newFBClock(C.FBCLOCK_PATH, &cOpts)
+}
+
+// opts == nil selects the defaults, as fbclock_init does
+func newFBClock(path string, opts *C.fbclock_options) (*FBClock, error) {
+	cFBClock := &C.fbclock_lib{}
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	errCode := C.fbclock_init_with_options(cFBClock, cPath, opts)
+	if errCode != 0 {
+		return nil, fmt.Errorf("initializing FBClock: %s", strerror(errCode))
+	}
+	return &FBClock{cFBClock: cFBClock}, nil
 }
 
 // Close destroys fbclock wrapper

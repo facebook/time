@@ -38,6 +38,7 @@ var (
 	fbclockDurationFlag time.Duration
 	fbclockUTCFlag      bool
 	fbclockJSONFlag     bool
+	fbclockSourcesFlag  = fbclock.SourcePTP
 )
 
 func init() {
@@ -46,6 +47,7 @@ func init() {
 	fbclockCmd.Flags().DurationVarP(&fbclockDurationFlag, "duration", "t", 1*time.Second, "spread the requests over this duration")
 	fbclockCmd.Flags().BoolVarP(&fbclockUTCFlag, "utc", "", false, "get UTC time (TAI is default)")
 	fbclockCmd.Flags().BoolVarP(&fbclockJSONFlag, "json", "j", false, "JSON output")
+	fbclockCmd.Flags().VarP(&fbclockSourcesFlag, "sources", "", "time sources to accept")
 }
 
 // formatErrorCauses orders by count, then by message so runs are comparable.
@@ -100,11 +102,11 @@ func fbclockPrintText(w io.Writer, tt *fbclock.TrueTime) error {
 	return err
 }
 
-func fbclockRun(requests int64, duration time.Duration, utc, jsonOut bool) error {
+func fbclockRun(requests int64, duration time.Duration, utc, jsonOut bool, sources fbclock.Sources) error {
 	prefix := "ptp.fbclock_synthetic.api."
 	suffix := fmt.Sprintf(".%d", int(duration.Seconds()))
 
-	clock, err := fbclock.NewFBClockV2()
+	clock, err := fbclock.NewFBClockV2WithOptions(fbclock.Options{Sources: sources})
 	if err != nil {
 		return err
 	}
@@ -181,7 +183,7 @@ var fbclockCmd = &cobra.Command{
 			log.Fatal("duration must be 0 or positive")
 		}
 
-		if err := fbclockRun(fbclockRequestsFlag, fbclockDurationFlag, fbclockUTCFlag, fbclockJSONFlag); err != nil {
+		if err := fbclockRun(fbclockRequestsFlag, fbclockDurationFlag, fbclockUTCFlag, fbclockJSONFlag, fbclockSourcesFlag); err != nil {
 			log.Fatal(err)
 		}
 

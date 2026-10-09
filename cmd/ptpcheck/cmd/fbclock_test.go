@@ -107,6 +107,14 @@ func TestFbclockTextByDefault(t *testing.T) {
 	require.Equal(t, "false", f.DefValue)
 }
 
+// Defaults to ptp, so the fbagent collector, which doesn't pass it, keeps
+// measuring PTP only.
+func TestFbclockSourcesDefaultToPTP(t *testing.T) {
+	f := fbclockCmd.Flags().Lookup("sources")
+	require.NotNil(t, f)
+	require.Equal(t, "ptp", f.DefValue)
+}
+
 func TestFbclockPrintText(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, fbclockPrintText(&buf, fbclockBinSample))
