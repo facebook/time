@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"encoding/binary"
 	"net"
 	"os"
 	"sync"
@@ -71,6 +72,89 @@ func TestFindWorker(t *testing.T) {
 
 	require.Equal(t, 7, s.findWorker(clipi2, 0).id)
 	require.Equal(t, 6, s.findWorker(clipi3, 0).id)
+}
+
+func TestDelayReqPortMoveReplacesSubscription(t *testing.T) {
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		StaticConfig:  StaticConfig{TimestampType: timestamp.SW, SendWorkers: 10, QueueSize: 10},
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s := Server{Config: c, Stats: stats.NewJSONStats(1), sw: make([]*sendWorker, c.SendWorkers), ctx: ctx, cancel: cancel}
+	for i := range s.sw {
+		s.sw[i] = newSendWorker(i, c, s.Stats)
+	}
+
+	// left open: closing it would spin handleEventMessages on read errors
+	eFD, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
+	require.NoError(t, err)
+	require.NoError(t, unix.Bind(eFD, timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 0)))
+	require.NoError(t, timestamp.EnableSWTimestampsRx(eFD))
+	serverAddr, err := unix.Getsockname(eFD)
+	require.NoError(t, err)
+	go s.handleEventMessages(eFD, 0)
+
+	clientFD, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
+	require.NoError(t, err)
+	defer unix.Close(clientFD)
+
+	client := ptp.PortIdentity{ClockIdentity: 5678, PortNumber: 1}
+	home := s.findWorker(client, 0)
+	moved := uint16(1)
+	for s.findWorker(client, uint64(moved)) == home {
+		moved++
+	}
+	sender := s.findWorker(client, uint64(moved))
+
+	sendDelayReq(t, clientFD, serverAddr, client, 0)
+	var first *SubscriptionClient
+	require.Eventually(t, func() bool {
+		first = home.FindSubscription(client, ptp.MessageDelayReq)
+		return first != nil && first.Running()
+	}, time.Second, time.Millisecond)
+	require.True(t, first.queue == home.queue)
+
+	sendDelayReq(t, clientFD, serverAddr, client, moved)
+	var second *SubscriptionClient
+	require.Eventually(t, func() bool {
+		second = home.FindSubscription(client, ptp.MessageDelayReq)
+		return second != first && second.Running()
+	}, time.Second, time.Millisecond, "a port move must replace the subscription stored under the client's identity")
+	require.True(t, second.queue == sender.queue, "the new subscription must send from the worker the offset picks")
+	require.Eventually(t, func() bool { return !first.Running() }, time.Second, time.Millisecond,
+		"the replaced subscription must stop")
+
+	var subs int
+	for _, w := range s.sw {
+		subs += w.inventoryClients()
+	}
+	require.Equal(t, 1, subs)
+}
+
+func sendDelayReq(t *testing.T, fd int, to unix.Sockaddr, client ptp.PortIdentity, offset uint16) {
+	size := binary.Size(ptp.Header{}) + binary.Size(ptp.SyncDelayReqBody{}) + binary.Size(ptp.AlternateResponsePortTLV{})
+	req := &ptp.SyncDelayReq{
+		Header: ptp.Header{
+			SdoIDAndMsgType:    ptp.NewSdoIDAndMsgType(ptp.MessageDelayReq, 0),
+			Version:            ptp.Version,
+			MessageLength:      uint16(size), //#nosec G115
+			FlagField:          ptp.FlagUnicast | ptp.FlagProfileSpecific1,
+			SourcePortIdentity: client,
+			LogMessageInterval: 0x7f,
+		},
+		TLVs: []ptp.TLV{&ptp.AlternateResponsePortTLV{
+			TLVHead: ptp.TLVHead{
+				TLVType:     ptp.TLVAlternateResponsePort,
+				LengthField: uint16(binary.Size(ptp.AlternateResponsePortTLV{}) - binary.Size(ptp.TLVHead{})), //#nosec G115
+			},
+			Offset: offset,
+		}},
+	}
+	buf := make([]byte, size+ptp.TrailingBytes)
+	n, err := ptp.BytesTo(req, buf)
+	require.NoError(t, err)
+	require.NoError(t, unix.Sendto(fd, buf[:n], 0, to))
 }
 
 func TestStartEventListener(t *testing.T) {

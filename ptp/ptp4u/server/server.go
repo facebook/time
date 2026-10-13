@@ -344,7 +344,14 @@ func (s *Server) handleEventMessages(eFD, rworker int) {
 			if dReq.FlagField == ptp.FlagProfileSpecific1|ptp.FlagUnicast {
 				expire = time.Now().Add(subscriptionDuration)
 				// SYNC DELAY_REQUEST and ANNOUNCE
-				if sc = worker.FindSubscription(dReq.SourcePortIdentity, ptp.MessageDelayReq); sc == nil {
+				// stored by identity alone, so a moved client is still found; the offset only picks the sender
+				home := s.findWorker(dReq.SourcePortIdentity, 0)
+				sc = home.FindSubscription(dReq.SourcePortIdentity, ptp.MessageDelayReq)
+				if sc == nil || sc.queue != worker.queue {
+					// the client moved to another sending worker
+					if sc != nil {
+						sc.Stop()
+					}
 					// if the port number is > 10, it's a ptping request which expects announce to come to the same ephemeral port
 					if dReq.SourcePortIdentity.PortNumber > 10 {
 						gclisa = eclisa
@@ -353,7 +360,7 @@ func (s *Server) handleEventMessages(eFD, rworker int) {
 					}
 					// Create a new subscription
 					sc = NewSubscriptionClient(worker.queue, worker.signalingQueue, eclisa, gclisa, ptp.MessageDelayReq, s.Config, subscriptionDuration, expire)
-					worker.RegisterSubscription(dReq.SourcePortIdentity, ptp.MessageDelayReq, sc)
+					home.RegisterSubscription(dReq.SourcePortIdentity, ptp.MessageDelayReq, sc)
 					go sc.Start(s.ctx)
 				} else {
 					// bump the subscription
