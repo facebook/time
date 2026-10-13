@@ -264,15 +264,6 @@ func readPacketBuf(connFd int, buf []byte) (int, unix.Sockaddr, error) {
 	return n, saddr, nil
 }
 
-func updateSockaddrWithPort(sa unix.Sockaddr, port int) {
-	switch sa := sa.(type) {
-	case *unix.SockaddrInet4:
-		sa.Port = port
-	case *unix.SockaddrInet6:
-		sa.Port = port
-	}
-}
-
 // handleEventMessages is a handler which processes Event Messages in the loop
 func (s *Server) handleEventMessages(eFD, rworker int) {
 	buf := make([]byte, timestamp.PayloadSizeBytes)
@@ -363,15 +354,11 @@ func (s *Server) handleEventMessages(eFD, rworker int) {
 					home.RegisterSubscription(dReq.SourcePortIdentity, ptp.MessageDelayReq, sc)
 					go sc.Start(s.ctx)
 				} else {
-					// bump the subscription
-					sc.SetExpire(expire)
-					// sptp is stateless, port can change
-					sc.eclisa = eclisa
+					// bump the subscription; sptp is stateless, port can change
+					sc.Bump(expire, eclisa)
 					// if the port number is > 10, it's a ptping request which expects announce to come to the same ephemeral port
 					if dReq.SourcePortIdentity.PortNumber > 10 {
-						sc.gclisa = eclisa
-					} else {
-						updateSockaddrWithPort(sc.gclisa, ptp.PortGeneral)
+						sc.SetGclisa(eclisa)
 					}
 				}
 				sc.UpdateSyncDelayReq(rxTS, dReq.SequenceID)

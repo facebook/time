@@ -85,7 +85,8 @@ func NewSubscriptionClient(q chan *SubscriptionClient, gq chan *SubscriptionClie
 
 // Start launches the subscription timers and exit on expire
 func (sc *SubscriptionClient) Start(ctx context.Context) {
-	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa))
+	ip := timestamp.SockaddrToIP(sc.Eclisa())
+	log.Infof("Starting a new %s subscription for %s", sc.subscriptionType, ip)
 	sc.setRunning(true)
 
 	// Send first message right away
@@ -96,7 +97,7 @@ func (sc *SubscriptionClient) Start(ctx context.Context) {
 	sc.runningInterval = sc.interval
 	sc.intervalTicker = time.NewTicker(sc.runningInterval)
 
-	defer log.Infof("Subscription %s is over for %s", sc.subscriptionType, timestamp.SockaddrToIP(sc.eclisa))
+	defer log.Infof("Subscription %s is over for %s", sc.subscriptionType, ip)
 	if sc.subscriptionType != ptp.MessageDelayReq {
 		defer sc.sendSignalingCancel()
 	}
@@ -175,6 +176,21 @@ func (sc *SubscriptionClient) SetInterval(interval time.Duration) {
 	sc.Lock()
 	defer sc.Unlock()
 	sc.interval = interval
+}
+
+// Bump atomically sets expire and eclisa
+func (sc *SubscriptionClient) Bump(expire time.Time, eclisa unix.Sockaddr) {
+	sc.Lock()
+	defer sc.Unlock()
+	sc.expire = expire
+	sc.eclisa = eclisa
+}
+
+// Eclisa atomically returns eclisa
+func (sc *SubscriptionClient) Eclisa() unix.Sockaddr {
+	sc.Lock()
+	defer sc.Unlock()
+	return sc.eclisa
 }
 
 // SetGclisa atomically sets gclisa

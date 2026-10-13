@@ -59,6 +59,20 @@ func TestSubscriptionStart(t *testing.T) {
 	require.True(t, sc.Running())
 }
 
+func TestSubscriptionBump(t *testing.T) {
+	w := &sendWorker{}
+	c := &Config{clockIdentity: ptp.ClockIdentity(1234)}
+	sa := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 123)
+	moved := timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 456)
+	sc := NewSubscriptionClient(w.queue, w.signalingQueue, sa, sa, ptp.MessageDelayReq, c, time.Minute, time.Now().Add(time.Minute))
+
+	go sc.Start(t.Context())
+	sc.Bump(time.Now().Add(-time.Second), moved)
+	require.Eventually(t, sc.Running, time.Second, time.Millisecond)
+	require.Equal(t, moved, sc.Eclisa())
+	require.True(t, sc.Expired())
+}
+
 func TestSubscriptionExpire(t *testing.T) {
 	w := &sendWorker{
 		signalingQueue: make(chan *SubscriptionClient, 100),

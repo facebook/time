@@ -75,28 +75,8 @@ func TestFindWorker(t *testing.T) {
 }
 
 func TestDelayReqPortMoveReplacesSubscription(t *testing.T) {
-	c := &Config{
-		clockIdentity: ptp.ClockIdentity(1234),
-		StaticConfig:  StaticConfig{TimestampType: timestamp.SW, SendWorkers: 10, QueueSize: 10},
-	}
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	s := Server{Config: c, Stats: stats.NewJSONStats(1), sw: make([]*sendWorker, c.SendWorkers), ctx: ctx, cancel: cancel}
-	for i := range s.sw {
-		s.sw[i] = newSendWorker(i, c, s.Stats)
-	}
-
-	// left open: closing it would spin handleEventMessages on read errors
-	eFD, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
-	require.NoError(t, err)
-	require.NoError(t, unix.Bind(eFD, timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 0)))
-	require.NoError(t, timestamp.EnableSWTimestampsRx(eFD))
-	serverAddr, err := unix.Getsockname(eFD)
-	require.NoError(t, err)
-	go s.handleEventMessages(eFD, 0)
-
-	clientFD, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
-	require.NoError(t, err)
+	s, serverAddr := eventServer(t)
+	clientFD := loopbackSocket(t)
 	defer unix.Close(clientFD)
 
 	client := ptp.PortIdentity{ClockIdentity: 5678, PortNumber: 1}
@@ -107,20 +87,25 @@ func TestDelayReqPortMoveReplacesSubscription(t *testing.T) {
 	}
 	sender := s.findWorker(client, uint64(moved))
 
-	sendDelayReq(t, clientFD, serverAddr, client, 0)
+	// resend until acted on: before the kernel turns RX stamping on, packets arrive unstamped and are dropped
+	stay := delayReq(t, client, 0)
 	var first *SubscriptionClient
 	require.Eventually(t, func() bool {
-		first = home.FindSubscription(client, ptp.MessageDelayReq)
+		if first = home.FindSubscription(client, ptp.MessageDelayReq); first == nil {
+			_ = unix.Sendto(clientFD, stay, 0, serverAddr)
+		}
 		return first != nil && first.Running()
-	}, time.Second, time.Millisecond)
+	}, time.Second, 100*time.Millisecond)
 	require.True(t, first.queue == home.queue)
 
-	sendDelayReq(t, clientFD, serverAddr, client, moved)
+	move := delayReq(t, client, moved)
 	var second *SubscriptionClient
 	require.Eventually(t, func() bool {
-		second = home.FindSubscription(client, ptp.MessageDelayReq)
-		return second != first && second.Running()
-	}, time.Second, time.Millisecond, "a port move must replace the subscription stored under the client's identity")
+		if second = home.FindSubscription(client, ptp.MessageDelayReq); second == first {
+			_ = unix.Sendto(clientFD, move, 0, serverAddr)
+		}
+		return second != nil && second != first && second.Running()
+	}, time.Second, 100*time.Millisecond, "a port move must replace the subscription stored under the client's identity")
 	require.True(t, second.queue == sender.queue, "the new subscription must send from the worker the offset picks")
 	require.Eventually(t, func() bool { return !first.Running() }, time.Second, time.Millisecond,
 		"the replaced subscription must stop")
@@ -132,7 +117,71 @@ func TestDelayReqPortMoveReplacesSubscription(t *testing.T) {
 	require.Equal(t, 1, subs)
 }
 
-func sendDelayReq(t *testing.T, fd int, to unix.Sockaddr, client ptp.PortIdentity, offset uint16) {
+func TestDelayReqPtpingRefreshFollowsPort(t *testing.T) {
+	s, serverAddr := eventServer(t)
+	client := ptp.PortIdentity{ClockIdentity: 5678, PortNumber: 4242}
+	home := s.findWorker(client, 0)
+	req := delayReq(t, client, 0)
+
+	firstFD := loopbackSocket(t)
+	defer unix.Close(firstFD)
+	var sc *SubscriptionClient
+	require.Eventually(t, func() bool {
+		if sc = home.FindSubscription(client, ptp.MessageDelayReq); sc == nil {
+			_ = unix.Sendto(firstFD, req, 0, serverAddr)
+		}
+		return sc != nil && sc.Running()
+	}, time.Second, 100*time.Millisecond)
+
+	movedFD := loopbackSocket(t)
+	defer unix.Close(movedFD)
+	moved, err := unix.Getsockname(movedFD)
+	require.NoError(t, err)
+	gclisa := func() unix.Sockaddr {
+		sc.Lock()
+		defer sc.Unlock()
+		return sc.gclisa
+	}
+	require.Eventually(t, func() bool {
+		if timestamp.SockaddrToPort(gclisa()) == timestamp.SockaddrToPort(moved) {
+			return true
+		}
+		_ = unix.Sendto(movedFD, req, 0, serverAddr)
+		return false
+	}, time.Second, 100*time.Millisecond, "a ptping refresh must send announce to the new ephemeral port")
+	require.Equal(t, timestamp.SockaddrToPort(moved), timestamp.SockaddrToPort(sc.Eclisa()))
+	require.True(t, home.FindSubscription(client, ptp.MessageDelayReq) == sc, "a refresh must keep the subscription")
+}
+
+func eventServer(t *testing.T) (*Server, unix.Sockaddr) {
+	c := &Config{
+		clockIdentity: ptp.ClockIdentity(1234),
+		StaticConfig:  StaticConfig{TimestampType: timestamp.SW, SendWorkers: 10, QueueSize: 10},
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	s := &Server{Config: c, Stats: stats.NewJSONStats(1), sw: make([]*sendWorker, c.SendWorkers), ctx: ctx, cancel: cancel}
+	for i := range s.sw {
+		s.sw[i] = newSendWorker(i, c, s.Stats)
+	}
+
+	// left open: closing it would spin handleEventMessages on read errors
+	eFD := loopbackSocket(t)
+	require.NoError(t, timestamp.EnableSWTimestampsRx(eFD))
+	serverAddr, err := unix.Getsockname(eFD)
+	require.NoError(t, err)
+	go s.handleEventMessages(eFD, 0)
+	return s, serverAddr
+}
+
+func loopbackSocket(t *testing.T) int {
+	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, unix.IPPROTO_UDP)
+	require.NoError(t, err)
+	require.NoError(t, unix.Bind(fd, timestamp.IPToSockaddr(net.ParseIP("127.0.0.1"), 0)))
+	return fd
+}
+
+func delayReq(t *testing.T, client ptp.PortIdentity, offset uint16) []byte {
 	size := binary.Size(ptp.Header{}) + binary.Size(ptp.SyncDelayReqBody{}) + binary.Size(ptp.AlternateResponsePortTLV{})
 	req := &ptp.SyncDelayReq{
 		Header: ptp.Header{
@@ -154,7 +203,7 @@ func sendDelayReq(t *testing.T, fd int, to unix.Sockaddr, client ptp.PortIdentit
 	buf := make([]byte, size+ptp.TrailingBytes)
 	n, err := ptp.BytesTo(req, buf)
 	require.NoError(t, err)
-	require.NoError(t, unix.Sendto(fd, buf[:n], 0, to))
+	return buf[:n]
 }
 
 func TestStartEventListener(t *testing.T) {
