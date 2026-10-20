@@ -18,6 +18,7 @@ limitations under the License.
 #include <assert.h> // for static_assert in C11
 #include <errno.h>
 #include <fcntl.h> // For O_* constants
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h> // for printf and perror
 #include <string.h>
@@ -43,6 +44,46 @@ static_assert(
     sizeof(atomic_uint64) == sizeof(uint_fast64_t) &&
         alignof(atomic_uint64) == alignof(uint_fast64_t),
     "atomic_uint64 must match its base type's layout; see FBCLOCK_CGO in fbclock.h");
+
+// Every writer and reader of /run/fbclock/data depends on these offsets.
+static_assert(sizeof(FBCLOCK_DATA_MAGIC) == 8, "magic is 8 bytes with its NUL");
+static_assert(
+    sizeof(fbclock_data_header) == 64,
+    "the header is one cache line");
+static_assert(offsetof(fbclock_data_header, major) == 8, "major");
+static_assert(offsetof(fbclock_data_header, minor) == 9, "minor");
+static_assert(
+    sizeof(fbclock_data_clock) == 56,
+    "a clock fits a cache line after its seq");
+static_assert(
+    sizeof(fbclock_data_section) == 64,
+    "a section is one cache line");
+static_assert(offsetof(fbclock_data_section, clock.source) == 8, "source");
+static_assert(offsetof(fbclock_data_section, clock.status) == 10, "status");
+static_assert(offsetof(fbclock_data_section, clock.clock_id) == 12, "clock_id");
+static_assert(
+    offsetof(fbclock_data_section, clock.ref_time_ns) == 16,
+    "ref_time_ns");
+static_assert(
+    offsetof(fbclock_data_section, clock.sysclock_time_ns) == 24,
+    "sysclock_time_ns");
+static_assert(offsetof(fbclock_data_section, clock.coef_ppb) == 32, "coef_ppb");
+static_assert(
+    offsetof(fbclock_data_section, clock.ingress_time_ns) == 40,
+    "ingress_time_ns");
+static_assert(
+    offsetof(fbclock_data_section, clock.error_bound_ns) == 48,
+    "error_bound_ns");
+static_assert(
+    offsetof(fbclock_data_section, clock.holdover_multiplier_ns) == 52,
+    "holdover");
+static_assert(offsetof(fbclock_data_section, clock.reserved) == 56, "reserved");
+static_assert(offsetof(fbclock_data, ptp) == 64, "ptp is line 1");
+static_assert(
+    offsetof(fbclock_data, ptp_realtime) == 128,
+    "ptp_realtime is line 2");
+static_assert(offsetof(fbclock_data, ntp) == 192, "ntp is line 3");
+static_assert(FBCLOCK_DATA_SIZE == 4096, "the file is 4096 bytes");
 
 #if defined(__GNUC__) && !defined(__OPTIMIZE__)
 #define fbclock_debug_print(fmt, ...)  \
