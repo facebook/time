@@ -31,12 +31,8 @@ func TestTLVHeadType(t *testing.T) {
 	require.Equal(t, TLVRequestUnicastTransmission, head.Type())
 }
 
-func TestParsePathTraceTLV(t *testing.T) {
-	pathSequence := []ClockIdentity{
-		630763432548989518,
-		123479299994292777,
-		342422224531222222,
-	}
+func pathTraceBytes(t *testing.T, pathSequence []ClockIdentity) []byte {
+	t.Helper()
 	tlv := &PathTraceTLV{
 		TLVHead: TLVHead{
 			TLVType:     TLVPathTrace,
@@ -44,18 +40,26 @@ func TestParsePathTraceTLV(t *testing.T) {
 		},
 		PathSequence: pathSequence,
 	}
-	// A PathTrace is the last TLV of an Announce, whose 64 byte header plus its
-	// TLVs already exceeds the Ethernet minimum, so on the wire the TLV body
-	// ends exactly at the end of the buffer.
 	raw := make([]byte, tlvHeadSize+len(pathSequence)*8)
 	n, err := tlv.MarshalBinaryTo(raw)
 	require.Nil(t, err)
 	require.Equal(t, len(raw), n)
+	return raw
+}
 
+func TestParsePathTraceTLV(t *testing.T) {
+	pathSequence := []ClockIdentity{
+		630763432548989518,
+		123479299994292777,
+		342422224531222222,
+	}
+
+	// PathTrace last in the buffer, exactly as an Announce datagram carries it
 	parsed := &PathTraceTLV{}
-	require.Nil(t, parsed.UnmarshalBinary(raw))
+	require.Nil(t, parsed.UnmarshalBinary(pathTraceBytes(t, pathSequence)))
 	require.Equal(t, pathSequence, parsed.PathSequence)
 
+	// followed by another TLV, which must not be read as an extra hop
 	next := &PathTraceTLV{
 		TLVHead: TLVHead{
 			TLVType:     TLVPathTrace,
@@ -63,16 +67,51 @@ func TestParsePathTraceTLV(t *testing.T) {
 		},
 		PathSequence: []ClockIdentity{42},
 	}
-	combined := make([]byte, 0, len(raw)+8+4)
-	combined = append(combined, raw...)
 	nextRaw := make([]byte, tlvHeadSize+8)
-	n, err = next.MarshalBinaryTo(nextRaw)
+	n, err := next.MarshalBinaryTo(nextRaw)
 	require.Nil(t, err)
-	combined = append(combined, nextRaw[:n]...)
+	buf := append(pathTraceBytes(t, pathSequence), nextRaw[:n]...)
 
 	first := &PathTraceTLV{}
-	require.Nil(t, first.UnmarshalBinary(combined))
+	require.Nil(t, first.UnmarshalBinary(buf))
 	require.Equal(t, pathSequence, first.PathSequence)
+}
+
+func TestParseAnnounceWithPathTraceDatagram(t *testing.T) {
+	pathSequence := []ClockIdentity{
+		630763432548989518,
+		123479299994292777,
+		342422224531222222,
+	}
+	packet := &Announce{
+		Header: Header{
+			SdoIDAndMsgType: NewSdoIDAndMsgType(MessageAnnounce, 0),
+			Version:         Version,
+			FlagField:       FlagUnicast | FlagPTPTimescale,
+		},
+		TLVs: []TLV{&PathTraceTLV{
+			TLVHead: TLVHead{
+				TLVType:     TLVPathTrace,
+				LengthField: uint16(len(pathSequence) * 8),
+			},
+			PathSequence: pathSequence,
+		}},
+	}
+	buf := make([]byte, 512)
+	n, err := packet.MarshalBinaryTo(buf)
+	require.Nil(t, err)
+	// MarshalBinaryTo reports an unpadded size; senders put exactly that in the
+	// header, and unlike Bytes() it does not append the twoZeros pad.
+	packet.MessageLength = uint16(n)
+	n, err = packet.MarshalBinaryTo(buf)
+	require.Nil(t, err)
+
+	got := &Announce{}
+	require.Nil(t, FromBytes(buf[:n], got))
+	require.Len(t, got.TLVs, 1)
+	pathTrace, ok := got.TLVs[0].(*PathTraceTLV)
+	require.True(t, ok)
+	require.Equal(t, pathSequence, pathTrace.PathSequence)
 }
 
 func TestParseAnnounceWithPathTrace(t *testing.T) {
