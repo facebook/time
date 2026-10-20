@@ -49,6 +49,7 @@ var defaultPollParams = []string{
 	"DisciplineTuning",
 	"Temperature",
 	"Alarms",
+	"Phase",
 }
 
 var (
