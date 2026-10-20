@@ -205,7 +205,7 @@ func TestModule(t *testing.T) {
 	c := Module{Remediation: r}
 	require.Equal(t, "Module", c.Name())
 
-	sampleResp := "{\"Channels\":{\"1\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"2\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"C\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"},\"D\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"}},\"Modules\":{\"1\":{\"Channels\":[\"1\",\"2\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Packet Module (V2)\"},\"C\":{\"Channels\":[\"C\",\"D\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Clock Module\"}}}"
+	sampleResp := "{\"Channels\":{\"1\":{\"Progress\":-1,\"QSFP\":{\"detected\":true},\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"2\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"C\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"},\"D\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"}},\"Modules\":{\"1\":{\"Channels\":[\"1\",\"2\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Packet Module (V2)\"},\"C\":{\"Channels\":[\"C\",\"D\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Clock Module\"}}}"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
@@ -226,7 +226,7 @@ func TestModuleBad(t *testing.T) {
 	c := Module{Remediation: r}
 	require.Equal(t, "Module", c.Name())
 
-	sampleResp := "{\"Channels\":{\"1\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"2\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"C\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"},\"D\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"}},\"Modules\":{\"1\":{\"Channels\":[\"1\",\"2\"],\"Progress\":-1,\"State\":\"Fault\",\"Type\":\"Packet Module (V2)\"},\"C\":{\"Channels\":[\"C\",\"D\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Clock Module\"}}}"
+	sampleResp := "{\"Channels\":{\"1\":{\"Progress\":-1,\"QSFP\":{\"detected\":true},\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"2\":{\"Progress\":-1,\"Slot\":\"1\",\"State\":\"Ready\",\"Type\":\"10G Packet Module (V2)\"},\"C\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"},\"D\":{\"Progress\":-1,\"Slot\":\"C\",\"State\":\"Ready\",\"Type\":\"Clock Module\"}},\"Modules\":{\"1\":{\"Channels\":[\"1\",\"2\"],\"Progress\":-1,\"State\":\"Fault\",\"Type\":\"Packet Module (V2)\"},\"C\":{\"Channels\":[\"C\",\"D\"],\"Progress\":-1,\"State\":\"Ready\",\"Type\":\"Clock Module\"}}}"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		fmt.Fprintln(w, sampleResp)
@@ -240,6 +240,45 @@ func TestModuleBad(t *testing.T) {
 
 	err = c.Run(parsed.Host, true)
 	require.ErrorContains(t, err, "module: failed module 1: state: Fault")
+}
+
+func TestModuleMissingQSFP(t *testing.T) {
+	r := ModuleRemediation{}
+	c := Module{Remediation: r}
+
+	sampleResp := `{
+		"Channels": {
+			"1": {
+				"Progress": -1,
+				"QSFP": {"detected": false},
+				"SFP": {"detected": true},
+				"Slot": "1",
+				"State": "Ready",
+				"Type": "10G Packet Module (V2)"
+			}
+		},
+		"Modules": {
+			"1": {
+				"Channels": ["1", "2"],
+				"Progress": -1,
+				"State": "Ready",
+				"Type": "Packet Module (V2)"
+			}
+		}
+	}`
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
+		_ *http.Request) {
+		fmt.Fprintln(w, sampleResp)
+	}))
+	defer ts.Close()
+
+	parsed, _ := url.Parse(ts.URL)
+	calnexAPI, err := api.NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
+	calnexAPI.Client = ts.Client()
+
+	err = c.Run(parsed.Host, true)
+	require.ErrorContains(t, err, "module: QSFP not detected on channel 1")
 }
 
 func TestModuleError(t *testing.T) {

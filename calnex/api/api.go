@@ -59,9 +59,15 @@ type InstrumentStatus struct {
 	IsRecoveryMode bool `json:"isRecoveryMode"`
 }
 
+// TransceiverStatus is a struct representing Calnex transceiver status
+type TransceiverStatus struct {
+	Detected bool `json:"detected"`
+}
+
 // ChannelStatus is a struct representing Calnex channel instrument status
 type ChannelStatus struct {
 	Progress int
+	QSFP     TransceiverStatus
 	Slot     string
 	State    string
 	Type     string

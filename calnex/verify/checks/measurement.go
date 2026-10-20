@@ -42,14 +42,19 @@ func (m *Module) Name() string {
 
 // Run executes the check
 func (m *Module) Run(target string, insecureTLS bool) error {
-	api, err := api.NewAPI(target, insecureTLS, 10*time.Second)
+	calnexAPI, err := api.NewAPI(target, insecureTLS, 10*time.Second)
 	if err != nil {
 		return err
 	}
 
-	ms, err := api.FetchInstrumentStatus()
+	ms, err := calnexAPI.FetchInstrumentStatus()
 	if err != nil {
 		return err
+	}
+
+	chOne, ok := ms.Channels[api.ChannelONE]
+	if ok && !chOne.QSFP.Detected {
+		return fmt.Errorf("module: QSFP not detected on channel %s", api.ChannelONE)
 	}
 
 	for channel, module := range ms.Modules {
