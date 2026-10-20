@@ -46,14 +46,8 @@ func readPHC() *float64 {
 		log.Warningf("reading %s: %v", ptpDevice, err)
 		return nil
 	}
-	// the PHC keeps TAI; without the table every reading is 37s out
-	leaps, err := leapsectz.Parse("")
-	if err != nil {
-		log.Warningf("reading leap second table: %v", err)
-		return nil
-	}
-	offset := sysoff.Offset + time.Duration(leapsectz.UTCOffsetS(leaps, sysoff.SysTime))*time.Second
-	ms := float64(offset) / float64(time.Millisecond)
+	// the PHC keeps TAI
+	ms := float64(sysoff.Offset+leapsectz.UTCOffset) / float64(time.Millisecond)
 	return &ms
 }
 

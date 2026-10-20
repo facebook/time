@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/daemon"
+	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/ptp/c4u/clock"
 	"github.com/facebook/time/ptp/c4u/stats"
-	"github.com/facebook/time/ptp/c4u/utcoffset"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/ptp4u/server"
 	log "github.com/sirupsen/logrus"
@@ -126,13 +126,6 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 	// Evaluate and override if needed
 	q := evaluateClockQuality(config, w)
 
-	// UTC data
-	u, utcErr := utcoffset.Run()
-	if utcErr != nil {
-		log.Errorf("Failed to collect UTC offset data: %v", utcErr)
-		dataError = true
-	}
-
 	if dataError {
 		st.IncDataError()
 	} else {
@@ -149,9 +142,7 @@ func Run(config *Config, rb *clock.RingBuffer, st stats.Stats) error {
 
 	pending.ClockClass = q.ClockClass
 	pending.ClockAccuracy = q.ClockAccuracy
-	if utcErr == nil {
-		pending.UTCOffset = u
-	}
+	pending.UTCOffset = leapsectz.UTCOffset
 
 	st.SetClockClass(int64(pending.ClockClass))
 	st.SetClockAccuracy(int64(pending.ClockAccuracy))

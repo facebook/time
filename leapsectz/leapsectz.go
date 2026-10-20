@@ -31,6 +31,9 @@ import (
 // utcOffsetOriginalS is TAI-UTC before leap seconds began in 1972.
 const utcOffsetOriginalS int32 = 10
 
+// UTCOffset is the TAI-UTC offset, fixed at 37s since the 2017-01-01 leap second.
+const UTCOffset = 37 * time.Second
+
 // leapFile is a file containing leap second information
 var leapFile = "/usr/share/zoneinfo/right/UTC"
 

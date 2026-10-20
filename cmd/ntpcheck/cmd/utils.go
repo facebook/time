@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/facebook/time/leaphash"
-	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/ntp/chrony"
 	ntp "github.com/facebook/time/ntp/protocol"
 	"github.com/facebook/time/timestamp"
@@ -261,44 +260,6 @@ func ntpDate(remoteServerAddr string, remoteServerPort string, requests int, ntp
 	return nil
 }
 
-// printLeap prints leap second information from the system timezone database
-func printLeap(srcfile string) error {
-	ls, err := leapsectz.Parse(srcfile)
-	if err != nil {
-		return err
-	}
-	for _, l := range ls {
-		fmt.Println(l.Time().UTC())
-	}
-	return nil
-}
-
-// addFakeSecondZoneInfo reads current zoneinfo db leap seconds and add one in the end of month or year
-func addFakeSecondZoneInfo(srcfile, dstfile string, offsetMonth int) error {
-	ls, err := leapsectz.Parse(srcfile)
-	if err != nil {
-		return err
-	}
-
-	ntpEpoch := time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)
-	now := time.Now()
-	fakeLeap := time.Date(now.Year(), now.Month()+time.Month(offsetMonth), 1, 0, 0, 0, 0, time.UTC)
-	fmt.Printf("Fake second added on %s\n", fakeLeap.Format(time.RFC3339))
-	ls = append(ls, leapsectz.LeapSecond{
-		Tleap: uint64(fakeLeap.Sub(ntpEpoch).Seconds()) + uint64(len(ls)),
-		Nleap: int32(len(ls) + 1), //#nosec G115
-	})
-
-	o, err := os.Create(dstfile)
-	if err != nil {
-		return err
-	}
-
-	defer o.Close()
-
-	return leapsectz.Write(o, '2', ls, "")
-}
-
 // cli vars
 var refidIP string
 var fsCount int
@@ -306,9 +267,6 @@ var signFileName string
 var remoteServerAddr string
 var remoteServerPort int
 var ntpdateRequests int
-var sourceLeapSeconds string
-var destLeapSeconds string
-var offsetMonth int
 var ntpdateLocalAddr string
 
 func init() {
@@ -328,14 +286,6 @@ func init() {
 	ntpdateCmd.Flags().IntVarP(&remoteServerPort, "port", "p", 123, "Port of the remote server")
 	ntpdateCmd.Flags().IntVarP(&ntpdateRequests, "requests", "r", 3, "How many requests to send")
 	ntpdateCmd.Flags().StringVarP(&ntpdateLocalAddr, "local-addr", "l", "", "Source IP address")
-	// printleap
-	utilsCmd.AddCommand(printLeapCmd)
-	printLeapCmd.Flags().StringVarP(&sourceLeapSeconds, "srcfile", "s", "/usr/share/zoneinfo/right/UTC", "Source file of leap seconds")
-	// addFakeSecondZoneInfo
-	utilsCmd.AddCommand(addFakeSecondZoneInfoCmd)
-	addFakeSecondZoneInfoCmd.Flags().IntVarP(&offsetMonth, "month", "m", 1, "How many monthes to add to current to insert leap second")
-	addFakeSecondZoneInfoCmd.Flags().StringVarP(&sourceLeapSeconds, "srcfile", "s", "/usr/share/zoneinfo/right/UTC", "Source file of leap seconds")
-	addFakeSecondZoneInfoCmd.Flags().StringVarP(&destLeapSeconds, "dstfile", "d", "/usr/share/zoneinfo/right/Fake", "Destination file for fake leap seconds")
 }
 
 var utilsCmd = &cobra.Command{
@@ -386,32 +336,6 @@ var ntpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		if err := ntpDate(remoteServerAddr, strconv.Itoa(remoteServerPort), ntpdateRequests, ntpdateLocalAddr); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-	},
-}
-
-var printLeapCmd = &cobra.Command{
-	Use:   "printleap",
-	Short: "Prints leap second information from the system timezone database",
-	Run: func(_ *cobra.Command, _ []string) {
-		ConfigureVerbosity()
-		if err := printLeap(sourceLeapSeconds); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-	},
-}
-
-var addFakeSecondZoneInfoCmd = &cobra.Command{
-	Use:   "addfakesecond",
-	Short: "Adds fake second to zoneinfo database",
-	Long: `'addfakesecond' will read current zoneinfo leap second file from srcfile, add fake second
-	in the end of the month (plus offset provided by -m) and write new file to dstfile`,
-	Run: func(_ *cobra.Command, _ []string) {
-		ConfigureVerbosity()
-		if err := addFakeSecondZoneInfo(sourceLeapSeconds, destLeapSeconds, offsetMonth); err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}

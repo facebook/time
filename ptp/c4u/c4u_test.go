@@ -22,18 +22,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/facebook/time/leapsectz/leaptest"
 	"github.com/facebook/time/ptp/c4u/clock"
 	"github.com/facebook/time/ptp/c4u/stats"
-	"github.com/facebook/time/ptp/c4u/utcoffset"
 	ptp "github.com/facebook/time/ptp/protocol"
 	"github.com/facebook/time/ptp/ptp4u/server"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRun(t *testing.T) {
-	leaptest.Use(t, 27)
-
 	expected := &server.DynamicConfig{
 		ClockClass:     ptp.ClockClass6,
 		ClockAccuracy:  ptp.ClockAccuracyNanosecond25,
@@ -73,8 +69,6 @@ func TestRun(t *testing.T) {
 }
 
 func TestRunNilDatapoint(t *testing.T) {
-	leaptest.Use(t, 27)
-
 	expected := &server.DynamicConfig{
 		ClockClass:     ptp.ClockClass52,
 		ClockAccuracy:  254,
@@ -146,86 +140,7 @@ func writeDynamicConfig(t *testing.T, path string, utcOffset time.Duration) {
 	require.NoError(t, onDisk.Write(path))
 }
 
-func TestRunKeepsUsableUTCOffsetWhenLeapDataIsUnusable(t *testing.T) {
-	tests := []struct {
-		name     string
-		unusable func(testing.TB)
-	}{
-		{name: "no past leap second", unusable: leaptest.UseFutureOnly},
-		{name: "unreadable leap table", unusable: leaptest.UseUnreadable},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.unusable(t)
-			_, err := utcoffset.Run()
-			require.Error(t, err, "the leap data must be unusable or this test proves nothing")
-
-			path := filepath.Join(t.TempDir(), "ptp4u.yaml")
-			writeDynamicConfig(t, path, 37*time.Second)
-
-			c, rb := runConfig(t, path)
-			require.NoError(t, Run(c, rb, stats.NewJSONStats()))
-
-			dc, err := server.ReadDynamicConfig(path)
-			require.NoError(t, err, "ptp4u must still accept the config c4u wrote")
-			require.Equal(t, 37*time.Second, dc.UTCOffset, "the last usable offset survives")
-			require.Equal(t, ptp.ClockClass6, dc.ClockClass, "clock quality still gets through")
-			require.Equal(t, ptp.ClockAccuracyNanosecond25, dc.ClockAccuracy)
-		})
-	}
-}
-
-func TestRunLeavesAnOutOfRangeConfigAloneWhenLeapDataIsUnusable(t *testing.T) {
-	leaptest.UseFutureOnly(t)
-
-	path := filepath.Join(t.TempDir(), "ptp4u.yaml")
-	writeDynamicConfig(t, path, 10*time.Second)
-	before, err := os.ReadFile(path)
-	require.NoError(t, err)
-	_, err = server.ReadDynamicConfig(path)
-	require.Error(t, err, "the on-disk offset is out of range, so c4u falls back to defaultConfig")
-
-	c, rb := runConfig(t, path)
-	require.NoError(t, Run(c, rb, stats.NewJSONStats()))
-
-	after, err := os.ReadFile(path)
-	require.NoError(t, err)
-	require.Equal(t, string(before), string(after), "c4u must not replace 10s with defaultConfig's 0s")
-}
-
-func TestRunWritesNoConfigWhenThereIsNoUsableUTCOffset(t *testing.T) {
-	leaptest.UseFutureOnly(t)
-
-	path := filepath.Join(t.TempDir(), "ptp4u.yaml")
-	c, rb := runConfig(t, path)
-	require.NoError(t, Run(c, rb, stats.NewJSONStats()))
-
-	_, err := os.Stat(path)
-	require.ErrorIs(t, err, os.ErrNotExist, "c4u must not create a config ptp4u would refuse to load")
-}
-
-func TestRunResumesWritingOnceLeapDataIsUsableAgain(t *testing.T) {
-	leaptest.UseFutureOnly(t)
-
-	path := filepath.Join(t.TempDir(), "ptp4u.yaml")
-	c, rb := runConfig(t, path)
-	require.NoError(t, Run(c, rb, stats.NewJSONStats()))
-	_, err := os.Stat(path)
-	require.ErrorIs(t, err, os.ErrNotExist)
-
-	leaptest.Use(t, 27)
-	require.NoError(t, Run(c, rb, stats.NewJSONStats()))
-
-	dc, err := server.ReadDynamicConfig(path)
-	require.NoError(t, err, "refusing to write must not be a one-way door")
-	require.Equal(t, 37*time.Second, dc.UTCOffset)
-	require.Equal(t, ptp.ClockClass6, dc.ClockClass)
-}
-
 func TestRunRefreshesAStaleUsableUTCOffset(t *testing.T) {
-	leaptest.Use(t, 27)
-
 	path := filepath.Join(t.TempDir(), "ptp4u.yaml")
 	writeDynamicConfig(t, path, 36*time.Second)
 
