@@ -413,13 +413,16 @@ func streamFrames(
 	var rawxCount uint64
 
 	// Inject RTCM 1033 on connect and every 30s.
-	msg1033 := rtcm.Encode1033(rtcm.AntennaDescriptor{
+	msg1033, err := rtcm.Encode1033(rtcm.AntennaDescriptor{
 		StationID:      stationID,
 		AntennaType:    "ADVNULLANTENNA",
 		AntennaSetupID: 0,
 		ReceiverType:   "u-blox F9T",
 		ReceiverFW:     "2.20",
 	})
+	if err != nil {
+		return fmt.Errorf("encoding 1033: %w", err)
+	}
 	if _, err := client.Write(msg1033); err != nil {
 		return casterWrite("initial 1033", err)
 	}

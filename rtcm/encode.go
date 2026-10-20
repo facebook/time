@@ -16,7 +16,11 @@ limitations under the License.
 
 package rtcm
 
-import "encoding/binary"
+import "fmt"
+
+// maxDescriptorFieldLen is the width of the DF227/DF230/DF232/DF234/DF236
+// counters that prefix each descriptor string.
+const maxDescriptorFieldLen = 255
 
 // AntennaDescriptor holds parameters for generating RTCM 1033
 // (Receiver and Antenna Descriptor) messages.
@@ -31,7 +35,10 @@ type AntennaDescriptor struct {
 }
 
 // Encode1033 generates a complete RTCM 1033 frame (header + payload + CRC).
-func Encode1033(desc AntennaDescriptor) []byte {
+// It reports ErrDescriptorTooLong for a string the 8-bit counters cannot carry,
+// and ErrPayloadTooLarge for a frame whose length does not fit the 10-bit header
+// field, rather than emitting a frame the parser and scanner both reject.
+func Encode1033(desc AntennaDescriptor) ([]byte, error) {
 	// Build the bit-packed payload.
 	// RTCM 1033 fields:
 	//   DF002: Message Number (12 bits) = 1033
@@ -48,6 +55,23 @@ func Encode1033(desc AntennaDescriptor) []byte {
 	//   DF236: Serial Counter K (8 bits)
 	//   DF237: Receiver Serial (K bytes)
 
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{"AntennaType", desc.AntennaType},
+		{"AntennaSerial", desc.AntennaSerial},
+		{"ReceiverType", desc.ReceiverType},
+		{"ReceiverFW", desc.ReceiverFW},
+		{"ReceiverSerial", desc.ReceiverSerial},
+	}
+	for _, f := range fields {
+		if len(f.value) > maxDescriptorFieldLen {
+			return nil, fmt.Errorf("%w: %s is %d bytes, max %d",
+				ErrDescriptorTooLong, f.name, len(f.value), maxDescriptorFieldLen)
+		}
+	}
+
 	payloadSize := 3 + // 12+12 bits = 24 bits = 3 bytes for msg number + station ID
 		1 + len(desc.AntennaType) +
 		1 + // setup ID
@@ -55,6 +79,11 @@ func Encode1033(desc AntennaDescriptor) []byte {
 		1 + len(desc.ReceiverType) +
 		1 + len(desc.ReceiverFW) +
 		1 + len(desc.ReceiverSerial)
+
+	if payloadSize > MaxPayloadLen {
+		return nil, fmt.Errorf("%w: %d > %d for 1033",
+			ErrPayloadTooLarge, payloadSize, MaxPayloadLen)
+	}
 
 	payload := make([]byte, payloadSize)
 	offset := 0
@@ -107,11 +136,12 @@ func Encode1033(desc AntennaDescriptor) []byte {
 
 	// Header: preamble + 6 reserved bits (0) + 10-bit length
 	frame[0] = Preamble
-	binary.BigEndian.PutUint16(frame[1:3], uint16(len(payload)&0xFFFF))
+	frame[1] = byte((len(payload) >> 8) & 0x03)
+	frame[2] = byte(len(payload) & 0xFF)
 
 	// Payload
 	copy(frame[HeaderSize:], payload)
 
 	putCRC(frame)
-	return frame
+	return frame, nil
 }

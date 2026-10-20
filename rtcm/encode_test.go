@@ -17,6 +17,8 @@ limitations under the License.
 package rtcm
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,6 +29,13 @@ func stationIDOf(payload []byte) uint16 {
 	return uint16(payload[1]&0x0F)<<8 | uint16(payload[2])
 }
 
+func mustEncode1033(t *testing.T, desc AntennaDescriptor) []byte {
+	t.Helper()
+	frame, err := Encode1033(desc)
+	require.NoError(t, err)
+	return frame
+}
+
 func TestEncode1033RoundTrip(t *testing.T) {
 	desc := AntennaDescriptor{
 		StationID:    1234,
@@ -34,7 +43,7 @@ func TestEncode1033RoundTrip(t *testing.T) {
 		ReceiverType: "u-blox F9T",
 		ReceiverFW:   "2.20",
 	}
-	frame := Encode1033(desc)
+	frame := mustEncode1033(t, desc)
 
 	f, err := ParseFrame(frame) // also validates CRC-24Q
 	require.NoError(t, err)
@@ -45,8 +54,59 @@ func TestEncode1033RoundTrip(t *testing.T) {
 	require.Contains(t, string(f.Payload), "2.20")
 }
 
+func TestEncode1033RejectsUnrepresentableFrames(t *testing.T) {
+	t.Run("total exceeds the 10-bit header length", func(t *testing.T) {
+		// Every field is individually legal under its 8-bit counter, but the
+		// payload they add up to does not fit the header's length field.
+		long := strings.Repeat("A", 250)
+		frame, err := Encode1033(AntennaDescriptor{
+			StationID:      7,
+			AntennaType:    long,
+			AntennaSerial:  long,
+			ReceiverType:   long,
+			ReceiverFW:     long,
+			ReceiverSerial: long,
+		})
+		require.Nil(t, frame)
+		require.ErrorIs(t, err, ErrPayloadTooLarge)
+	})
+
+	t.Run("field exceeds its 8-bit counter", func(t *testing.T) {
+		frame, err := Encode1033(AntennaDescriptor{
+			StationID:   7,
+			AntennaType: strings.Repeat("A", maxDescriptorFieldLen+1),
+		})
+		require.Nil(t, frame)
+		require.ErrorIs(t, err, ErrDescriptorTooLong)
+	})
+}
+
+func TestEncode1033LargestRepresentableFrame(t *testing.T) {
+	// 9 bytes of fixed overhead plus 255+255+255+249 descriptor bytes is exactly
+	// MaxPayloadLen, the longest frame the header can still describe.
+	frame, err := Encode1033(AntennaDescriptor{
+		StationID:     7,
+		AntennaType:   strings.Repeat("A", maxDescriptorFieldLen),
+		AntennaSerial: strings.Repeat("B", maxDescriptorFieldLen),
+		ReceiverType:  strings.Repeat("C", maxDescriptorFieldLen),
+		ReceiverFW:    strings.Repeat("D", maxDescriptorFieldLen-6),
+	})
+	require.NoError(t, err)
+	require.Len(t, frame, HeaderSize+MaxPayloadLen+CRCSize)
+	require.Zero(t, frame[1]&0xFC, "reserved bits must stay zero")
+
+	f, err := ParseFrame(frame)
+	require.NoError(t, err)
+	require.Equal(t, uint16(1033), f.MessageType)
+
+	s := NewScanner(bytes.NewReader(frame))
+	require.True(t, s.Scan(), "the scanner must sync on what the encoder emitted")
+	require.Equal(t, uint16(1033), s.Frame().MessageType)
+	require.NoError(t, s.Err())
+}
+
 func TestPatchStationID(t *testing.T) {
-	orig := Encode1033(AntennaDescriptor{StationID: 1, AntennaType: "X"})
+	orig := mustEncode1033(t, AntennaDescriptor{StationID: 1, AntennaType: "X"})
 	patched := PatchStationID(orig, 4090)
 
 	f, err := ParseFrame(patched) // CRC must still validate after the patch

@@ -91,8 +91,10 @@ func TestSetupLogger(t *testing.T) {
 
 func TestParseStreamCleanFile(t *testing.T) {
 	// A file of back-to-back valid RTCM3 frames parses without error.
-	a := rtcm.Encode1033(rtcm.AntennaDescriptor{StationID: 1, AntennaType: "A"})
-	b := rtcm.Encode1033(rtcm.AntennaDescriptor{StationID: 2, AntennaType: "BB"})
+	a, err := rtcm.Encode1033(rtcm.AntennaDescriptor{StationID: 1, AntennaType: "A"})
+	require.NoError(t, err)
+	b, err := rtcm.Encode1033(rtcm.AntennaDescriptor{StationID: 2, AntennaType: "BB"})
+	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "stream.rtcm3")
 	require.NoError(t, os.WriteFile(path, append(append([]byte{}, a...), b...), 0o644))
 	require.NoError(t, parseStream(path))
