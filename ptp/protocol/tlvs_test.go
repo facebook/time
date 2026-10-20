@@ -31,6 +31,50 @@ func TestTLVHeadType(t *testing.T) {
 	require.Equal(t, TLVRequestUnicastTransmission, head.Type())
 }
 
+func TestParsePathTraceTLV(t *testing.T) {
+	pathSequence := []ClockIdentity{
+		630763432548989518,
+		123479299994292777,
+		342422224531222222,
+	}
+	tlv := &PathTraceTLV{
+		TLVHead: TLVHead{
+			TLVType:     TLVPathTrace,
+			LengthField: uint16(len(pathSequence) * 8),
+		},
+		PathSequence: pathSequence,
+	}
+	// A PathTrace is the last TLV of an Announce, whose 64 byte header plus its
+	// TLVs already exceeds the Ethernet minimum, so on the wire the TLV body
+	// ends exactly at the end of the buffer.
+	raw := make([]byte, tlvHeadSize+len(pathSequence)*8)
+	n, err := tlv.MarshalBinaryTo(raw)
+	require.Nil(t, err)
+	require.Equal(t, len(raw), n)
+
+	parsed := &PathTraceTLV{}
+	require.Nil(t, parsed.UnmarshalBinary(raw))
+	require.Equal(t, pathSequence, parsed.PathSequence)
+
+	next := &PathTraceTLV{
+		TLVHead: TLVHead{
+			TLVType:     TLVPathTrace,
+			LengthField: 8,
+		},
+		PathSequence: []ClockIdentity{42},
+	}
+	combined := make([]byte, 0, len(raw)+8+4)
+	combined = append(combined, raw...)
+	nextRaw := make([]byte, tlvHeadSize+8)
+	n, err = next.MarshalBinaryTo(nextRaw)
+	require.Nil(t, err)
+	combined = append(combined, nextRaw[:n]...)
+
+	first := &PathTraceTLV{}
+	require.Nil(t, first.UnmarshalBinary(combined))
+	require.Equal(t, pathSequence, first.PathSequence)
+}
+
 func TestParseAnnounceWithPathTrace(t *testing.T) {
 	raw := []uint8("\x0b\x12\x00\x4c\x00\x00\x04\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\xc0\xeb\xff\xfe\x63\x7a\x4e\x00\x01\x00\x00\x05\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x25\x00\x80\xf8\xfe\xff\xff\x80\x08\xc0\xeb\xff\xfe\x63\x7a\x4e\x00\x00\xa0\x00\x08\x00\x18\x08\xc0\xeb\xff\xfe\x63\x7a\x4e\x01\xb6\xaf\xc4\xe5\x46\x12\x29\x04\xc0\x87\x32\xf0\x61\xee\xce\x00\x00")
 	packet := new(Announce)

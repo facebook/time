@@ -349,9 +349,11 @@ func (t *PathTraceTLV) UnmarshalBinary(b []byte) error {
 		return err
 	}
 	t.PathSequence = []ClockIdentity{}
-	for i := 0; i*8 <= int(t.LengthField); i++ {
+	// LengthField is 8N, so the Nth identity starts at (N-1)*8 and ends exactly
+	// at the head plus LengthField; a body that ends at len(b) is still complete.
+	for i := 0; i*8 < int(t.LengthField); i++ {
 		pos := tlvHeadSize + i*8
-		if pos+8 >= len(b) {
+		if pos+8 > len(b) {
 			break
 		}
 		identity := ClockIdentity(binary.BigEndian.Uint64(b[pos:]))
