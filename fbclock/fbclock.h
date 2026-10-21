@@ -164,6 +164,72 @@ typedef struct fbclock_shmdata_v2 {
 #define FBCLOCK_POW2_16 ((double)(1ULL << 16))
 #define FBCLOCK_PTPPATH "/dev/fbclock/ptp"
 
+// No version in the name: an incompatible change needs a new path. Additive
+// changes bump FBCLOCK_DATA_MINOR; a field added later uses 0 for "absent".
+#define FBCLOCK_DATA_PATH "/run/fbclock/data"
+// The file's first 8 bytes, NUL included.
+#define FBCLOCK_DATA_MAGIC "FBCLOCK"
+// Readers require this major.
+#define FBCLOCK_DATA_MAJOR 3
+// Readers check minor >= N before using a field added in minor N.
+#define FBCLOCK_DATA_MINOR 0
+
+// Bits of fbclock_data_clock.status. Readers serve a section only when status
+// is exactly VALID, so a bit added later fails closed in old readers.
+#define FBCLOCK_STATUS_VALID (1 << 0)
+// Published for monitoring, never served.
+#define FBCLOCK_STATUS_OBSERVE_ONLY (1 << 1)
+
+// Written at daemon startup: the magic last, after every section is set up.
+typedef struct fbclock_data_header {
+  alignas(64) uint8_t magic[8];
+  uint8_t major;
+  uint8_t minor;
+  uint8_t reserved[54];
+} fbclock_data_header;
+
+// One source's clock, copied as a whole under its section's seqlock.
+typedef struct fbclock_data_clock {
+  // FBCLOCK_SOURCE_* published in this section on this host; 0 for none
+  uint8_t source;
+  uint8_t reserved0;
+  // FBCLOCK_STATUS_* bits
+  uint16_t status;
+  // base clock of sysclock_time_ns: CLOCK_MONOTONIC_RAW or CLOCK_REALTIME
+  uint32_t clock_id;
+  // the anchor: the source's time (TAI) and the base clock at one instant
+  int64_t ref_time_ns;
+  int64_t sysclock_time_ns;
+  // source rate against the base clock; 0 for NTP
+  int64_t coef_ppb;
+  // the bound: error_bound_ns at ingress_time_ns (TAI), then growing at
+  // holdover_multiplier_ns; UINT32_MAX in either means too big to serve
+  int64_t ingress_time_ns;
+  uint32_t error_bound_ns;
+  // ns per second, Q16.16
+  uint32_t holdover_multiplier_ns;
+  uint8_t reserved[8];
+} fbclock_data_clock;
+
+typedef struct fbclock_data_section {
+  alignas(64) atomic_uint64 seq;
+  fbclock_data_clock clock;
+} fbclock_data_section;
+
+// The whole file: a fixed 4096 bytes, each section at a fixed offset.
+typedef struct fbclock_data {
+  fbclock_data_header header;
+  // MONOTONIC_RAW base; REALTIME where the kernel rejects MONOTONIC_RAW
+  fbclock_data_section ptp;
+  // REALTIME base for fbclock_gettime_past, only when ptp isn't REALTIME
+  fbclock_data_section ptp_realtime;
+  // REALTIME base, the clock chrony steers, so coef_ppb is 0
+  fbclock_data_section ntp;
+  fbclock_data_section reserved[60];
+} fbclock_data;
+
+#define FBCLOCK_DATA_SIZE sizeof(fbclock_data)
+
 // supported time standards
 #define FBCLOCK_TAI 0
 #define FBCLOCK_UTC 1
