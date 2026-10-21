@@ -16,7 +16,10 @@ limitations under the License.
 
 package rtcm
 
-import "encoding/binary"
+import "fmt"
+
+// maxDescriptorLen is the RTCM 1033 limit on each descriptor string (counters DF029/DF032/DF227/DF229/DF231).
+const maxDescriptorLen = 31
 
 // AntennaDescriptor holds parameters for generating RTCM 1033
 // (Receiver and Antenna Descriptor) messages.
@@ -31,22 +34,22 @@ type AntennaDescriptor struct {
 }
 
 // Encode1033 generates a complete RTCM 1033 frame (header + payload + CRC).
-func Encode1033(desc AntennaDescriptor) []byte {
-	// Build the bit-packed payload.
-	// RTCM 1033 fields:
-	//   DF002: Message Number (12 bits) = 1033
-	//   DF003: Reference Station ID (12 bits)
-	//   DF227: Descriptor Counter N (8 bits)
-	//   DF228: Antenna Descriptor (N bytes)
-	//   DF229: Antenna Setup ID (8 bits)
-	//   DF230: Serial Number Counter M (8 bits)
-	//   DF231: Antenna Serial Number (M bytes)
-	//   DF232: Receiver Type Counter I (8 bits)
-	//   DF233: Receiver Type (I bytes)
-	//   DF234: Firmware Counter J (8 bits)
-	//   DF235: Receiver Firmware (J bytes)
-	//   DF236: Serial Counter K (8 bits)
-	//   DF237: Receiver Serial (K bytes)
+func Encode1033(desc AntennaDescriptor) ([]byte, error) {
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{"AntennaType", desc.AntennaType},
+		{"AntennaSerial", desc.AntennaSerial},
+		{"ReceiverType", desc.ReceiverType},
+		{"ReceiverFW", desc.ReceiverFW},
+		{"ReceiverSerial", desc.ReceiverSerial},
+	}
+	for _, f := range fields {
+		if len(f.value) > maxDescriptorLen {
+			return nil, fmt.Errorf("%w: %s is %d bytes", ErrDescriptorTooLong, f.name, len(f.value))
+		}
+	}
 
 	payloadSize := 3 + // 12+12 bits = 24 bits = 3 bytes for msg number + station ID
 		1 + len(desc.AntennaType) +
@@ -101,17 +104,5 @@ func Encode1033(desc AntennaDescriptor) []byte {
 	offset++
 	copy(payload[offset:], desc.ReceiverSerial)
 
-	// Build complete frame: header (3) + payload + CRC (3)
-	frameLen := HeaderSize + len(payload) + CRCSize
-	frame := make([]byte, frameLen)
-
-	// Header: preamble + 6 reserved bits (0) + 10-bit length
-	frame[0] = Preamble
-	binary.BigEndian.PutUint16(frame[1:3], uint16(len(payload)&0xFFFF))
-
-	// Payload
-	copy(frame[HeaderSize:], payload)
-
-	putCRC(frame)
-	return frame
+	return frameRTCM(payload), nil
 }

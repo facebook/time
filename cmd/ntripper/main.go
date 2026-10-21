@@ -282,6 +282,18 @@ func runOnce(ctx context.Context, cfg config, logger *slog.Logger, st *stats.JSO
 		return rawxStats(ctx, sockConn, logger)
 	}
 
+	stationID := parseStationID(cfg.username)
+	msg1033, err := rtcm.Encode1033(rtcm.AntennaDescriptor{
+		StationID:      stationID,
+		AntennaType:    "ADVNULLANTENNA",
+		AntennaSetupID: 0,
+		ReceiverType:   "u-blox F9T",
+		ReceiverFW:     "2.20",
+	})
+	if err != nil {
+		return fmt.Errorf("encoding 1033: %w", err)
+	}
+
 	client, err := connectCaster(ctx, cfg, logger)
 	if err != nil {
 		return fmt.Errorf("caster: %w", err)
@@ -289,7 +301,6 @@ func runOnce(ctx context.Context, cfg config, logger *slog.Logger, st *stats.JSO
 	defer client.Close()
 
 	st.SetConnected(1)
-	stationID := parseStationID(cfg.username)
 
 	// oscillatord closes the RTCM socket every ~5s.
 	// Keep caster alive and reconnect the socket seamlessly. The ephemeris
@@ -300,7 +311,7 @@ func runOnce(ctx context.Context, cfg config, logger *slog.Logger, st *stats.JSO
 			return fmt.Errorf("socket: %w", err)
 		}
 
-		err = streamFrames(ctx, sockConn, client, logger, st, stationID, ephColl, cfg.ephInterval)
+		err = streamFrames(ctx, sockConn, client, logger, st, stationID, msg1033, ephColl, cfg.ephInterval)
 		sockConn.Close()
 
 		if ctx.Err() != nil {
@@ -405,6 +416,7 @@ func streamFrames(
 	logger *slog.Logger,
 	st *stats.JSONStats,
 	stationID uint16,
+	msg1033 []byte,
 	ephColl *rtcm.EphCollector,
 	ephInterval time.Duration,
 ) error {
@@ -413,13 +425,6 @@ func streamFrames(
 	var rawxCount uint64
 
 	// Inject RTCM 1033 on connect and every 30s.
-	msg1033 := rtcm.Encode1033(rtcm.AntennaDescriptor{
-		StationID:      stationID,
-		AntennaType:    "ADVNULLANTENNA",
-		AntennaSetupID: 0,
-		ReceiverType:   "u-blox F9T",
-		ReceiverFW:     "2.20",
-	})
 	if _, err := client.Write(msg1033); err != nil {
 		return casterWrite("initial 1033", err)
 	}

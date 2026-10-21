@@ -50,10 +50,11 @@ const (
 )
 
 var (
-	ErrInvalidPreamble = errors.New("invalid preamble")
-	ErrPayloadTooLarge = errors.New("payload length exceeds maximum")
-	ErrFrameTooShort   = errors.New("frame data too short")
-	ErrCRCMismatch     = errors.New("CRC-24Q mismatch")
+	ErrInvalidPreamble   = errors.New("invalid preamble")
+	ErrPayloadTooLarge   = errors.New("payload length exceeds maximum")
+	ErrDescriptorTooLong = errors.New("1033 descriptor exceeds 31 characters")
+	ErrFrameTooShort     = errors.New("frame data too short")
+	ErrCRCMismatch       = errors.New("CRC-24Q mismatch")
 )
 
 // Frame represents a parsed RTCM3 frame.

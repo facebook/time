@@ -17,6 +17,8 @@ limitations under the License.
 package rtcm
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,6 +29,13 @@ func stationIDOf(payload []byte) uint16 {
 	return uint16(payload[1]&0x0F)<<8 | uint16(payload[2])
 }
 
+func mustEncode1033(t *testing.T, desc AntennaDescriptor) []byte {
+	t.Helper()
+	frame, err := Encode1033(desc)
+	require.NoError(t, err)
+	return frame
+}
+
 func TestEncode1033RoundTrip(t *testing.T) {
 	desc := AntennaDescriptor{
 		StationID:    1234,
@@ -34,7 +43,7 @@ func TestEncode1033RoundTrip(t *testing.T) {
 		ReceiverType: "u-blox F9T",
 		ReceiverFW:   "2.20",
 	}
-	frame := Encode1033(desc)
+	frame := mustEncode1033(t, desc)
 
 	f, err := ParseFrame(frame) // also validates CRC-24Q
 	require.NoError(t, err)
@@ -45,8 +54,56 @@ func TestEncode1033RoundTrip(t *testing.T) {
 	require.Contains(t, string(f.Payload), "2.20")
 }
 
+func TestEncode1033RejectsLongDescriptor(t *testing.T) {
+	long := strings.Repeat("A", 32)
+	for _, desc := range []AntennaDescriptor{
+		{AntennaType: long},
+		{AntennaSerial: long},
+		{ReceiverType: long},
+		{ReceiverFW: long},
+		{ReceiverSerial: long},
+	} {
+		frame, err := Encode1033(desc)
+		require.Nil(t, frame)
+		require.ErrorIs(t, err, ErrDescriptorTooLong)
+	}
+}
+
+func TestEncode1033MaxDescriptors(t *testing.T) {
+	desc := AntennaDescriptor{
+		StationID:      4095,
+		AntennaType:    strings.Repeat("A", 31),
+		AntennaSetupID: 7,
+		AntennaSerial:  strings.Repeat("B", 31),
+		ReceiverType:   strings.Repeat("C", 31),
+		ReceiverFW:     strings.Repeat("D", 31),
+		ReceiverSerial: strings.Repeat("E", 31),
+	}
+	frame := mustEncode1033(t, desc)
+
+	s := NewScanner(bytes.NewReader(frame))
+	require.True(t, s.Scan())
+	require.NoError(t, s.Err())
+	f := s.Frame()
+	require.Equal(t, uint16(1033), f.MessageType)
+	require.Equal(t, desc.StationID, stationIDOf(f.Payload))
+
+	p := f.Payload[3:]
+	var got []string
+	for len(p) > 0 {
+		n := int(p[0])
+		got = append(got, string(p[1:1+n]))
+		p = p[1+n:]
+		if len(got) == 1 {
+			require.Equal(t, desc.AntennaSetupID, p[0])
+			p = p[1:]
+		}
+	}
+	require.Equal(t, []string{desc.AntennaType, desc.AntennaSerial, desc.ReceiverType, desc.ReceiverFW, desc.ReceiverSerial}, got)
+}
+
 func TestPatchStationID(t *testing.T) {
-	orig := Encode1033(AntennaDescriptor{StationID: 1, AntennaType: "X"})
+	orig := mustEncode1033(t, AntennaDescriptor{StationID: 1, AntennaType: "X"})
 	patched := PatchStationID(orig, 4090)
 
 	f, err := ParseFrame(patched) // CRC must still validate after the patch

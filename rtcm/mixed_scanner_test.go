@@ -41,9 +41,9 @@ func TestScannerUBXFrame(t *testing.T) {
 }
 
 func TestScannerMixedUBXAndRTCM(t *testing.T) {
-	rtcmA := Encode1033(AntennaDescriptor{StationID: 1, AntennaType: "A"})
+	rtcmA := mustEncode1033(t, AntennaDescriptor{StationID: 1, AntennaType: "A"})
 	ubx := buildUBXFrame(UBXMsgRAWX, []byte{1, 2, 3, 4, 5})
-	rtcmB := Encode1033(AntennaDescriptor{StationID: 2, AntennaType: "BB"})
+	rtcmB := mustEncode1033(t, AntennaDescriptor{StationID: 2, AntennaType: "BB"})
 
 	var buf bytes.Buffer
 	buf.Write(rtcmA)
@@ -73,7 +73,7 @@ func TestScannerMixedUBXAndRTCM(t *testing.T) {
 func TestScannerUBXBadChecksumResyncs(t *testing.T) {
 	bad := buildUBXFrame(UBXMsgRAWX, []byte{0x11, 0x22, 0x33})
 	bad[len(bad)-1] ^= 0xFF // corrupt the checksum
-	good := Encode1033(AntennaDescriptor{StationID: 3, AntennaType: "CCC"})
+	good := mustEncode1033(t, AntennaDescriptor{StationID: 3, AntennaType: "CCC"})
 
 	var buf bytes.Buffer
 	buf.Write(bad)
@@ -145,7 +145,7 @@ func TestScannerRecordsNonEOFReadError(t *testing.T) {
 	})
 
 	t.Run("RTCM", func(t *testing.T) {
-		frame := Encode1033(AntennaDescriptor{StationID: 1, AntennaType: "A"})
+		frame := mustEncode1033(t, AntennaDescriptor{StationID: 1, AntennaType: "A"})
 		s := NewMixedScanner(&shortThenErrReader{data: frame[:4], err: readErr})
 		require.False(t, s.Scan())
 		require.ErrorIs(t, s.Err(), readErr)
