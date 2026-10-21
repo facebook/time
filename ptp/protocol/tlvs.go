@@ -349,11 +349,8 @@ func (t *PathTraceTLV) UnmarshalBinary(b []byte) error {
 		return err
 	}
 	t.PathSequence = []ClockIdentity{}
-	for i := 0; i*8 <= int(t.LengthField); i++ {
+	for i := range int(t.LengthField) / 8 {
 		pos := tlvHeadSize + i*8
-		if pos+8 >= len(b) {
-			break
-		}
 		identity := ClockIdentity(binary.BigEndian.Uint64(b[pos:]))
 		t.PathSequence = append(t.PathSequence, identity)
 	}

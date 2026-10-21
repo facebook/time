@@ -17,6 +17,7 @@ limitations under the License.
 package protocol
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -29,6 +30,69 @@ func TestTLVHeadType(t *testing.T) {
 		LengthField: 10,
 	}
 	require.Equal(t, TLVRequestUnicastTransmission, head.Type())
+}
+
+func pathTraceBytes(t *testing.T, pathSequence []ClockIdentity) []byte {
+	t.Helper()
+	tlv := &PathTraceTLV{
+		TLVHead:      TLVHead{TLVType: TLVPathTrace, LengthField: uint16(len(pathSequence) * 8)},
+		PathSequence: pathSequence,
+	}
+	raw := make([]byte, tlvHeadSize+len(pathSequence)*8)
+	n, err := tlv.MarshalBinaryTo(raw)
+	require.NoError(t, err)
+	require.Equal(t, len(raw), n)
+	return raw
+}
+
+func TestParsePathTraceTLV(t *testing.T) {
+	pathSequence := []ClockIdentity{630763432548989518, 123479299994292777, 342422224531222222}
+
+	t.Run("LastInBuffer", func(t *testing.T) {
+		parsed := &PathTraceTLV{}
+		require.NoError(t, parsed.UnmarshalBinary(pathTraceBytes(t, pathSequence)))
+		require.Equal(t, pathSequence, parsed.PathSequence)
+	})
+
+	t.Run("FollowedByTLV", func(t *testing.T) {
+		buf := slices.Concat(pathTraceBytes(t, pathSequence), pathTraceBytes(t, []ClockIdentity{42}))
+		parsed := &PathTraceTLV{}
+		require.NoError(t, parsed.UnmarshalBinary(buf))
+		require.Equal(t, pathSequence, parsed.PathSequence)
+	})
+
+	t.Run("LengthNotMultipleOf8", func(t *testing.T) {
+		malformed := []byte{0x00, 0x08, 0x00, 0x0c, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2}
+		buf := slices.Concat(malformed, pathTraceBytes(t, []ClockIdentity{42}))
+		tlvs, err := readTLVs(nil, len(buf), buf)
+		require.NoError(t, err)
+		require.Len(t, tlvs, 2)
+		require.Equal(t, []ClockIdentity{0x0101010101010101}, tlvs[0].(*PathTraceTLV).PathSequence)
+		require.Equal(t, []ClockIdentity{42}, tlvs[1].(*PathTraceTLV).PathSequence)
+	})
+}
+
+func TestParseAnnounceWithPathTraceDatagram(t *testing.T) {
+	pathSequence := []ClockIdentity{630763432548989518, 123479299994292777, 342422224531222222}
+	packet := &Announce{
+		Header: Header{
+			SdoIDAndMsgType: NewSdoIDAndMsgType(MessageAnnounce, 0),
+			Version:         Version,
+			MessageLength:   uint16(headerSize + 30 + tlvHeadSize + len(pathSequence)*8),
+			FlagField:       FlagUnicast | FlagPTPTimescale,
+		},
+		TLVs: []TLV{&PathTraceTLV{
+			TLVHead:      TLVHead{TLVType: TLVPathTrace, LengthField: uint16(len(pathSequence) * 8)},
+			PathSequence: pathSequence,
+		}},
+	}
+	b, err := packet.MarshalBinary()
+	require.NoError(t, err)
+	require.Len(t, b, int(packet.MessageLength))
+
+	got := &Announce{}
+	require.NoError(t, FromBytes(b, got))
+	require.Equal(t, packet, got)
 }
 
 func TestParseAnnounceWithPathTrace(t *testing.T) {
