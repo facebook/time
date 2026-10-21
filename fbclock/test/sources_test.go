@@ -38,10 +38,10 @@ func TestSourcesNames(t *testing.T) {
 	require.NoError(t, s.Set("NTP"))
 	require.Equal(t, lib.SourceNTP, s)
 	require.Error(t, s.Set("chrony"))
-	require.Equal(t, "0x03", (lib.SourcePTP | lib.SourceNTP).String())
+	require.Equal(t, "0x05", (lib.SourcePTP | lib.SourceNTP).String())
 }
 
 // every source, including ones added later
 func TestSourceAnyIsEveryBit(t *testing.T) {
-	require.Equal(t, lib.Sources(0xFF), lib.SourceAny)
+	require.Equal(t, lib.Sources(0xFFFFFFFF), lib.SourceAny)
 }

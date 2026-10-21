@@ -174,41 +174,49 @@ typedef struct fbclock_shmdata_v2 {
 // Readers check minor >= N before using a field added in minor N.
 #define FBCLOCK_DATA_MINOR 0
 
-// Bits of fbclock_data_clock.status. Readers serve a section only when status
-// is exactly VALID, so a bit added later fails closed in old readers.
-#define FBCLOCK_STATUS_VALID (1 << 0)
-// Published for monitoring, never served.
-#define FBCLOCK_STATUS_OBSERVE_ONLY (1 << 1)
+// Source bits, the one list of what the file holds: bit k is
+// fbclock_data.sections[k] (fbclock_data_section_index). The header's sources
+// and fbclock_options.sources use the same bits. The file stores them, so they
+// never change; a new source takes the next free bit.
+//
+// PTP on MONOTONIC_RAW, or REALTIME if the kernel rejects it.
+#define FBCLOCK_SOURCE_PTP (1u << 0)
+// PRTC, PTP on the RTC (CLOCK_REALTIME), read only by fbclock_gettime_past for
+// network monitoring. If you just want the time, use FBCLOCK_SOURCE_PTP.
+#define FBCLOCK_SOURCE_PRTC (1u << 1)
+// NTP on REALTIME, the clock chrony steers, so coef_ppb is 0.
+#define FBCLOCK_SOURCE_NTP (1u << 2)
+// Callers only, never in the header: every source, including ones added later.
+#define FBCLOCK_SOURCE_ANY 0xFFFFFFFFu
 
 // Written at daemon startup: the magic last, after every section is set up.
 typedef struct fbclock_data_header {
   alignas(64) uint8_t magic[8];
   uint8_t major;
   uint8_t minor;
-  uint8_t reserved[54];
+  // sources is 32 bits, so it starts at the next multiple of 4, byte 12
+  uint8_t reserved0[2];
+  // FBCLOCK_SOURCE_* bits of the sections this host offers
+  uint32_t sources;
+  uint8_t reserved[48];
 } fbclock_data_header;
 
 // One source's clock, copied as a whole under its section's seqlock.
 typedef struct fbclock_data_clock {
-  // FBCLOCK_SOURCE_* published in this section on this host; 0 for none
-  uint8_t source;
-  uint8_t reserved0;
-  // FBCLOCK_STATUS_* bits
-  uint16_t status;
-  // base clock of sysclock_time_ns: CLOCK_MONOTONIC_RAW or CLOCK_REALTIME
-  uint32_t clock_id;
   // the anchor: the source's time (TAI) and the base clock at one instant
   int64_t ref_time_ns;
   int64_t sysclock_time_ns;
   // source rate against the base clock; 0 for NTP
   int64_t coef_ppb;
+  // base clock of sysclock_time_ns: CLOCK_MONOTONIC_RAW or CLOCK_REALTIME
+  uint32_t clock_id;
   // the bound: error_bound_ns at ingress_time_ns (TAI), then growing at
   // holdover_multiplier_ns; UINT32_MAX in either means too big to serve
-  int64_t ingress_time_ns;
   uint32_t error_bound_ns;
+  int64_t ingress_time_ns;
   // ns per second, Q16.16
   uint32_t holdover_multiplier_ns;
-  uint8_t reserved[8];
+  uint8_t reserved[12];
 } fbclock_data_clock;
 
 typedef struct fbclock_data_section {
@@ -216,17 +224,17 @@ typedef struct fbclock_data_section {
   fbclock_data_clock clock;
 } fbclock_data_section;
 
-// The whole file: a fixed 4096 bytes, each section at a fixed offset.
+// The whole file, 4096 bytes: the header, one section per source bit, then
+// lines no bit reaches.
 typedef struct fbclock_data {
   fbclock_data_header header;
-  // MONOTONIC_RAW base; REALTIME where the kernel rejects MONOTONIC_RAW
-  fbclock_data_section ptp;
-  // REALTIME base for fbclock_gettime_past, only when ptp isn't REALTIME
-  fbclock_data_section ptp_realtime;
-  // REALTIME base, the clock chrony steers, so coef_ppb is 0
-  fbclock_data_section ntp;
-  fbclock_data_section reserved[60];
+  fbclock_data_section sections[32];
+  uint8_t reserved[31 * 64];
 } fbclock_data;
+
+// Returns k for source bit k, its index in fbclock_data.sections, or -1 if
+// source isn't exactly one bit.
+int fbclock_data_section_index(uint32_t source);
 
 #define FBCLOCK_DATA_SIZE sizeof(fbclock_data)
 
@@ -245,13 +253,6 @@ typedef struct fbclock_truetime {
 // (error_bound/holdover saturate at UINT32_MAX, ~4.29s).
 #define FBCLOCK_MAX_WOU_NS_UNSET 0
 
-// Flags for fbclock_options.sources, combined with |. A host with a PTP device
-// serves PTP; one without serves NTP.
-#define FBCLOCK_SOURCE_PTP (1 << 0)
-#define FBCLOCK_SOURCE_NTP (1 << 1)
-// Every source, including ones added later.
-#define FBCLOCK_SOURCE_ANY 0xFF
-
 // fbclock_options and fbclock_lib have no stable binary layout: build fbclock
 // from the same version as its callers (from source or libfbclock.a).
 
@@ -263,7 +264,7 @@ typedef struct fbclock_options {
   uint64_t max_wou_ns;
   // Sources the caller accepts; 0 means FBCLOCK_SOURCE_PTP. NTP windows are
   // orders of magnitude wider than PTP's.
-  uint8_t sources;
+  uint32_t sources;
 } fbclock_options;
 
 // fbclock library

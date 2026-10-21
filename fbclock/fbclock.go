@@ -43,7 +43,10 @@ import (
 // Values for Options.Sources, from fbclock.h
 const (
 	SourcePTP Sources = C.FBCLOCK_SOURCE_PTP
-	SourceNTP Sources = C.FBCLOCK_SOURCE_NTP
+	// SourcePRTC is PTP on the RTC (CLOCK_REALTIME), read only by gettime_past
+	// for network monitoring. If you just want the time, use SourcePTP.
+	SourcePRTC Sources = C.FBCLOCK_SOURCE_PRTC
+	SourceNTP  Sources = C.FBCLOCK_SOURCE_NTP
 	// SourceAny accepts every source, including ones added later
 	SourceAny Sources = C.FBCLOCK_SOURCE_ANY
 )
@@ -57,7 +60,7 @@ func (s Sources) String() string {
 			return name
 		}
 	}
-	return fmt.Sprintf("0x%02x", uint8(s))
+	return fmt.Sprintf("0x%02x", uint32(s))
 }
 
 // Set implements pflag.Value
@@ -100,7 +103,7 @@ func NewFBClockV2() (*FBClock, error) {
 
 // NewFBClockV2WithOptions is NewFBClockV2 with caller options
 func NewFBClockV2WithOptions(opts Options) (*FBClock, error) {
-	cOpts := C.fbclock_options{sources: C.uint8_t(opts.Sources)}
+	cOpts := C.fbclock_options{sources: C.uint32_t(opts.Sources)}
 	return newFBClock(C.FBCLOCK_PATH, &cOpts)
 }
 

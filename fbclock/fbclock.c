@@ -52,38 +52,51 @@ static_assert(
     "the header is one cache line");
 static_assert(offsetof(fbclock_data_header, major) == 8, "major");
 static_assert(offsetof(fbclock_data_header, minor) == 9, "minor");
+static_assert(offsetof(fbclock_data_header, sources) == 12, "sources");
+static_assert(
+    sizeof(((fbclock_data_header*)0)->sources) == 4,
+    "sources is 32 bits");
 static_assert(
     sizeof(fbclock_data_clock) == 56,
     "a clock fits a cache line after its seq");
 static_assert(
     sizeof(fbclock_data_section) == 64,
     "a section is one cache line");
-static_assert(offsetof(fbclock_data_section, clock.source) == 8, "source");
-static_assert(offsetof(fbclock_data_section, clock.status) == 10, "status");
-static_assert(offsetof(fbclock_data_section, clock.clock_id) == 12, "clock_id");
 static_assert(
-    offsetof(fbclock_data_section, clock.ref_time_ns) == 16,
+    offsetof(fbclock_data_section, clock.ref_time_ns) == 8,
     "ref_time_ns");
 static_assert(
-    offsetof(fbclock_data_section, clock.sysclock_time_ns) == 24,
+    offsetof(fbclock_data_section, clock.sysclock_time_ns) == 16,
     "sysclock_time_ns");
-static_assert(offsetof(fbclock_data_section, clock.coef_ppb) == 32, "coef_ppb");
+static_assert(offsetof(fbclock_data_section, clock.coef_ppb) == 24, "coef_ppb");
+static_assert(offsetof(fbclock_data_section, clock.clock_id) == 32, "clock_id");
+static_assert(
+    offsetof(fbclock_data_section, clock.error_bound_ns) == 36,
+    "error_bound_ns");
 static_assert(
     offsetof(fbclock_data_section, clock.ingress_time_ns) == 40,
     "ingress_time_ns");
 static_assert(
-    offsetof(fbclock_data_section, clock.error_bound_ns) == 48,
-    "error_bound_ns");
-static_assert(
-    offsetof(fbclock_data_section, clock.holdover_multiplier_ns) == 52,
+    offsetof(fbclock_data_section, clock.holdover_multiplier_ns) == 48,
     "holdover");
-static_assert(offsetof(fbclock_data_section, clock.reserved) == 56, "reserved");
-static_assert(offsetof(fbclock_data, ptp) == 64, "ptp is line 1");
+static_assert(offsetof(fbclock_data_section, clock.reserved) == 52, "reserved");
+// The file stores the source bits, and bit k is sections[k], line k + 1.
+static_assert(FBCLOCK_SOURCE_PTP == 1u << 0, "PTP is bit 0");
+static_assert(FBCLOCK_SOURCE_PRTC == 1u << 1, "PRTC is bit 1");
+static_assert(FBCLOCK_SOURCE_NTP == 1u << 2, "NTP is bit 2");
+static_assert(offsetof(fbclock_data, sections) == 64, "sections[0] is line 1");
 static_assert(
-    offsetof(fbclock_data, ptp_realtime) == 128,
-    "ptp_realtime is line 2");
-static_assert(offsetof(fbclock_data, ntp) == 192, "ntp is line 3");
+    sizeof(((fbclock_data*)0)->sections) / sizeof(fbclock_data_section) ==
+        8 * sizeof(((fbclock_data_header*)0)->sources),
+    "one section per source bit");
 static_assert(FBCLOCK_DATA_SIZE == 4096, "the file is 4096 bytes");
+
+int fbclock_data_section_index(uint32_t source) {
+  if (source == 0 || (source & (source - 1)) != 0) {
+    return -1;
+  }
+  return __builtin_ctz(source);
+}
 
 #if defined(__GNUC__) && !defined(__OPTIMIZE__)
 #define fbclock_debug_print(fmt, ...)  \
@@ -308,10 +321,10 @@ int fbclock_init_with_options(
   lib->shmp_v2 = NULL;
   lib->max_wou_ns =
       (options != NULL) ? options->max_wou_ns : FBCLOCK_MAX_WOU_NS_UNSET;
-  const int sources = (options != NULL && options->sources != 0)
+  const uint32_t sources = (options != NULL && options->sources != 0)
       ? options->sources
       : FBCLOCK_SOURCE_PTP;
-  int host_source = FBCLOCK_SOURCE_PTP;
+  uint32_t host_source = FBCLOCK_SOURCE_PTP;
   if (access(FBCLOCK_PTPPATH, F_OK) != 0) {
     // only "not found" means no PTP device; any other error leaves it unknown
     if (errno != ENOENT) {

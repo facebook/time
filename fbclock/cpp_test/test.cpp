@@ -435,9 +435,9 @@ TEST(fbclockTest, test_init_ntp_source_reads_the_chrony_record) {
 // Whatever the host, it serves only its own source: a caller that accepts just
 // the other one gets NOTSUP.
 TEST(fbclockTest, test_init_serves_only_the_hosts_source) {
-  const uint8_t host =
+  const uint32_t host =
       fbclock_is_ptp_host() ? FBCLOCK_SOURCE_PTP : FBCLOCK_SOURCE_NTP;
-  const uint8_t other =
+  const uint32_t other =
       host == FBCLOCK_SOURCE_PTP ? FBCLOCK_SOURCE_NTP : FBCLOCK_SOURCE_PTP;
   char path[] = "/tmp/fbclock_testXXXXXX";
   const int fd = mkstemp(path);

@@ -32,7 +32,7 @@ type TrueTime struct {
 
 // Sources is a set of fbclock.h's FBCLOCK_SOURCE_* flags, combined with |. A
 // host with a PTP device serves PTP; one without serves NTP.
-type Sources uint8
+type Sources uint32
 
 // Options are caller options applied at init (see fbclock_options)
 type Options struct {

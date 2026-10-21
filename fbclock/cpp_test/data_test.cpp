@@ -31,4 +31,22 @@ TEST(FBClockDataLayoutTest, SectionIsOneCacheLine) {
   EXPECT_EQ(sizeof(fbclock_data_section), static_cast<size_t>(line));
 }
 
+// Bit k is sections[k], line k + 1, at offset 64 * (k + 1); anything but one
+// bit has no section.
+TEST(FBClockDataLayoutTest, EachSourceBitIsItsSection) {
+  EXPECT_EQ(fbclock_data_section_index(FBCLOCK_SOURCE_PTP), 0);
+  EXPECT_EQ(fbclock_data_section_index(FBCLOCK_SOURCE_PRTC), 1);
+  EXPECT_EQ(fbclock_data_section_index(FBCLOCK_SOURCE_NTP), 2);
+  EXPECT_EQ(fbclock_data_section_index(1u << 31), 31);
+  for (uint32_t source :
+       {0u, FBCLOCK_SOURCE_PTP | FBCLOCK_SOURCE_NTP, FBCLOCK_SOURCE_ANY}) {
+    EXPECT_EQ(fbclock_data_section_index(source), -1) << source;
+  }
+  for (uint32_t k = 0; k < 32; k++) {
+    const auto offset =
+        offsetof(fbclock_data, sections) + k * sizeof(fbclock_data_section);
+    EXPECT_EQ(offset, 64 * (k + 1)) << k;
+  }
+}
+
 } // namespace
