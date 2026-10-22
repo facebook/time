@@ -165,6 +165,9 @@ static uint64_t fbclock_seq_write_begin(atomic_uint64* _Nonnull seqp) {
   }
   seq = (seq & ~1) + 1;
   atomic_store(seqp, seq);
+  // The store only orders what comes before it; this keeps the section's
+  // writes from becoming visible ahead of the odd value.
+  atomic_thread_fence(memory_order_release);
   return seq + 1;
 }
 
@@ -176,6 +179,22 @@ static void fbclock_seq_write_end(atomic_uint64* _Nonnull seqp, uint64_t seq) {
   atomic_store(seqp, seq);
 }
 
+// Starts a seqlock read: the sequence to check after the copy. Odd means a
+// write is in progress, 0 that the section was never written.
+static uint64_t fbclock_seq_read_begin(const atomic_uint64* _Nonnull seqp) {
+  return atomic_load(seqp);
+}
+
+// Ends a seqlock read: non-zero if a write overlapped the copy.
+static int fbclock_seq_read_retry(
+    const atomic_uint64* _Nonnull seqp,
+    uint64_t seq) {
+  // The load only orders what comes after it; this keeps the copy from
+  // finishing after the re-check.
+  atomic_thread_fence(memory_order_acquire);
+  return seq != atomic_load(seqp);
+}
+
 // fbclock_section_store writes one section's data under its seqlock. A single
 // writer is assumed; concurrent readers detect a torn read via the counter.
 // Each section has its own seqlock on its own cache line, so writing one never
@@ -184,11 +203,8 @@ static void fbclock_section_store(
     fbclock_shmsection* _Nonnull section,
     const fbclock_clockdata_v2* _Nonnull data) {
   uint64_t seq = fbclock_seq_write_begin(&section->seq);
-  __sync_synchronize();
   section->data = *data;
-  __sync_synchronize();
   fbclock_seq_write_end(&section->seq, seq);
-  __sync_synchronize();
 }
 
 int fbclock_clockdata_store_data_v2(uint32_t fd, fbclock_clockdata_v2* data) {
@@ -254,23 +270,19 @@ static int fbclock_section_load(
     return FBCLOCK_E_NO_DATA;
   }
   for (int i = 0; i < FBCLOCK_MAX_READ_TRIES; i++) {
-    uint64_t seq = atomic_load(&section->seq);
+    uint64_t seq = fbclock_seq_read_begin(&section->seq);
     if (!seq) { // 0 value means uninitialized
       if (fail_fast_if_uninitialized) {
         return FBCLOCK_E_NO_DATA;
       }
-      usleep(10);
-      __sync_synchronize();
+      usleep(1);
       continue;
     }
     if (seq & 1) {
-      __sync_synchronize();
       continue;
     }
-    __sync_synchronize();
     *data = section->data;
-    __sync_synchronize();
-    if (seq == atomic_load(&section->seq)) {
+    if (!fbclock_seq_read_retry(&section->seq, seq)) {
       fbclock_debug_print("reading clock data took %d tries\n", i + 1);
       return FBCLOCK_E_NO_ERROR;
     }
@@ -296,6 +308,70 @@ int fbclock_clockdata_load_data_realtime(
     return FBCLOCK_E_NO_DATA;
   }
   return fbclock_section_load(&shmp->realtime, data, 1);
+}
+
+void fbclock_data_section_store(
+    fbclock_data_section* _Nonnull section,
+    const fbclock_data_clock* _Nonnull clock) {
+  uint64_t seq = fbclock_seq_write_begin(&section->seq);
+  section->clock = *clock;
+  fbclock_seq_write_end(&section->seq, seq);
+}
+
+int fbclock_data_section_load(
+    const fbclock_data_section* _Nonnull section,
+    fbclock_data_clock* _Nonnull clock) {
+  for (int i = 0; i < FBCLOCK_MAX_READ_TRIES; i++) {
+    uint64_t seq = fbclock_seq_read_begin(&section->seq);
+    if (!seq) {
+      return FBCLOCK_E_NO_DATA;
+    }
+    if (seq & 1) {
+      continue;
+    }
+    fbclock_data_clock copy = section->clock;
+    if (!fbclock_seq_read_retry(&section->seq, seq)) {
+      *clock = copy;
+      return FBCLOCK_E_NO_ERROR;
+    }
+  }
+  return FBCLOCK_E_CRC_MISMATCH;
+}
+
+enum {
+  FBCLOCK_DATA_HEADER_WORDS = sizeof(fbclock_data_header) / sizeof(uint64_t)
+};
+
+// Copied as atomic 8-byte words, the magic's stored last with release and
+// loaded first with acquire; minor and sources share one word.
+void fbclock_data_header_store(
+    fbclock_data_header* _Nonnull header,
+    uint32_t sources) {
+  fbclock_data_header value = {
+      .major = FBCLOCK_DATA_MAJOR,
+      .minor = FBCLOCK_DATA_MINOR,
+      .sources = sources,
+  };
+  memcpy(value.magic, FBCLOCK_DATA_MAGIC, sizeof(value.magic));
+  uint64_t words[FBCLOCK_DATA_HEADER_WORDS];
+  memcpy(words, &value, sizeof(words));
+  uint64_t* _Nonnull to = (uint64_t*)header;
+  for (size_t i = 1; i < FBCLOCK_DATA_HEADER_WORDS; i++) {
+    __atomic_store_n(&to[i], words[i], __ATOMIC_RELAXED);
+  }
+  __atomic_store_n(&to[0], words[0], __ATOMIC_RELEASE);
+}
+
+void fbclock_data_header_load(
+    const fbclock_data_header* _Nonnull header,
+    fbclock_data_header* _Nonnull copy) {
+  const uint64_t* _Nonnull from = (const uint64_t*)header;
+  uint64_t words[FBCLOCK_DATA_HEADER_WORDS];
+  words[0] = __atomic_load_n(&from[0], __ATOMIC_ACQUIRE);
+  for (size_t i = 1; i < FBCLOCK_DATA_HEADER_WORDS; i++) {
+    words[i] = __atomic_load_n(&from[i], __ATOMIC_RELAXED);
+  }
+  memcpy(copy, words, sizeof(words));
 }
 
 static void fbclock_close_fds(fbclock_lib* lib) {

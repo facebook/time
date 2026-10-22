@@ -290,6 +290,25 @@ int fbclock_clockdata_load_data_v2(
 int fbclock_clockdata_load_data_realtime(
     fbclock_shmdata_v2* shmp,
     fbclock_clockdata_v2* data);
+// One writer per file. Copies clock as given, reserved bytes included.
+void fbclock_data_section_store(
+    fbclock_data_section* _Nonnull section,
+    const fbclock_data_clock* _Nonnull clock);
+// NO_DATA if never written (seq 0); CRC_MISMATCH if every try saw a write.
+// clock is written only on success.
+int fbclock_data_section_load(
+    const fbclock_data_section* _Nonnull section,
+    fbclock_data_clock* _Nonnull clock);
+// Call after every section is set up: writes the version, sources and zero
+// reserved bytes, then the magic. A valid magic is never cleared.
+void fbclock_data_header_store(
+    fbclock_data_header* _Nonnull header,
+    uint32_t sources);
+// The store's read side: copies the magic, then the rest, so a copy with the
+// magic set has its version. Callers check the copy's magic and major.
+void fbclock_data_header_load(
+    const fbclock_data_header* _Nonnull header,
+    fbclock_data_header* _Nonnull copy);
 uint64_t fbclock_window_of_uncertainty(
     double seconds,
     uint64_t error_bound_ns,
