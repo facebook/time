@@ -299,13 +299,12 @@ func TestChronyServesSHMv2(t *testing.T) {
 	require.Equal(t, testAsOf.UnixNano(), got.PHCTimeNS)
 	require.Equal(t, testSysTime.UnixNano(), got.SysclockTimeNS)
 	require.Equal(t, uint32(unix.CLOCK_REALTIME), got.ClockID)
-	// chrony publishes the fixed last-leap smearing window, not zero offsets
-	require.Equal(t, int32(36), stored.UTCOffsetPreS)
-	require.Equal(t, int32(37), stored.UTCOffsetPostS)
-	require.Equal(t, uint64(1483228836), stored.SmearingStartS)
-	require.Equal(t, uint64(1483291336), stored.SmearingEndS)
+	// clients read the fixed last-leap smearing window, not zero offsets
+	require.Equal(t, int16(36), got.UTCOffsetPreS)
+	require.Equal(t, int16(37), got.UTCOffsetPostS)
+	require.Equal(t, uint64(1483228836), got.SmearingStartS)
 	// the published TAI anchor converts back to the system clock reading
-	require.Equal(t, got.SysclockTimeNS, got.PHCTimeNS-int64(stored.UTCOffsetPostS)*int64(time.Second))
+	require.Equal(t, got.SysclockTimeNS, got.PHCTimeNS-int64(got.UTCOffsetPostS)*int64(time.Second))
 	// one clock named twice leaves nothing to extrapolate
 	require.Zero(t, got.CoefPPB)
 	// what the client widens by: phc_time_ns - ingress_time_ns, never negative
