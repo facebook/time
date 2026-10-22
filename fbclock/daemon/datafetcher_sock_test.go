@@ -78,7 +78,7 @@ func TestPTP4lDataPointsReachSHM(t *testing.T) {
 		dp := sockDataPoint(status, pds, cds)
 		dp.FreqAdjustmentPPB = adj
 
-		shmData, err := s.calculateSHMData(dp, nil)
+		shmData, err := s.calculateSHMData(dp)
 		if i < cfg.RingSize-1 {
 			require.ErrorIs(t, err, errNotEnoughData)
 			continue

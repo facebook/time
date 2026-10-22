@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/facebook/time/fbclock"
-	"github.com/facebook/time/leapsectz"
 	"github.com/stretchr/testify/require"
 )
 
@@ -338,17 +337,4 @@ func TestConvolveExactSize(t *testing.T) {
 	got, err := convolve(input, coeffs)
 	require.NoError(t, err)
 	require.Len(t, got, 3)
-}
-
-func TestLeapSecondSmearingEmpty(t *testing.T) {
-	got := leapSecondSmearing(nil)
-	require.Equal(t, &clockSmearing{}, got)
-}
-
-func TestLeapSecondSmearingSingle(t *testing.T) {
-	leaps := []leapsectz.LeapSecond{
-		{Tleap: 1483228826, Nleap: 26},
-	}
-	got := leapSecondSmearing(leaps)
-	require.Equal(t, &clockSmearing{}, got)
 }

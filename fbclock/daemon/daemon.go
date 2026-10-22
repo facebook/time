@@ -40,9 +40,10 @@ import (
 )
 
 const (
-	utcOffsetOriginalS int32  = 10    // UTC-TAI offset was 10s before leap seconds started (1972)
-	leapDurationS      uint64 = 62500 // 17.36 hours https://chrony-project.org/doc/4.6/chrony.conf.html
-	monPrefix          string = "linearizability."
+	leapDurationS uint64 = 62500      // 17.36 hours https://chrony-project.org/doc/4.6/chrony.conf.html
+	lastLeapS     uint64 = 1483228800 // 2017-01-01 00:00:00 UTC, when TAI-UTC went from 36s to 37s
+	utcOffsetS           = int32(leapsectz.UTCOffset / time.Second)
+	monPrefix     string = "linearizability."
 	// nsPerSecondPerPPM converts a frequency error in PPM into ns of drift per
 	// second: 1 PPM = 1e-6 s/s = 1000 ns/s.
 	nsPerSecondPerPPM float64 = 1000.0
@@ -52,10 +53,19 @@ var errNotEnoughData = errors.New("not enough data points")
 var errNoTestResults = errors.New("no test results")
 var errNoPHC = errors.New("phc error")
 var errCorrectness = errors.New("sanity checking data point error")
-var errNoLeapData = errors.New("no leap second data to build a TAI anchor from")
 
 // defaultTargets is a list of targets if no available
 var defaultTargets = []string{"::1", "::2", "::3"}
+
+// lastLeapSmearing is the smearing window of the last leap second. Leap seconds
+// are abolished, so clients are always past it.
+var lastLeapSmearing = clockSmearing{
+	// smearing starts at the leap second and runs leapDurationS, in TAI
+	smearingStartS: lastLeapS + uint64(utcOffsetS-1),
+	smearingEndS:   lastLeapS + leapDurationS + uint64(utcOffsetS-1),
+	utcOffsetPreS:  utcOffsetS - 1,
+	utcOffsetPostS: utcOffsetS,
+}
 
 // DataPoint is what we store in DataPoint ring buffer
 type DataPoint struct {
@@ -160,46 +170,6 @@ type clockSmearing struct {
 	smearingEndS   uint64 // time (TAI) when smearing ends
 	utcOffsetPreS  int32  // DTAI offset prior to Leap Second Event Time
 	utcOffsetPostS int32  // DTAI offset post Leap Second Event Time
-}
-
-func leapSeconds() ([]leapsectz.LeapSecond, error) {
-	leaps, err := leapsectz.Parse("")
-	if err != nil {
-		return []leapsectz.LeapSecond{}, err
-	}
-	if len(leaps) < 2 {
-		return []leapsectz.LeapSecond{}, fmt.Errorf("not enough leap seconds in the file")
-	}
-
-	previousLeap := leaps[len(leaps)-2]
-	latestLeap := leaps[len(leaps)-1]
-
-	return []leapsectz.LeapSecond{previousLeap, latestLeap}, nil
-}
-
-func leapSecondSmearing(leaps []leapsectz.LeapSecond) *clockSmearing {
-	// need a minimum of 2 published leap second events in tzdata
-	if len(leaps) < 2 {
-		return &clockSmearing{}
-	}
-	latestLeap := leaps[len(leaps)-1]
-	previousLeap := leaps[len(leaps)-2]
-	utcOffsetPreS := previousLeap.Nleap + utcOffsetOriginalS
-	utcOffsetPostS := latestLeap.Nleap + utcOffsetOriginalS
-
-	// this is the leap second adjustment time which is either 23:59:60 UTC or 00:00:00 UTC of following day
-	// if we don't render a timestamp of 23:59:60 UTC
-	leapSecondEventTimeS := latestLeap.Tleap - uint64(latestLeap.Nleap) + 1
-	// smearing starts at leap second event time and ends leapDurationS after
-	smearingStartS := leapSecondEventTimeS + uint64(utcOffsetPreS)
-	smearingEndS := leapSecondEventTimeS + leapDurationS + uint64(utcOffsetPreS)
-
-	return &clockSmearing{
-		smearingStartS: smearingStartS,
-		smearingEndS:   smearingEndS,
-		utcOffsetPreS:  utcOffsetPreS,
-		utcOffsetPostS: utcOffsetPostS,
-	}
 }
 
 // noTestResults generates a map of error test results
@@ -414,7 +384,7 @@ func (s *Daemon) publishRawDataPointGauges(data *DataPoint) {
 	s.stats.SetCounter("clock_accuracy_ns", int64(data.ClockAccuracyNS))
 }
 
-func (s *Daemon) calculateSHMData(data *DataPoint, leaps []leapsectz.LeapSecond) (*fbclock.Data, error) {
+func (s *Daemon) calculateSHMData(data *DataPoint) (*fbclock.Data, error) {
 	if err := data.SanityCheck(); err != nil {
 		s.stats.UpdateCounterBy("data_sanity_check_error", 1)
 		return nil, fmt.Errorf("%w: %w", errCorrectness, err)
@@ -443,7 +413,7 @@ func (s *Daemon) calculateSHMData(data *DataPoint, leaps []leapsectz.LeapSecond)
 	}
 	s.stats.SetCounter("drift_ppb", int64(hValue))
 
-	clockSmearing := leapSecondSmearing(leaps)
+	clockSmearing := lastLeapSmearing
 	return &fbclock.Data{
 		IngressTimeNS:        data.IngressTimeNS,
 		ErrorBoundNS:         wUint,
@@ -456,19 +426,19 @@ func (s *Daemon) calculateSHMData(data *DataPoint, leaps []leapsectz.LeapSecond)
 }
 
 // calculateSHMDataChrony builds what chrony mode publishes to shared memory:
-// the bound and holdover rate from ChronyBound, the leap-second fields from
-// tzdata. No ring buffer and no M/W expressions, unlike the PTP path.
+// the bound and holdover rate from ChronyBound, the fixed leap-second fields.
+// No ring buffer and no M/W expressions, unlike the PTP path.
 //
 // asOf is the anchor read taken at fetch time and published as IngressTimeNS
 // (ClockBound's as_of). Not chronyd's RefTime: RootDispersion already covers
 // the age of the last update, so RefTime would count that staleness twice.
-func (s *Daemon) calculateSHMDataChrony(tracking *chrony.Tracking, asOf time.Time, leaps []leapsectz.LeapSecond) (*fbclock.Data, error) {
+func (s *Daemon) calculateSHMDataChrony(tracking *chrony.Tracking, asOf time.Time) (*fbclock.Data, error) {
 	errorBoundNS, holdoverNS, err := ChronyBound(tracking, s.cfg.MaxDriftRate)
 	if err != nil {
 		return nil, err
 	}
 
-	clockSmearing := leapSecondSmearing(leaps)
+	clockSmearing := lastLeapSmearing
 	return &fbclock.Data{
 		IngressTimeNS:        asOf.UnixNano(),
 		ErrorBoundNS:         errorBoundNS,
@@ -503,19 +473,12 @@ func (s *Daemon) doWorkChrony(tracking *chrony.Tracking) error {
 	if err != nil {
 		return fmt.Errorf("failed to read system clock: %w", err)
 	}
-	// unlike the PTP path we cannot proceed without this: it is what turns the
-	// system clock reading into the TAI anchor clients expect
-	leaps, err := leapSeconds()
-	if err != nil {
-		return fmt.Errorf("%w: %w", errNoLeapData, err)
-	}
 	// anchors are TAI, the system clock is UTC
-	s.state.leaps.Store(&leaps)
-	asOf := sysNow.Add(time.Duration(leapsectz.UTCOffsetS(leaps, sysNow)) * time.Second)
+	asOf := sysNow.Add(leapsectz.UTCOffset)
 
 	log.Debugf("Age of chronyd reference time: %dns", sysNow.UnixNano()-tracking.RefTime.UnixNano())
 
-	d, err := s.calculateSHMDataChrony(tracking, asOf, leaps)
+	d, err := s.calculateSHMDataChrony(tracking, asOf)
 	if err != nil {
 		return err
 	}
@@ -548,13 +511,8 @@ func (s *Daemon) doWork(shm *fbclock.Shm, data *DataPoint) error {
 	} else {
 		log.Warning("No data for time since ingress")
 	}
-	// read tzdata for leap seconds
-	leaps, err := leapSeconds()
-	if err != nil {
-		log.Warningf("Failed to get leap seconds: %v", err)
-	}
 	// store everything in shared memory
-	d, err := s.calculateSHMData(data, leaps)
+	d, err := s.calculateSHMData(data)
 	if err != nil {
 		if errors.Is(err, errNotEnoughData) {
 			log.Warning(err)
@@ -693,7 +651,7 @@ func calcCoeffPPB(prev, cur *fbclock.DataV2) (int64, error) {
 
 // meanCoeffPPB returns 0 on first sample and in chrony mode, mean coefficient in other cases
 func (s *Daemon) meanCoeffPPB(prev, cur *fbclock.DataV2) int64 {
-	// anchor and base are one clock in chrony mode; its 1s leap step would read as ~1e11 ppb
+	// anchor and base are one clock in chrony mode, a constant apart: nothing to extrapolate
 	if s.cfg.Chrony || prev.SysclockTimeNS == 0 {
 		return 0
 	}
@@ -714,18 +672,11 @@ func (s *Daemon) meanCoeffPPB(prev, cur *fbclock.DataV2) int64 {
 // the realtime anchor section (another PHC read).
 func (s *Daemon) readClocks() (time.Time, time.Time, uint32, time.Duration, error) {
 	if s.cfg.Chrony {
-		// resolved per sample, not cached, so the offset changes at the leap
-		// instant rather than at the next chrony poll
-		leaps := s.state.leaps.Load()
-		if leaps == nil {
-			return time.Time{}, time.Time{}, 0, 0, errNoLeapData
-		}
 		sysNow, err := s.getSysTime()
 		if err != nil {
 			return time.Time{}, time.Time{}, 0, 0, err
 		}
-		offsetS := leapsectz.UTCOffsetS(*leaps, sysNow)
-		return sysNow.Add(time.Duration(offsetS) * time.Second), sysNow, unix.CLOCK_REALTIME, 0, nil
+		return sysNow.Add(leapsectz.UTCOffset), sysNow, unix.CLOCK_REALTIME, 0, nil
 	}
 	return s.getPHCAndSysTime()
 }

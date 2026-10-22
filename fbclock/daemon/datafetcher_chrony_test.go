@@ -24,7 +24,6 @@ import (
 
 	"github.com/facebook/time/fbclock"
 	"github.com/facebook/time/fbclock/stats"
-	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/ntp/chrony"
 	ntp "github.com/facebook/time/ntp/protocol"
 	"github.com/stretchr/testify/require"
@@ -86,19 +85,10 @@ func TestFetchTrackingTimeout(t *testing.T) {
 	require.Contains(t, err.Error(), "failed to get tracking from chronyd")
 }
 
-// testUTCOffsetS is what current tzdata yields (latest leap 2017-01-01), and
-// leap2017 is that leap instant: Tleap-Nleap+1 of the record below.
-const (
-	testUTCOffsetS = 37
-	leap2017       = 1483228800
-)
+// testUTCOffsetS is TAI-UTC since the last leap second, 2017-01-01.
+const testUTCOffsetS = 37
 
 var (
-	// testLeaps is verbatim from /usr/share/zoneinfo/right/UTC
-	testLeaps = []leapsectz.LeapSecond{
-		{Tleap: 1435708825, Nleap: 26},
-		{Tleap: 1483228826, Nleap: 27},
-	}
 	// testSysTime is the CLOCK_REALTIME read the daemon stamps at fetch time, a
 	// second after the fixtures' RefTime so assertions can tell them apart.
 	testSysTime = time.Unix(1755000001, 0)
@@ -129,12 +119,19 @@ func TestCalculateSHMDataChronyErrorBound(t *testing.T) {
 		SkewPPM:           0.005,
 	}
 
-	d, err := s.calculateSHMDataChrony(tracking, testAsOf, nil)
+	d, err := s.calculateSHMDataChrony(tracking, testAsOf)
 	require.NoError(t, err)
 	// |-1us| + 2us + 4us/2 = 5us; the correction contributes magnitude, not sign
 	require.Equal(t, uint64(5000), d.ErrorBoundNS)
 	// the anchor read, not RefTime, whose age is already in RootDispersion
 	require.Equal(t, testAsOf.UnixNano(), d.IngressTimeNS)
+	// fixed smearing window of the last leap second (2017-01-01, 36s to 37s)
+	require.Equal(t, int32(36), d.UTCOffsetPreS)
+	require.Equal(t, int32(37), d.UTCOffsetPostS)
+	require.Equal(t, uint64(1483228836), d.SmearingStartS)
+	require.Equal(t, uint64(1483291336), d.SmearingEndS)
+	// the published TAI anchor converts back to the system clock reading
+	require.Equal(t, testSysTime.UnixNano(), testAsOf.Add(-time.Duration(d.UTCOffsetPostS)*time.Second).UnixNano())
 }
 
 func TestCalculateSHMDataChronyRoundsBoundUp(t *testing.T) {
@@ -145,7 +142,7 @@ func TestCalculateSHMDataChronyRoundsBoundUp(t *testing.T) {
 		RootDispersion: 1.5 * time.Nanosecond.Seconds(),
 	}
 
-	d, err := s.calculateSHMDataChrony(tracking, testAsOf, nil)
+	d, err := s.calculateSHMDataChrony(tracking, testAsOf)
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), d.ErrorBoundNS)
 }
@@ -170,7 +167,7 @@ func TestCalculateSHMDataChronyHoldoverMultiplier(t *testing.T) {
 				SkewPPM:        tc.skewPPM,
 			}
 
-			d, err := s.calculateSHMDataChrony(tracking, testAsOf, nil)
+			d, err := s.calculateSHMDataChrony(tracking, testAsOf)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, d.HoldoverMultiplierNS)
 		})
@@ -208,7 +205,7 @@ func TestCalculateSHMDataChronyRejectsBadTracking(t *testing.T) {
 			cfg := &Config{Chrony: true, Interval: time.Second, MaxDriftRate: 50}
 			s := newChronyTestDaemon(t, cfg, stats.NewStats())
 
-			_, err := s.calculateSHMDataChrony(tc.tracking, testAsOf, nil)
+			_, err := s.calculateSHMDataChrony(tc.tracking, testAsOf)
 			require.ErrorIs(t, err, errCorrectness)
 		})
 	}
@@ -255,6 +252,11 @@ func TestDoWorkChrony(t *testing.T) {
 	require.Equal(t, uint64(5000), stored.ErrorBoundNS)
 	require.Equal(t, testAsOf.UnixNano(), stored.IngressTimeNS)
 	require.Equal(t, stored.IngressTimeNS, c["ingress_time_ns"])
+	// fixed smearing window of the last leap second (2017-01-01, 36s to 37s)
+	require.Equal(t, int32(36), stored.UTCOffsetPreS)
+	require.Equal(t, int32(37), stored.UTCOffsetPostS)
+	require.Equal(t, uint64(1483228836), stored.SmearingStartS)
+	require.Equal(t, uint64(1483291336), stored.SmearingEndS)
 }
 
 // TestChronyServesSHMv2 covers the serving path a client actually reads: a real
@@ -293,10 +295,17 @@ func TestChronyServesSHMv2(t *testing.T) {
 	require.Equal(t, stored.ErrorBoundNS, got.ErrorBoundNS)
 	require.Equal(t, stored.IngressTimeNS, got.IngressTimeNS)
 	require.Equal(t, stored.HoldoverMultiplierNS, got.HoldoverMultiplierNS)
-	// the anchor a client reads is TAI, the system clock plus the tzdata offset
+	// the anchor a client reads is TAI, the system clock plus the TAI-UTC offset
 	require.Equal(t, testAsOf.UnixNano(), got.PHCTimeNS)
 	require.Equal(t, testSysTime.UnixNano(), got.SysclockTimeNS)
 	require.Equal(t, uint32(unix.CLOCK_REALTIME), got.ClockID)
+	// chrony publishes the fixed last-leap smearing window, not zero offsets
+	require.Equal(t, int32(36), stored.UTCOffsetPreS)
+	require.Equal(t, int32(37), stored.UTCOffsetPostS)
+	require.Equal(t, uint64(1483228836), stored.SmearingStartS)
+	require.Equal(t, uint64(1483291336), stored.SmearingEndS)
+	// the published TAI anchor converts back to the system clock reading
+	require.Equal(t, got.SysclockTimeNS, got.PHCTimeNS-int64(stored.UTCOffsetPostS)*int64(time.Second))
 	// one clock named twice leaves nothing to extrapolate
 	require.Zero(t, got.CoefPPB)
 	// what the client widens by: phc_time_ns - ingress_time_ns, never negative
@@ -308,10 +317,6 @@ func TestReadClocksChrony(t *testing.T) {
 	s := newChronyTestDaemon(t, cfg, stats.NewStats())
 	// a PHC read here would panic: chrony mode never populates getPHCAndSysTime
 	require.Nil(t, s.getPHCAndSysTime)
-	// no anchor at all until doWorkChrony has published the leap records
-	_, _, _, _, err := s.readClocks()
-	require.ErrorIs(t, err, errNoLeapData)
-	s.state.leaps.Store(&testLeaps)
 
 	ref, base, clockID, delay, err := s.readClocks()
 	require.NoError(t, err)
@@ -320,46 +325,6 @@ func TestReadClocksChrony(t *testing.T) {
 	require.Equal(t, testSysTime, base)
 	require.Equal(t, uint32(unix.CLOCK_REALTIME), clockID)
 	require.Zero(t, delay)
-}
-
-func TestReadClocksChronyLeapBoundary(t *testing.T) {
-	cfg := &Config{Chrony: true, Interval: time.Second, MaxDriftRate: 50, EnableDataV2: true}
-	s := newChronyTestDaemon(t, cfg, stats.NewStats())
-	s.state.leaps.Store(&testLeaps)
-
-	// the offset must move with the sampled instant, not with the chrony poll
-	for _, tc := range []struct {
-		name   string
-		now    time.Time
-		offset time.Duration
-	}{
-		{name: "before", now: time.Unix(leap2017-1, 0), offset: 36 * time.Second},
-		{name: "at", now: time.Unix(leap2017, 0), offset: 37 * time.Second},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			s.getSysTime = func() (time.Time, error) { return tc.now, nil }
-			ref, base, _, _, err := s.readClocks()
-			require.NoError(t, err)
-			require.Equal(t, tc.offset, ref.Sub(base))
-		})
-	}
-}
-
-// The anchor steps 1s at the leap and the REALTIME base doesn't: ~1e11 ppb over one 10ms tick.
-func TestMeanCoeffPPBChronyLeap(t *testing.T) {
-	cfg := &Config{Chrony: true, Interval: time.Second, MaxDriftRate: 50, EnableDataV2: true}
-	s := newChronyTestDaemon(t, cfg, stats.NewStats())
-	s.state.leaps.Store(&testLeaps)
-
-	var prev fbclock.DataV2
-	for _, now := range []time.Time{time.Unix(leap2017, 0).Add(-10 * time.Millisecond), time.Unix(leap2017, 0)} {
-		s.getSysTime = func() (time.Time, error) { return now, nil }
-		ref, base, _, _, err := s.readClocks()
-		require.NoError(t, err)
-		cur := fbclock.DataV2{PHCTimeNS: ref.UnixNano(), SysclockTimeNS: base.UnixNano()}
-		require.Zero(t, s.meanCoeffPPB(&prev, &cur))
-		prev = cur
-	}
 }
 
 func TestReadClocksPTPUnaffected(t *testing.T) {

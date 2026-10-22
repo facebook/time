@@ -25,7 +25,6 @@ import (
 
 	"github.com/facebook/time/fbclock"
 	"github.com/facebook/time/fbclock/stats"
-	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/ptp/linearizability"
 	"github.com/stretchr/testify/require"
 
@@ -405,10 +404,6 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 			Drift: "1.5 * mean(freqchangeabs, 29)",
 		},
 	}
-	leaps := []leapsectz.LeapSecond{
-		{Tleap: 1435708825, Nleap: 26},
-		{Tleap: 1483228826, Nleap: 27},
-	}
 
 	err := cfg.Math.Prepare()
 	require.NoError(t, err)
@@ -431,7 +426,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 			ClockAccuracyNS:   100.0,
 			ServoState:        2,
 		}
-		shmData, err := s.calculateSHMData(d, leaps)
+		shmData, err := s.calculateSHMData(d)
 		if i < 29 {
 			require.Nil(t, shmData)
 			require.Error(t, err, "not enough data should give us error when calculating shm state")
@@ -458,7 +453,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		UTCOffsetPreS:        36,
 		UTCOffsetPostS:       37,
 	}
-	shmData, err := s.calculateSHMData(d, leaps)
+	shmData, err := s.calculateSHMData(d)
 	require.NoError(t, err)
 	require.Equal(t, want, shmData)
 
@@ -469,7 +464,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		PathDelayNS:       0,
 		FreqAdjustmentPPB: 0,
 	}
-	shmData, err = s.calculateSHMData(d, leaps)
+	shmData, err = s.calculateSHMData(d)
 	require.Error(t, err, "we expect calculateSHMData to produce no new shm state when new input is invalid")
 	require.Nil(t, shmData)
 	// ptp4l started syncing, but haven't started updating the clock
@@ -479,7 +474,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		PathDelayNS:       213,
 		FreqAdjustmentPPB: 0,
 	}
-	shmData, err = s.calculateSHMData(d, leaps)
+	shmData, err = s.calculateSHMData(d)
 	require.Nil(t, shmData)
 	require.Error(t, err, "we expect calculateSHMData to produce no new shm state when new input is incomplete")
 
@@ -492,7 +487,7 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		ClockAccuracyNS:   100,
 		ServoState:        2,
 	}
-	shmData, err = s.calculateSHMData(d, leaps)
+	shmData, err = s.calculateSHMData(d)
 	want = &fbclock.Data{
 		IngressTimeNS:        d.IngressTimeNS,
 		ErrorBoundNS:         157,
@@ -501,29 +496,6 @@ func TestDaemonCalculateSHMData(t *testing.T) {
 		SmearingEndS:         1483291336,
 		UTCOffsetPreS:        36,
 		UTCOffsetPostS:       37,
-	}
-	require.NoError(t, err)
-	require.Equal(t, want, shmData)
-
-	// no leap second data
-	leaps = []leapsectz.LeapSecond{}
-	d = &DataPoint{
-		IngressTimeNS:     int64(startTime + 66*time.Second),
-		MasterOffsetNS:    234,
-		PathDelayNS:       213,
-		FreqAdjustmentPPB: 32333,
-		ClockAccuracyNS:   100,
-		ServoState:        2,
-	}
-	shmData, err = s.calculateSHMData(d, leaps)
-	want = &fbclock.Data{
-		IngressTimeNS:        d.IngressTimeNS,
-		ErrorBoundNS:         185,
-		HoldoverMultiplierNS: 9361.241379310344,
-		SmearingStartS:       0,
-		SmearingEndS:         0,
-		UTCOffsetPreS:        0,
-		UTCOffsetPostS:       0,
 	}
 	require.NoError(t, err)
 	require.Equal(t, want, shmData)
@@ -775,30 +747,6 @@ func TestPublishRawDataPointGauges(t *testing.T) {
 	}
 }
 
-func TestLeapSecondSmearing(t *testing.T) {
-	// assume that these were the 2 most recent leap seconds in tzinfo data
-	leaps := []leapsectz.LeapSecond{
-		{Tleap: 1435708837, Nleap: 25}, // Wednesday, 1 July 2015 00:00:25 | 25 leap seconds
-		{Tleap: 1483228826, Nleap: 26}, // Sunday, 01 Jan 2017 00:00:26 UTC | 26 leap seconds
-	}
-	got := leapSecondSmearing(leaps)
-	want := &clockSmearing{
-		smearingStartS: 1483228836, // Sun, 01 Jan 2017 00:00:36 TAI (or Sat, 31 Dec 2016 12:00:00 UTC)
-		smearingEndS:   1483291336, // Sun, 01 Jan 2017 17:22:53 TAI (or Sun, 01 Jan 2017 17:22:16 UTC)
-		utcOffsetPreS:  35,
-		utcOffsetPostS: 36,
-	}
-	require.Equal(t, want, got)
-
-	// less than 2 leap second events in tzdata
-	leaps = []leapsectz.LeapSecond{
-		{Tleap: 1483228826, Nleap: 26}, // Sunday, 01 Jan 2017 00:00:26 UTC | 26 leap seconds
-	}
-	got = leapSecondSmearing(leaps)
-	want = &clockSmearing{}
-	require.Equal(t, want, got)
-}
-
 func TestRunLinearizabilityTestsNoGMs(t *testing.T) {
 	cfg := &Config{
 		LinearizabilityTestInterval: time.Second,
@@ -885,10 +833,6 @@ func TestDaemonGradualWindowFromN2(t *testing.T) {
 		require.NoError(t, cfg.EvalAndValidate())
 		return cfg
 	}
-	leaps := []leapsectz.LeapSecond{
-		{Tleap: 1435708825, Nleap: 26},
-		{Tleap: 1483228826, Nleap: 27},
-	}
 	startTime := time.Duration(1647359186979431900)
 	// Varying offset so stddev(m) > 0 and the warm-up factor actually widens the window.
 	sample := func(i int) *DataPoint {
@@ -905,7 +849,7 @@ func TestDaemonGradualWindowFromN2(t *testing.T) {
 	// Flag ON: n=1 is skipped; publishes from n=2; window stays under the uint32 sentinel.
 	dOn := newTestDaemon(makeCfg(true), stats.NewStats())
 	for i := range 30 {
-		shmData, err := dOn.calculateSHMData(sample(i), leaps)
+		shmData, err := dOn.calculateSHMData(sample(i))
 		if i == 0 {
 			require.Error(t, err, "n=1 must be skipped (stddev=0, no margin)")
 			require.Nil(t, shmData)
@@ -920,7 +864,7 @@ func TestDaemonGradualWindowFromN2(t *testing.T) {
 	// Flag OFF (same gradual formula): unchanged behavior, nothing until the ring is full.
 	dOff := newTestDaemon(makeCfg(false), stats.NewStats())
 	for i := range 30 {
-		shmData, err := dOff.calculateSHMData(sample(i), leaps)
+		shmData, err := dOff.calculateSHMData(sample(i))
 		if i < 29 {
 			require.Error(t, err, "flag off must not publish before the ring is full")
 			require.Nil(t, shmData)
@@ -952,10 +896,6 @@ func TestDaemonGradualWindowSteadyStateIdentical(t *testing.T) {
 		require.NoError(t, cfg.EvalAndValidate())
 		return cfg
 	}
-	leaps := []leapsectz.LeapSecond{
-		{Tleap: 1435708825, Nleap: 26},
-		{Tleap: 1483228826, Nleap: 27},
-	}
 	startTime := time.Duration(1647359186979431900)
 	sample := func(i int) *DataPoint {
 		return &DataPoint{
@@ -972,8 +912,8 @@ func TestDaemonGradualWindowSteadyStateIdentical(t *testing.T) {
 	dOff := newTestDaemon(makeCfg(false), stats.NewStats())
 	var onFull, offFull *fbclock.Data
 	for i := range ringSize {
-		onData, onErr := dOn.calculateSHMData(sample(i), leaps)
-		offData, offErr := dOff.calculateSHMData(sample(i), leaps)
+		onData, onErr := dOn.calculateSHMData(sample(i))
+		offData, offErr := dOff.calculateSHMData(sample(i))
 		if i == ringSize-1 {
 			require.NoError(t, onErr)
 			require.NoError(t, offErr)
