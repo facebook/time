@@ -18,7 +18,7 @@ limitations under the License.
 
 #include <stdint.h> /* for proper fixed width types */
 
-// Only the cgo preambles in fbclock.go and shmem.go define FBCLOCK_CGO. cgo
+// Only the Go package's cgo preambles define FBCLOCK_CGO. cgo
 // builds its Go types from DWARF, and Go's debug/dwarf has no model for
 // DW_TAG_atomic_type, which clang 21 emits where clang 19 folded the atomic
 // into its base integer; every struct reachable from fbclock_lib then fails to
