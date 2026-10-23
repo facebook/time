@@ -119,7 +119,7 @@ func ReadFBClockDataFile(path string, v2 bool) (*DataFileSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer unix.Munmap(mapping)
+	defer func() { _ = unix.Munmap(mapping) }()
 	view := &DataFileSnapshot{Path: path, Version: version, Size: info.Size()}
 	if v2 {
 		for index, name := range []string{"primary", "realtime"} {
