@@ -18,9 +18,11 @@ package stats
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"slices"
 	"sync"
 	"testing"
 
@@ -137,14 +139,14 @@ func TestNewJSONStats(t *testing.T) {
 	require.Empty(t, js.Get())
 }
 
-func TestHandleRequest(t *testing.T) {
+func TestHandleStatsRequest(t *testing.T) {
 	js := NewJSONStats()
 	js.SetCounter("requests", 42)
 	js.SetCounter("errors", 3)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/stats", nil)
 	w := httptest.NewRecorder()
-	js.handleRequest(w, req)
+	js.handleStatsRequest(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Equal(t, "application/json", w.Header().Get("Content-Type"))
@@ -156,7 +158,7 @@ func TestHandleRequest(t *testing.T) {
 	require.Equal(t, int64(3), result["errors"])
 }
 
-func TestHandleRequestDuringCounterUpdates(t *testing.T) {
+func TestHandleStatsRequestDuringCounterUpdates(t *testing.T) {
 	js := NewJSONStats()
 
 	stop := make(chan struct{})
@@ -184,9 +186,9 @@ func TestHandleRequestDuringCounterUpdates(t *testing.T) {
 	<-started
 
 	for range 200 {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req := httptest.NewRequest(http.MethodGet, "/stats", nil)
 		w := httptest.NewRecorder()
-		js.handleRequest(w, req)
+		js.handleStatsRequest(w, req)
 		require.Equal(t, http.StatusOK, w.Code)
 
 		var result map[string]int64
@@ -196,11 +198,11 @@ func TestHandleRequestDuringCounterUpdates(t *testing.T) {
 	}
 }
 
-func TestHandleRequestEmpty(t *testing.T) {
+func TestHandleStatsRequestEmpty(t *testing.T) {
 	js := NewJSONStats()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/stats", nil)
 	w := httptest.NewRecorder()
-	js.handleRequest(w, req)
+	js.handleStatsRequest(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Equal(t, "application/json", w.Header().Get("Content-Type"))
@@ -209,4 +211,55 @@ func TestHandleRequestEmpty(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &result)
 	require.NoError(t, err)
 	require.Empty(t, result)
+}
+
+func TestGetCounters(t *testing.T) {
+	js := NewJSONStats()
+	js.SetCounter("data_error", 7)
+	js.SetCounter("m_ns", 120)
+
+	got := js.GetCounters()
+	require.Equal(t, []string{
+		"clock.data_error",
+		"clock.m_ns",
+		"go.process.rss",
+		"go.runtime.num_goroutines",
+	}, slices.Sorted(maps.Keys(got)))
+	require.Equal(t, int64(7), got["clock.data_error"])
+	require.Equal(t, int64(120), got["clock.m_ns"])
+	require.Positive(t, got["go.process.rss"])
+	require.Positive(t, got["go.runtime.num_goroutines"])
+	// process stats are not stored as counters
+	require.Equal(t, map[string]int64{"data_error": 7, "m_ns": 120}, js.Get())
+}
+
+func TestHandleCountersRequest(t *testing.T) {
+	js := NewJSONStats()
+	js.SetCounter("data_error", 7)
+
+	req := httptest.NewRequest(http.MethodGet, "/counters", nil)
+	w := httptest.NewRecorder()
+	js.handleCountersRequest(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "application/json", w.Header().Get("Content-Type"))
+	var result map[string]int64
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	require.Equal(t, int64(7), result["clock.data_error"])
+	require.Contains(t, result, "go.process.rss")
+}
+
+func TestHandlerRoutes(t *testing.T) {
+	h := NewJSONStats().handler()
+	for path, want := range map[string]int{
+		"/stats":    http.StatusOK,
+		"/counters": http.StatusOK,
+		"/":         http.StatusNotFound,
+		"/foo":      http.StatusNotFound,
+		"/stats/x":  http.StatusNotFound,
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		require.Equal(t, want, w.Code, path)
+	}
 }

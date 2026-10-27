@@ -20,7 +20,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"runtime"
+	"time"
 
+	"github.com/shirou/gopsutil/v4/process"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -36,19 +40,53 @@ func NewJSONStats() *JSONStats {
 
 // Start runs http server and initializes maps
 func (s *JSONStats) Start(monitoringport int) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleRequest)
-	addr := fmt.Sprintf(":%d", monitoringport)
-	log.Infof("Starting http json server on %s", addr)
-	err := http.ListenAndServe(addr, mux)
-	if err != nil {
+	server := &http.Server{
+		Addr:         fmt.Sprintf(":%d", monitoringport),
+		Handler:      s.handler(),
+		ReadTimeout:  time.Second,
+		WriteTimeout: time.Second,
+	}
+	log.Infof("Starting http json server on %s", server.Addr)
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Failed to start listener: %v", err)
 	}
 }
 
-// handleRequest is a handler used for all http monitoring requests
-func (s *JSONStats) handleRequest(w http.ResponseWriter, _ *http.Request) {
-	js, err := json.Marshal(s.Get())
+func (s *JSONStats) handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/stats", s.handleStatsRequest)
+	mux.HandleFunc("/counters", s.handleCountersRequest)
+	return mux
+}
+
+// GetCounters returns all counters with process stats, named as fb303 exports them
+func (s *JSONStats) GetCounters() map[string]int64 {
+	res := map[string]int64{
+		"go.runtime.num_goroutines": int64(runtime.NumGoroutine()),
+	}
+	if proc, err := process.NewProcess(int32(os.Getpid())); err == nil { //nolint:gosec
+		if mem, err := proc.MemoryInfo(); err == nil {
+			res["go.process.rss"] = int64(mem.RSS) //nolint:gosec
+		}
+	}
+	for k, v := range s.Get() {
+		res[fmt.Sprintf("clock.%s", k)] = v
+	}
+	return res
+}
+
+// handleStatsRequest serves every counter under its bare name
+func (s *JSONStats) handleStatsRequest(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.Get())
+}
+
+// handleCountersRequest serves the counters to collect
+func (s *JSONStats) handleCountersRequest(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.GetCounters())
+}
+
+func writeJSON(w http.ResponseWriter, counters map[string]int64) {
+	js, err := json.Marshal(counters)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
