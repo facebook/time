@@ -134,6 +134,124 @@ type RBStatus struct {
 	RBStateName string `json:"state_name"`
 }
 
+// Measurements is the measurement data of every active channel, in device order
+type Measurements struct {
+	Channels []ChannelMeasurement
+}
+
+// ChannelMeasurement is the measurement data of a single channel. The device's
+// target and source are not decoded: its targets are incomplete, use the config's.
+type ChannelMeasurement struct {
+	Channel Channel
+	Probe   Probe
+	Samples []Sample
+}
+
+// Sample is a single measurement point
+type Sample struct {
+	Timestamp float64 `json:"timestamp"`
+	Value     float64 `json:"value"`
+}
+
+func (s *Sample) UnmarshalJSON(b []byte) error {
+	var payload struct {
+		Timestamp *float64 `json:"timestamp"`
+		Value     *float64 `json:"value"`
+	}
+	if err := json.Unmarshal(b, &payload); err != nil {
+		return err
+	}
+	if payload.Timestamp == nil {
+		return errors.New("measurement sample has no timestamp")
+	}
+	if payload.Value == nil {
+		return errors.New("measurement sample has no value")
+	}
+	s.Timestamp = *payload.Timestamp
+	s.Value = *payload.Value
+	return nil
+}
+
+// measurementsResponse is the JSON response.
+type measurementsResponse struct {
+	Data *Measurements `json:"data"`
+}
+
+type channelPayload struct {
+	Data *[]Sample `json:"data"`
+	Info struct {
+		Protocol string `json:"protocol"`
+	} `json:"info"`
+}
+
+func (m *Measurements) UnmarshalJSON(b []byte) error {
+	raw := map[string]json.RawMessage{}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+
+	list, ok := raw["keys"]
+	if !ok {
+		return errors.New("measurement response has no channel list")
+	}
+
+	var order []string
+	if err := json.Unmarshal(list, &order); err != nil {
+		return fmt.Errorf("failed to parse channel list: %w", err)
+	}
+	if order == nil {
+		return errors.New("measurement response has a null channel list")
+	}
+
+	m.Channels = make([]ChannelMeasurement, 0, len(order))
+	seenChannels := make(map[Channel]string, len(order))
+	for _, name := range order {
+		channel, err := ChannelFromString(name)
+		if err != nil {
+			return fmt.Errorf("unknown channel %s: %w", name, err)
+		}
+		if _, ok := seenChannels[*channel]; ok {
+			return fmt.Errorf("channel %s appears multiple times in the channel list", *channel)
+		}
+		seenChannels[*channel] = name
+
+		entry, ok := raw[name]
+		if !ok {
+			return fmt.Errorf("channel %s is in the channel list with no entry", name)
+		}
+
+		var payload *channelPayload
+		if err := json.Unmarshal(entry, &payload); err != nil {
+			return fmt.Errorf("failed to parse channel %s: %w", name, err)
+		}
+
+		if payload == nil || payload.Data == nil {
+			return fmt.Errorf("channel %s has no data", name)
+		}
+
+		probe, err := ProbeFromString(payload.Info.Protocol)
+		if err != nil {
+			return fmt.Errorf("channel %s has unknown protocol %q: %w", name, payload.Info.Protocol, err)
+		}
+		m.Channels = append(m.Channels, ChannelMeasurement{
+			Channel: *channel,
+			Probe:   *probe,
+			Samples: *payload.Data,
+		})
+	}
+
+	for name := range raw {
+		if name == "keys" {
+			continue
+		}
+		channel, err := ChannelFromString(name)
+		if err != nil || seenChannels[*channel] != name {
+			return fmt.Errorf("channel %s has an entry but is not in the channel list", name)
+		}
+	}
+	return nil
+}
+
 // Channel is a Calnex channel object
 type Channel string
 
@@ -481,6 +599,8 @@ const (
 	// measureURL is a base URL for to the measurement API
 	measureURL = "https://%s/api/get/measure/%s"
 	dataURL    = "https://%s/api/getdata?channel=%s&datatype=%s&reset=%t"
+	// fetchMeasurementsURL returns every channel in one request
+	fetchMeasurementsURL = "https://%s/api/fetch/meta"
 
 	startMeasure = "https://%s/api/startmeasurement"
 	stopMeasure  = "https://%s/api/stopmeasurement"
@@ -510,8 +630,11 @@ const (
 var (
 	// ErrBadChannel is returned when channel is not recognized
 	ErrBadChannel = errors.New("channel is not recognized")
-	errBadProbe   = errors.New("probe protocol is not recognized")
-	errAPI        = errors.New("invalid response from API")
+	// ErrNotSupported is returned when the device firmware does not implement
+	// the endpoint, which it reports as 501 Not Implemented
+	ErrNotSupported = errors.New("endpoint not supported by device firmware")
+	errBadProbe     = errors.New("probe protocol is not recognized")
+	errAPI          = errors.New("invalid response from API")
 )
 
 func parseResponse(response string) (string, error) {
@@ -632,6 +755,33 @@ func (a *API) FetchCsv(channel Channel, allData bool) ([][]string, error) {
 		res = append(res, csvLine)
 	}
 	return res, nil
+}
+
+// fetches all the channel data using the fetch/meta api
+func (a *API) FetchMeasurements() (*Measurements, error) {
+	url := fmt.Sprintf(fetchMeasurementsURL, a.source)
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotImplemented {
+		return nil, ErrNotSupported
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+	}
+
+	m := &measurementsResponse{}
+	if err = json.NewDecoder(resp.Body).Decode(m); err != nil {
+		return nil, err
+	}
+	if m.Data == nil {
+		return nil, errors.New("measurement response has no data section")
+	}
+
+	return m.Data, nil
 }
 
 // FetchChannelProbe returns monitored protocol of the channel

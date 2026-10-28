@@ -183,6 +183,159 @@ func TestFetchCsvNoData(t *testing.T) {
 	require.Nil(t, lines)
 }
 
+// newTestAPI returns an API pointed at a server answering every request with h
+func newTestAPI(t *testing.T, h http.Handler) *API {
+	t.Helper()
+
+	ts := httptest.NewTLSServer(h)
+	t.Cleanup(ts.Close)
+
+	parsed, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	calnexAPI, err := NewAPI(parsed.Host, true, time.Second)
+	require.NoError(t, err)
+	calnexAPI.Client = ts.Client()
+	return calnexAPI
+}
+
+// respondWith serves a fixed body
+func respondWith(body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintln(w, body)
+	}
+}
+
+// respondStatus serves a status code and no body
+func respondStatus(code int) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(code)
+	}
+}
+
+func TestFetchMeasurements(t *testing.T) {
+	sampleResp := `{
+		"data": {
+			"VP17": {
+				"data": [],
+				"info": {"channel": "VP17", "protocol": "PTP", "source": "calnex01", "target": "::1"}
+			},
+			"C": {
+				"data": [{"timestamp": 1785935899.0, "value": -5.8164005167782307E-8}],
+				"info": {"channel": "C", "protocol": "PPS", "source": "calnex01", "target": ""}
+			},
+			"keys": ["C", "VP17"]
+		},
+		"status": {"gnss": {"lockedSatellites": 12}}
+	}`
+	expected := &Measurements{
+		Channels: []ChannelMeasurement{
+			{
+				Channel: ChannelC,
+				Probe:   ProbePPS,
+				Samples: []Sample{{Timestamp: 1785935899.0, Value: -5.8164005167782307e-8}},
+			},
+			{
+				Channel: ChannelVP17,
+				Probe:   ProbePTP,
+				Samples: []Sample{},
+			},
+		},
+	}
+
+	m, err := newTestAPI(t, respondWith(sampleResp)).FetchMeasurements()
+	require.NoError(t, err)
+	require.Equal(t, expected, m)
+}
+
+// Firmware without the endpoint answers 501s
+func TestFetchMeasurementsNotImplemented(t *testing.T) {
+	m, err := newTestAPI(t, respondStatus(http.StatusNotImplemented)).FetchMeasurements()
+	require.ErrorIs(t, err, ErrNotSupported)
+	require.Nil(t, m)
+}
+
+// A code net/http has no text for must still be diagnosable
+func TestFetchMeasurementsUnexpectedStatus(t *testing.T) {
+	m, err := newTestAPI(t, respondStatus(599)).FetchMeasurements()
+	require.ErrorContains(t, err, "599")
+	require.Nil(t, m)
+}
+
+// An empty list is how a device says it is measuring nothing. It has to stay
+// distinguishable from a response that omits the list altogether.
+func TestFetchMeasurementsNoChannels(t *testing.T) {
+	m, err := newTestAPI(t, respondWith(`{"data": {"keys": []}}`)).FetchMeasurements()
+	require.NoError(t, err)
+	require.Empty(t, m.Channels)
+}
+
+func TestFetchMeasurementsBadResponse(t *testing.T) {
+	badResponses := map[string]struct{ resp, err string }{
+		"not json":     {"certainly not json", "invalid character"},
+		"no keys":      {`{"data": {}}`, "no channel list"},
+		"null keys":    {`{"data": {"keys": null}}`, "null channel list"},
+		"no data":      {`{}`, "no data section"},
+		"bad keys":     {`{"data": {"keys": "C"}}`, "failed to parse channel list"},
+		"bad channel":  {`{"data": {"keys": ["C"], "C": []}}`, "failed to parse channel C"},
+		"null channel": {`{"data": {"keys": ["C"], "C": null}}`, "channel C has no data"},
+		"listed channel with no entry": {
+			`{"data": {"keys": ["C", "VP1"], "C": {"data": [], "info": {"protocol": "PPS"}}}}`,
+			"channel VP1 is in the channel list with no entry",
+		},
+		"unlisted channel": {
+			`{"data": {"keys": ["C"], "C": {"data": [], "info": {"protocol": "PPS"}},` +
+				` "VP1": {"data": [], "info": {"protocol": "PTP"}}}}`,
+			"channel VP1 has an entry but is not in the channel list",
+		},
+		"unlisted channel alias": {
+			`{"data": {"keys": ["C"], "C": {"data": [], "info": {"protocol": "PPS"}},` +
+				` "c": {"data": [], "info": {"protocol": "PPS"}}}}`,
+			"channel c has an entry but is not in the channel list",
+		},
+		"missing channel data": {
+			`{"data": {"keys": ["C"], "C": {"info": {"protocol": "PPS"}}}}`,
+			"channel C has no data",
+		},
+		"bad data point": {
+			`{"data": {"keys": ["C"], "C": {"data": [{"timestamp": "now", "value": 1}]}}}`,
+			"failed to parse channel C",
+		},
+		"missing timestamp": {
+			`{"data": {"keys": ["C"], "C": {"data": [{"value": 1}], "info": {"protocol": "PPS"}}}}`,
+			"no timestamp",
+		},
+		"missing value": {
+			`{"data": {"keys": ["C"], "C": {"data": [{"timestamp": 1}], "info": {"protocol": "PPS"}}}}`,
+			"no value",
+		},
+		"mixed case channel": {
+			`{"data": {"keys": ["C", "c"], "C": {"data": [], "info": {"protocol": "PPS"}},` +
+				` "c": {"data": [], "info": {"protocol": "PPS"}}}}`,
+			"channel C appears multiple times",
+		},
+		"unknown channel": {
+			`{"data": {"keys": ["ZZ"], "ZZ": {"data": [], "info": {"protocol": "PPS"}}}}`,
+			"unknown channel ZZ",
+		},
+		"unknown protocol": {
+			`{"data": {"keys": ["C"], "C": {"data": [], "info": {"protocol": "CARRIER"}}}}`,
+			`channel C has unknown protocol "CARRIER"`,
+		},
+		"missing info": {
+			`{"data": {"keys": ["C"], "C": {"data": []}}}`,
+			`channel C has unknown protocol ""`,
+		},
+	}
+
+	for name, tt := range badResponses {
+		t.Run(name, func(t *testing.T) {
+			m, err := newTestAPI(t, respondWith(tt.resp)).FetchMeasurements()
+			require.ErrorContains(t, err, tt.err)
+			require.Nil(t, m)
+		})
+	}
+}
+
 func TestFetchChannelProtocol_NTP(t *testing.T) {
 	sampleResp := "measure/ch9/ptp_synce/mode/probe_type=2"
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,
