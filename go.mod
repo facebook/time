@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/Knetic/govaluate v3.0.0+incompatible
 	github.com/cespare/xxhash/v2 v2.1.2
-	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
+	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/eclesh/welford v0.0.0-20150116075914-eec62615b1f0
 	github.com/fatih/color v1.15.0

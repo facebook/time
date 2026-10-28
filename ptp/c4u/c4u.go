@@ -19,7 +19,7 @@ package c4u
 import (
 	"time"
 
-	"github.com/coreos/go-systemd/daemon"
+	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/facebook/time/leapsectz"
 	"github.com/facebook/time/ptp/c4u/clock"
 	"github.com/facebook/time/ptp/c4u/stats"
