@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coreos/go-systemd/daemon"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/unix"
@@ -848,7 +849,23 @@ func (p *SPTP) stepClock(step time.Duration) error {
 	return nil
 }
 
+func sdNotify() error {
+	s, err := daemon.SdNotify(false, daemon.SdNotifyReady)
+	if !s && err != nil {
+		return err
+	} else if !s {
+		log.Warn("sd_notify is not supported")
+	} else {
+		log.Info("sd_notify event sent")
+	}
+	return nil
+}
+
 func (p *SPTP) runInternal(ctx context.Context) error {
+	if err := sdNotify(); err != nil {
+		log.Errorf("sd_notify() failed: %v", err)
+	}
+
 	p.pi.SyncInterval(p.cfg.Interval.Seconds())
 	var lock sync.Mutex
 
