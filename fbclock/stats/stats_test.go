@@ -18,13 +18,16 @@ package stats
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -262,4 +265,40 @@ func TestHandlerRoutes(t *testing.T) {
 		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
 		require.Equal(t, want, w.Code, path)
 	}
+}
+
+func getStatusCode(t *testing.T, url string) int {
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+func TestServeRetriesUntilPortIsFree(t *testing.T) {
+	taken, err := net.Listen("tcp", "[::1]:0")
+	require.NoError(t, err)
+	addr := taken.Addr().String()
+	go func() {
+		for {
+			conn, err := taken.Accept()
+			if err != nil {
+				return
+			}
+			conn.Close()
+		}
+	}()
+
+	go NewJSONStats().serve(addr, 10*time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
+	url := fmt.Sprintf("http://%s/stats", addr)
+	require.Zero(t, getStatusCode(t, url))
+
+	require.NoError(t, taken.Close())
+	require.Eventually(t, func() bool {
+		return getStatusCode(t, url) == http.StatusOK
+	}, 5*time.Second, 10*time.Millisecond)
 }

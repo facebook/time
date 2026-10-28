@@ -28,6 +28,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// an outgoing connection can hold the port as its source port until it closes
+const listenRetryInterval = time.Second
+
 // JSONStats is what we want to report as stats via http
 type JSONStats struct {
 	Stats
@@ -38,17 +41,23 @@ func NewJSONStats() *JSONStats {
 	return &JSONStats{Stats: *NewStats()}
 }
 
-// Start runs http server and initializes maps
+// Start runs http server, retrying until the port is free
 func (s *JSONStats) Start(monitoringport int) {
+	s.serve(fmt.Sprintf(":%d", monitoringport), listenRetryInterval)
+}
+
+func (s *JSONStats) serve(addr string, retryInterval time.Duration) {
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", monitoringport),
+		Addr:         addr,
 		Handler:      s.handler(),
 		ReadTimeout:  time.Second,
 		WriteTimeout: time.Second,
 	}
-	log.Infof("Starting http json server on %s", server.Addr)
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("Failed to start listener: %v", err)
+	log.Infof("Starting http json server on %s", addr)
+	for {
+		err := server.ListenAndServe()
+		log.Errorf("Failed to start listener, retrying in %s: %v", retryInterval, err)
+		time.Sleep(retryInterval)
 	}
 }
 
