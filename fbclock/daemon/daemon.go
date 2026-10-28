@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coreos/go-systemd/daemon"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/unix"
@@ -778,6 +779,18 @@ func (s *Daemon) runChrony() error {
 	return nil
 }
 
+func sdNotify() error {
+	s, err := daemon.SdNotify(false, daemon.SdNotifyReady)
+	if !s && err != nil {
+		return err
+	} else if !s {
+		log.Warn("sd_notify is not supported")
+	} else {
+		log.Info("sd_notify event sent")
+	}
+	return nil
+}
+
 // Run a daemon
 func (s *Daemon) Run(ctx context.Context) error {
 	shm, err := fbclock.OpenFBClockSHMv1()
@@ -798,6 +811,10 @@ func (s *Daemon) Run(ctx context.Context) error {
 		}
 		defer shmv2.Close()
 		go s.populateDataV2(shmv2)
+	}
+
+	if err := sdNotify(); err != nil {
+		log.Error(err)
 	}
 
 	if s.cfg.Chrony {
