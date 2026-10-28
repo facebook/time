@@ -32,7 +32,7 @@ import (
 const chronyAddress = "127.0.0.1:323"
 
 // ChronyFetcher reads tracking data from chronyd. FetchGMs and FetchStats are
-// left to the embedded interface; chrony mode never calls them.
+// left to the embedded interface.
 type ChronyFetcher struct {
 	DataFetcher
 	// address overrides chronyAddress, for tests only

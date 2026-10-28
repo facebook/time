@@ -39,8 +39,8 @@ const maxChronyBoundNS float64 = 1e18
 // It needs only the reply and the floor, no daemon state and no PHC, so a tool
 // outside the daemon can compute the same bound the daemon publishes.
 func ChronyBound(t *chrony.Tracking, maxDriftRatePPM float64) (errorBoundNS uint64, holdoverNS float64, err error) {
-	// the floor is a flag, not chronyd data, and the config check on it does not
-	// catch a NaN. Zero is allowed and means no floor.
+	// the floor is a flag, not chronyd data, and no config check catches a NaN.
+	// Zero is allowed and means no floor.
 	if math.IsNaN(maxDriftRatePPM) || math.IsInf(maxDriftRatePPM, 0) || maxDriftRatePPM < 0 {
 		return 0, 0, fmt.Errorf("%w: max drift rate is %v", errCorrectness, maxDriftRatePPM)
 	}

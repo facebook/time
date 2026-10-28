@@ -20,6 +20,8 @@ import (
 	"context"
 	"math"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/facebook/time/fbclock/stats"
 	"github.com/facebook/time/ptp/linearizability"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 
 	ptp "github.com/facebook/time/ptp/protocol"
 )
@@ -945,4 +948,113 @@ func TestMeanCoeffPPB(t *testing.T) {
 	cur = fbclock.DataV2{SysclockTimeNS: 1749167822504951677, PHCTimeNS: 1749167859504956519}
 	c = d.meanCoeffPPB(&prev, &cur)
 	require.Equal(t, int64(-493), c)
+}
+
+// TestPopulateDataV2 pins v2's PTP output: every field of the records clients read
+// from data_v2, for a fixed last stored sample and fake clock readings.
+func TestPopulateDataV2(t *testing.T) {
+	// Readings are 2^20 ns apart on the base clock and the PHC gains (primary) or
+	// loses (realtime) 16, then 48 ns of them: exact coefficients, unequal so the mean shows.
+	const step = 1 << 20
+	gain := []int64{0, 16, 64}
+	stored := &fbclock.Data{
+		IngressTimeNS:        1755000036500000000,
+		ErrorBoundNS:         789,
+		HoldoverMultiplierNS: 30.5,
+		SmearingStartS:       1483228836,
+		SmearingEndS:         1483291336,
+		UTCOffsetPreS:        36,
+		UTCOffsetPostS:       37,
+	}
+	primary := fbclock.DataV2{
+		IngressTimeNS:        1755000036500000000,
+		ErrorBoundNS:         814, // plus the 25 ns read delay
+		HoldoverMultiplierNS: 30.5,
+		SmearingStartS:       1483228836,
+		UTCOffsetPreS:        36,
+		UTCOffsetPostS:       37,
+		ClockID:              unix.CLOCK_MONOTONIC_RAW,
+		PHCTimeNS:            1755000037002097216,
+		SysclockTimeNS:       5000002097152,
+		CoefPPB:              30517, // the mean of 15258 and 45776
+	}
+	realtimePrimary := primary
+	realtimePrimary.ClockID = unix.CLOCK_REALTIME
+	testCases := []struct {
+		name         string
+		clockID      uint32
+		wantPrimary  fbclock.DataV2
+		wantRealtime *fbclock.DataV2 // nil: never written
+	}{
+		{
+			name:        "MONOTONIC_RAW primary",
+			clockID:     unix.CLOCK_MONOTONIC_RAW,
+			wantPrimary: primary,
+			wantRealtime: &fbclock.DataV2{
+				IngressTimeNS:        1755000036500000000,
+				ErrorBoundNS:         829, // plus its own 40 ns read delay
+				HoldoverMultiplierNS: 30.5,
+				SmearingStartS:       1483228836,
+				UTCOffsetPreS:        36,
+				UTCOffsetPostS:       37,
+				ClockID:              unix.CLOCK_REALTIME,
+				PHCTimeNS:            1755000037002098088,
+				SysclockTimeNS:       1755000000002098152,
+				CoefPPB:              -45776, // the last measurement, not averaged
+			},
+		},
+		{
+			name:        "CLOCK_REALTIME primary",
+			clockID:     unix.CLOCK_REALTIME,
+			wantPrimary: realtimePrimary,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestDaemon(&Config{RingSize: 30, Interval: time.Second}, stats.NewStats())
+			s.state.setLastStoredData(stored)
+			// populateDataV2 never returns, so the reads of its fourth tick end its goroutine
+			const ticks = 3
+			done := make(chan struct{})
+			var reads, realtimeReads int64
+			s.getPHCAndSysTime = func() (time.Time, time.Time, uint32, time.Duration, error) {
+				if reads == ticks {
+					close(done)
+					runtime.Goexit()
+				}
+				phc, sys := 1755000037000000000+reads*step+gain[reads], 5000000000000+reads*step
+				reads++
+				return time.Unix(0, phc), time.Unix(0, sys), tc.clockID, 25 * time.Nanosecond, nil
+			}
+			s.getPHCAndSysTimeRealtime = func() (time.Time, time.Time, time.Duration, error) {
+				phc, sys := 1755000037000001000+realtimeReads*step-gain[realtimeReads], 1755000000000001000+realtimeReads*step
+				realtimeReads++
+				return time.Unix(0, phc), time.Unix(0, sys), 40 * time.Nanosecond, nil
+			}
+			shm, err := fbclock.OpenFBClockShmCustomVer(filepath.Join(t.TempDir(), "data_v2"), 2)
+			require.NoError(t, err)
+			defer shm.Close()
+
+			go s.populateDataV2(shm)
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				require.FailNow(t, "populateDataV2 didn't reach its fourth tick")
+			}
+
+			shmp, err := fbclock.MmapShmpDataV2(shm.File.Fd())
+			require.NoError(t, err)
+			got, err := fbclock.ReadFBClockDataV2(shmp)
+			require.NoError(t, err)
+			require.Equal(t, tc.wantPrimary, *got)
+			got, err = fbclock.ReadFBClockDataRealtime(shmp)
+			if tc.wantRealtime == nil {
+				require.ErrorContains(t, err, "no data from daemon")
+				require.Zero(t, realtimeReads)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, *tc.wantRealtime, *got)
+		})
+	}
 }
