@@ -19,6 +19,7 @@ package stats
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -27,9 +28,6 @@ import (
 	"github.com/shirou/gopsutil/v4/process"
 	log "github.com/sirupsen/logrus"
 )
-
-// an outgoing connection can hold the port as its source port until it closes
-const listenRetryInterval = time.Second
 
 // JSONStats is what we want to report as stats via http
 type JSONStats struct {
@@ -41,23 +39,29 @@ func NewJSONStats() *JSONStats {
 	return &JSONStats{Stats: *NewStats()}
 }
 
-// Start runs http server, retrying until the port is free
+// Start runs http server, exiting if it cannot bind the port
 func (s *JSONStats) Start(monitoringport int) {
-	s.serve(fmt.Sprintf(":%d", monitoringport), listenRetryInterval)
+	l, err := listen(monitoringport)
+	if err != nil {
+		log.Fatalf("Failed to start listener: %v", err)
+	}
+	s.serve(l)
 }
 
-func (s *JSONStats) serve(addr string, retryInterval time.Duration) {
+func listen(monitoringport int) (net.Listener, error) {
+	addr := fmt.Sprintf(":%d", monitoringport)
+	log.Infof("Starting http json server on %s", addr)
+	return net.Listen("tcp", addr)
+}
+
+func (s *JSONStats) serve(l net.Listener) {
 	server := &http.Server{
-		Addr:         addr,
 		Handler:      s.handler(),
 		ReadTimeout:  time.Second,
 		WriteTimeout: time.Second,
 	}
-	log.Infof("Starting http json server on %s", addr)
-	for {
-		err := server.ListenAndServe()
-		log.Errorf("Failed to start listener, retrying in %s: %v", retryInterval, err)
-		time.Sleep(retryInterval)
+	if err := server.Serve(l); err != nil {
+		log.Fatalf("Failed to serve: %v", err)
 	}
 }
 

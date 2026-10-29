@@ -267,38 +267,38 @@ func TestHandlerRoutes(t *testing.T) {
 	}
 }
 
-func getStatusCode(t *testing.T, url string) int {
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+// held stays referenced for the whole test: a listener nobody holds is closed
+// by the runtime finalizer on its socket, which hands the port straight back
+func TestListenFailsOnHeldPort(t *testing.T) {
+	held, err := listen(0)
 	require.NoError(t, err)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return 0
+	defer held.Close()
+
+	l, err := listen(held.Addr().(*net.TCPAddr).Port)
+	if l != nil {
+		l.Close()
 	}
-	resp.Body.Close()
-	return resp.StatusCode
+	require.Error(t, err, "listen must report a port it cannot bind")
 }
 
-func TestServeRetriesUntilPortIsFree(t *testing.T) {
-	taken, err := net.Listen("tcp", "[::1]:0")
+func TestServe(t *testing.T) {
+	l, err := listen(0)
 	require.NoError(t, err)
-	addr := taken.Addr().String()
-	go func() {
-		for {
-			conn, err := taken.Accept()
-			if err != nil {
-				return
-			}
-			conn.Close()
-		}
-	}()
+	js := NewJSONStats()
+	js.SetCounter("data_error", 7)
+	go js.serve(l)
 
-	go NewJSONStats().serve(addr, 10*time.Millisecond)
-	time.Sleep(100 * time.Millisecond)
-	url := fmt.Sprintf("http://%s/stats", addr)
-	require.Zero(t, getStatusCode(t, url))
-
-	require.NoError(t, taken.Close())
+	url := fmt.Sprintf("http://[::1]:%d/stats", l.Addr().(*net.TCPAddr).Port)
+	var got map[string]int64
 	require.Eventually(t, func() bool {
-		return getStatusCode(t, url) == http.StatusOK
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode == http.StatusOK && json.NewDecoder(resp.Body).Decode(&got) == nil
 	}, 5*time.Second, 10*time.Millisecond)
+	require.Equal(t, map[string]int64{"data_error": 7}, got)
 }
