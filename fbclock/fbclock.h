@@ -146,18 +146,16 @@ typedef struct fbclock_shmdata_v2 {
 
 #define FBCLOCK_SHMDATA_SIZE sizeof(fbclock_shmdata)
 #define FBCLOCK_SHMDATA_V2_SIZE sizeof(fbclock_shmdata_v2)
-// The daemon still writes v1 for binaries built before v2; fbclock_init reads
-// only v2.
-#define FBCLOCK_PATH_V1 "/run/fbclock_data_v1"
-// Where the daemon writes the v2 segment. Binaries built before FBCLOCK_PATH
-// moved to FBCLOCK_DIR_PATH still read it here.
-#define FBCLOCK_LEGACY_PATH "/run/fbclock_data_v2"
-// Hardlinks to the flat shmem files above live here, so consumers can
-// bind-mount the directory (present even before the file exists) instead of the
-// file.
+// The daemon's shmem files. Consumers can bind-mount the directory, which
+// exists before the files do.
 #define FBCLOCK_DIR "/run/fbclock"
 #define FBCLOCK_DIR_PATH "/run/fbclock/data_v2"
+// The daemon still writes v1 for binaries built before v2; fbclock_init reads
+// only v2.
 #define FBCLOCK_DIR_PATH_V1 "/run/fbclock/data_v1"
+// Hardlinks to the files above, kept for binaries built before 1 Oct 2026.
+#define FBCLOCK_LEGACY_PATH "/run/fbclock_data_v2"
+#define FBCLOCK_PATH_V1 "/run/fbclock_data_v1"
 // Default for clients. fbclock_init* falls back to FBCLOCK_LEGACY_PATH where
 // FBCLOCK_DIR isn't mounted.
 #define FBCLOCK_PATH "/run/fbclock/data_v2"

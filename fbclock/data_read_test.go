@@ -398,3 +398,85 @@ func TestReadFBClockDataFileErrors(t *testing.T) {
 		})
 	}
 }
+
+func shmFirstByte(t *testing.T, path string) byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return b[0]
+}
+
+// shmSeed leaves a file starting with b at path, as an earlier daemon would.
+func shmSeed(t *testing.T, path string, b byte) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte{b}, 0o600))
+}
+
+func TestOpenFBClockShmLinked(t *testing.T) {
+	for _, ver := range []int{1, 2} {
+		for _, tc := range []struct {
+			name    string
+			restart bool // the daemon already ran once and wrote 1
+			flat    byte // first byte of an existing flat file, 0 for none
+			dir     byte // first byte of an existing /run/fbclock file, 0 for none
+			kept    byte // first byte of the existing file both names keep, 0 for none
+			// the kept file is the flat one, not the /run/fbclock one
+			keepFlat bool
+		}{
+			{name: "fresh"},
+			{name: "restart", restart: true, kept: 1},
+			{name: "dir_only", dir: 2, kept: 2},
+			{name: "flat_only", flat: 5, kept: 5, keepFlat: true},
+			{name: "different_files", flat: 3, dir: 4, kept: 3, keepFlat: true},
+		} {
+			t.Run(fmt.Sprintf("v%d/%s", ver, tc.name), func(t *testing.T) {
+				root := t.TempDir()
+				dirPath := filepath.Join(root, "fbclock", fmt.Sprintf("data_v%d", ver))
+				flatPath := filepath.Join(root, fmt.Sprintf("fbclock_data_v%d", ver))
+				if tc.restart {
+					shm, err := openFBClockShmLinked(dirPath, flatPath, ver)
+					require.NoError(t, err)
+					_, err = shm.File.WriteAt([]byte{1}, 0)
+					require.NoError(t, err)
+					require.NoError(t, shm.Close())
+				}
+				if tc.flat != 0 {
+					shmSeed(t, flatPath, tc.flat)
+				}
+				if tc.dir != 0 {
+					shmSeed(t, dirPath, tc.dir)
+				}
+				var before os.FileInfo
+				if tc.kept != 0 {
+					keptPath := dirPath
+					if tc.keepFlat {
+						keptPath = flatPath
+					}
+					var err error
+					before, err = os.Stat(keptPath)
+					require.NoError(t, err)
+				}
+
+				shm, err := openFBClockShmLinked(dirPath, flatPath, ver)
+				require.NoError(t, err)
+				defer shm.Close()
+
+				require.Equal(t, dirPath, shm.Path)
+				dir, err := os.Stat(dirPath)
+				require.NoError(t, err)
+				flat, err := os.Stat(flatPath)
+				require.NoError(t, err)
+				require.True(t, os.SameFile(dir, flat), "the two names aren't one file")
+				if tc.kept != 0 {
+					require.True(t, os.SameFile(before, dir), "moved off the existing file")
+					require.Equal(t, tc.kept, shmFirstByte(t, flatPath))
+				}
+				_, err = shm.File.WriteAt([]byte{9}, 0)
+				require.NoError(t, err)
+				require.Equal(t, byte(9), shmFirstByte(t, dirPath))
+				require.Equal(t, byte(9), shmFirstByte(t, flatPath))
+			})
+		}
+	}
+}

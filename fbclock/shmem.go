@@ -103,6 +103,9 @@ func ensureDirHardlink(realPath, dirLinkPath string) error {
 		return fmt.Errorf("creating fbclock shmem dir for %q: %w", dirLinkPath, err)
 	}
 	rf, err := os.Stat(realPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("stat %q: %w", realPath, err)
 	}
@@ -128,34 +131,38 @@ func ensureDirHardlink(realPath, dirLinkPath string) error {
 	return nil
 }
 
-// openFBClockShmLinked opens the shmem file and adds a hardlink to it in the
-// folder for directory-mount consumers. A link failure is logged, not fatal:
-// the shmem itself is open and usable regardless.
-func openFBClockShmLinked(realPath, dirLinkPath string, ver int) (*Shm, error) {
-	shm, err := OpenFBClockShmCustomVer(realPath, ver)
+// openFBClockShmLinked opens the shmem file at dirPath and hardlinks flatPath to
+// it. A link failure is logged, not fatal: the shmem itself is open and usable.
+func openFBClockShmLinked(dirPath, flatPath string, ver int) (*Shm, error) {
+	// Link the folder's name to an existing flat file first, so the flat file is
+	// never replaced: readers that have it mapped keep getting updates.
+	if err := ensureDirHardlink(flatPath, dirPath); err != nil {
+		log.Warnf("fbclock dir hardlink %q: %v", dirPath, err)
+	}
+	shm, err := OpenFBClockShmCustomVer(dirPath, ver)
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureDirHardlink(realPath, dirLinkPath); err != nil {
-		log.Warnf("fbclock dir hardlink %q: %v", dirLinkPath, err)
+	if err := os.Link(dirPath, flatPath); err != nil && !os.IsExist(err) {
+		log.Warnf("fbclock hardlink %q: %v", flatPath, err)
 	}
 	return shm, nil
 }
 
 // OpenFBClockSHM returns opened POSIX shared mem used by fbclock
 func OpenFBClockSHM() (*Shm, error) {
-	return openFBClockShmLinked(C.FBCLOCK_LEGACY_PATH, C.FBCLOCK_DIR_PATH, 2)
+	return openFBClockShmLinked(C.FBCLOCK_DIR_PATH, C.FBCLOCK_LEGACY_PATH, 2)
 }
 
 // OpenFBClockSHMv2 returns opened POSIX shared mem used by fbclock
 func OpenFBClockSHMv2() (*Shm, error) {
 	// TODO: remove this once all call sites are updated to use v2
-	return openFBClockShmLinked(C.FBCLOCK_LEGACY_PATH, C.FBCLOCK_DIR_PATH, 2)
+	return openFBClockShmLinked(C.FBCLOCK_DIR_PATH, C.FBCLOCK_LEGACY_PATH, 2)
 }
 
 // OpenFBClockSHMv1 returns opened POSIX shared mem used by fbclock
 func OpenFBClockSHMv1() (*Shm, error) {
-	return openFBClockShmLinked(C.FBCLOCK_PATH_V1, C.FBCLOCK_DIR_PATH_V1, 1)
+	return openFBClockShmLinked(C.FBCLOCK_DIR_PATH_V1, C.FBCLOCK_PATH_V1, 1)
 }
 
 // StoreFBClockData is a wrapper for StoreFBClockDataV2
