@@ -18,6 +18,7 @@ package daemon
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -106,4 +107,46 @@ func TestConfigGradualWindowRequiresK(t *testing.T) {
 	require.Error(t, makeCfg(true, wNoK).EvalAndValidate(), "gradualwindow + W without k must fail closed")
 	require.NoError(t, makeCfg(true, MathDefaultW).EvalAndValidate(), "gradualwindow + default W (has k) must pass")
 	require.NoError(t, makeCfg(false, wNoK).EvalAndValidate(), "flag off + W without k must pass")
+}
+
+// TestConfigMaxDriftRate checks the NTP holdover floor is positive whenever -v3
+// writes NTP, and left alone otherwise.
+func TestConfigMaxDriftRate(t *testing.T) {
+	testCases := []struct {
+		name         string
+		v3           bool
+		maxDriftRate float64
+		wantErr      string
+	}{
+		{name: "v3 with the default floor", v3: true, maxDriftRate: DefaultMaxDriftRatePPM},
+		{name: "v3 with no floor", v3: true, maxDriftRate: 0, wantErr: "bad config: 'maxdriftrate' must be positive"},
+		{name: "v3 with a negative floor", v3: true, maxDriftRate: -1, wantErr: "bad config: 'maxdriftrate' must be positive"},
+		{name: "v3 with a NaN floor", v3: true, maxDriftRate: math.NaN(), wantErr: "bad config: 'maxdriftrate' must be positive"},
+		{name: "v3 with an infinite floor", v3: true, maxDriftRate: math.Inf(1), wantErr: "bad config: 'maxdriftrate' must be below 65.536"},
+		{name: "v3 with the highest floor the file can hold", v3: true, maxDriftRate: 65.535},
+		{name: "v3 with a floor the file can't hold", v3: true, maxDriftRate: 65.536, wantErr: "bad config: 'maxdriftrate' must be below 65.536"},
+		{name: "no floor needed without v3", maxDriftRate: 0},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{
+				PTPClientAddress: "/tmp/fbclock-test",
+				RingSize:         30,
+				Interval:         time.Second,
+				EnableDataV3:     tc.v3,
+				MaxDriftRate:     tc.maxDriftRate,
+				Math: Math{
+					M:     MathDefaultM,
+					W:     MathDefaultW,
+					Drift: MathDefaultDrift,
+				},
+			}
+			err := cfg.EvalAndValidate()
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

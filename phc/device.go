@@ -19,14 +19,16 @@ package phc
 import (
 	"fmt"
 	"os"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/facebook/time/phc/unix" // a temporary shim for "golang.org/x/sys/unix" until v0.27.0 is cut
 )
 
-// isClockMonoRawSupported is a global variable to keep information whether clockid is supported in PTPSysOffsetExtended
-var isClockMonoRawSupported = true
+// monoRawUnsupported is set once PTPSysOffsetExtended rejects CLOCK_MONOTONIC_RAW, and shared by
+// every goroutine reading a PHC.
+var monoRawUnsupported atomic.Bool
 
 // Device represents a PHC device
 type Device os.File
@@ -83,12 +85,12 @@ func (dev *Device) ReadSysoffPrecise() (*PTPSysOffsetPrecise, error) {
 }
 
 func (dev *Device) readSysoffExtended(samples uint) (*PTPSysOffsetExtended, error) {
-	if isClockMonoRawSupported {
+	if !monoRawUnsupported.Load() {
 		value, err := dev.readSysoffExtendedClockID(samples, unix.CLOCK_MONOTONIC_RAW)
 		if err == nil {
 			return value, nil
 		}
-		isClockMonoRawSupported = false
+		monoRawUnsupported.Store(true)
 	}
 	return dev.readSysoffExtendedClockID(samples, unix.CLOCK_REALTIME)
 }

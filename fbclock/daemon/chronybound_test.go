@@ -18,6 +18,7 @@ package daemon
 
 import (
 	"math"
+	"net"
 	"testing"
 	"time"
 
@@ -32,6 +33,7 @@ const testMaxDriftRatePPM = 50
 // out at |-1us| + 2us + 4us/2 = 5us, and the skew sits below the holdover floor.
 func healthyTracking() *chrony.Tracking {
 	return &chrony.Tracking{
+		IPAddr:            net.ParseIP("2401:db00::123"),
 		RefTime:           time.Unix(1755000000, 0),
 		CurrentCorrection: -1 * time.Microsecond.Seconds(),
 		RootDispersion:    2 * time.Microsecond.Seconds(),
@@ -136,6 +138,11 @@ func TestChronyBoundRejectsBadTracking(t *testing.T) {
 		{
 			name:   "chronyd has no usable source",
 			mutate: func(tr *chrony.Tracking) { tr.LeapStatus = ntp.LeapAlarm },
+		},
+		{
+			// what chronyd reports while it follows `refclock PHC`
+			name:   "chronyd follows a local reference, not an NTP server",
+			mutate: func(tr *chrony.Tracking) { tr.IPAddr, tr.RefID = nil, 0x50484330 },
 		},
 		{
 			name:   "chronyd never synchronised, so reference time is unset",

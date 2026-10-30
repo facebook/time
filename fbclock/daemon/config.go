@@ -18,14 +18,20 @@ package daemon
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"slices"
 	"time"
 
+	"github.com/facebook/time/fbclock"
 	"github.com/facebook/time/phc/unix"
 	log "github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
 )
+
+// DefaultMaxDriftRatePPM is -max-drift-rate's default, the floor for chronyd's
+// holdover multiplier.
+const DefaultMaxDriftRatePPM = 50
 
 // Config represents configuration we expect to read from file
 type Config struct {
@@ -72,6 +78,16 @@ func (c *Config) EvalAndValidate() error {
 	// flat 4.0 to a 2-sample stddev. Require k in the W expression.
 	if c.GradualWindow && !slices.Contains(c.Math.wExpr.Vars(), "k") {
 		return fmt.Errorf("bad config: 'gradualwindow' requires the W expression to reference 'k' (got %q)", c.Math.W)
+	}
+	// with no floor a zero chronyd skew gives ntp a holdover rate of zero, and a bound that
+	// never widens under-reports once chronyd stops answering
+	if c.EnableDataV3 && (math.IsNaN(c.MaxDriftRate) || c.MaxDriftRate <= 0) {
+		return fmt.Errorf("bad config: 'maxdriftrate' must be positive")
+	}
+	// the v3 file holds the holdover rate as Q16.16 ns/s, which saturates from 65.536 PPM up,
+	// and readers refuse a saturated rate
+	if c.EnableDataV3 && fbclock.FloatAsUint32(c.MaxDriftRate*nsPerSecondPerPPM) == math.MaxUint32 {
+		return fmt.Errorf("bad config: 'maxdriftrate' must be below 65.536")
 	}
 	// Precompute the data-independent factor table once at parse; only used when GradualWindow is on.
 	c.kFactors = precomputeGradualWindowFactors(c.RingSize, warmupConfidence)

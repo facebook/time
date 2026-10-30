@@ -17,6 +17,7 @@ limitations under the License.
 package daemon
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -24,6 +25,10 @@ import (
 	"github.com/facebook/time/ntp/chrony"
 	ntp "github.com/facebook/time/ntp/protocol"
 )
+
+// errLocalReference marks tracking with no NTP server behind it: chronyd follows a
+// local reference, a refclock such as the PHC or local mode.
+var errLocalReference = errors.New("chronyd follows a local reference, not an NTP server")
 
 // maxChronyBoundNS is a sanity limit, ~31 years in ns, to keep +Inf out of the
 // float-to-uint64 conversion below.
@@ -47,6 +52,11 @@ func ChronyBound(t *chrony.Tracking, maxDriftRatePPM float64) (errorBoundNS uint
 	// chronyd has no usable source, so its error model says nothing about our clock
 	if t.LeapStatus == ntp.LeapAlarm {
 		return 0, 0, fmt.Errorf("%w: chronyd is not synchronised", errCorrectness)
+	}
+	// a local reference (a refclock such as the PHC, or local mode) isn't an NTP
+	// server, and chronyd's numbers leave out that reference's own error
+	if t.IPAddr == nil {
+		return 0, 0, fmt.Errorf("%w: %w (refid %08X)", errCorrectness, errLocalReference, t.RefID)
 	}
 	if t.RefTime.UnixNano() <= 0 {
 		return 0, 0, fmt.Errorf("%w: chronyd reference time is not set", errCorrectness)

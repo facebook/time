@@ -70,7 +70,7 @@ type DataClock struct {
 }
 
 // DataFile writes the file; as with v2, the one sidecar is its only writer.
-// Stores aren't safe for concurrent use; close it only after they finish.
+// One writer per section, so stores to different sections can run at once; close it only after they finish.
 type DataFile struct {
 	Path     string
 	file     *os.File

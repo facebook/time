@@ -288,7 +288,7 @@ int fbclock_clockdata_load_data_v2(
 int fbclock_clockdata_load_data_realtime(
     fbclock_shmdata_v2* shmp,
     fbclock_clockdata_v2* data);
-// One writer per file. Copies clock as given, reserved bytes included.
+// One writer per section. Copies clock as given, reserved bytes included.
 void fbclock_data_section_store(
     fbclock_data_section* _Nonnull section,
     const fbclock_data_clock* _Nonnull clock);

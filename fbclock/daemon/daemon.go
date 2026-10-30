@@ -23,6 +23,7 @@ import (
 	"math"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/go-systemd/v22/daemon"
@@ -606,6 +607,7 @@ func (s *Daemon) openDataV3(path string) *fbclock.DataFile {
 	v3, err := fbclock.OpenFBClockDataCustom(path, map[fbclock.Sources]fbclock.DataSectionConfig{
 		fbclock.SourcePTP:  {},
 		fbclock.SourcePRTC: {},
+		fbclock.SourceNTP:  {},
 	})
 	if err != nil {
 		log.Errorf("not writing fbclock data v3: %v", err)
@@ -696,6 +698,98 @@ func (s *Daemon) populatePTPDataV3(v3 *fbclock.DataFile) {
 		}
 		prevPRTC = prtc
 		storePTPDataV3(v3, fbclock.SourcePRTC, prtc)
+	}
+}
+
+// ntpSample is the last good chronyd poll, which the ntp section is rewritten from.
+type ntpSample struct {
+	ingressTimeNS        int64
+	errorBoundNS         uint64
+	holdoverMultiplierNS float64
+}
+
+// pollChrony fetches chronyd's tracking and turns it into the ntp section's bound, with
+// sysNow, the system clock read just before, as the ingress.
+func (s *Daemon) pollChrony(fetcher *ChronyFetcher, sysNow time.Time) (*ntpSample, error) {
+	tracking, err := fetcher.FetchTracking(s.cfg)
+	if err != nil {
+		return nil, err
+	}
+	errorBoundNS, holdoverNS, err := ChronyBound(tracking, s.cfg.MaxDriftRate)
+	if err != nil {
+		return nil, err
+	}
+	return &ntpSample{
+		ingressTimeNS:        sysNow.Add(leapsectz.UTCOffset).UnixNano(),
+		errorBoundNS:         errorBoundNS,
+		holdoverMultiplierNS: holdoverNS,
+	}, nil
+}
+
+// storeNTPDataV3 writes sample to v3's ntp section, anchored on the system clock reading now.
+func storeNTPDataV3(v3 *fbclock.DataFile, sample *ntpSample, now time.Time) error {
+	// the system clock is both anchor (in TAI) and base, so the coefficient is 0
+	return v3.Store(fbclock.SourceNTP, fbclock.DataClock{
+		ClockID:              unix.CLOCK_REALTIME,
+		RefTimeNS:            now.Add(leapsectz.UTCOffset).UnixNano(),
+		SysclockTimeNS:       now.UnixNano(),
+		IngressTimeNS:        sample.ingressTimeNS,
+		ErrorBoundNS:         sample.errorBoundNS,
+		HoldoverMultiplierNS: sample.holdoverMultiplierNS,
+	})
+}
+
+// populateNTPDataV3 writes v3's ntp section until ctx is done: it polls chronyd every -i and
+// rewrites the section every 10 ms from the last good poll, or refused under a local reference.
+func (s *Daemon) populateNTPDataV3(ctx context.Context, fetcher *ChronyFetcher, v3 *fbclock.DataFile) {
+	var last atomic.Pointer[ntpSample]
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	// its own goroutine, so a slow or dead chronyd never delays a write
+	wg.Go(func() {
+		// a host whose chronyd follows the PHC stays that way, so that's logged once
+		var followedLocal bool
+		ticker := time.NewTicker(s.cfg.Interval)
+		defer ticker.Stop()
+		for {
+			// read before the fetch, so the bound ages from no later than the instant chronyd
+			// describes; not RefTime, whose age RootDispersion already covers
+			sample, err := s.pollChrony(fetcher, time.Now())
+			local := errors.Is(err, errLocalReference)
+			if err != nil && (!local || !followedLocal) {
+				log.Errorf("polling chronyd for fbclock data v3: %v", err)
+			}
+			followedLocal = local
+			switch {
+			case err == nil:
+				last.Store(sample)
+			case local:
+				// chronyd steers the clock to a reference nothing checks, so no NTP sample bounds it,
+				// this run's or one a previous run left in the file: write a bound readers refuse
+				last.Store(&ntpSample{errorBoundNS: math.MaxUint32})
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	})
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		// nothing before the first good poll; after it, holdover from its ingress
+		if sample := last.Load(); sample != nil {
+			if err := storeNTPDataV3(v3, sample, time.Now()); err != nil {
+				log.Errorf("writing ntp to %s: %v", v3.Path, err)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
 
@@ -794,9 +888,10 @@ func (s *Daemon) Run(ctx context.Context) error {
 		go s.runLinearizabilityTests(ctx)
 	}
 
-	// v3 isn't closed: populatePTPDataV3 writes to its mapping until the process exits
+	// v3 isn't closed: the loops below write to its mapping until the process exits
 	if v3 := s.openDataV3(fbclock.DataPath); v3 != nil {
 		go s.populatePTPDataV3(v3)
+		go s.populateNTPDataV3(ctx, &ChronyFetcher{}, v3)
 	}
 
 	if s.cfg.EnableDataV2 {
