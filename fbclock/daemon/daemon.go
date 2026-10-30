@@ -543,20 +543,31 @@ func (s *Daemon) runLinearizabilityTests(ctx context.Context) {
 // calcCoeffPPB computes the PHC-vs-sysclock rate ratio in PPB between the prev
 // and cur snapshots of a single anchor section.
 func calcCoeffPPB(prev, cur *fbclock.DataV2) (int64, error) {
-	if prev.SysclockTimeNS == 0 {
+	return coeffPPB(prev.PHCTimeNS, prev.SysclockTimeNS, cur.PHCTimeNS, cur.SysclockTimeNS)
+}
+
+// calcCoeffPPBV3 is calcCoeffPPB for v3's records, where the PHC time is RefTimeNS.
+func calcCoeffPPBV3(prev, cur *fbclock.DataClock) (int64, error) {
+	return coeffPPB(prev.RefTimeNS, prev.SysclockTimeNS, cur.RefTimeNS, cur.SysclockTimeNS)
+}
+
+// coeffPPB computes the ratio for calcCoeffPPB and calcCoeffPPBV3 from two anchors' PHC and
+// system clock times, so v2 and v3 can't compute it differently.
+func coeffPPB(prevPHCNS, prevSysNS, curPHCNS, curSysNS int64) (int64, error) {
+	if prevSysNS == 0 {
 		// first run, no previous data
 		return 0, nil
 	}
 	// calculate the ratio of PHC time to system time (how faster (or slower) PHC ticks compared to system time)
-	mCoeff := float64(cur.PHCTimeNS-prev.PHCTimeNS) / float64(cur.SysclockTimeNS-prev.SysclockTimeNS)
+	mCoeff := float64(curPHCNS-prevPHCNS) / float64(curSysNS-prevSysNS)
 	// calculate the ratio in parts per billion (PPB)
 	coefPPB := int64(mCoeff*float64(time.Second) - float64(time.Second))
 	// check continuity of extrapolated PHC time
-	sysTimeDiff := cur.SysclockTimeNS - prev.SysclockTimeNS - 1
-	phcTimeFixed := prev.PHCTimeNS + sysTimeDiff + coefPPB*sysTimeDiff/time.Second.Nanoseconds()
+	sysTimeDiff := curSysNS - prevSysNS - 1
+	phcTimeFixed := prevPHCNS + sysTimeDiff + coefPPB*sysTimeDiff/time.Second.Nanoseconds()
 	var err error
-	if phcTimeFixed > cur.PHCTimeNS {
-		err = fmt.Errorf("PHC time is not monotonic: %d > %d", phcTimeFixed, cur.PHCTimeNS)
+	if phcTimeFixed > curPHCNS {
+		err = fmt.Errorf("PHC time is not monotonic: %d > %d", phcTimeFixed, curPHCNS)
 	}
 	return coefPPB, err
 }
@@ -572,6 +583,120 @@ func (s *Daemon) meanCoeffPPB(prev, cur *fbclock.DataV2) int64 {
 		s.stats.UpdateCounterBy("monotonictime_error", 1)
 	}
 	return s.state.getMeanCoeffPPB(coefPPB)
+}
+
+// meanCoeffPPBV3 is meanCoeffPPB for v3's records, on v3's own ring and without v2's counter.
+func (s *Daemon) meanCoeffPPBV3(prev, cur *fbclock.DataClock) int64 {
+	if prev.SysclockTimeNS == 0 {
+		return 0
+	}
+	coefPPB, err := calcCoeffPPBV3(prev, cur)
+	if err != nil {
+		log.Warning(err)
+	}
+	return s.state.getMeanCoeffPPBV3(coefPPB)
+}
+
+// openDataV3 opens the v3 file at path for -v3. It returns nil when -v3 is off or
+// the open fails: v3 must never stop the daemon.
+func (s *Daemon) openDataV3(path string) *fbclock.DataFile {
+	if !s.cfg.EnableDataV3 {
+		return nil
+	}
+	v3, err := fbclock.OpenFBClockDataCustom(path, map[fbclock.Sources]fbclock.DataSectionConfig{
+		fbclock.SourcePTP:  {},
+		fbclock.SourcePRTC: {},
+	})
+	if err != nil {
+		log.Errorf("not writing fbclock data v3: %v", err)
+		return nil
+	}
+	log.Infof("writing fbclock data v3 to %s", path)
+	return v3
+}
+
+// readDelayNS is a PHC read's delay, which the bound grows by. It's negative only when the
+// system clock steps back mid-read, and then the reading can't anchor a record.
+func readDelayNS(delay time.Duration) (uint64, error) {
+	if delay < 0 {
+		return 0, fmt.Errorf("negative PHC read delay %v", delay)
+	}
+	return uint64(delay), nil
+}
+
+// storePTPDataV3 stores a PTP record, the PTP loop's last sample anchored on a PHC reading,
+// in v3's ptp or prtc section. Errors are only logged.
+func storePTPDataV3(v3 *fbclock.DataFile, source fbclock.Sources, clock fbclock.DataClock) {
+	if err := v3.Store(source, clock); err != nil {
+		log.Errorf("writing %s to %s: %v", fbclock.DataSectionName(source), v3.Path, err)
+	}
+}
+
+// populatePTPDataV3 writes v3's ptp and prtc sections every 10 ms: the PTP loop's last
+// sample anchored on this loop's own PHC readings, as populateDataV2 does for v2.
+func (s *Daemon) populatePTPDataV3(v3 *fbclock.DataFile) {
+	prevPTP := fbclock.DataClock{}
+	prevPRTC := fbclock.DataClock{}
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for ; true; <-ticker.C { // first run without delay, then at interval
+		d := s.state.getLastStoredData()
+		if d == nil {
+			continue
+		}
+		snapshot := *d
+		phcTime, sysTime, clockID, phcReadDelay, err := s.getPHCAndSysTime()
+		var delayNS uint64
+		if err == nil {
+			delayNS, err = readDelayNS(phcReadDelay)
+		}
+		if err != nil {
+			log.Errorf("reading PHC time from %s for fbclock data v3: %v", s.cfg.Iface, err)
+			continue
+		}
+		ptp := fbclock.DataClock{
+			ClockID:              clockID,
+			RefTimeNS:            phcTime.UnixNano(),
+			SysclockTimeNS:       sysTime.UnixNano(),
+			IngressTimeNS:        snapshot.IngressTimeNS,
+			ErrorBoundNS:         snapshot.ErrorBoundNS + delayNS,
+			HoldoverMultiplierNS: snapshot.HoldoverMultiplierNS,
+		}
+		if prevPTP.SysclockTimeNS != 0 && ptp.ClockID != prevPTP.ClockID {
+			// phc fell back to another base clock, so the old anchor and coefficients don't apply
+			prevPTP = fbclock.DataClock{}
+			s.state.resetCoeffPPBsV3()
+		}
+		ptp.CoefPPB = s.meanCoeffPPBV3(&prevPTP, &ptp)
+		prevPTP = ptp
+		storePTPDataV3(v3, fbclock.SourcePTP, ptp)
+
+		// a CLOCK_REALTIME primary already is the realtime anchor
+		if clockID == unix.CLOCK_REALTIME {
+			storePTPDataV3(v3, fbclock.SourcePRTC, ptp)
+			continue
+		}
+		phcTimeRT, sysTimeRT, phcReadDelayRT, err := s.getPHCAndSysTimeRealtime()
+		var delayNSRT uint64
+		if err == nil {
+			delayNSRT, err = readDelayNS(phcReadDelayRT)
+		}
+		if err != nil {
+			log.Warningf("reading PHC time (REALTIME anchor) from %s for fbclock data v3: %v", s.cfg.Iface, err)
+			continue
+		}
+		prtc := ptp
+		prtc.ClockID = unix.CLOCK_REALTIME
+		prtc.RefTimeNS = phcTimeRT.UnixNano()
+		prtc.SysclockTimeNS = sysTimeRT.UnixNano()
+		prtc.ErrorBoundNS = snapshot.ErrorBoundNS + delayNSRT
+		if prtc.CoefPPB, err = calcCoeffPPBV3(&prevPRTC, &prtc); err != nil {
+			log.Warning(err)
+		}
+		prevPRTC = prtc
+		storePTPDataV3(v3, fbclock.SourcePRTC, prtc)
+	}
 }
 
 // populateDataV2 populates fbclock.DataV2 with data from fbclock.Data plus calculated values
@@ -667,6 +792,11 @@ func (s *Daemon) Run(ctx context.Context) error {
 
 	if s.cfg.LinearizabilityTestInterval != 0 {
 		go s.runLinearizabilityTests(ctx)
+	}
+
+	// v3 isn't closed: populatePTPDataV3 writes to its mapping until the process exits
+	if v3 := s.openDataV3(fbclock.DataPath); v3 != nil {
+		go s.populatePTPDataV3(v3)
 	}
 
 	if s.cfg.EnableDataV2 {

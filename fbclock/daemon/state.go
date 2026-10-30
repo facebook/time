@@ -34,6 +34,7 @@ type daemonState struct {
 	mmms                       *ring.Ring // M values we calculated
 	linearizabilityTestResults *ring.Ring // linearizability test results
 	coefPPBs                   *ring.Ring // set of extrapolation coefficients for mean coefficient
+	coefPPBsV3                 *ring.Ring // the same for v3, apart from v2's so v3 can't move v2's mean
 
 	lastIngressTimeNS int64
 	lastStoredData    atomic.Pointer[fbclock.Data]
@@ -54,6 +55,7 @@ func newDaemonState(ringSize int) *daemonState {
 		mmms:                       ring.New(ringSize),
 		linearizabilityTestResults: ring.New(ringSize),
 		coefPPBs:                   ring.New(coefPPBRingSize),
+		coefPPBsV3:                 ring.New(coefPPBRingSize),
 	}
 	// init ring buffers with nils
 	for range ringSize {
@@ -165,11 +167,25 @@ func (s *daemonState) takeLinearizabilityTestResult(n int) []linearizability.Tes
 }
 
 func (s *daemonState) getMeanCoeffPPB(coef int64) int64 {
-	s.coefPPBs.Value = coef
-	s.coefPPBs = s.coefPPBs.Next()
+	return pushMeanCoeffPPB(&s.coefPPBs, coef)
+}
+
+// resetCoeffPPBsV3 empties v3's ring.
+func (s *daemonState) resetCoeffPPBsV3() { s.coefPPBsV3 = ring.New(coefPPBRingSize) }
+
+// getMeanCoeffPPBV3 is getMeanCoeffPPB on v3's ring.
+func (s *daemonState) getMeanCoeffPPBV3(coef int64) int64 {
+	return pushMeanCoeffPPB(&s.coefPPBsV3, coef)
+}
+
+// pushMeanCoeffPPB stores coef in the ring, over its oldest value once full, and returns
+// the mean of what the ring holds: the one averaging v2 and v3 use, each on its own ring.
+func pushMeanCoeffPPB(coefs **ring.Ring, coef int64) int64 {
+	(*coefs).Value = coef
+	*coefs = (*coefs).Next()
 
 	var cnt, sumCoeff int64
-	s.coefPPBs.Do(func(val any) {
+	(*coefs).Do(func(val any) {
 		if val == nil {
 			return
 		}

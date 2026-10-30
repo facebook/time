@@ -18,6 +18,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"math"
 	"os"
 	"path/filepath"
@@ -1055,6 +1056,194 @@ func TestPopulateDataV2(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, *tc.wantRealtime, *got)
+		})
+	}
+}
+
+// v3Clock is how a stored record reads back.
+func v3Clock(c fbclock.DataClock) *fbclock.DataClockSnapshot {
+	return &fbclock.DataClockSnapshot{
+		Reserved:              &[12]uint8{},
+		ClockID:               c.ClockID,
+		RefTimeNS:             new(c.RefTimeNS),
+		SysclockTimeNS:        c.SysclockTimeNS,
+		CoefPPB:               c.CoefPPB,
+		IngressTimeNS:         c.IngressTimeNS,
+		ErrorBoundNS:          c.ErrorBoundNS,
+		HoldoverMultiplierRaw: fbclock.FloatAsUint32(c.HoldoverMultiplierNS),
+		HoldoverMultiplierNS:  c.HoldoverMultiplierNS,
+	}
+}
+
+// dataSections reads a v3 file's sections by name: ptp, prtc and ntp.
+func dataSections(path string) (*fbclock.DataFileSnapshot, map[string]fbclock.DataSectionSnapshot, error) {
+	file, err := fbclock.ReadFBClockDataFile(path, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	sections := map[string]fbclock.DataSectionSnapshot{}
+	for _, section := range file.Sections {
+		sections[section.Name] = section
+	}
+	return file, sections, nil
+}
+
+func TestOpenDataV3(t *testing.T) {
+	testCases := []struct {
+		name        string
+		v2, v3      bool
+		failOpen    bool   // a directory where the file goes
+		wantSources uint32 // 0: no file
+	}{
+		{name: "ptp and prtc with -v3", v2: true, v3: true, wantSources: uint32(fbclock.SourcePTP | fbclock.SourcePRTC)},
+		{name: "ptp and prtc with -v3, -v2 off", v3: true, wantSources: uint32(fbclock.SourcePTP | fbclock.SourcePRTC)},
+		{name: "no file with -v3 off", v2: true},
+		{name: "nil when the open fails", v2: true, v3: true, failOpen: true},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestDaemon(&Config{RingSize: 1, Interval: time.Second, EnableDataV2: tc.v2, EnableDataV3: tc.v3}, stats.NewStats())
+			path := filepath.Join(t.TempDir(), "data")
+			if tc.failOpen {
+				require.NoError(t, os.Mkdir(path, 0o755))
+			}
+			v3 := s.openDataV3(path)
+			if tc.wantSources == 0 {
+				require.Nil(t, v3)
+				if !tc.failOpen {
+					require.NoFileExists(t, path)
+				}
+				return
+			}
+			require.NotNil(t, v3)
+			t.Cleanup(func() { v3.Close() })
+			file, _, err := dataSections(path)
+			require.NoError(t, err)
+			require.Equal(t, tc.wantSources, file.Header.Sources)
+		})
+	}
+}
+
+func TestPopulatePTPDataV3(t *testing.T) {
+	// TestPopulateDataV2's snapshot and readings, so the records are the ones it pins for v2
+	const step = 1 << 20
+	gain := []int64{0, 16, 64}
+	stored := &fbclock.Data{IngressTimeNS: 1755000036500000000, ErrorBoundNS: 789, HoldoverMultiplierNS: 30.5}
+	ptp := fbclock.DataClock{
+		ClockID:              unix.CLOCK_MONOTONIC_RAW,
+		RefTimeNS:            1755000037002097216,
+		SysclockTimeNS:       5000002097152,
+		CoefPPB:              30517, // the mean of 15258 and 45776
+		IngressTimeNS:        1755000036500000000,
+		ErrorBoundNS:         814, // plus the 25 ns read delay
+		HoldoverMultiplierNS: 30.5,
+	}
+	realtimePTP := ptp
+	realtimePTP.ClockID = unix.CLOCK_REALTIME
+	prtc := fbclock.DataClock{
+		ClockID:              unix.CLOCK_REALTIME,
+		RefTimeNS:            1755000037002098088,
+		SysclockTimeNS:       1755000000002098152,
+		CoefPPB:              -45776, // the last measurement, not averaged
+		IngressTimeNS:        1755000036500000000,
+		ErrorBoundNS:         829, // plus its own 40 ns read delay
+		HoldoverMultiplierNS: 30.5,
+	}
+	// a failed read skips tick 1, so tick 2's coefficient spans ticks 0 to 2; for ptp that
+	// comes to the same 30517
+	prtcAfterGap := prtc
+	prtcAfterGap.CoefPPB = -30517
+	// phc falling back to CLOCK_REALTIME from tick 1: tick 2's coefficient only spans ticks 1 to 2
+	fellBack := ptp
+	fellBack.ClockID = unix.CLOCK_REALTIME
+	fellBack.SysclockTimeNS = 1755000000002097152
+	fellBack.CoefPPB = 45776
+	testCases := []struct {
+		name                  string
+		clockID               uint32
+		primaryFails          bool // the primary read of tick 1 fails
+		realtimeFails         bool // the realtime read of tick 1 fails
+		negativeDelay         bool // the failing read returns a negative delay instead of an error
+		fallBack              bool // the primary reads against CLOCK_REALTIME from tick 1 on
+		wantPTP               fbclock.DataClock
+		wantPRTC              fbclock.DataClock
+		ptpWrites, prtcWrites uint64
+	}{
+		{name: "MONOTONIC_RAW primary", clockID: unix.CLOCK_MONOTONIC_RAW, wantPTP: ptp, wantPRTC: prtc, ptpWrites: 3, prtcWrites: 3},
+		{name: "MONOTONIC_RAW primary, primary read fails once", clockID: unix.CLOCK_MONOTONIC_RAW, primaryFails: true, wantPTP: ptp, wantPRTC: prtcAfterGap, ptpWrites: 2, prtcWrites: 2},
+		{name: "MONOTONIC_RAW primary, primary read with a negative delay once", clockID: unix.CLOCK_MONOTONIC_RAW, primaryFails: true, negativeDelay: true, wantPTP: ptp, wantPRTC: prtcAfterGap, ptpWrites: 2, prtcWrites: 2},
+		{name: "MONOTONIC_RAW primary, realtime read fails once", clockID: unix.CLOCK_MONOTONIC_RAW, realtimeFails: true, wantPTP: ptp, wantPRTC: prtcAfterGap, ptpWrites: 3, prtcWrites: 2},
+		{name: "MONOTONIC_RAW primary, realtime read with a negative delay once", clockID: unix.CLOCK_MONOTONIC_RAW, realtimeFails: true, negativeDelay: true, wantPTP: ptp, wantPRTC: prtcAfterGap, ptpWrites: 3, prtcWrites: 2},
+		{name: "MONOTONIC_RAW primary falling back to CLOCK_REALTIME", clockID: unix.CLOCK_MONOTONIC_RAW, fallBack: true, wantPTP: fellBack, wantPRTC: fellBack, ptpWrites: 3, prtcWrites: 3},
+		// a REALTIME primary already is the realtime anchor
+		{name: "CLOCK_REALTIME primary", clockID: unix.CLOCK_REALTIME, wantPTP: realtimePTP, wantPRTC: realtimePTP, ptpWrites: 3, prtcWrites: 3},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestDaemon(&Config{RingSize: 30, Interval: time.Second, EnableDataV3: true}, stats.NewStats())
+			s.state.setLastStoredData(stored)
+			path := filepath.Join(t.TempDir(), "data")
+			v3 := s.openDataV3(path)
+			require.NotNil(t, v3)
+			defer v3.Close()
+			// populatePTPDataV3 never returns, so the reads of its fourth tick end its goroutine
+			const ticks = 3
+			done := make(chan struct{})
+			var reads, realtimeReads int64
+			s.getPHCAndSysTime = func() (time.Time, time.Time, uint32, time.Duration, error) {
+				if reads == ticks {
+					close(done)
+					runtime.Goexit()
+				}
+				tick := reads
+				reads++
+				phc, sys := 1755000037000000000+tick*step+gain[tick], 5000000000000+tick*step
+				clockID := tc.clockID
+				if tc.fallBack && tick >= 1 {
+					clockID, sys = unix.CLOCK_REALTIME, 1755000000000000000+tick*step
+				}
+				delay := 25 * time.Nanosecond
+				if tc.primaryFails && tick == 1 {
+					if !tc.negativeDelay {
+						return time.Time{}, time.Time{}, 0, 0, errors.New("primary read failed")
+					}
+					delay = -5 * time.Nanosecond
+				}
+				return time.Unix(0, phc), time.Unix(0, sys), clockID, delay, nil
+			}
+			s.getPHCAndSysTimeRealtime = func() (time.Time, time.Time, time.Duration, error) {
+				realtimeReads++
+				tick := reads - 1
+				phc, sys := 1755000037000001000+tick*step-gain[tick], 1755000000000001000+tick*step
+				delay := 40 * time.Nanosecond
+				if tc.realtimeFails && tick == 1 {
+					if !tc.negativeDelay {
+						return time.Time{}, time.Time{}, 0, errors.New("realtime read failed")
+					}
+					delay = -5 * time.Nanosecond
+				}
+				return time.Unix(0, phc), time.Unix(0, sys), delay, nil
+			}
+
+			go s.populatePTPDataV3(v3)
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				require.FailNow(t, "populatePTPDataV3 didn't reach its fourth tick")
+			}
+
+			file, sections, err := dataSections(path)
+			require.NoError(t, err)
+			require.Equal(t, uint32(fbclock.SourcePTP|fbclock.SourcePRTC), file.Header.Sources)
+			require.Equal(t, v3Clock(tc.wantPTP), sections["ptp"].Clock)
+			require.Equal(t, v3Clock(tc.wantPRTC), sections["prtc"].Clock)
+			// each write moves a section's seq on by 2
+			require.Equal(t, 2*tc.ptpWrites, sections["ptp"].Seq)
+			require.Equal(t, 2*tc.prtcWrites, sections["prtc"].Seq)
+			require.Zero(t, sections["ntp"].Seq)
+			if tc.clockID == unix.CLOCK_REALTIME {
+				require.Zero(t, realtimeReads)
+			}
 		})
 	}
 }

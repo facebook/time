@@ -39,6 +39,7 @@ type Config struct {
 	LinearizabilityTestMaxGMOffset time.Duration // max offset between GMs before linearizability test considered failed
 	BootDelay                      time.Duration // postpone startup by this time after boot
 	EnableDataV2                   bool          // enable fbclock data v2
+	EnableDataV3                   bool          // also write fbclock data v3, /run/fbclock/data
 	GradualWindow                  bool          // publish a widened window from the first sample after restart (default off)
 	MaxDriftRate                   float64       // floor for chronyd's holdover multiplier, in PPM
 	// kFactors is the precomputed warm-up tolerance-factor table k[2..RingSize], looked up per tick.

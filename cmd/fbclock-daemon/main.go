@@ -63,6 +63,7 @@ func main() {
 	flag.DurationVar(&cfg.LinearizabilityTestMaxGMOffset, "o", 10*time.Microsecond, "Max offset between GMs before linearizability test considered failed")
 	flag.DurationVar(&cfg.BootDelay, "b", 0, "Postpone startup by this time after boot")
 	flag.BoolVar(&cfg.EnableDataV2, "v2", true, "Enable data v2 in shared memory region (default: true)")
+	flag.BoolVar(&cfg.EnableDataV3, "v3", false, "Also write fbclock data v3 to /run/fbclock/data")
 	flag.BoolVar(&cfg.GradualWindow, "gradualwindow", false, "Publish a widened window from the first sample after a restart (default off)")
 	flag.StringVar(&cfgPath, "cfg", "", "Path to config")
 	flag.BoolVar(&manageDevice, "manage", true, fmt.Sprintf("Manage device. This will setup %q as a copy of PHC device associated with given network interface", daemon.ManagedPTPDevicePath))
